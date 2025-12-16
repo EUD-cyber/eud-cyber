@@ -15,7 +15,6 @@ MEMORY=4096       # in MB
 CORES=4
 DISK_SIZE="32"    # the number is in GB
 BRIDGE="vmbr0"
-CLOUDINIT_FILE="$(pwd)/GUACVM/GUACVM-cloud-init"
 # ==================
 
 # ===== Find next free VMID =====
