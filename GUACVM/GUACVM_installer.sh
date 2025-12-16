@@ -15,6 +15,24 @@ DISK_SIZE="32"    # the number is in GB
 BRIDGE="vmbr0"
 # ==================
 
+# Ask user for network type
+echo "Select network configuration:"
+echo "1) DHCP"
+echo "2) Static"
+read -p "Enter choice [1-2]: " choice
+
+if [ "$choice" == "1" ]; then
+    IP_ADDR=dhcp
+    DNS_SERVER=""
+EOF
+)
+elif [ "$choice" == "2" ]; then
+    read -p "Enter static IP (e.g., 192.168.1.100/24): " STATIC_IP
+    read -p "Enter gateway (e.g., 192.168.1.1): " GATEWAY
+    read -p "Enter DNS servers (comma separated, e.g., 8.8.8.8,1.1.1.1): " DNS
+    IP_ADDR=$STATIC_IP,gw=$GATEWAY
+    DNS_SERVER=$DNS
+
 # ===== Find next free VMID =====
 VMID=$START_VMID
 while qm status $VMID &>/dev/null; do
@@ -66,6 +84,15 @@ qm set $VMID --agent enabled=1
 
 # ===== Set autostart =====
 qm set $VMID --onboot 1
+
+# ===== Cloud-init =====
+  --ipconfig0 ip=$IP_ADDR
+  --ciuser=ubuntu \
+  --sshkey ~/.ssh/id_rsa.pub \
+  --cipassword 'Password1!' \
+  --searchdomain cloud.local \
+  --nameserver $DNS_SERVER \
+  --ciupgrade 1
 
 # ===== Start VM =====
 #echo "Starting VM $VMID ($VM_NAME)..."
