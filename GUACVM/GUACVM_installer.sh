@@ -68,12 +68,15 @@ qm set $VMID \
 
 
 # ===== Attach ISO =====
-qm set $VMID \
-  --cdrom ${ISO_STORAGE}:iso/${ISO_NAME}
+#qm set $VMID \
+#  --cdrom ${ISO_STORAGE}:iso/${ISO_NAME}
 
 # ===== Boot order and console =====
 qm set $VMID \
-  --boot "order=ide2;scsi0" \
+  --ide2 $DISK_STORAGE:cloudinit \
+  --boot c \
+  --bootdisk scsi0 \
+#  --boot "order=scsi0" \
   --vga serial0 \
   --serial0 socket
 
