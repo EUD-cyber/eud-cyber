@@ -3,7 +3,7 @@ set -e
 
 # ===== CONFIG =====
 START_VMID=100
-BASE_NAME="ubuntu-24-04-3"
+BASE_NAME="GUACVM"
 ISO_NAME="ubuntu-24.04.3-live-server-amd64.iso"
 ISO_URL="https://releases.ubuntu.com/24.04/${ISO_NAME}"
 ISO_STORAGE="local"
@@ -60,7 +60,7 @@ qm set $VMID \
 
 # ===== Boot order and console =====
 qm set $VMID \
-  --boot order=scsi0,ide2 \
+  --boot order="ide2,scsi0" \
   --vga serial0 \
   --serial0 socket
 
