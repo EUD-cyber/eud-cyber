@@ -68,5 +68,19 @@ qm set $VMID \
 # ===== Enable QEMU Guest Agent =====
 qm set $VMID --agent enabled=1
 
+# ===== Add external Cloud-Init disk =====
+qm set $VMID --ide0 ${DISK_STORAGE}:cloudinit
+qm set $VMID --cicustom "user=${CLOUDINIT_FILE}"
+
+# ===== Set autostart =====
+qm set $VMID --onboot 1
+
+# ===== Start VM =====
+echo "Starting VM $VMID ($VM_NAME)..."
+qm start $VMID
+
+echo "VM $VMID ($VM_NAME) started successfully!"
+echo "Ubuntu Server autoinstall via external Cloud-Init file is in progress."
+
 echo "VM $VMID ($VM_NAME) created successfully!"
 echo "Start it with: qm start $VMID"
