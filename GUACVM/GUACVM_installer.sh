@@ -4,8 +4,11 @@ set -e
 # ===== CONFIG =====
 START_VMID=100
 BASE_NAME="GUACVM"
-ISO_NAME="ubuntu-24.04.3-live-server-amd64.iso"
-ISO_URL="https://releases.ubuntu.com/24.04/${ISO_NAME}"
+#ISO_NAME="ubuntu-24.04.3-live-server-amd64.iso"
+#ISO_URL="https://releases.ubuntu.com/24.04/${ISO_NAME}"
+IMG_URL="https://cloud-images.ubuntu.com/noble/20251213/noble-server-cloudimg-amd64.img"
+IMG_NAME="noble-server-cloudimg-amd64.img"
+IMG_PATH="$(pwd)"
 ISO_STORAGE="local"
 DISK_STORAGE="local-lvm"
 MEMORY=4096       # in MB
@@ -32,13 +35,21 @@ done
 echo "VM name to use: $VM_NAME"
 
 # ===== Download ISO if missing =====
-ISO_PATH="/var/lib/vz/template/iso/${ISO_NAME}"
-if [ ! -f "$ISO_PATH" ]; then
-    echo "Downloading Ubuntu 24.04.3 ISO..."
-    wget --show-progress -O "$ISO_PATH" "$ISO_URL"
-else
-    echo "ISO already exists: $ISO_PATH"
-fi
+#ISO_PATH="/var/lib/vz/template/iso/${ISO_NAME}"
+#if [ ! -f "$ISO_PATH" ]; then
+#    echo "Downloading Ubuntu 24.04.3 ISO..."
+#    wget --show-progress -O "$ISO_PATH" "$ISO_URL"
+#else
+#    echo "ISO already exists: $ISO_PATH"
+#fi
+
+# ===== Download IMG if missing =====
+#if [ ! -f "$IMG_PATH" ]; then
+#    echo "Downloading $IMG_NAME IMG..."
+#    wget --show-progress -O "IMG_PATH" "IMG_URL"
+#else
+#    echo "IMG already exists: $IMG_PATH"
+#fi
 
 # ===== Create VM =====
 echo "Creating VM $VMID..."
@@ -51,9 +62,11 @@ qm create $VMID \
   --ostype l26
 
 # ===== Add LVM disk =====
+qm importdisk $VMID $IMG_NAME $DISK_STORAGE
 qm set $VMID \
   --scsihw virtio-scsi-pci \
-  --scsi0 ${DISK_STORAGE}:${DISK_SIZE}
+  --scsi0 ${DISK_STORAGE}:"vm-$VMID-disk-0"
+
 
 # ===== Attach ISO =====
 qm set $VMID \
