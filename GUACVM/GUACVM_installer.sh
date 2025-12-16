@@ -4,8 +4,6 @@ set -e
 # ===== CONFIG =====
 START_VMID=100
 BASE_NAME="GUACVM"
-#ISO_NAME="ubuntu-24.04.3-live-server-amd64.iso"
-#ISO_URL="https://releases.ubuntu.com/24.04/${ISO_NAME}"
 IMG_URL="https://cloud-images.ubuntu.com/noble/20251213/noble-server-cloudimg-amd64.img"
 IMG_NAME="noble-server-cloudimg-amd64.img"
 IMG_PATH="$(pwd)/$IMG_NAME"
@@ -33,15 +31,6 @@ while qm list | awk '{print $2}' | grep -x "$VM_NAME" &>/dev/null; do
 done
 echo "VM name to use: $VM_NAME"
 
-# ===== Download ISO if missing =====
-#ISO_PATH="/var/lib/vz/template/iso/${ISO_NAME}"
-#if [ ! -f "$ISO_PATH" ]; then
-#    echo "Downloading Ubuntu 24.04.3 ISO..."
-#    wget --show-progress -O "$ISO_PATH" "$ISO_URL"
-#else
-#    echo "ISO already exists: $ISO_PATH"
-#fi
-
 # ===== Download IMG if missing =====
 if [ ! -f "$IMG_PATH" ]; then
     echo "Downloading $IMG_NAME IMG..."
@@ -66,19 +55,11 @@ qm set $VMID \
   --scsihw virtio-scsi-pci \
   --scsi0 ${DISK_STORAGE}:"vm-$VMID-disk-0"
 
-
-# ===== Attach ISO =====
-#qm set $VMID \
-#  --cdrom ${ISO_STORAGE}:iso/${ISO_NAME}
-
 # ===== Boot order and console =====
 qm set $VMID \
   --ide2 $DISK_STORAGE:cloudinit \
   --boot c \
   --bootdisk scsi0 \
-#  --boot "order=scsi0" \
-#  --vga serial0 \
-#  --serial0 socket
 
 # ===== Enable QEMU Guest Agent =====
 qm set $VMID --agent enabled=1
