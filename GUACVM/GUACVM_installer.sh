@@ -12,7 +12,7 @@ MEMORY=4096       # in MB
 CORES=4
 DISK_SIZE="32"    # the number is in GB
 BRIDGE="vmbr0"
-CLOUDINIT_FILE="./GUACVM-cloud-init"
+CLOUDINIT_FILE="$(pwd)/GUACVM/GUACVM-cloud-init"
 # ==================
 
 # ===== Find next free VMID =====
@@ -69,8 +69,8 @@ qm set $VMID \
 qm set $VMID --agent enabled=1
 
 # ===== Add external Cloud-Init disk =====
-qm set $VMID --ide0 ${DISK_STORAGE}:cloudinit
-qm set $VMID --cicustom "user=${CLOUDINIT_FILE}"
+qm import $VMID $CLOUDINIT_FILE $DISK_STORAGE
+qm set $VMID --ide0 $DISK_STORAGE:cloudinit
 
 # ===== Set autostart =====
 qm set $VMID --onboot 1
