@@ -44,12 +44,12 @@ echo "VM name to use: $VM_NAME"
 #fi
 
 # ===== Download IMG if missing =====
-#if [ ! -f "$IMG_PATH" ]; then
-#    echo "Downloading $IMG_NAME IMG..."
-#    wget --show-progress -O "IMG_PATH" "IMG_URL"
-#else
-#    echo "IMG already exists: $IMG_PATH"
-#fi
+if [ ! -f "$IMG_PATH" ]; then
+    echo "Downloading $IMG_NAME IMG..."
+    wget --show-progress -O "IMG_PATH" "IMG_URL"
+else
+    echo "IMG already exists: $IMG_PATH"
+fi
 
 # ===== Create VM =====
 echo "Creating VM $VMID..."
