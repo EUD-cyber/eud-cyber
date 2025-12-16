@@ -1,0 +1,9 @@
+#cloud-config
+package_update: true
+packages:
+  - qemu-guest-agent
+  - docker.io
+runcmd:
+  - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent
+  - docker run hello-world
