@@ -60,7 +60,7 @@ qm set $VMID \
 
 # ===== Boot order and console =====
 qm set $VMID \
-  --boot order="ide2,scsi0" \
+  --boot "order=ide2,scsi0" \
   --vga serial0 \
   --serial0 socket
 
