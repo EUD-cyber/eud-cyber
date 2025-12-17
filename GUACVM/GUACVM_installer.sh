@@ -21,18 +21,22 @@ echo "1) DHCP"
 echo "2) Static"
 read -p "Enter choice [1-2]: " choice
 
-if [ "$choice" == "1" ]; then
-    IP_ADDR=dhcp
+if [ "$choice" = "1" ]; then
+    IP_ADDR="ip=dhcp"
     DNS_SERVER=""
-EOF
-)
-elif [ "$choice" == "2" ]; then
+
+elif [ "$choice" = "2" ]; then
     read -p "Enter static IP (e.g., 192.168.1.100/24): " STATIC_IP
     read -p "Enter gateway (e.g., 192.168.1.1): " GATEWAY
-    read -p "Enter DNS servers (comma separated, e.g., 8.8.8.8,1.1.1.1): " DNS
-    IP_ADDR=$STATIC_IP,gw=$GATEWAY
-    DNS_SERVER=$DNS
+    read -p "Enter DNS servers (space separated, e.g., 8.8.8.8 1.1.1.1): " DNS
 
+    IP_ADDR="ip=${STATIC_IP},gw=${GATEWAY}"
+    DNS_SERVER="$DNS"
+
+else
+    echo "Invalid choice. Exiting."
+    exit 1
+fi
 # ===== Find next free VMID =====
 VMID=$START_VMID
 while qm status $VMID &>/dev/null; do
