@@ -43,7 +43,7 @@ if [[ ! -f "$IMG_PATH" ]]; then
   if [[ ! -f "$IMG_BZ2_PATH" ]]; then
     echo "Downloading OPNsense nano image..."
     wget -O "$IMG_BZ2_PATH" \
-      https://mirror.opnsense.org/releases/${OPN_VERSION}/${IMG_BZ2}
+      https://pkg.opnsense.org/releases/${OPN_VERSION}/${IMG_BZ2}
   fi
 
   echo "Unpacking image..."
