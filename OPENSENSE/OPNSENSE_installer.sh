@@ -67,6 +67,7 @@ qm create $VMID \
   --memory $RAM \
   --cores $CORES \
   --cpu host \
+  --bios seabios \
   --ostype l26 \
   --scsihw virtio-scsi-pci \
   --net0 virtio,bridge=$WAN_BRIDGE \
