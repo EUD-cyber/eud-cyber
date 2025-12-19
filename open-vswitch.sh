@@ -20,18 +20,25 @@ systemctl enable --now openvswitch-switch
 echo "Backing up network config..."
 cp /etc/network/interfaces /etc/network/interfaces.bak.$(date +%F_%T)
 
-echo "Writing OVS network configuration..."
+echo "Appending OVS configuration..."
 
-cat > /etc/network/interfaces <<EOF
+cat <<EOF >> /etc/network/interfaces
+
+# ===== Open vSwitch configuration =====
 
 auto $BRIDGE1
-iface $BRIDGE1 inet manuel
+iface $BRIDGE1 inet static
     ovs_type OVSBridge
 
 auto $BRIDGE2
-iface $BRIDGE2 inet manuel
+iface $BRIDGE2 inet static
     ovs_type OVSBridge
+
+# ===== End Open vSwitch configuration =====
 EOF
+
+echo "Checking interface syntax..."
+ifquery --check -a
 
 echo "Reloading network configuration..."
 ifreload -a
