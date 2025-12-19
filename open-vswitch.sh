@@ -37,13 +37,8 @@ iface $BRIDGE2 inet static
 # ===== End Open vSwitch configuration =====
 EOF
 
-echo "Checking interface syntax..."
-ifquery --check -a
-
 echo "Reloading network configuration..."
 ifreload -a
 
 echo "OVS configuration complete."
-echo "Verifying:"
 ovs-vsctl show
-ip addr show $BRIDGE
