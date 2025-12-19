@@ -99,7 +99,7 @@ PHASE="$2"
 
 CONFIG_SRC="/root/opnsense/config.xml"
 MOUNTPOINT="/mnt/opnsense-config"
-DISK="scsi1"
+DISK="scsi0"
 
 if [ "$PHASE" = "pre-start" ]; then
   echo "[HOOK] Injecting OPNsense config.xml"
