@@ -70,7 +70,7 @@ echo "VM name to use: $VM_NAME"
 
 ### ===== CREATE VM =====
 qm create $VMID \
-  --name "$VMNAME" \
+  --name "$VM_NAME" \
   --memory $RAM \
   --cores $CORES \
   --cpu host \
