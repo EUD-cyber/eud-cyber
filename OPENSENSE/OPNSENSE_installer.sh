@@ -2,8 +2,8 @@
 set -e
 
 ### ===== VARIABLES =====
-VMID=900
-VMNAME="opnsense-fw"
+START_VMID=100
+BASE_NAME="opnsense"
 RAM=2048
 CORES=2
 DISK_SIZE=20G
@@ -14,7 +14,7 @@ ISO_STORAGE="local"
 
 # Bridges
 WAN_BRIDGE="vmbr0"
-LAN_BRIDGE="vmbr1"
+LAN_BRIDGE="lan1"
 
 # OPNsense
 OPN_VERSION="24.1"
@@ -37,9 +37,26 @@ if [[ ! -f "$ISO_PATH" ]]; then
     https://mirror.opnsense.org/releases/${OPN_VERSION}/${ISO_NAME}
 fi
 
+# ===== Find next free VMID =====
+VMID=$START_VMID
+while qm status $VMID &>/dev/null; do
+    VMID=$((VMID + 1))
+done
+echo "Selected free VMID: $VMID"
+
+# ===== Handle VM name collision =====
+VM_NAME="$BASE_NAME"
+COUNT=1
+while qm list | awk '{print $2}' | grep -x "$VM_NAME" &>/dev/null; do
+    VM_NAME="${BASE_NAME}-${COUNT}"
+    COUNT=$((COUNT + 1))
+done
+echo "VM name to use: $VM_NAME"
+
+
 ### ===== CREATE VM =====
 qm create $VMID \
-  --name $VMNAME \
+  --name $VM_NAME \
   --memory $RAM \
   --cores $CORES \
   --cpu host \
