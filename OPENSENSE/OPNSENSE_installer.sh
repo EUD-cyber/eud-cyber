@@ -83,7 +83,7 @@ qm create $VMID \
   --vga std
 
 ### ===== IMPORT DISK =====
-qm importdisk $VMID "$IMG_PATH" $STORAGE --format raw
+qm import $VMID "$IMG_PATH" $STORAGE --format raw
 
 # Attach imported disk as scsi0
 qm set $VMID --scsi0 $STORAGE:vm-$VMID-disk-0
