@@ -68,6 +68,7 @@ cat > /root/opnsense/config.xml <<EOF
       <enable>1</enable>
       <if>${WAN_IF}</if>
       ${WAN_IP_BLOCK}
+      <descr>WAN Gateway</descr>
     </wan>
 
     <lan>
