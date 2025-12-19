@@ -99,10 +99,8 @@ qm set $VMID --sshkeys ~/.ssh/id_rsa.pub \
   --ciupgrade 1
 
 # ===== Start VM =====
-#echo "Starting VM $VMID ($VM_NAME)..."
-#qm start $VMID
+echo "Starting VM $VMID ($VM_NAME)..."
+qm start $VMID
 
-#echo "VM $VMID ($VM_NAME) started successfully!"
+echo "VM $VMID ($VM_NAME) started successfully!"
 
-echo "VM $VMID ($VM_NAME) created successfully!"
-echo "Start it with: qm start $VMID"
