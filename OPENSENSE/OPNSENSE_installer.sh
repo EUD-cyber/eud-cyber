@@ -78,7 +78,7 @@ qm set $VMID \
   --scsi0 $DISK_STORAGE:$DISK_SIZE \
   --scsi1 $DISK_STORAGE:1 \
   --cdrom $ISO_STORAGE:iso/$ISO_BASE \
-  --boot order=scsi0
+  --boot order="ide2,scsi0"
 
 qm set $VMID --serial0 socket --vga serial0
 
