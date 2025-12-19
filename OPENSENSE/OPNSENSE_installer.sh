@@ -6,7 +6,7 @@ START_VMID=100
 BASE_NAME="opnsense"
 RAM=2048
 CORES=2
-DISK_SIZE=20G
+DISK_SIZE=20
 
 # Proxmox storage
 DISK_STORAGE="local-lvm"
@@ -76,7 +76,7 @@ qm create $VMID \
 qm set $VMID \
   --scsi0 $DISK_STORAGE:$DISK_SIZE \
   --scsi1 $DISK_STORAGE:1 \
-  --cdrom $ISO_STORAGE:iso/$ISO_NAME \
+  --cdrom $ISO_STORAGE:iso/$ISO_BASE \
   --boot order=scsi0
 
 qm set $VMID --serial0 socket --vga serial0
