@@ -26,9 +26,9 @@
 
     <lan>
       <enable>1</enable>
-      <if>${LAN_IF}</if>
-      <ipaddr>${LAN_IP}</ipaddr>
-      <subnet>${LAN_CIDR}</subnet>
+      <if>vtnet1</if>
+      <ipaddr>192.168.10.1</ipaddr>
+      <subnet>24</subnet>
     </lan>
   </interfaces>
 
