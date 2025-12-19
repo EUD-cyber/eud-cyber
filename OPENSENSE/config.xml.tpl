@@ -27,10 +27,9 @@
     <lan>
       <enable>1</enable>
       <if>vtnet1</if>
-      <ipaddr>192.168.10.1</ipaddr>
-      <subnet>24</subnet>
+      <ipaddr>LAN_IP</ipaddr>
+      <subnet>LAN_SUB</subnet>
     </lan>
   </interfaces>
 
-  ${WAN_GATEWAY_BLOCK}
 </opnsense>
