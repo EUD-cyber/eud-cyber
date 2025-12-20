@@ -43,7 +43,7 @@ chmod 755 "$SNIPPETS_DIR"
 echo "✔ Proxmox snippets setup complete"
 
 #check if packages is installed is not install them
-PACKAGES=(wget bzip2)
+PACKAGES=(wget bzip2 openvswith-switch ifupdown2)
 
 for pkg in "${PACKAGES[@]}"; do
   if ! dpkg -s "$pkg" >/dev/null 2>&1; then
@@ -54,3 +54,4 @@ for pkg in "${PACKAGES[@]}"; do
     echo "[✓] $pkg already installed"
   fi
 done
+
