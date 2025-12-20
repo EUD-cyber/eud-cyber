@@ -16,9 +16,6 @@ ISO_STORAGE="local"
 WAN_BRIDGE="vmbr0"
 LAN_BRIDGE="lan1"
 
-#install bzip2 for unzip opensense iso
-apt install -y wget bzip2
-
 OPN_VERSION="24.1"
 IMG_BASE="OPNsense-${OPN_VERSION}-nano-amd64.img"
 IMG_BZ2="${IMG_BASE}.bz2"
