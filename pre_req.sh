@@ -1,6 +1,7 @@
 #!/bin/bash
 set -e
 
+#check if snippets folder exits if not create it
 STORAGE_CFG="/etc/pve/storage.cfg"
 STORAGE_NAME="local"
 STORAGE_PATH="/var/lib/vz"
@@ -41,7 +42,15 @@ chmod 755 "$SNIPPETS_DIR"
 
 echo "✔ Proxmox snippets setup complete"
 
-# 5. Verify
-echo
-echo "Verification:"
-pvesm list "$STORAGE_NAME" --content snippets || true
+#check if packages is installed is not install them
+PACKAGES=(wget bzip2)
+
+for pkg in "${PACKAGES[@]}"; do
+  if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+    echo "[+] Installing $pkg..."
+    apt-get update -qq
+    apt-get install -y "$pkg"
+  else
+    echo "[✓] $pkg already installed"
+  fi
+done
