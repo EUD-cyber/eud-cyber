@@ -1,4 +1,17 @@
 #cloud-config
+
+users:
+  - name: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
+    ssh_authorized_keys:
+      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDIyX/... root@pve01
+
+chpasswd:
+  expire: false
+
 package_update: true
 package_upgrade: true
 
