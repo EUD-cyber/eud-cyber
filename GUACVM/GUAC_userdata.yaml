@@ -98,5 +98,14 @@ runcmd:
   - systemctl enable docker
   - systemctl start docker
   - systemctl enable qemu-guest-agent
-  # Start services
-# - docker compose -f /opt/guacamole/docker-compose.yml up -d
+  - mkdir -p /opt/guacamole
+  - cd /opt/guacamole
+  # Create for guacamole docker
+  - mkdir ./init >/dev/null 2>&1
+  - mkdir -p ./nginx/ssl >/dev/null 2>&1
+  - chmod -R +x ./init
+  - docker run --rm 'guacamole/guacamole:1.6.0' /opt/guacamole/bin/initdb.sh --postgresql > ./init/initdb.sql
+  - mkdir ./record >/dev/null 2>&1
+  - chmod -R 777 ./record
+  - openssl req -nodes -newkey rsa:2048 -new -x509 -keyout nginx/ssl/self-ssl.key -out nginx/ssl/self.cert -subj '/C=DK/CN=guacamole.com'
+  - docker compose -f /opt/guacamole/docker-compose.yml up -d
