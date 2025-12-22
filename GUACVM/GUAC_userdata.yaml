@@ -6,9 +6,7 @@ users:
     shell: /bin/bash
     lock_passwd: false
     passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
-    ssh_authorized_keys:
-      - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDIyX/+NAB1zqh6agc8nn8179ZKDYpRqz1cqlTPxNsiax9LxABFWmwOrdQzH0ILZ31VEv4pVmGzbTsWBTC+hFmgZjNRd89IaJds9YLOjAeLDLHy+HG4B6IHjp8eSuE55vHwCvNg3fYEKhroNHhJ9AsjMgnNJcWNmRRFbJ3Y6cVXVy61S02+j+y72cUTNi9bd4KIKqFMyJkhpOcIST8vqgRNZmKWUZuwkU9pWe2JlQJiv7oLb6NdNKItt4ImqKIcNpc58n+hrkshRujLhnST8TPn1zHuvvWOjPtx+rNNvgJNfG0aXXBgQ3iHPFq+kx6z7CakggXFtm8PT1mRJaNNP04xAx677UxVwAH+SA0sBVDlmeWJWltEi9eI7/kPfv0QIatk3HGHHiBmNnYTjqSBgUEyYB3rGuvTkvC1EwYUSpKPY7mVSyYzzaEsKeD0NFWz3ghrGPRZ5XANIfMdq9tsZ/e2NCM66ZfQlZogojIefdgU0mvPTMMK9lCVdzRkQD0AICRqpB0cVkJZd1IjtuD7o9YA1ofcDDpORpButL1ifQ8xIWS7aedVNW39SiotRsdqy1AKwxplrKkUbyw+CFkdqWuLqjt9d59Ka7/7knAw2+rdbDBWgq+7CdMcH/0SM3LpdPATC1eFreHyQwXd2hj7og3ofLFmh7/X2tgXla8fuHdZ9w== root@pve01
-
+   
 chpasswd:
   expire: false
 
