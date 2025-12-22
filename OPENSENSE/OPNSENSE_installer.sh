@@ -77,8 +77,8 @@ qm create $VMID \
   --bios seabios \
   --ostype l26 \
   --scsihw virtio-scsi-pci \
-  --net0 virtio,bridge=$WAN_BRIDGE \
-  --net1 virtio,bridge=$LAN_BRIDGE \
+  --net0 virtio,bridge=$LAN_BRIDGE \
+  --net1 virtio,bridge=$WAN_BRIDGE \
   --boot order=scsi0 \
   --vga std
 
