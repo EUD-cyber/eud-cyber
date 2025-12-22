@@ -19,7 +19,6 @@ packages:
   - ca-certificates
   - curl
   - docker.io
-  - docker-compose-plugin
   - docker-compose
 
 runcmd:
@@ -70,4 +69,4 @@ runcmd:
     EOF
 
   # Start services
-  - docker-compose up -d
+  - docker-compose -f /opt/guacamole/docker-compose.yml up -d
