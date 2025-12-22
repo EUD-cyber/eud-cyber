@@ -31,6 +31,92 @@ runcmd:
   # Create working directory
   - mkdir -p /opt/guacamole
   - cd /opt/guacamole
+  # Create for guacamole docker
+  - mkdir ./init >/dev/null 2>&1
+  - mkdir -p ./nginx/ssl >/dev/null 2>&1
+  - chmod -R +x ./init
+  - docker run --rm 'guacamole/guacamole:1.6.0' /opt/guacamole/bin/initdb.sh --postgresql > ./init/initdb.sql
+  - mkdir ./record >/dev/null 2>&1
+  - chmod -R 777 ./record
+  - openssl req -nodes -newkey rsa:2048 -new -x509 -keyout nginx/ssl/self-ssl.key -out nginx/ssl/self.cert -subj '/C=DK/CN=guacamole.com'
+
+
+write_files:
+  - path: /opt/guacamole/docker-compose.yml
+    owner: ubuntu:ubuntu
+    permissions: '0644'
+    content: |
+      version: "3.9"
+      # networks
+# create a network 'guacnetwork_compose' in mode 'bridged'
+networks:
+  guacnetwork_compose:
+    driver: bridge
+
+# services
+services:
+  # guacd
+  guacd:
+    container_name: guacd_compose
+    image: guacamole/guacd:1.6.0
+    networks:
+      - guacnetwork_compose
+    restart: always
+    volumes:
+    - ./drive:/drive:rw
+    - ./record:/record:rw
+  # postgres
+  postgres:
+    container_name: postgres_guacamole_compose
+    environment:
+      PGDATA: /var/lib/postgresql/data/guacamole
+      POSTGRES_DB: guacamole_db
+      POSTGRES_PASSWORD: 'Password1!'
+      POSTGRES_USER: guacamole_user
+    image: postgres:15.2-alpine
+    networks:
+      - guacnetwork_compose
+    restart: always
+    volumes:
+    - ./init:/docker-entrypoint-initdb.d:z
+    - ./data:/var/lib/postgresql/data:Z
+
+  # guacamole
+  guacamole:
+    container_name: guacamole_compose
+    group_add:
+      - "1000"
+    depends_on:
+    - guacd
+    - postgres
+    environment:
+      GUACD_HOSTNAME: guacd
+      POSTGRESQL_DATABASE: guacamole_db
+      POSTGRESQL_HOSTNAME: postgres
+      POSTGRESQL_PASSWORD: 'Password1!'
+      POSTGRESQL_USERNAME: guacamole_user
+      RECORDING_SEARCH_PATH: /record
+    image: guacamole/guacamole:1.6.0
+    networks:
+      - guacnetwork_compose
+    volumes:
+      - ./record:/record:rw
+    ports:
+    - 8080/tcp
+    restart: always
+
+  nginx:
+   container_name: nginx_guacamole_compose
+   restart: always
+   image: nginx:latest
+   volumes:
+   - ./nginx/templates:/etc/nginx/templates:ro
+   - ./nginx/ssl/self.cert:/etc/nginx/ssl/self.cert:ro
+   - ./nginx/ssl/self-ssl.key:/etc/nginx/ssl/self-ssl.key:ro
+   ports:
+   - 8443:443
+   networks:
+     - guacnetwork_compose
 
   # Start services
-#  - docker compose -f /opt/guacamole/docker-compose.yml up -d
+ - docker compose -f /opt/guacamole/docker-compose.yml up -d
