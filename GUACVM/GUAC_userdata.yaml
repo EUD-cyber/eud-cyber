@@ -20,6 +20,7 @@ packages:
   - curl
   - docker.io
   - docker-compose-plugin
+  - docker-compose
 
 runcmd:
   # Enable Docker
@@ -69,4 +70,4 @@ runcmd:
     EOF
 
   # Start services
-  - docker compose up -d
+  - docker-compose up -d
