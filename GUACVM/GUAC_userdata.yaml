@@ -19,9 +19,26 @@ packages:
   - ca-certificates
   - curl
   - docker.io
-  
-write_files:
-  - path: /root/docker-compose.yml
+
+runcmd:
+  - apt-get update
+  - apt-get install -y docker-compose-v2 qemu-guest-agent
+  # Enable Docker
+  - systemctl enable docker
+  - systemctl start docker
+  - systemctl enable qemu-guest-agent
+  - mkdir -p /opt/guacamole
+  - cd /opt/guacamole
+  # Create for guacamole docker
+  - mkdir ./init >/dev/null 2>&1
+  - mkdir -p ./nginx/ssl >/dev/null 2>&1
+  - chmod -R +x ./init
+  - docker run --rm 'guacamole/guacamole:1.6.0' /opt/guacamole/bin/initdb.sh --postgresql > ./init/initdb.sql
+  - mkdir ./record >/dev/null 2>&1
+  - chmod -R 777 ./record
+  - openssl req -nodes -newkey rsa:2048 -new -x509 -keyout nginx/ssl/self-ssl.key -out nginx/ssl/self.cert -subj '/C=DK/CN=guacamole.com'
+  write_files:
+  - path: /opt/guacamole/docker-compose.yml
     owner: root:root
     permissions: '0644'
     content: |
@@ -91,22 +108,5 @@ write_files:
            - 8443:443
            networks:
              - guacnetwork_compose          
-runcmd:
-  - apt-get update
-  - apt-get install -y docker-compose-v2 qemu-guest-agent
-  # Enable Docker
-  - systemctl enable docker
-  - systemctl start docker
-  - systemctl enable qemu-guest-agent
-  - mkdir -p /opt/guacamole
-  - cd /opt/guacamole
-  # Create for guacamole docker
-  - mkdir ./init >/dev/null 2>&1
-  - mkdir -p ./nginx/ssl >/dev/null 2>&1
-  - chmod -R +x ./init
-  - docker run --rm 'guacamole/guacamole:1.6.0' /opt/guacamole/bin/initdb.sh --postgresql > ./init/initdb.sql
-  - mkdir ./record >/dev/null 2>&1
-  - chmod -R 777 ./record
-  - openssl req -nodes -newkey rsa:2048 -new -x509 -keyout nginx/ssl/self-ssl.key -out nginx/ssl/self.cert -subj '/C=DK/CN=guacamole.com'
-  - cp /root/docker-compose.yml /opt/guacamole/docker-compose.yml
+
   - docker compose -f /opt/guacamole/docker-compose.yml up -d
