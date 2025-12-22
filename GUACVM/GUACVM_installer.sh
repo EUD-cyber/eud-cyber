@@ -11,7 +11,7 @@ ISO_STORAGE="local"
 DISK_STORAGE="local-lvm"
 MEMORY=4096       # in MB
 CORES=4
-DISK_SIZE="32"    # the number is in GB
+DISK_SIZE="32G"    # the number is in GB
 BRIDGE="vmbr0"
 SNIPPET_DIR="/var/lib/vz/snippets"
 SRC_USERDATA="$(pwd)/GUACVM/GUAC_userdata.yaml"     # source file
@@ -95,6 +95,9 @@ qm importdisk $VMID $IMG_NAME $DISK_STORAGE
 qm set $VMID \
   --scsihw virtio-scsi-pci \
   --scsi0 ${DISK_STORAGE}:"vm-$VMID-disk-0"
+
+#extend disk
+qm disk resize $VMID scsi0 +$DISK_SIZE
 
 # ===== Boot order and console =====
 qm set $VMID \
