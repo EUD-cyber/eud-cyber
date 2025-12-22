@@ -19,7 +19,7 @@ packages:
   - ca-certificates
   - curl
   - docker.io
-  - docker-compose
+  - docker-compose-v2
 
 runcmd:
   # Enable Docker
@@ -33,40 +33,47 @@ runcmd:
   # Create docker-compose.yml
   - |
     cat << 'EOF' > docker-compose.yml
-    services:
-      guacd:
-        image: guacamole/guacd:latest
-        restart: unless-stopped
+ services:
+  guacd:
+    image: guacamole/guacd:1.5.5
+    restart: unless-stopped
 
-      mysql:
-        image: mysql:8.4
-        restart: unless-stopped
-        environment:
-          MYSQL_ROOT_PASSWORD: guacrootpass
-          MYSQL_DATABASE: guacamole_db
-          MYSQL_USER: guacamole
-          MYSQL_PASSWORD: guacpass
-        volumes:
-          - mysql_data:/var/lib/mysql
-
-      guacamole:
-        image: guacamole/guacamole:latest
-        restart: unless-stopped
-        depends_on:
-          - guacd
-          - mysql
-        environment:
-          GUACD_HOSTNAME: guacd
-          MYSQL_HOSTNAME: mysql
-          MYSQL_DATABASE: guacamole_db
-          MYSQL_USER: guacamole
-          MYSQL_PASSWORD: guacpass
-        ports:
-          - "8080:8080"
-
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: guacrootpass
+      MYSQL_DATABASE: guacamole_db
+      MYSQL_USER: guacamole
+      MYSQL_PASSWORD: guacpass
     volumes:
-      mysql_data:
-    EOF
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  guacamole:
+    image: guacamole/guacamole:1.5.5
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+      guacd:
+        condition: service_started
+    environment:
+      GUACD_HOSTNAME: guacd
+      MYSQL_HOSTNAME: mysql
+      MYSQL_DATABASE: guacamole_db
+      MYSQL_USER: guacamole
+      MYSQL_PASSWORD: guacpass
+    ports:
+      - "8080:8080"
+
+volumes:
+  mysql_data:
+EOF
 
   # Start services
-  - docker-compose -f /opt/guacamole/docker-compose.yml up -d
+  - docker compose -f /opt/guacamole/docker-compose.yml up -d
