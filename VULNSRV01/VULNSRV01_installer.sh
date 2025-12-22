@@ -11,7 +11,7 @@ ISO_STORAGE="local"
 DISK_STORAGE="local-lvm"
 MEMORY=4096       # in MB
 CORES=4
-DISK_SIZE="32"    # the number is in GB
+DISK_SIZE="32G"    # the number is in GB
 BRIDGE="lan1"
 IP_ADDR="ip=192.168.10.100/24"
 DNS_SERVER="192.168.10.1"
@@ -56,6 +56,8 @@ qm set $VMID \
   --scsihw virtio-scsi-pci \
   --scsi0 ${DISK_STORAGE}:"vm-$VMID-disk-0"
 
+qm disk resize $VMID scsi0 +$DISK_SIZE
+
 # ===== Boot order and console =====
 qm set $VMID \
   --ide2 $DISK_STORAGE:cloudinit \
@@ -71,8 +73,6 @@ qm set $VMID --onboot 1
 # ===== Cloud-init =====
 qm set $VMID --sshkeys ~/.ssh/id_rsa.pub \
   --ipconfig0 $IP_ADDR \
-  --ciuser=ubuntu \
-  --cipassword 'Password1!' \
   --searchdomain cloud.local \
   --nameserver $DNS_SERVER \
   --ciupgrade 1
