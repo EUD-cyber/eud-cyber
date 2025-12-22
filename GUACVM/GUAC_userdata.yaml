@@ -34,13 +34,15 @@ runcmd:
   # Create docker-compose.yml
   - |
     cat << 'EOF' > docker-compose.yml
- services:
+services:
   guacd:
     image: guacamole/guacd:1.5.5
+    container_name: guacd
     restart: unless-stopped
 
-  mysql:
-    image: mysql:8.4
+  mariadb:
+    image: mariadb:10.11
+    container_name: guacamole-mariadb
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: guacrootpass
@@ -48,24 +50,25 @@ runcmd:
       MYSQL_USER: guacamole
       MYSQL_PASSWORD: guacpass
     volumes:
-      - mysql_data:/var/lib/mysql
+      - mariadb_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   guacamole:
     image: guacamole/guacamole:1.5.5
+    container_name: guacamole
     restart: unless-stopped
     depends_on:
-      mysql:
+      mariadb:
         condition: service_healthy
       guacd:
         condition: service_started
     environment:
       GUACD_HOSTNAME: guacd
-      MYSQL_HOSTNAME: mysql
+      MYSQL_HOSTNAME: mariadb
       MYSQL_DATABASE: guacamole_db
       MYSQL_USER: guacamole
       MYSQL_PASSWORD: guacpass
@@ -73,7 +76,7 @@ runcmd:
       - "8080:8080"
 
 volumes:
-  mysql_data:
+  mariadb_data:
 EOF
 
   # Start services
