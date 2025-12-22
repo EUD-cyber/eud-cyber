@@ -19,15 +19,13 @@ packages:
   - ca-certificates
   - curl
   - docker.io  
-#write_files:
-#  - path: /home/ubuntu/docker-compose.yml
-#    owner: ubuntu
-#    permissions: '0644'
-#    content: |
-#      networks:
-#        guacnetwork_compose:
-#          driver: bridge
-          
+write_files:
+  - path: /home/ubuntu/docker-compose.yml
+    owner: ubuntu
+    permissions: '0644'
+    content: |
+      networks:
+         guacnetwork_compose:          
 runcmd:
   - apt-get update
   - apt-get install -y docker-compose-v2 qemu-guest-agent
