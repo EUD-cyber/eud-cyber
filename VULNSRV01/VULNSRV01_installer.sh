@@ -13,8 +13,11 @@ MEMORY=4096       # in MB
 CORES=4
 DISK_SIZE="32G"    # the number is in GB
 BRIDGE="lan1"
-IP_ADDR="ip=192.168.10.100/24"
-DNS_SERVER="192.168.10.1"
+IP_ADDR="ip=192.168.1.100/24"
+DNS_SERVER="192.168.1.1"
+SNIPPET_DIR="/var/lib/vz/snippets"
+SRC_USERDATA="$(pwd)/VULNSRV01/VULNSRV01_userdata.yaml"     # source file
+DST_USERDATA="VULNSRV01_userdata.yaml"            # destination filename
 
 # ===== Find next free VMID =====
 VMID=$START_VMID
