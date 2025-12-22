@@ -1,0 +1,59 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+
+packages:
+  - ca-certificates
+  - curl
+  - docker.io
+  - docker-compose-plugin
+
+runcmd:
+  # Enable Docker
+  - systemctl enable docker
+  - systemctl start docker
+
+  # Create working directory
+  - mkdir -p /opt/guacamole
+  - cd /opt/guacamole
+
+  # Create docker-compose.yml
+  - |
+    cat << 'EOF' > docker-compose.yml
+    services:
+      guacd:
+        image: guacamole/guacd:latest
+        restart: unless-stopped
+
+      mysql:
+        image: mysql:8.4
+        restart: unless-stopped
+        environment:
+          MYSQL_ROOT_PASSWORD: guacrootpass
+          MYSQL_DATABASE: guacamole_db
+          MYSQL_USER: guacamole
+          MYSQL_PASSWORD: guacpass
+        volumes:
+          - mysql_data:/var/lib/mysql
+
+      guacamole:
+        image: guacamole/guacamole:latest
+        restart: unless-stopped
+        depends_on:
+          - guacd
+          - mysql
+        environment:
+          GUACD_HOSTNAME: guacd
+          MYSQL_HOSTNAME: mysql
+          MYSQL_DATABASE: guacamole_db
+          MYSQL_USER: guacamole
+          MYSQL_PASSWORD: guacpass
+        ports:
+          - "8080:8080"
+
+    volumes:
+      mysql_data:
+    EOF
+
+  # Start services
+  - docker compose up -d
