@@ -19,14 +19,14 @@ packages:
   - ca-certificates
   - curl
   - docker.io  
-write_files:
-  - path: /home/ubuntu/docker-compose.yml
-    owner: ubuntu
-    permissions: '0644'
-    content: |
-      networks:
-        guacnetwork_compose:
-          driver: bridge
+#write_files:
+#  - path: /home/ubuntu/docker-compose.yml
+#    owner: ubuntu
+#    permissions: '0644'
+#    content: |
+#      networks:
+#        guacnetwork_compose:
+#          driver: bridge
           
 runcmd:
   - apt-get update
@@ -34,6 +34,6 @@ runcmd:
   # Enable Docker
   - systemctl enable docker
   - systemctl start docker
-  - systemctl enable --now qemu-guest-agent
+  - systemctl enable qemu-guest-agent
   # Start services
 # - docker compose -f /opt/guacamole/docker-compose.yml up -d
