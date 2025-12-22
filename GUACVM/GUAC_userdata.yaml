@@ -18,13 +18,15 @@ package_upgrade: true
 packages:
   - ca-certificates
   - curl
-  - docker.io  
+  - docker.io
+  
 write_files:
   - path: /home/ubuntu/test.txt
     owner: ubuntu:ubuntu
     permissions: '0644'
     content: |
       cloud-init works
+      
 runcmd:
   - apt-get update
   - apt-get install -y docker-compose-v2 qemu-guest-agent
