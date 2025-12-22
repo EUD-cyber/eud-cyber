@@ -6,7 +6,8 @@ This script is testet with proxmox 9.1
 
 missing \
   ip address validation on vm opnsense and guacvm \
-  download cloud img to default folder and check if exits on each vm creation 
+  download cloud img to default folder and check if exits on each vm creation \
+  all input first so the script will run without input after \
 
 Network \
   guacvm \
