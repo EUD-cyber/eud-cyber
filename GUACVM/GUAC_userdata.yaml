@@ -19,9 +19,11 @@ packages:
   - ca-certificates
   - curl
   - docker.io
-  - docker-compose-v2
-
+  
 runcmd:
+   -apt-get update
+   - apt-get install -y docker-compose-v2
+  
   # Enable Docker
   - systemctl enable docker
   - systemctl start docker
