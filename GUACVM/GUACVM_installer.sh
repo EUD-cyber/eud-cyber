@@ -45,35 +45,9 @@ if [ "$choice" = "1" ]; then
 
 elif [ "$choice" = "2" ]; then
 
-validate_ip_cidr() {
-  ipcalc -cs "$1" >/dev/null 2>&1
-}
-validate_ip_only() {
-  ipcalc -c "$ip" >/dev/null 2>&1
-}
-while true; do
-  read -rp "Enter IP address with CIDR (e.g. 192.168.1.10/24): " STATIC_IP
-  if validate_ip_cidr "$STATIC_IP"; then
-    echo "✔ Valid IP/CIDR: $STATIC_IP"
-    break
-  else
-    echo "✖ Invalid IP/CIDR. Please try again."
-  fi
-done
-while true; do
-  read -rp "Enter gateway (e.g. 192.168.1.1): " GATEWAY
-  if validate_ip_only "$GATEWAY"; then
-    echo "✔ Valid IP/CIDR: $GATEWAY"
-    break
-  else
-    echo "✖ Invalid IP. Please try again."
-  fi
-done
-
-
-#    read -p "Enter static IP (e.g., 192.168.1.100/24): " STATIC_IP
-#    read -p "Enter gateway (e.g., 192.168.1.1): " GATEWAY
-  read -p "Enter DNS servers (space separated, e.g., 8.8.8.8 1.1.1.1): " DNS
+    read -p "Enter static IP (e.g., 192.168.1.100/24): " STATIC_IP
+    read -p "Enter gateway (e.g., 192.168.1.1): " GATEWAY
+    read -p "Enter DNS servers (space separated, e.g., 8.8.8.8 1.1.1.1): " DNS
 
     IP_ADDR="ip=${STATIC_IP},gw=${GATEWAY}"
     DNS_SERVER="$DNS"
