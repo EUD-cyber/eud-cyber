@@ -5,7 +5,7 @@ set -e
 GUACVM="./GUACVM/GUACVM_installer.sh"
 OPENVSWITCH="./open-vswitch.sh"
 VULNSRV01="./VULNSRV01/VULNSRV01_installer.sh"
-OPNSENSE="./OPENSENSE/OPNSENSE_installer.sk"
+OPNSENSE="./OPENSENSE/OPNSENSE_installer.sh"
 PREREQ="./pre_req.sh"
 
 echo "check package and snippet if  exits if not creating it"
