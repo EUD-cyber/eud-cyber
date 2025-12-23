@@ -14,3 +14,82 @@ users:
 
 chpasswd:
   expire: false
+
+packages:
+  - openssh-server
+  - curl
+  - wget
+  - ca-certificates
+
+
+version: "3.9"
+
+services:
+  wazuh-indexer:
+    image: wazuh/wazuh-indexer:4.8.2
+    container_name: wazuh-indexer
+    hostname: wazuh-indexer
+    restart: unless-stopped
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    environment:
+      - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+    volumes:
+      - wazuh-indexer-data:/var/lib/wazuh-indexer
+    ports:
+      - "9200:9200"
+    networks:
+      - wazuh
+    healthcheck:
+      test: ["CMD", "curl", "-k", "https://localhost:9200"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  wazuh-manager:
+    image: wazuh/wazuh-manager:4.8.2
+    container_name: wazuh-manager
+    hostname: wazuh-manager
+    restart: unless-stopped
+    ports:
+      - "1514:1514/udp"
+      - "1515:1515"
+      - "514:514/udp"
+      - "55000:55000"
+    volumes:
+      - wazuh-manager-data:/var/ossec/data
+      - wazuh-manager-etc:/var/ossec/etc
+      - wazuh-manager-logs:/var/ossec/logs
+    networks:
+      - wazuh
+    depends_on:
+      wazuh-indexer:
+        condition: service_healthy
+
+  wazuh-dashboard:
+    image: wazuh/wazuh-dashboard:4.8.2
+    container_name: wazuh-dashboard
+    hostname: wazuh-dashboard
+    restart: unless-stopped
+    ports:
+      - "5601:5601"
+    networks:
+      - wazuh
+    depends_on:
+      - wazuh-indexer
+
+networks:
+  wazuh:
+
+volumes:
+  wazuh-indexer-data:
+  wazuh-manager-data:
+  wazuh-manager-etc:
+  wazuh-manager-logs:
+
+
+
+runcmd:
+  - systemctl enable ssh --now
