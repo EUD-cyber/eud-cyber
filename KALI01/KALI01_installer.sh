@@ -28,7 +28,7 @@ BRIDGE="lan1"
 IP_ADDR="ip=192.168.10.100/24"
 DNS_SERVER="192.168.10.1"
 SNIPPET_DIR="/var/lib/vz/snippets"
-SRC_USERDATA="$(pwd)/KALI01/KALI01_userdata.yaml"     # source file
+SRC_USERDATA="$(pwd)/KALI01/KALI01_userdata.yml"     # source file
 DST_USERDATA="KALI01_userdata.yaml"            # destination filename
 # ==================
 
