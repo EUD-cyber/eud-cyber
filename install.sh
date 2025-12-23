@@ -10,6 +10,7 @@ OPNSENSE="./OPENSENSE/OPNSENSE_installer.sh"
 PREREQ="./pre_req.sh"
 KALI01="./KALI01/KALI01_installer.sh"
 WAZUH="./WAZUH/WAZUH_installer.sh"
+WIN11="./WIN11/WIN11_installer2.sh"
 FINISH="./finish.sh"
 
 echo "=============================="
@@ -23,6 +24,7 @@ echo "5) Create Vuln-server01 VM"
 echo "6) Create Vuln-server02 VM"
 echo "7) Create KALI01 VM"
 echo "8) Create WAZUH VM"
+echo "9) Create Windows 11 VM"
 echo "90) Run ALL"
 echo "99) Finish script"
 echo "0) Exit"
@@ -63,6 +65,9 @@ case "$CHOICE" in
     echo "Starting Wazuh VM creation.... "
     bash "$WAZUH"
     ;;
+  9)
+    echo "Starting Windows 11 VM creation... "
+    ;;
   90)
     echo "Running ALL steps..."
 
@@ -87,9 +92,12 @@ case "$CHOICE" in
     echo "Starting KALI01 VM creation... "
     bash "$KALI01"
 
-    echo "Stating Wazuh VM creation... "
+    echo "Starting Wazuh VM creation... "
     bash "$WAZUH"
 
+    echo "Starting Windows 11 VM creation... "
+    bash "$WIN11"
+    
     echo "Start finishing script..."
     bash "$FINISH"
     ;;
