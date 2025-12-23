@@ -8,6 +8,7 @@ VULNSRV01="./VULNSRV01/VULNSRV01_installer.sh"
 OPNSENSE="./OPENSENSE/OPNSENSE_installer.sh"
 PREREQ="./pre_req.sh"
 KALI01="./KALI01/KALI01_installer.sh"
+FINISH="./finish.sh"
 
 echo "=============================="
 echo " Proxmox Deployment Menu"
@@ -19,6 +20,7 @@ echo "4) Create Guacamole VM"
 echo "5) Create Vuln-server01 VM"
 echo "6) Create KALI01 VM"
 echo "7) Run ALL"
+echo "99) Finish script
 echo "0) Exit"
 echo "=============================="
 
@@ -69,10 +71,17 @@ case "$CHOICE" in
 
     echo "Starting KALI01 VM creation... "
     bash "$KALI01"
+
+    echo "Start finishing script..."
+    bash "$FINISH"
     ;;
   0)
     echo "Exiting."
     exit 0
+    ;;
+  99)
+    echo "Start finishing script..."
+    bash "$FINISH"
     ;;
   *)
     echo "❌ Invalid choice"
