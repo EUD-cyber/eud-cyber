@@ -8,6 +8,8 @@ missing \
   ip address validation on vm opnsense and guacvm \
   download cloud img to default folder and check if exits on each vm creation \
   all input first so the script will run without input after \
+  no docker on vulnsrv01
+  
 
 Network \
   guacvm \
@@ -25,8 +27,8 @@ Network \
     lan1  192.168.1.100/24
     oobm  172.20.0.11/24  \
   wazuh
-    lan1 (change to lan2 when opnsense has 2 lan) 192.168.1.200
-    oobm 172.20.0.12
+    lan1 (change to lan2 when opnsense has 2 lan) 192.168.1.200 \
+    oobm 172.20.0.20 \
   win11 (not done yet) \
     lan1  192.168.1.101/24 (not done yet) \
     oobm 172.20.0.12/24 (not done yet) \
