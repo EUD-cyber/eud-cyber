@@ -22,7 +22,8 @@ IMG_URL="https://aka.ms/windev_VM_vmware"
 VIRT_PATH="/var/lib/vz/template/iso/virtio-win.iso"
 VIRT_URL="https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso"
 VMSTORAGE="local-lvm" # Where should the VM saved on Proxmox
-VMNET="virtio,bridge=lan1" # Your network definition for VM
+BRIDGE="lan1" # Your network definition for VM
+BRIDGE="lan2"
 VIRTIO_ISO="ISOimages:iso/virtio-win.iso" # Location of virtio driver ISO
 OVF="$(pwd)/WinDev2407Eval.ovf"
 
@@ -72,17 +73,19 @@ echo "VM name to use: $VM_NAME"
 
 echo "[i] Importing VM into Proxmox..."
 qm importovf $VMID $OVF $VMSTORAGE --format raw
-qm set $VMID --name $VM_NAME
-qm set $VMID --bios ovmf
-qm set $VMID --cpu host
-qm set $VMID --machine pc-q35-8.1
-qm set $VMID --agent 1,fstrim_cloned_disks=1
-qm set $VMID --ide2 media=cdrom,file=$VIRTIO_ISO
-qm set $VMID --boot order='sata0;ide2'
-qm set $VMID --ostype win11
-qm set $VMID --net0 $VMNET
-qm set $VMID --efidisk0 $VMSTORAGE:1,efitype=4m,pre-enrolled-keys=1,size=4M
-qm set $VMID --tpmstate0 $VMSTORAGE:1,size=4M,version=v2.0
+qm set $VMID \
+  --name "$VM_NAME" \
+  --bois ovmf \
+  --cpu host \
+  --net0 virtio,bridge=$BRIDGE \
+  --net1 virtio,bridge=$BRIDGE1 \
+  --ostype win11 \
+  --machine pc-q35-8.1 \
+  --agent 1,fstrim_cloned_disks=1 \
+  --ide2 media=cdrom,file=$VIRTIO_ISO \
+  --boot order='sata0;ide2' \
+  --efidisk0 $VMSTORAGE:1,efitype=4m,pre-enrolled-keys=1,size=4M \
+  --tpmstate0 $VMSTORAGE:1,size=4M,version=v2.0 \
 qm start $VMID
 
 echo "[!] PLEASE install VIRTIO driver package from CD ROM on your newly created VM!"
