@@ -24,7 +24,7 @@ VIRT_URL="https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stabl
 VMSTORAGE="local-lvm" # Where should the VM saved on Proxmox
 VMNET="virtio,bridge=lan1" # Your network definition for VM
 VIRTIO_ISO="ISOimages:iso/virtio-win.iso" # Location of virtio driver ISO
-OVF="$(pwd/WinDev2407Eval.ovf"
+OVF="$(pwd)/WinDev2407Eval.ovf"
 
 
 # ===== Download Windows 11 if missing =====
