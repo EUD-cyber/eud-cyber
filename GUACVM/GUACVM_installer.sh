@@ -129,10 +129,12 @@ qm set $VMID --onboot 1
 qm set $VMID --ipconfig0 $IP_ADDR \
   --ipconfig1 $OOBM_IP \
   --searchdomain cloud.local \
-  --nameserver $DNS_SERVER \
   --ciupgrade 1 \
   --cicustom "user=local:snippets/GUAC_userdata.yaml"
 
+if [[ "$IP_ADDR" != "ip=dhcp" ]]; then
+  qm set $VMID --nameserver $DNS_SERVER"
+fi
 
 # ===== Start VM =====
 echo "Starting VM $VMID ($VM_NAME)..."
