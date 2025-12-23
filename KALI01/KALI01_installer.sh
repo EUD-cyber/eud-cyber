@@ -26,6 +26,25 @@ DISK_SIZE="32G"    # the number is in GB
 BRIDGE="lan1"
 IP_ADDR="ip=192.168.10.100/24"
 DNS_SERVER="192.168.10.1"
+SNIPPET_DIR="/var/lib/vz/snippets"
+SRC_USERDATA="$(pwd)/GUACVM/KALI01_userdata.yaml"     # source file
+DST_USERDATA="KALI01_userdata.yaml"            # destination filename
+# ==================
+
+DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
+
+echo "Checking Cloud-Init user-data snippet..."
+
+# Check if snippet already exists
+if [[ -f "$DST_PATH" ]]; then
+  echo "User-data already exists: $DST_PATH"
+else
+  echo "User-data not found. Copying..."
+  cp "$SRC_USERDATA" "$DST_PATH"
+  chmod 644 "$DST_PATH"
+  echo "User-data copied to $DST_PATH"
+fi
+echo "Done."
 
 # ===== Find next free VMID =====
 VMID=$START_VMID
@@ -67,6 +86,9 @@ qm set $VMID \
   --scsihw virtio-scsi-pci \
   --scsi0 ${DISK_STORAGE}:"vm-$VMID-disk-0"
 
+#extend disk
+qm disk resize $VMID scsi0 +$DISK_SIZE
+
 # ===== Boot order and console =====
 qm set $VMID \
   --ide2 $DISK_STORAGE:cloudinit \
@@ -83,7 +105,8 @@ qm set $VMID --onboot 1
 qm set $VMID --ipconfig0 $IP_ADDR \
   --searchdomain cloud.local \
   --nameserver $DNS_SERVER \
-  --ciupgrade 1
+  --ciupgrade 1 \
+  --cicustom "user=local:snippets/KALI01_userdata.yaml"
 
 # ===== Start VM =====
 echo "Starting VM $VMID ($VM_NAME)..."
