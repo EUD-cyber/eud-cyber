@@ -56,6 +56,7 @@ case "$CHOICE" in
   7)
     echo "Starting Wazuh VM creation.... "
     bash "$WAZUH"
+    ;;
   90)
     echo "Running ALL steps..."
 
