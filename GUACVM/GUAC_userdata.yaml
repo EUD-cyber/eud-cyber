@@ -1,6 +1,6 @@
 #cloud-config
 
-hostname: GUACVM
+hostname: guacvm
 manage_etc_hosts: true
 
 users:
