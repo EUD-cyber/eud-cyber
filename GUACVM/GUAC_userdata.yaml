@@ -108,4 +108,4 @@ runcmd:
   - mkdir ./record >/dev/null 2>&1
   - chmod -R 777 ./record
 #  - openssl req -nodes -newkey rsa:2048 -new -x509 -keyout nginx/ssl/self-ssl.key -out nginx/ssl/self.cert -subj '/C=DK/CN=guacamole.com'  
-  - docker compose -f /opt/guacamole/docker-compose.yml up -d
+#  - docker compose -f /opt/guacamole/docker-compose.yml up -d
