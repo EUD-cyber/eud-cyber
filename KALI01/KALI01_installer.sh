@@ -15,9 +15,10 @@ echo "===== KALI01 installation started at $(date) ====="
 # ===== CONFIG =====
 START_VMID=100
 BASE_NAME="KALI01"
-IMG_URL="https://cdimage.kali.org/kali-2025.4/kali-linux-2025.4-qemu-amd64.7z"
-IMG_NAME="noble-server-cloudimg-amd64.img"
+IMG_URL="https://kali.download/cloud-images/kali-2025.4/$IMG_NAME"
+IMG_NAME="kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
 IMG_PATH="$(pwd)/$IMG_NAME"
+DISK="disk.raw"
 ISO_STORAGE="local"
 DISK_STORAGE="local-lvm"
 MEMORY=4096       # in MB
@@ -81,7 +82,7 @@ qm create $VMID \
   --ostype l26
 
 # ===== Add LVM disk =====
-qm importdisk $VMID $IMG_NAME $DISK_STORAGE
+qm importdisk $VMID $DISK $DISK_STORAGE
 qm set $VMID \
   --scsihw virtio-scsi-pci \
   --scsi0 ${DISK_STORAGE}:"vm-$VMID-disk-0"
