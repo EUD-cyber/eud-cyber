@@ -3,7 +3,8 @@
 USERNAME= lab
 PASSWORD= Password!1
 VMNAME= WIN11
-VMDOWNLOAD_PATH="/mnt/pve/ISOimages" # Where to download the Windows 11 Developer Image
+VMDOWNLOAD_PATH="$(pwd)/" # Where to download the Windows 11 Developer Image
+VIRT_PATH="/var/lib/vz/template/iso/"
 VMSTORAGE="FastDisk" # Where should the VM saved on Proxmox
 VMNET="virtio,bridge=lan1" # Your network definition for VM
 VIRTIO_ISO="ISOimages:iso/virtio-win.iso" # Location of virtio driver ISO
@@ -14,6 +15,10 @@ cd $VMDOWNLOAD_PATH
 wget -O WinDevEval.VMWare.zip https://aka.ms/windev_VM_vmware
 unzip -o WinDevEval.VMWare.zip
 rm WinDevEval.VMWare.zip
+
+echo "[+] Downloading VirtIO drivers"
+wget -O "$VIRT_PATH" \
+https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/stable-virtio/virtio-win.iso
 
 vmid=110
 echo "[i] Importing VM into Proxmox..."
