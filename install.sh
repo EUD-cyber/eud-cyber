@@ -47,7 +47,7 @@ case "$CHOICE" in
     ;;
   6)
     echo "Starting KALI01 VM creation... "
-    bask "$KALI01"
+    bash "$KALI01"
     ;;
   7)
     echo "Running ALL steps..."
