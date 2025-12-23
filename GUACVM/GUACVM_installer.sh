@@ -10,7 +10,7 @@ chmod 600 "$LOGFILE"
 # Redirect all output (stdout + stderr) to log AND console
 exec > >(tee -a "$LOGFILE") 2>&1
 
-echo "===== Proxmox installation started at $(date) ====="
+echo "===== GUACVM installation started at $(date) ====="
 
 # ===== CONFIG =====
 START_VMID=100
