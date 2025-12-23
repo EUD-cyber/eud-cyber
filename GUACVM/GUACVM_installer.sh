@@ -24,6 +24,8 @@ MEMORY=4096       # in MB
 CORES=4
 DISK_SIZE="32G"    # the number is in GB
 BRIDGE="vmbr0"
+BRIDGE1="oobm"
+OOBM_IP="172.20.0.1/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
 SRC_USERDATA="$(pwd)/GUACVM/GUAC_userdata.yaml"     # source file
 DST_USERDATA="GUAC_userdata.yaml"            # destination filename
@@ -99,6 +101,7 @@ qm create $VMID \
   --cores $CORES \
   --cpu host \
   --net0 virtio,bridge=$BRIDGE \
+  --net1 virtio,bridge=$BRIDGE1 \
   --ostype l26
 
 # ===== Add LVM disk =====
@@ -124,6 +127,7 @@ qm set $VMID --onboot 1
 
 # ===== Cloud-init =====
 qm set $VMID  --ipconfig0 $IP_ADDR \
+  --ipconfig1 $OOBM_IP \
   --searchdomain cloud.local \
   --nameserver $DNS_SERVER \
   --ciupgrade 1 \
