@@ -1,6 +1,17 @@
 #!/bin/bash
 set -e
 
+LOGFILE="$(pwd)/LOGS/KALI01.log"
+
+# Create log file and ensure permissions
+touch "$LOGFILE"
+chmod 600 "$LOGFILE"
+
+# Redirect all output (stdout + stderr) to log AND console
+exec > >(tee -a "$LOGFILE") 2>&1
+
+echo "===== KALI01 installation started at $(date) ====="
+
 # ===== CONFIG =====
 START_VMID=100
 BASE_NAME="KALI01"
@@ -11,7 +22,7 @@ ISO_STORAGE="local"
 DISK_STORAGE="local-lvm"
 MEMORY=4096       # in MB
 CORES=4
-DISK_SIZE="32"    # the number is in GB
+DISK_SIZE="32G"    # the number is in GB
 BRIDGE="lan1"
 IP_ADDR="ip=192.168.10.100/24"
 DNS_SERVER="192.168.10.1"
@@ -69,10 +80,7 @@ qm set $VMID --agent enabled=1
 qm set $VMID --onboot 1
 
 # ===== Cloud-init =====
-qm set $VMID --sshkeys ~/.ssh/id_rsa.pub \
-  --ipconfig0 $IP_ADDR \
-  --ciuser=ubuntu \
-  --cipassword 'Password1!' \
+qm set $VMID --ipconfig0 $IP_ADDR \
   --searchdomain cloud.local \
   --nameserver $DNS_SERVER \
   --ciupgrade 1
