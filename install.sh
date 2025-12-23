@@ -20,7 +20,7 @@ echo "4) Create Guacamole VM"
 echo "5) Create Vuln-server01 VM"
 echo "6) Create KALI01 VM"
 echo "7) Run ALL"
-echo "99) Finish script
+echo "99) Finish script"
 echo "0) Exit"
 echo "=============================="
 
