@@ -126,7 +126,7 @@ qm set $VMID --agent enabled=1
 qm set $VMID --onboot 1
 
 # ===== Cloud-init =====
-qm set $VMID  --ipconfig0 $IP_ADDR \
+qm set $VMID --ipconfig0 $IP_ADDR \
   --ipconfig1 $OOBM_IP \
   --searchdomain cloud.local \
   --nameserver $DNS_SERVER \
