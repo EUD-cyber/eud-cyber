@@ -73,7 +73,7 @@ else
 fi
 
 echo "[+] Extracting image"
-tar -xJf "$DISK_PATH"/"$IMAGE_NAME"
+tar -xJf "$DISK_PATH""$IMG_NAME"
 
 # ===== Create VM =====
 echo "Creating VM $VMID..."
