@@ -76,19 +76,19 @@ write_files:
             volumes:
               - ./record:/record:rw
             ports:
-            - 8080/tcp
+              - 8080:8080/tcp
             restart: always        
           # nginx
-          nginx:
-           container_name: nginx_guacamole_compose
-           restart: always
-           image: nginx:latest
-           volumes:
-           - ./nginx/templates:/etc/nginx/templates:ro
-           - ./nginx/ssl/self.cert:/etc/nginx/ssl/self.cert:ro
-           - ./nginx/ssl/self-ssl.key:/etc/nginx/ssl/self-ssl.key:ro
-           ports:
-           - 8443:443
+          #nginx:
+          # container_name: nginx_guacamole_compose
+          # restart: always
+          # image: nginx:latest
+          # volumes:
+          # - ./nginx/templates:/etc/nginx/templates:ro
+          # - ./nginx/ssl/self.cert:/etc/nginx/ssl/self.cert:ro
+          # - ./nginx/ssl/self-ssl.key:/etc/nginx/ssl/self-ssl.key:ro
+          # ports:
+          # - 8443:443
            networks:
              - guacnetwork_compose          
 runcmd:
@@ -107,5 +107,5 @@ runcmd:
   - docker run --rm 'guacamole/guacamole:1.6.0' /opt/guacamole/bin/initdb.sh --postgresql > ./init/initdb.sql
   - mkdir ./record >/dev/null 2>&1
   - chmod -R 777 ./record
-  - openssl req -nodes -newkey rsa:2048 -new -x509 -keyout nginx/ssl/self-ssl.key -out nginx/ssl/self.cert -subj '/C=DK/CN=guacamole.com'  
-#  - docker compose -f /opt/guacamole/docker-compose.yml up -d
+#  - openssl req -nodes -newkey rsa:2048 -new -x509 -keyout nginx/ssl/self-ssl.key -out nginx/ssl/self.cert -subj '/C=DK/CN=guacamole.com'  
+  - docker compose -f /opt/guacamole/docker-compose.yml up -d
