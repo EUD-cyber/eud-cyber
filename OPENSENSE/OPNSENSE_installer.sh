@@ -1,6 +1,17 @@
 #!/bin/bash
 set -e
 
+LOGFILE="$(pwd)/LOGS/OPNSENSE.log"
+
+# Create log file and ensure permissions
+touch "$LOGFILE"
+chmod 600 "$LOGFILE"
+
+# Redirect all output (stdout + stderr) to log AND console
+exec > >(tee -a "$LOGFILE") 2>&1
+
+echo "===== OPNSENSE installation started at $(date) ====="
+
 ### ===== VARIABLES =====
 START_VMID=100
 BASE_NAME="opnsense"
