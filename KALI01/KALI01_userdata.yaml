@@ -15,6 +15,29 @@ chpasswd:
 package_update: true
 package_upgrade: true
 
+packages:
+  - kali-desktop-xfce
+  - lightdm
+  - lightdm-gtk-greeter
+  - xorg
+  - dbus-x11
+  - qemu-guest-agent
+  - openssh-server
+  - xfce4-terminal
+  - firefox-esr
+  - kali-linux-default
+
+timezone: UTC
+
 runcmd:
-  - apt-get update
-  - apt install -y kali-desktop-xfce
+  - systemctl enable ssh
+  - systemctl enable lightdm
+  - systemctl enable qemu-guest-agent
+  - systemctl set-default graphical.target
+  - systemctl start lightdm
+  - echo "ZERO TOUCH DESKTOP READY" > /var/log/desktop-installed.log
+
+final_message: |
+  ✔ Kali XFCE desktop installed
+  ✔ Zero-touch provisioning complete
+  ✔ GUI enabled on first boot
