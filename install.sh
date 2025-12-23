@@ -67,6 +67,7 @@ case "$CHOICE" in
     ;;
   9)
     echo "Starting Windows 11 VM creation... "
+    bash "$WIN11"
     ;;
   90)
     echo "Running ALL steps..."
