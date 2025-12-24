@@ -12,6 +12,9 @@ users:
     ssh_authorized_keys:
       - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
 
+chpasswd:
+  expire: false
+
 package_update: true
 package_upgrade: true
 
@@ -58,7 +61,7 @@ runcmd:
   - systemctl set-default graphical.target
   - mkdir -p /home/kali/.vnc
   - chown -R kali:kali /home/kali/.vnc
-  - su - kali -c "printf 'vncpassword\nvncpassword\n\n' | vncpasswd"
+  - su - kali -c "printf 'password\password\n\n' | vncpasswd"
   - systemctl daemon-reexec
   - systemctl daemon-reload
   - systemctl enable vncserver@:1
