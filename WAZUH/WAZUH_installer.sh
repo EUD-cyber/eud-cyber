@@ -22,7 +22,7 @@ ISO_STORAGE="local"
 DISK_STORAGE="local-lvm"
 MEMORY=4096       # in MB
 CORES=4
-DISK_SIZE="32G"    # the number is in GB
+DISK_SIZE="80G"    # the number is in GB
 BRIDGE="lan1"
 BRIDGE1="oobm"
 IP_ADDR="ip=192.168.1.200/24"
