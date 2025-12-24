@@ -62,7 +62,7 @@ runcmd:
   - systemctl set-default graphical.target
   - mkdir -p /home/kali/.vnc
   - chown -R kali:kali /home/kali/.vnc
-  - su - kali -c "printf 'vncpassword\nvncpassword\n\n' | password"
+  - su - kali -c "printf 'vncpassword\nvncpassword\n\n' | vncpasswd"
   - systemctl daemon-reexec
   - systemctl daemon-reload
   - systemctl enable vncserver@:1
