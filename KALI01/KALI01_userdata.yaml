@@ -31,7 +31,7 @@ packages:
   
 write_files:
   - path: /home/kali/.vnc/xstartup
-    owner: root:root
+    owner: kali:kali
     permissions: "0755"
     content: |
       #!/bin/sh
@@ -64,9 +64,8 @@ runcmd:
   - systemctl enable lightdm
   - systemctl set-default graphical.target
   - mkdir -p /home/kali/.vnc
+  - mkdir -p /home/kali/.config/tigervnc
   - chown -R kali:kali /home/kali
   - su - kali -c "printf 'password\npassword\n\n' | vncpasswd"
-#  - systemctl daemon-reexec
-#  - systemctl daemon-reload
   - systemctl enable vncserver@:1
   - systemctl start vncserver@:1
