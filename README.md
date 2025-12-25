@@ -25,13 +25,15 @@ Network \
     lan1  192.168.1.20 \
     oobm  172.20.0.10/24 \
   vulnsrv02 \
-    lan1 (change to lan2 when opnsense has 2 lan) 192.168.1.210 \
-    oobm 172.20.0.21 \
-  kali01 (not done yet) \
-    lan1  192.168.1.100/24
+    temp lan1 192.168.1.210 \
+    lan2 192.168.2.21/24 \
+    oobm 172.20.0.21/24 \
+  kali01 \
+    lan1  192.168.1.100/24 \
     oobm  172.20.0.11/24  \
   wazuh
-    lan1 (change to lan2 when opnsense has 2 lan) 192.168.1.200 \
+    temp lan1 192.168.1.200/24 \
+    lan2 192.168.2.20/24 \
     oobm 172.20.0.20 \
   win11 (not done yet) \
     lan1  192.168.1.101/24 (not done yet) \
