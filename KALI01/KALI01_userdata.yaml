@@ -51,16 +51,24 @@ write_files:
     permissions: "0644"
     content: |
       [Unit]
-      Description=TigerVNC Server for display :1
+      Description=TigerVNC Server for display %i
       After=network.target
-
+      
       [Service]
       Type=forking
       User=kali
       PAMName=login
-      ExecStart=/usr/bin/vncserver -localhost=no :1
-      ExecStop=/usr/bin/vncserver -kill :1
-
+      
+      # IMPORTANT: give TigerVNC the correct home env
+      Environment="HOME=/home/kali"
+      Environment="USER=kali"
+      Environment="LOGNAME=kali"
+      
+      WorkingDirectory=/home/kali
+      
+      ExecStart=/usr/bin/vncserver %i -localhost=no
+      ExecStop=/usr/bin/vncserver -kill %i
+      
       [Install]
       WantedBy=multi-user.target
 
