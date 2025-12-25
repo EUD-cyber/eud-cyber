@@ -16,6 +16,9 @@ users:
 #ssh_pwauth: false
 #disable_root: true
 
+chpasswd:
+  expire: false
+
 package_update: true
 package_upgrade: true
 
