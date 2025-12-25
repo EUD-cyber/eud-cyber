@@ -233,4 +233,4 @@ runcmd:
   - systemctl start docker
   - systemctl enable qemu-guest-agent
   - mkdir -p /opt/websploit
-  - cd /opt/guacamole
+ # - docker compose -f /opt/websploit/docker-compose.yml up -d
