@@ -6,7 +6,7 @@ manage_etc_hosts: true
 users:
   - name: kali
     sudo: ALL=(ALL) NOPASSWD:ALL
-#    groups: sudo
+    groups: sudo
     passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
     shell: /bin/bash
     lock_passwd: false
@@ -24,8 +24,7 @@ package_upgrade: true
 
 packages:
   - kali-desktop-xfce
-#  - lightdm
-#  - xorg
+  - xorg
   - dbus-x11
   - openssh-server
   - tigervnc-standalone-server
@@ -69,9 +68,9 @@ write_files:
 runcmd:
   - DEBIAN_FRONTEND=noninteractive
   - apt-get update
-  - apt install -y xfce4 xfce4-goodies kali-linux-everything
+  - apt install -y xfce4 xfce4-goodies xfce4-session
+  #kali-linux-everything
   - systemctl enable ssh
- # - systemctl enable lightdm
   - systemctl set-default multi-user.target
   - mkdir -p /home/kali/.vnc
   - mkdir -p /home/kali/.config/tigervnc
