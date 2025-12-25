@@ -36,42 +36,26 @@ write_files:
     permissions: "0755"
     content: |
       #!/bin/sh
-      
+
       unset SESSION_MANAGER
       unset DBUS_SESSION_BUS_ADDRESS
+      startxfce4 &
       
-      # Start a D-Bus session explicitly
-      if command -v dbus-launch >/dev/null 2>&1; then
-        eval "$(dbus-launch --sh-syntax)"
-      fi
-      
-      exec startxfce4
-      
-  - path: /etc/systemd/system/vncserver@:1.service
+  - path: /etc/systemd/system/vncserver.service
     permissions: "0644"
     content: |
       [Unit]
-      Description=TigerVNC Server for display %i
-      After=network.target
+      Description=TightVNC server on Port 5910
+      After=Network.target
       
       [Service]
       Type=forking
       User=kali
-      PAMName=login
-      
-      # IMPORTANT: give TigerVNC the correct home env
-      Environment="HOME=/home/kali"
-      Environment="USER=kali"
-      Environment="LOGNAME=kali"
-      
-      WorkingDirectory=/home/kali
-      
-      ExecStart=/usr/bin/vncserver %i -localhost=no
-      ExecStop=/usr/bin/vncserver -kill %i
+      ExecStart=/usr/bin/vncserver -localhost=no -geometry 1280x720 :10
+      ExecStop=/usr/bin/vncserver -kill :10
       
       [Install]
       WantedBy=multi-user.target
-
 
 runcmd:
   - DEBIAN_FRONTEND=noninteractive
@@ -84,5 +68,5 @@ runcmd:
   - mkdir -p /home/kali/.config/tigervnc
   - chown -R kali:kali /home/kali
   - su - kali -c "printf 'password\npassword\n\n' | vncpasswd"
-#  - systemctl enable vncserver@:1
-#  - systemctl start vncserver@:1
+  - systemctl enable vncserver
+  - systemctl start vncserver
