@@ -48,7 +48,6 @@ write_files:
       Type=forking
       User=kali
       PAMName=login
-      PIDFile=/home/kali/.vnc/%H%i.pid
       ExecStart=/usr/bin/vncserver -localhost=no :1
       ExecStop=/usr/bin/vncserver -kill :1
 
