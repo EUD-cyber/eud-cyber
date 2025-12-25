@@ -14,3 +14,12 @@ users:
 
 chpasswd:
   expire: false
+
+packages:
+  - git
+
+runcmd:
+  - cd /opt/
+  - git clone https://github.com/The-Art-of-Hacking/websploit.git
+  - cd websploit
+  - bash install.sh
