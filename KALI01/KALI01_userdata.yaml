@@ -27,7 +27,7 @@ packages:
   - openssh-server
   - tigervnc-standalone-server
   - tigervnc-common
-
+  
 write_files:
   - path: /home/kali/.vnc/xstartup
     owner: root:root
@@ -57,12 +57,14 @@ write_files:
 
 
 runcmd:
+  - apt-get update
+  - apt install -y xfce4 xfce4-goodies
   - systemctl enable ssh
   - systemctl enable lightdm
   - systemctl set-default graphical.target
   - mkdir -p /home/kali/.vnc
   - chown -R kali:kali /home/kali
-#  - su - kali -c "printf 'password\npassword\n\n' | vncpasswd"
+  - su - kali -c "printf 'password\npassword\n\n' | vncpasswd"
 #  - systemctl daemon-reexec
 #  - systemctl daemon-reload
   - systemctl enable vncserver@:1
