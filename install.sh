@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-
+REPO="./repo.sh"
 GUACVM="./GUACVM/GUACVM_installer.sh"
 OPENVSWITCH="./open-vswitch.sh"
 VULNSRV01="./VULNSRV01/VULNSRV01_installer.sh"
@@ -25,6 +25,7 @@ echo "6) Create Vuln-server02 VM"
 echo "7) Create KALI01 VM"
 echo "8) Create WAZUH VM"
 echo "9) Create Windows 11 VM"
+echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
 echo "99) Finish script"
 echo "0) Exit"
@@ -69,9 +70,16 @@ case "$CHOICE" in
     echo "Starting Windows 11 VM creation... "
     bash "$WIN11"
     ;;
+  89)
+    echo "Change proxmox repo to no-enterprise"
+    bash "$REPO"
+    ;;
   90)
     echo "Running ALL steps..."
-
+    
+    echo "Change proxmox repo to no-enterprise"
+    bash "$REPO"
+    
     echo "Checking packages and snippets..."
     bash "$PREREQ"
 
