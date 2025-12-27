@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-mkdir -p $(pwd)/iso/conf
+mkdir -p $(pwd)/OPNSENSE/iso/conf
 
 echo "=== OPNsense WAN IP Configuration ==="
 echo "1) DHCP"
@@ -45,7 +45,7 @@ else
   exit 1
 fi
 
-cat > $(pwd)/iso/conf/config.xml <<EOF
+cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
 <?xml version="1.0"?>
 <opnsense>
   <system>
