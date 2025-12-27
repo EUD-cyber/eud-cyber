@@ -37,8 +37,11 @@ IMG_DIR="$(pwd)/OPNSENSE"
 IMG_PATH="${IMG_DIR}/${IMG_BASE}"
 IMG_BZ2_PATH="${IMG_DIR}/${IMG_BZ2}"
 
+ISO_PATH="/var/lib/vz/template/iso/opnsense-config.iso"
+
 GENERATESH="$(pwd)/OPENSENSE/generate_config.sh"
-CONFIG_SRC="/root/opnsense/iso/conf/config.xml"
+CONFIG_ISO="$(pwd)/OPSENSE/iso"
+CONFIG_SRC="$(pwd)/OPNSENSE/iso/conf/config.xml"
 
 
 ## ===== CHECKS =====
@@ -48,7 +51,7 @@ if [[ ! -f "$CONFIG_SRC" ]]; then
   bash $GENERATESH
 fi
 
-mkdir -p "$IMG_DIR"
+#mkdir -p "$IMG_DIR"
 
 ### ===== DOWNLOAD IMG.BZ2 =====
 if [[ ! -f "$IMG_PATH" ]]; then
@@ -60,6 +63,14 @@ if [[ ! -f "$IMG_PATH" ]]; then
 
   echo "Unpacking image..."
   bunzip2 -fk "$IMG_BZ2_PATH"
+fi
+
+## ===== CHECK IF ISO EXITS =====
+if [[ ! -f "$ISO_PATH" ]]; then
+#  echo opnsense-config.iso not found at $ISO_PATH"
+  echo "generating opnsense-config.iso"
+  cd $CONFIG_ISO
+  genisoimage -o $ISO_PATH -J -r -V OPNCONF .
 fi
 
 
@@ -102,8 +113,8 @@ qm importdisk $VMID "$IMG_PATH" $DISK_STORAGE
 # Attach imported disk as scsi0
 qm set $VMID --scsi0 $DISK_STORAGE:vm-$VMID-disk-0
 
-### ===== CONFIG DISK FOR config.xml =====
-qm set $VMID --scsi1 $DISK_STORAGE:1
+# Attach cdrom to vm
+qm set $VMID --ide2 local:iso/opnsense-config.iso,media=cdrom
 
 ### ===== START VM =====
 qm start $VMID
