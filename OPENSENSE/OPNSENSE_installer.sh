@@ -26,6 +26,8 @@ ISO_STORAGE="local"
 # Bridges
 WAN_BRIDGE="vmbr0"
 LAN_BRIDGE="lan1"
+LAN_BRIDGE1="lan2"
+OOBM="oobm"
 
 OPN_VERSION="24.1"
 IMG_BASE="OPNsense-${OPN_VERSION}-nano-amd64.img"
@@ -37,10 +39,9 @@ IMG_BZ2_PATH="${IMG_DIR}/${IMG_BZ2}"
 
 GENERATESH="$(pwd)/OPENSENSE/generate_config.sh"
 CONFIG_SRC="/root/opnsense/config.xml"
-HOOK_PATH="/var/lib/vz/snippets/opnsense-hook.sh"
 
 
-### ===== CHECKS =====
+## ===== CHECKS =====
 if [[ ! -f "$CONFIG_SRC" ]]; then
 #  echo "ERROR: config.xml not found at $CONFIG_SRC"
   echo "generating config.xml"
@@ -90,6 +91,8 @@ qm create $VMID \
   --scsihw virtio-scsi-pci \
   --net0 virtio,bridge=$LAN_BRIDGE \
   --net1 virtio,bridge=$WAN_BRIDGE \
+  --net2 virtio,bridge=$LAN_BRIDGE1 \
+  --net3 virtio,bridge=$OOBM \
   --boot order=scsi0 \
   --vga std
 
@@ -101,35 +104,6 @@ qm set $VMID --scsi0 $DISK_STORAGE:vm-$VMID-disk-0
 
 ### ===== CONFIG DISK FOR config.xml =====
 qm set $VMID --scsi1 $DISK_STORAGE:1
-
-### ===== HOOK SCRIPT (inject config.xml) =====
-cat > "$HOOK_PATH" <<EOF
-#!/bin/bash
-VMID="$1"
-PHASE="$2"
-
-CONFIG_SRC="/root/opnsense/config.xml"
-MOUNTPOINT="/mnt/opnsense-config"
-DISK="scsi0"
-
-if [ "$PHASE" = "pre-start" ]; then
-  echo "[HOOK] Injecting OPNsense config.xml"
-
-  mkdir -p "$MOUNTPOINT"
-
-  qm disk mount "$VMID" "$DISK" "$MOUNTPOINT"
-
-  mkdir -p "$MOUNTPOINT/conf"
-  cp "$CONFIG_SRC" "$MOUNTPOINT/conf/config.xml"
-
-  qm disk unmount "$VMID" "$DISK"
-fi
-
-EOF
-
-chmod +x "$HOOK_PATH"
-
-qm set $VMID --hookscript local:snippets/opnsense-hook.sh
 
 ### ===== START VM =====
 qm start $VMID
