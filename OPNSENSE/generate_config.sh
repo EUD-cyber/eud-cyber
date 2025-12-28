@@ -61,6 +61,20 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
       <uid>0</uid>
       <scope>system</scope>
     </user>
+    <ssh>
+      <group>admins</group>
+      <noauto>1</noauto>
+      <interfaces>lan,opt1,opt2</interfaces>
+      <kex/>
+      <ciphers/>
+      <macs/>
+      <keys/>
+      <keysig/>
+      <enabled>enabled</enabled>
+      <permitrootlogin>1</permitrootlogin>
+      <passwordauth>1</passwordauth>
+    </ssh>
+    <dnsserver>${DNS_SERVER}</dnsserver>
   </system>
 
   <interfaces>
