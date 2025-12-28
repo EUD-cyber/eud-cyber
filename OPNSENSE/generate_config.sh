@@ -47,13 +47,13 @@ elif [ "$MODE" = "2" ]; then
       <subnet>${WAN_CIDR}</subnet>"
 
   WAN_GATEWAY_BLOCK="<gateways>
-    <gateway item>
+    <gateway_item>
       <interface>wan</interface>
       <gateway>${WAN_GW}</gateway>
       <name>WAN_GW</name>
       <ipprotocol>inet</ipprotocol>
       <defaultgw>1</defaultgw>
-    </gateway item>
+    </gateway_item>
   </gateways>"
 else
   echo "Invalid selection"
