@@ -23,12 +23,12 @@ DISK_STORAGE="local-lvm"
 MEMORY=4096       # in MB
 CORES=4
 DISK_SIZE="80G"    # the number is in GB
-BRIDGE="lan1"
+BRIDGE="lan2"
 BRIDGE1="oobm"
-IP_ADDR="ip=192.168.1.200/24"
-DNS_SERVER="192.168.1.1"
+IP_ADDR="ip=192.168.2.20/24"
+DNS_SERVER="192.168.2.1"
 OOBM_IP="ip=172.20.0.20/24"
-IP_GW="gw=192.168.1.1"
+IP_GW="gw=192.168.2.1"
 SNIPPET_DIR="/var/lib/vz/snippets"
 SRC_USERDATA="$(pwd)/WAZUH/WAZUH_userdata.yaml"     # source file
 DST_USERDATA="WAZUH_userdata.yaml"            # destination filename
