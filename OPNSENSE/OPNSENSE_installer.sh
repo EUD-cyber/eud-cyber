@@ -139,8 +139,11 @@ expect {
         send "\cd0\r"
         exp_continue
     }
-    "login:"
-    {]
+    "login:" {
+        # quit qm terminal (Ctrl+] q)
+        send "\035q"
+        exit
+    }
     eof
 }
 EOF
