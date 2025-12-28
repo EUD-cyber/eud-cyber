@@ -140,8 +140,6 @@ expect {
         exp_continue
     }
     "login:" {
-        # quit qm terminal (Ctrl+] q)
-        send "\035q"
         exit
     }
     eof
