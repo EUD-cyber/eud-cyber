@@ -8,11 +8,8 @@ This script is testet with proxmox 9.1
 
 passwords: 
 
-proxmox \
-user: root pass: Password1! 
-
 opnsense \
-user: root pass: Password1! 
+user: root pass: opnsense 
 
 guacamole \
 user: guacadmin pass: guacadmin 
