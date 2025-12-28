@@ -105,6 +105,7 @@ qm create $VMID \
   --net2 virtio,bridge=$LAN_BRIDGE1 \
   --net3 virtio,bridge=$OOBM \
   --boot order=scsi0 \
+  --serial0 socket \
   --vga std
 
 ### ===== IMPORT DISK =====
