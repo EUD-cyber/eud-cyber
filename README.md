@@ -6,13 +6,22 @@ This script is testet with proxmox 9.1
 <img width="788" height="507" alt="image" src="https://github.com/user-attachments/assets/ab18e1a6-4ed1-482e-bcca-e4934619c9b3" />
 
 
+passwords: \
+opnsense \
+user: root pass: Password1! \
+
+guacamole \
+user: guacadmin pass: guacadmin \
+
+ubuntu \
+user: ubuntu pass: Password1! \
+
 missing \
   ip address validation on vm opnsense and guacvm \
   download cloud img to default folder and check if exits on each vm creation \
   all input first so the script will run without input after \
   no docker on vulnsrv01 \
   Problem with the WIN11 image, needs more testing \
-  Opnsense dont eat the config without a key \
   
 Network \
   guacvm \
