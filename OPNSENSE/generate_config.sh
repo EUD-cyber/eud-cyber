@@ -47,11 +47,13 @@ elif [ "$MODE" = "2" ]; then
       <subnet>${WAN_CIDR}</subnet>"
 
   WAN_GATEWAY_BLOCK="<gateways>
-    <gateway>
+    <gateway item>
       <interface>wan</interface>
       <gateway>${WAN_GW}</gateway>
       <name>WAN_GW</name>
-    </gateway>
+      <ipprotocol>inet</ipprotocol>
+      <defaultgw>1</defaultgw>
+    </gateway item>
   </gateways>"
 else
   echo "Invalid selection"
@@ -120,9 +122,58 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
       <ipaddr>${OOBM_IP}</ipaddr>
       <subnet>${OOBM_CIDR}</subnet>
     </opt2>
-    
-    
   </interfaces>
+
+  <nat>
+    <outbound>
+      <mode>automatic</mode>
+    </outbound>
+</nat>
+
+<filter>
+  <rule>
+    <rule uuid="63376c20-f433-4f7a-b7af-9a74fce396d4">
+      <type>pass</type>
+      <ipprotocol>inet</ipprotocol>
+      <descr>Default allow LAN to any rule</descr>
+      <interface>lan</interface>
+      <source>
+        <network>lan</network>
+      </source>
+      <destination>
+        <any/>
+      </destination>
+  </rule>
+    <rule uuid="7780d053-9d65-4db8-8763-1a2dea6b4f27">
+      <type>pass</type>
+      <interface>opt1</interface>
+      <ipprotocol>inet</ipprotocol>
+      <statetype>keep state</statetype>
+      <descr>Default allow LAN to any rule</descr>
+      <direction>in</direction>
+      <quick>1</quick>
+      <source>
+        <network>opt1</network>
+      </source>
+      <destination>
+        <any>1</any>
+      </destination>
+  </rule>
+    <rule uuid="df90bc4c-7244-479e-b5d3-7722d2be0a6d">
+      <type>pass</type>
+      <interface>opt2</interface>
+      <ipprotocol>inet</ipprotocol>
+      <statetype>keep state</statetype>
+      <direction>in</direction>
+      <quick>1</quick>
+      <source>
+        <any>1</any>
+      </source>
+      <destination>
+        <any>1</any>
+      </destination>
+  </rule>
+</filter>
 
   ${WAN_GATEWAY_BLOCK}
 </opnsense>
