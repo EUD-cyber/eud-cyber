@@ -85,10 +85,14 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
     </user>
     <ssh>
       <group>admins</group>
+      <noauto>1</noauto>
+      <interfaces>lan,opt1,opt2</interfaces>
+      <enabled>enabled</enabled>
+      <permitrootlogin>1</permitrootlogin>
+      <passwordauth>1</passwordauth>
     </ssh>
     <dnsserver>${WAN_DNS}</dnsserver>
   </system>
-
   <interfaces>
     <wan>
       <enable>1</enable>
@@ -96,7 +100,6 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
       ${WAN_IP_BLOCK}
       <descr>wan</descr>
     </wan>
-
     <lan>
       <enable>1</enable>
       <if>${LAN_IF}</if>
@@ -104,7 +107,6 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
       <ipaddr>${LAN_IP}</ipaddr>
       <subnet>${LAN_CIDR}</subnet>
     </lan>
-
     <opt1>
       <enable>1</enable>
       <if>${LAN2_IF}</if>
@@ -120,15 +122,13 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
       <subnet>${OOBM_CIDR}</subnet>
     </opt2>
   </interfaces>
-
   <nat>
     <outbound>
       <mode>automatic</mode>
     </outbound>
-</nat>
-
-<filter>
-  <rule>
+  </nat>
+  <filter>
+    <rule>
       <type>pass</type>
       <ipprotocol>inet</ipprotocol>
       <descr>Default allow LAN to any rule</descr>
@@ -139,7 +139,8 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
       <destination>
         <any/>
       </destination>
-  </rule>
+    </rule>
+    <rule>
       <type>pass</type>
       <ipprotocol>inet</ipprotocol>
       <descr>Default allow LAN2 to any rule</descr>
@@ -150,7 +151,8 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
       <destination>
         <any/>
       </destination>
-  </rule>
+    <rule>  
+    </rule>
       <type>pass</type>
       <ipprotocol>inet</ipprotocol>
       <interface>opt2</interface>
@@ -160,9 +162,8 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
       <destination>
         <any/>
       </destination>
-  </rule>
-</filter>
-
+    </rule>
+  </filter>
   ${WAN_GATEWAY_BLOCK}
 </opnsense>
 EOF
