@@ -85,6 +85,16 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
     </user>
     <ssh>
       <group>admins</group>
+      <noauto>1</noauto>
+      <interfaces/>
+      <kex/>
+      <ciphers/>
+      <macs/>
+      <keys/>
+      <keysig/>
+      <passwordauth>1</passwordauth>
+      <permitrootlogin>1</permitrootlogin>
+      <enabled>enabled</enabled>  
     </ssh>
   </system>
   <interfaces>
