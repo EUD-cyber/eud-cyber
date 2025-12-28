@@ -67,25 +67,24 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
     <hostname>${HOSTNAME}</hostname>
     <domain>${DOMAIN}</domain>
     <timezone>${TIMEZONE}</timezone>
+    <group>
+      <name>admins</name>
+      <description>System Administrators</description>
+      <scope>system</scope>
+      <gid>1999</gid>
+      <member>0</member>
+      <priv>page-all</priv>
+    </group>
     <user>
       <name>root</name>
-      <password>${ROOT_PASSWORD_HASH}</password>
-      <uid>0</uid>
+      <descr>System Administrator</descr>
       <scope>system</scope>
       <groupname>admins</groupname>
+      <password>${ROOT_PASSWORD_HASH}</password>
+      <uid>0</uid>
     </user>
     <ssh>
       <group>admins</group>
-      <noauto>1</noauto>
-      <interfaces>lan,opt1,opt2</interfaces>
-      <kex/>
-      <ciphers/>
-      <macs/>
-      <keys/>
-      <keysig/>
-      <enabled>enabled</enabled>
-      <permitrootlogin>1</permitrootlogin>
-      <passwordauth>1</passwordauth>
     </ssh>
     <dnsserver>${WAN_DNS}</dnsserver>
   </system>
@@ -130,7 +129,6 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
 
 <filter>
   <rule>
-    <rule uuid="63376c20-f433-4f7a-b7af-9a74fce396d4">
       <type>pass</type>
       <ipprotocol>inet</ipprotocol>
       <descr>Default allow LAN to any rule</descr>
@@ -142,33 +140,25 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
         <any/>
       </destination>
   </rule>
-    <rule uuid="7780d053-9d65-4db8-8763-1a2dea6b4f27">
       <type>pass</type>
-      <interface>opt1</interface>
       <ipprotocol>inet</ipprotocol>
-      <statetype>keep state</statetype>
-      <descr>Default allow LAN to any rule</descr>
-      <direction>in</direction>
-      <quick>1</quick>
+      <descr>Default allow LAN2 to any rule</descr>
+      <interface>opt1</interface>
       <source>
-        <network>opt1</network>
+        <any/>
       </source>
       <destination>
-        <any>1</any>
+        <any/>
       </destination>
   </rule>
-    <rule uuid="df90bc4c-7244-479e-b5d3-7722d2be0a6d">
       <type>pass</type>
-      <interface>opt2</interface>
       <ipprotocol>inet</ipprotocol>
-      <statetype>keep state</statetype>
-      <direction>in</direction>
-      <quick>1</quick>
+      <interface>opt2</interface>
       <source>
-        <any>1</any>
+        <any/>
       </source>
       <destination>
-        <any>1</any>
+        <any/>
       </destination>
   </rule>
 </filter>
