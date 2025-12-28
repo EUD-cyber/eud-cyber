@@ -67,14 +67,12 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
     <hostname>${HOSTNAME}</hostname>
     <domain>${DOMAIN}</domain>
     <timezone>${TIMEZONE}</timezone>
-    <ssh>
-      <enable>1</enable>
-    </ssh>
     <user>
       <name>root</name>
       <password>${ROOT_PASSWORD_HASH}</password>
       <uid>0</uid>
       <scope>system</scope>
+      <groupname>admins</groupname>
     </user>
     <ssh>
       <group>admins</group>
