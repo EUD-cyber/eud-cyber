@@ -15,7 +15,7 @@ OOBM_IF="vtnet3"
 
 HOSTNAME="opnsense"
 DOMAIN="local"
-TIMEZONE="UTC"
+TIMEZONE="Etc/UTC"
 
 # LAN defaults
 LAN_IP="192.168.1.1"
@@ -32,7 +32,7 @@ OOBM_CIDR="24"
 WAN_DNS=""
 
 # Default password: opnsense
-ROOT_PASSWORD_HASH='$2y$10$u1rPZJvM0Qz9sPZP6UZZ6OaGxK2p2pF0XjU5O4Hn5qjz'
+ROOT_PASSWORD_HASH='$2y$10$YRVoF4SgskIsrXOvOQjGieB9XqHPRra9R7d80B3BZdbY/j21TwBfS'
 
 if [ "$MODE" = "1" ]; then
   WAN_IP_BLOCK="<ipaddr>dhcp</ipaddr>"
@@ -85,13 +85,7 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
     </user>
     <ssh>
       <group>admins</group>
-      <noauto>1</noauto>
-      <interfaces>lan,opt1,opt2</interfaces>
-      <enabled>enabled</enabled>
-      <permitrootlogin>1</permitrootlogin>
-      <passwordauth>1</passwordauth>
     </ssh>
-    <dnsserver>${WAN_DNS}</dnsserver>
   </system>
   <interfaces>
     <wan>
@@ -146,18 +140,18 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
       <descr>Default allow LAN2 to any rule</descr>
       <interface>opt1</interface>
       <source>
-        <any/>
+        <network>opt1</network>
       </source>
       <destination>
         <any/>
       </destination>
-    <rule>  
-    </rule>
+    </rule>  
+    <rule>
       <type>pass</type>
       <ipprotocol>inet</ipprotocol>
       <interface>opt2</interface>
       <source>
-        <any/>
+        <network>opt2</network>
       </source>
       <destination>
         <any/>
