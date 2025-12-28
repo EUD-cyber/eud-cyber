@@ -34,8 +34,8 @@ Network \
   opnsense \
     vmbri0  static/dhcp \
     lan1  192.168.1.1/24 \
-    lan2  10.0.0.1/24 (not done yet) \
-    oobm  172.20.0.2/24  (not done yet) \
+    lan2  10.0.0.1/24 \
+    oobm  172.20.0.2/24 \
   vulnsrv01 \
     lan1  192.168.1.20 \
     oobm  172.20.0.10/24 \
