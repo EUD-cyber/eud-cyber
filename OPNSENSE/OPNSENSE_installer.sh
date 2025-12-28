@@ -119,4 +119,29 @@ qm set $VMID --ide2 local:iso/opnsense-config.iso,media=cdrom
 ### ===== START VM =====
 qm start $VMID
 
-echo "✔ OPNsense VM $VMID deployed and booting"
+echo "Waiting for OPNsense bootstrap prompt..."
+
+expect <<EOF
+set timeout -1
+
+# Attach to VM console
+spawn qm terminal $VMID
+
+# WAIT for text, then press ENTER
+expect {
+    "Press any key to start" {
+        send "\r"
+        exp_continue
+    }
+
+    "Select device to import from (e.g. ada0) or leave blank to exit" {
+        send "\cd0\r"
+        exp_continue
+    }
+    "login:"
+    {]
+    eof
+}
+EOF
+
+echo "✔ OPNsense VM $VMID deployed"
