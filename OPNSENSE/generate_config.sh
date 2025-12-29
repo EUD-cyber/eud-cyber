@@ -47,15 +47,19 @@ elif [ "$MODE" = "2" ]; then
   WAN_DNS_BLOCK="<dnsserver>${WAN_DNS}</dnsserver>"
 
   WAN_IP_BLOCK="<ipaddr>${WAN_IP}</ipaddr>
-      <subnet>${WAN_CIDR}</subnet>"
+      <subnet>${WAN_CIDR}</subnet>
+      <gateway>WAN_GW</gateway>"
 
   WAN_GATEWAY_BLOCK="<gateways>
     <gateway_item>
+      <disabled>0</disabled>
       <interface>wan</interface>
       <gateway>${WAN_GW}</gateway>
       <name>WAN_GW</name>
       <ipprotocol>inet</ipprotocol>
       <defaultgw>1</defaultgw>
+      <weight>1</weight>
+      <priority>255</priority>
     </gateway_item>
   </gateways>"
 else
