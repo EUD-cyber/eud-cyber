@@ -27,8 +27,7 @@ write_files:
     owner: root:root
     permissions: '0644'
     content: |
-         version: "3.9"
-            services:
+           services:
               wazuh.manager:
                 image: wazuh/wazuh-manager:4.14.1
                 hostname: wazuh.manager
@@ -115,16 +114,16 @@ write_files:
                   - ./wazuh-certificates:/usr/share/wazuh-dashboard/config/certs
                   - wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
             
-            volumes:
-              wazuh_api_configuration:
-              wazuh_etc:
-              wazuh_logs:
-              wazuh_queue:
-              wazuh_var_multigroups:
-              wazuh_active_response:
-              wazuh_wodles:
-              wazuh-indexer-data:
-              wazuh-dashboard-custom:
+           volumes:
+             wazuh_api_configuration:
+             wazuh_etc:
+             wazuh_logs:
+             wazuh_queue:
+             wazuh_var_multigroups:
+             wazuh_active_response:
+             wazuh_wodles:
+             wazuh-indexer-data:
+             wazuh-dashboard-custom:
             
             
 
