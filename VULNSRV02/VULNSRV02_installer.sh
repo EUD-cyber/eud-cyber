@@ -25,7 +25,7 @@ CORES=4
 DISK_SIZE="32G"    # the number is in GB
 BRIDGE="lan2"
 BRIDGE1="oobm"
-IP_ADDR="ip=192.168.2.20/24"
+IP_ADDR="ip=192.168.2.21/24"
 DNS_SERVER="192.168.2.1"
 IP_GW="gw=192.168.2.1"
 OOBM_IP="ip=172.20.0.21/24"
