@@ -27,9 +27,9 @@ write_files:
     owner: root:root
     permissions: '0644'
     content: |
-          services:
+         services:
             wazuh.manager:
-              image: wazuh/wazuh-manager:5.0.0
+              image: wazuh/wazuh-manager:4.14.1
               hostname: wazuh.manager
               restart: always
               ulimits:
@@ -64,9 +64,8 @@ write_files:
                 - ./wazuh-certificates/root-ca.pem:/var/ossec/etc/certs/root-ca.pem
                 - ./wazuh-certificates/wazuh.manager.pem:/var/ossec/etc/certs/server.pem
                 - ./wazuh-certificates/wazuh.manager-key.pem:/var/ossec/etc/certs/server-key.pem
-          
             wazuh.indexer:
-              image: wazuh/wazuh-indexer:5.0.0
+              image: wazuh/wazuh-indexer:4.14.1
               hostname: wazuh.indexer
               restart: always
               ports:
@@ -94,13 +93,12 @@ write_files:
                 - ./wazuh-certificates/wazuh.indexer.pem:/usr/share/wazuh-indexer/config/certs/indexer.pem
                 - ./wazuh-certificates/admin.pem:/usr/share/wazuh-indexer/config/certs/admin.pem
                 - ./wazuh-certificates/admin-key.pem:/usr/share/wazuh-indexer/config/certs/admin-key.pem
-          
             wazuh.dashboard:
-              image: wazuh/wazuh-dashboard:5.0.0
+              image: wazuh/wazuh-dashboard:4.14.1
               hostname: wazuh.dashboard
               restart: always
               ports:
-                - 443:443
+                - "443:443"
               environment:
                 - SERVER_HOST=0.0.0.0
                 - OPENSEARCH_HOSTS=https://wazuh.indexer:9200
@@ -125,7 +123,6 @@ write_files:
               links:
                 - wazuh.indexer:wazuh.indexer
                 - wazuh.manager:wazuh.manager
-          
           volumes:
             wazuh_api_configuration:
             wazuh_etc:
@@ -137,6 +134,7 @@ write_files:
             wazuh-indexer-data:
             wazuh-dashboard-config:
             wazuh-dashboard-custom:
+
 
 runcmd:
   - apt-get update
