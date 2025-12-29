@@ -22,6 +22,7 @@ missing \
   download cloud img to default folder and check if exits on each vm creation \
   all input first so the script will run without input after \
   no docker on vulnsrv01 \
+  wazuh docker problem \
   Problem with the WIN11 image, needs more testing 
   
 Network \
@@ -37,14 +38,12 @@ Network \
     lan1  192.168.1.20 \
     oobm  172.20.0.10/24 \
   vulnsrv02 \
-    temp lan1 192.168.1.210 \
     lan2 192.168.2.21/24 \
     oobm 172.20.0.21/24 \
   kali01 \
     lan1  192.168.1.100/24 \
     oobm  172.20.0.11/24  \
   wazuh
-    temp lan1 192.168.1.200/24 \
     lan2 192.168.2.20/24 \
     oobm 172.20.0.20 \
   win11 (not done yet) \
