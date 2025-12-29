@@ -37,11 +37,14 @@ ROOT_PASSWORD_HASH='$2y$10$YRVoF4SgskIsrXOvOQjGieB9XqHPRra9R7d80B3BZdbY/j21TwBfS
 if [ "$MODE" = "1" ]; then
   WAN_IP_BLOCK="<ipaddr>dhcp</ipaddr>"
   WAN_GATEWAY_BLOCK=""
+  WAN_DNS=""
 elif [ "$MODE" = "2" ]; then
   read -rp "WAN IP address: " WAN_IP
   read -rp "WAN CIDR (e.g. 24): " WAN_CIDR
   read -rp "WAN Gateway: " WAN_GW
   read -rp "WAN dns: " WAN_DNS
+
+  WAN_DNS_BLOCK="<dnsserver>${WAN_DNS}</dnsserver>"
 
   WAN_IP_BLOCK="<ipaddr>${WAN_IP}</ipaddr>
       <subnet>${WAN_CIDR}</subnet>"
@@ -96,6 +99,7 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
       <permitrootlogin>1</permitrootlogin>
       <enabled>enabled</enabled>  
     </ssh>
+  ${WAN_DNS_BLOCK}
   </system>
   <interfaces>
     <wan>
