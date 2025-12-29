@@ -45,14 +45,14 @@ write_files:
     permissions: "0644"
     content: |
       [Unit]
-      Description=TightVNC server on Port 5910
+      Description=TightVNC server on Port 5901
       After=Network.target
       
       [Service]
       Type=forking
       User=kali
-      ExecStart=/usr/bin/vncserver -localhost=no -geometry 1280x720 :10
-      ExecStop=/usr/bin/vncserver -kill :10
+      ExecStart=/usr/bin/vncserver -localhost=no -geometry 1280x720 :1
+      ExecStop=/usr/bin/vncserver -kill :1
       
       [Install]
       WantedBy=multi-user.target
