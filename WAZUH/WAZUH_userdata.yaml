@@ -23,6 +23,19 @@ packages:
   - docker.io
 
 write_files:
+  - path: /opt/wazuh/generate-indexer-certs.yml
+    owner: root:root
+    permissions: '0644'
+    content: |
+      services:
+        generator:
+            image: wazuh/wazuh-certs-generator:0.0.3
+            hostname: wazuh-certs-generator
+            environment:
+              - CERT_TOOL_VERSION=4.14
+            volumes:
+              - ./config/wazuh_indexer_ssl_certs/:/certificates/
+              - ./config/certs.yml:/config/certs.yml
   - path: /opt/wazuh/docker-compose.yml
     owner: root:root
     permissions: '0644'
