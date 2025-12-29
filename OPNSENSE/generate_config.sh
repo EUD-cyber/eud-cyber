@@ -105,6 +105,14 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
     </ssh>
   ${WAN_DNS_BLOCK}
   </system>
+  <unbound>
+    <enable>1</enable>
+    <dnssec>0</dnssec>
+    <active_interface>all</active_interface>
+    <outgoing_interface>wan</outgoing_interface>
+    <registerdhcp>1</registerdhcp>
+    <registersystem>1</registersystem>
+  </unbound>
   <interfaces>
     <wan>
       <enable>1</enable>
