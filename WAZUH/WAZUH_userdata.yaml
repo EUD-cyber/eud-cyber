@@ -169,7 +169,7 @@ runcmd:
   - mkdir -p /opt/wazuh/certs
   - cd /opt/wazuh
   - chown -R 1000:1000 /opt/wazuh/dashboard-config
-  - openssl genrsa -out /opt/wazuh/certs/rootCA.key 4096
+  - openssl genrsa -out /opt/wazuh/certs/rootCA.key 2048
   - openssl req -x509 -new -nodes -key /opt/wazuh/certs/rootCA.key -sha256 -days 3650 -subj "/CN=wazuh-rootCA" -out /opt/wazuh/certs/rootCA.crt
   - openssl genrsa -out /opt/wazuh/certs/indexer.key 2048
   - openssl req -new -key /opt/wazuh/certs/indexer.key -subj "/CN=indexer" -out /opt/wazuh/certs/indexer.csr
