@@ -30,7 +30,7 @@ runcmd:
   - systemctl enable ssh --now
   - systemctl enable qemu-guest-agent
   - cd /opt/
-  - git clone https://github.com/wazuh/wazuh-docker.git
+  - git clone https://github.com/wazuh/wazuh-docker.git -b v4.14.1
   - cd /opt/wazuh-docker/single-node
   - docker compose -f generate-indexer-certs.yml run --rm generator
   - docker compose up -d
