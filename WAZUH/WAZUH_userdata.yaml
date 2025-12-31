@@ -116,8 +116,9 @@ write_files:
             - /opt/wazuh/certs/rootCA.crt:/usr/share/wazuh-indexer/config/certs/root-ca.pem
             - /opt/wazuh/certs/indexer.key:/usr/share/wazuh-indexer/config/certs/indexer-key.pem
             - /opt/wazuh/certs/indexer.crt:/usr/share/wazuh-indexer/config/certs/indexer.pem
-            - /opt/wazuh/certs/indexer.crt:/usr/share/wazuh-indexer/config/certs/admin.pem
-            - /opt/wazuh/certs/indexer.key:/usr/share/wazuh-indexer/config/certs/admin-key.pem
+            - /opt/wazuh/certs/admin.crt:/usr/share/wazuh-indexer/config/certs/admin.pem
+            - /opt/wazuh/certs/admin.key:/usr/share/wazuh-indexer/config/certs/admin-key.pem
+
       
         wazuh.dashboard:
           image: wazuh/wazuh-dashboard:4.14.1
