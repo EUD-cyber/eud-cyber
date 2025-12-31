@@ -176,7 +176,6 @@ runcmd:
   - mkdir -p /opt/wazuh/certs
   - cd /opt/wazuh
   - chown -R 1000:1000 /opt/wazuh/dashboard-config
-  - chown -R 1000:1000 /opt/wazuh/certs
   - |
       # Generate certs in the background so cloud-init does not hang
       bash -c '
@@ -205,5 +204,5 @@ runcmd:
       openssl x509 -req -in /opt/wazuh/certs/dashboard.csr -CA /opt/wazuh/certs/rootCA.crt -CAkey /opt/wazuh/certs/rootCA.key \
         -CAcreateserial -out /opt/wazuh/certs/dashboard.crt -days 365 -sha256
 
-      ' &
+      chown -R 1000:1000 /opt/wazuh/certs  ' &
 #  - docker compose -f /opt/wazuh/docker-compose.yml up -d
