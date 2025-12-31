@@ -104,6 +104,7 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
       <enabled>enabled</enabled>  
     </ssh>
   ${WAN_DNS_BLOCK}
+  <nohttpreferercheck>yes</nohttpreferercheck>
   </system>
   <unbound>
     <enable>1</enable>
