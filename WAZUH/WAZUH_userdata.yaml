@@ -114,4 +114,5 @@ runcmd:
   - systemctl enable qemu-guest-agent
   - mkdir -p /opt/wazuh
   - cd /opt/wazuh
+  - chown -R 1000:1000 /opt/wazuh/dashboard-config
 #  - docker compose -f /opt/wazuh/docker-compose.yml up -d
