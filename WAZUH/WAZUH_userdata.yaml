@@ -29,143 +29,94 @@ write_files:
     content: |
       server.host: "0.0.0.0"
       server.port: 5601
-      
-      # Indexer uses HTTPS now
+
       opensearch.hosts:
-        - https://wazuh.indexer:9200
+        - http://wazuh.indexer:9200
       
-      # Trust your custom CA
-      opensearch.ssl.certificateAuthorities: /usr/share/wazuh-dashboard/config/certs/root-ca.pem
+      opensearch.ssl.verificationMode: none
       
-      # Don't require mutual TLS (dashboard has its own cert already)
-      opensearch.ssl.verificationMode: full
-      
-      # Wazuh / OpenSearch Dashboards features
-      opensearch_security.multitenancy.enabled: true
-      opensearch_security.readonly_mode.roles: ["kibana_read_only"]
-      opensearch_security.cookie.secure: true
+      opensearch_security.multitenancy.enabled: false
+
 
   - path: /opt/wazuh/docker-compose.yml
     owner: root:root
     permissions: '0644'
     content: |
-      services:
-        wazuh.manager:
-          image: wazuh/wazuh-manager:4.14.1
-          hostname: wazuh.manager
-          container_name: single-node-wazuh.manager
-          restart: always
-          ulimits:
-            memlock:
-              soft: -1
-              hard: -1
-            nofile:
-              soft: 655360
-              hard: 655360
-          ports:
-            - "1514:1514"
-            - "1515:1515"
-            - "514:514/udp"
-            - "55000:55000"
-          environment:
-            - WAZUH_INDEXER_HOSTS=wazuh.indexer:9200
-            - WAZUH_NODE_NAME=manager
-            - WAZUH_CLUSTER_NODES=wazuh.manager
-            - WAZUH_CLUSTER_BIND_ADDR=wazuh.manager
-            - INDEXER_USERNAME=admin
-            - INDEXER_PASSWORD=admin
-            - API_USERNAME=wazuh-wui
-            - API_PASSWORD=MyS3cr37P450r.*-
-          volumes:
-            - wazuh_api_configuration:/var/ossec/api/configuration
-            - wazuh_etc:/var/ossec/etc
-            - wazuh_logs:/var/ossec/logs
-            - wazuh_queue:/var/ossec/queue
-            - wazuh_var_multigroups:/var/ossec/var/multigroups
-            - wazuh_active_response:/var/ossec/active-response/bin
-            - wazuh_wodles:/var/ossec/wodles
-            - ./wazuh-certificates/root-ca.pem:/var/ossec/etc/certs/root-ca.pem
-            - ./wazuh-certificates/wazuh.manager.pem:/var/ossec/etc/certs/server.pem
-            - ./wazuh-certificates/wazuh.manager-key.pem:/var/ossec/etc/certs/server-key.pem
-      
-        wazuh.indexer:
-          image: wazuh/wazuh-indexer:4.14.1
-          hostname: wazuh.indexer
-          container_name: single-node-wazuh.indexer
-          restart: always
-          ports:
-            - "9200:9200"
-          environment:
-            - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
-            - bootstrap.memory_lock=true
-            - network.host=wazuh.indexer
-            - node.name=wazuh.indexer
-            - cluster.initial_cluster_manager_nodes=wazuh.indexer
-            - node.max_local_storage_nodes=1
-            - plugins.security.allow_default_init_securityindex=true
-            - NODES_DN=CN=wazuh.indexer,OU=Wazuh,O=Wazuh,L=California,C=US
-          ulimits:
-            memlock:
-              soft: -1
-              hard: -1
-            nofile:
-              soft: 65536
-              hard: 65536
-          volumes:
-            - wazuh-indexer-data:/var/lib/wazuh-indexer
-            - /opt/wazuh/certs/rootCA.crt:/usr/share/wazuh-indexer/config/certs/root-ca.pem
-            - /opt/wazuh/certs/indexer.key:/usr/share/wazuh-indexer/config/certs/indexer-key.pem
-            - /opt/wazuh/certs/indexer.crt:/usr/share/wazuh-indexer/config/certs/indexer.pem
-            - /opt/wazuh/certs/admin.crt:/usr/share/wazuh-indexer/config/certs/admin.pem
-            - /opt/wazuh/certs/admin.key:/usr/share/wazuh-indexer/config/certs/admin-key.pem
+        services:
+          wazuh.indexer:
+            image: wazuh/wazuh-indexer:4.14.1
+            container_name: wazuh-indexer
+            hostname: wazuh.indexer
+            restart: always
+            environment:
+              - discovery.type=single-node
+              - bootstrap.memory_lock=true
+              - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+              - OPENSEARCH_SECURITY_DISABLED=true
+            ulimits:
+              memlock:
+                soft: -1
+                hard: -1
+              nofile:
+                soft: 65536
+                hard: 65536
+            ports:
+              - "9200:9200"
+            volumes:
+              - wazuh-indexer-data:/var/lib/wazuh-indexer
+        
+        
+          wazuh.manager:
+            image: wazuh/wazuh-manager:4.14.1
+            container_name: wazuh-manager
+            hostname: wazuh.manager
+            restart: always
+            environment:
+              - WAZUH_INDEXER_HOSTS=wazuh.indexer:9200
+              - WAZUH_CLUSTER=disabled
+            ports:
+              - "1514:1514/udp"
+              - "1515:1515"
+              - "55000:55000"
+            depends_on:
+              - wazuh.indexer
+            volumes:
+              - wazuh_etc:/var/ossec/etc
+              - wazuh_logs:/var/ossec/logs
+              - wazuh_queue:/var/ossec/queue
+              - wazuh_var:/var/ossec/var
+              - wazuh_active_response:/var/ossec/active-response/bin
+              - wazuh_wodles:/var/ossec/wodles
+          
+          wazuh.dashboard:
+            image: wazuh/wazuh-dashboard:4.14.1
+            container_name: wazuh-dashboard
+            hostname: wazuh.dashboard
+            restart: always
+            environment:
+              - SERVER_HOST=0.0.0.0
+              - SERVER_PORT=5601
+              - OPENSEARCH_HOSTS=http://wazuh.indexer:9200
+              - DASHBOARD_USERNAME=admin
+              - DASHBOARD_PASSWORD=admin
+            ports:
+              - "5601:5601"
+            depends_on:
+              - wazuh.indexer
+              - wazuh.manager
+            volumes:
+              - /opt/wazuh/dashboard-config/opensearch_dashboards.yml:/usr/share/wazuh-dashboard/config/opensearch_dashboards.yml
+        
+        volumes:
+          wazuh-indexer-data:
+          wazuh_etc:
+          wazuh_logs:
+          wazuh_queue:
+          wazuh_var:
+          wazuh_active_response:
+          wazuh_wodles:
 
-      
-        wazuh.dashboard:
-          image: wazuh/wazuh-dashboard:4.14.1
-          hostname: wazuh.dashboard
-          container_name: single-node-wazuh.dashboard
-          restart: always
-          ports:
-            - 443:5601
-          environment:
-            - SERVER_PORT=5601
-            - SERVER_HOST=0.0.0.0
-            - OPENSEARCH_HOSTS=https://wazuh.indexer:9200
-            - INDEXER_USERNAME=admin
-            - INDEXER_PASSWORD=admin
-            - WAZUH_API_URL=https://wazuh.manager
-            - DASHBOARD_USERNAME=kibanaserver
-            - DASHBOARD_PASSWORD=kibanaserver
-            - API_USERNAME=wazuh-wui
-            - API_PASSWORD=MyS3cr37P450r.*-
-            - SERVER_SSL_CERTIFICATE=/usr/share/wazuh-dashboard/config/certs/dashboard.pem
-            - SERVER_SSL_KEY=/usr/share/wazuh-dashboard/config/certs/dashboard-key.pem
-            - OPENSEARCH_SSL_CERTIFICATE_AUTHORITIES=/usr/share/wazuh-dashboard/config/certs/root-ca.pem
-          volumes:
-            - /opt/wazuh/certs/dashboard.crt:/usr/share/wazuh-dashboard/config/certs/dashboard.pem
-            - /opt/wazuh/certs/dashboard.key:/usr/share/wazuh-dashboard/config/certs/dashboard-key.pem
-            - /opt/wazuh/certs/rootCA.crt:/usr/share/wazuh-dashboard/config/certs/root-ca.pem
-            - /opt/wazuh/dashboard-config:/usr/share/wazuh-dashboard/config
-            - wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
-          depends_on:
-            - wazuh.indexer
-          links:
-            - wazuh.indexer:wazuh.indexer
-            - wazuh.manager:wazuh.manager
-      
-      volumes:
-        wazuh_api_configuration:
-        wazuh_etc:
-        wazuh_logs:
-        wazuh_queue:
-        wazuh_var_multigroups:
-        wazuh_active_response:
-        wazuh_wodles:
-        wazuh-indexer-data:
-        wazuh-dashboard-config:
-        wazuh-dashboard-custom:
-      
-
+    
 runcmd:
   - apt-get update
   - apt-get install -y docker-compose-v2 qemu-guest-agent
@@ -174,43 +125,6 @@ runcmd:
   - systemctl enable ssh --now
   - systemctl enable qemu-guest-agent
   - mkdir -p /opt/wazuh
-  - mkdir -p /opt/wazuh/certs
   - cd /opt/wazuh
   - chown -R 1000:1000 /opt/wazuh/dashboard-config
-  - |
-      # Generate certs in the background so cloud-init does not hang
-      bash -c '
-      set -e
-
-      # Root CA (2048 instead of 4096 for speed in labs)
-      openssl genrsa -out /opt/wazuh/certs/rootCA.key 2048
-      openssl req -x509 -new -nodes -key /opt/wazuh/certs/rootCA.key -sha256 -days 3650 \
-        -subj "/CN=wazuh-rootCA" -out /opt/wazuh/certs/rootCA.crt
-
-      # Indexer cert
-      openssl genrsa -out /opt/wazuh/certs/indexer.key 2048
-      openssl req -new -key /opt/wazuh/certs/indexer.key -subj "/CN=wazuh.indexer" -out /opt/wazuh/certs/indexer.csr
-      openssl x509 -req -in /opt/wazuh/certs/indexer.csr -CA /opt/wazuh/certs/rootCA.crt -CAkey /opt/wazuh/certs/rootCA.key \
-        -CAcreateserial -out /opt/wazuh/certs/indexer.crt -days 365 -sha256
-
-      # Manager cert
-      openssl genrsa -out /opt/wazuh/certs/manager.key 2048
-      openssl req -new -key /opt/wazuh/certs/manager.key -subj "/CN=wazuh.manager" -out /opt/wazuh/certs/manager.csr
-      openssl x509 -req -in /opt/wazuh/certs/manager.csr -CA /opt/wazuh/certs/rootCA.crt -CAkey /opt/wazuh/certs/rootCA.key \
-        -CAcreateserial -out /opt/wazuh/certs/manager.crt -days 365 -sha256
-
-      # Dashboard cert
-      openssl genrsa -out /opt/wazuh/certs/dashboard.key 2048
-      openssl req -new -key /opt/wazuh/certs/dashboard.key -subj "/CN=wazuh.dashboard" -out /opt/wazuh/certs/dashboard.csr
-      openssl x509 -req -in /opt/wazuh/certs/dashboard.csr -CA /opt/wazuh/certs/rootCA.crt -CAkey /opt/wazuh/certs/rootCA.key \
-        -CAcreateserial -out /opt/wazuh/certs/dashboard.crt -days 365 -sha256
-
-      # Admin cert
-      openssl genrsa -out admin.key 2048
-      openssl req -new -key admin.key -subj "/CN=admin" -out admin.csr
-      openssl x509 -req -in admin.csr \
-         -CA rootCA.crt -CAkey rootCA.key -CAcreateserial \
-         -out admin.crt -days 365 -sha256
-
-      chown -R 1000:1000 /opt/wazuh/certs  ' &
 #  - docker compose -f /opt/wazuh/docker-compose.yml up -d
