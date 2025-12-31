@@ -29,14 +29,21 @@ write_files:
     content: |
       server.host: "0.0.0.0"
       server.port: 5601
-
+      
+      # Indexer uses HTTPS now
       opensearch.hosts:
-        - http://wazuh.indexer:9200
-
-      opensearch.ssl.verificationMode: none
+        - https://wazuh.indexer:9200
+      
+      # Trust your custom CA
+      opensearch.ssl.certificateAuthorities: /usr/share/wazuh-dashboard/config/certs/root-ca.pem
+      
+      # Don't require mutual TLS (dashboard has its own cert already)
+      opensearch.ssl.verificationMode: full
+      
+      # Wazuh / OpenSearch Dashboards features
       opensearch_security.multitenancy.enabled: true
       opensearch_security.readonly_mode.roles: ["kibana_read_only"]
-      opensearch_security.cookie.secure: false
+      opensearch_security.cookie.secure: true
 
   - path: /opt/wazuh/docker-compose.yml
     owner: root:root
@@ -106,11 +113,11 @@ write_files:
               hard: 65536
           volumes:
             - wazuh-indexer-data:/var/lib/wazuh-indexer
-            - ./wazuh-certificates/root-ca.pem:/usr/share/wazuh-indexer/config/certs/root-ca.pem
-            - ./wazuh-certificates/wazuh.indexer-key.pem:/usr/share/wazuh-indexer/config/certs/indexer-key.pem
-            - ./wazuh-certificates/wazuh.indexer.pem:/usr/share/wazuh-indexer/config/certs/indexer.pem
-            - ./wazuh-certificates/admin.pem:/usr/share/wazuh-indexer/config/certs/admin.pem
-            - ./wazuh-certificates/admin-key.pem:/usr/share/wazuh-indexer/config/certs/admin-key.pem
+            - /opt/wazuh/certs/rootCA.crt:/usr/share/wazuh-indexer/config/certs/root-ca.pem
+            - /opt/wazuh/certs/indexer.key:/usr/share/wazuh-indexer/config/certs/indexer-key.pem
+            - /opt/wazuh/certs/indexer.crt:/usr/share/wazuh-indexer/config/certs/indexer.pem
+            - /opt/wazuh/certs/indexer.crt:/usr/share/wazuh-indexer/config/certs/admin.pem
+            - /opt/wazuh/certs/indexer.key:/usr/share/wazuh-indexer/config/certs/admin-key.pem
       
         wazuh.dashboard:
           image: wazuh/wazuh-dashboard:4.14.1
@@ -134,9 +141,9 @@ write_files:
             - SERVER_SSL_KEY=/usr/share/wazuh-dashboard/config/certs/dashboard-key.pem
             - OPENSEARCH_SSL_CERTIFICATE_AUTHORITIES=/usr/share/wazuh-dashboard/config/certs/root-ca.pem
           volumes:
-            - ./wazuh-certificates/wazuh.dashboard.pem:/usr/share/wazuh-dashboard/config/certs/dashboard.pem
-            - ./wazuh-certificates/wazuh.dashboard-key.pem:/usr/share/wazuh-dashboard/config/certs/dashboard-key.pem
-            - ./wazuh-certificates/root-ca.pem:/usr/share/wazuh-dashboard/config/certs/root-ca.pem
+            - /opt/wazuh/certs/dashboard.crt:/usr/share/wazuh-dashboard/config/certs/dashboard.pem
+            - /opt/wazuh/certs/dashboard.key:/usr/share/wazuh-dashboard/config/certs/dashboard-key.pem
+            - /opt/wazuh/certs/rootCA.crt:/usr/share/wazuh-dashboard/config/certs/root-ca.pem
             - wazuh-dashboard-config:/usr/share/wazuh-dashboard/config
             - wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
           depends_on:
