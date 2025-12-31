@@ -48,45 +48,38 @@ write_files:
     owner: root:root
     permissions: '0644'
     content: |
-      services:
-        indexer:
-          image: wazuh/wazuh-indexer:latest
-          hostname: indexer
-          ports:
-            - "9200:9200"
-          environment:
-            - OPENSEARCH_SECURITY_SSL_HTTP_ENABLED=true
-            - OPENSEARCH_SECURITY_SSL_HTTP_KEY=/certs/indexer.key
-            - OPENSEARCH_SECURITY_SSL_HTTP_CERTIFICATE=/certs/indexer.crt
-            - OPENSEARCH_SECURITY_SSL_HTTP_PEMTRUSTEDCAS=/certs/rootCA.crt
-          volumes:
-            - /opt/wazuh/certs:/certs:ro
-        manager:
-          image: wazuh/wazuh-manager:latest
-          hostname: manager
-          ports:
-            - "1514:1514/udp"
-            - "1515:1515"
-            - "55000:55000"
-          environment:
-            - WAZUH_SSL_CERTIFICATE=/certs/manager.crt
-            - WAZUH_SSL_KEY=/certs/manager.key
-            - WAZUH_SSL_CA=/certs/rootCA.crt
-          volumes:
-            - /opt/wazuh/certs:/certs:ro
-        dashboard:
-          image: wazuh/wazuh-dashboard:latest
-          hostname: dashboard
-          depends_on:
-            - indexer
-          ports:
-            - "80:5601"
-          environment:
-            - WAZUH_DASHBOARD_SSL_CERTIFICATE=/certs/dashboard.crt
-            - WAZUH_DASHBOARD_SSL_KEY=/certs/dashboard.key
-          volumes:
-            - /opt/wazuh/certs:/certs:ro
-            - /opt/wazuh/dashboard-config:/usr/share/wazuh-dashboard/config:ro
+        services:
+          indexer:
+            image: wazuh/wazuh-indexer:4.14.1
+            hostname: indexer
+            ports:
+              - "9200:9200"
+            environment:
+              - OPENSEARCH_INITIAL_ADMIN_PASSWORD=admin
+            ulimits:
+              memlock:
+                soft: -1
+                hard: -1
+        
+          manager:
+            image: wazuh/wazuh-manager:4.14.1
+            hostname: manager
+            ports:
+              - "1514:1514/udp"
+              - "1515:1515"
+              - "55000:55000"
+        
+          dashboard:
+            image: wazuh/wazuh-dashboard:4.14.1
+            hostname: dashboard
+            depends_on:
+              - indexer
+            ports:
+              - "80:5601"
+            volumes:
+              - /opt/wazuh/dashboard-config:/usr/share/wazuh-dashboard/config:ro
+            restart: always
+
 runcmd:
   - apt-get update
   - apt-get install -y docker-compose-v2 qemu-guest-agent
@@ -95,17 +88,5 @@ runcmd:
   - systemctl enable ssh --now
   - systemctl enable qemu-guest-agent
   - mkdir -p /opt/wazuh
-  - mkdir -p /opt/wazuh/certs
   - cd /opt/wazuh
-  - openssl genrsa -out /opt/wazuh/certs/rootCA.key 4096
-  - openssl req -x509 -new -nodes -key /opt/wazuh/certs/rootCA.key -sha256 -days 3650 -subj "/CN=wazuh-rootCA" -out /opt/wazuh/certs/rootCA.crt
-  - openssl genrsa -out /opt/wazuh/certs/indexer.key 2048
-  - openssl req -new -key /opt/wazuh/certs/indexer.key -subj "/CN=indexer" -out /opt/wazuh/certs/indexer.csr
-  - openssl x509 -req -in /opt/wazuh/certs/indexer.csr -CA /opt/wazuh/certs/rootCA.crt -CAkey /opt/wazuh/certs/rootCA.key -CAcreateserial -out /opt/wazuh/certs/indexer.crt -days 365 -sha256
-  - openssl genrsa -out /opt/wazuh/certs/manager.key 2048
-  - openssl req -new -key /opt/wazuh/certs/manager.key -subj "/CN=manager" -out /opt/wazuh/certs/manager.csr
-  - openssl x509 -req -in /opt/wazuh/certs/manager.csr -CA /opt/wazuh/certs/rootCA.crt -CAkey /opt/wazuh/certs/rootCA.key -CAcreateserial -out /opt/wazuh/certs/manager.crt -days 365 -sha256
-  - openssl genrsa -out /opt/wazuh/certs/dashboard.key 2048
-  - openssl req -new -key /opt/wazuh/certs/dashboard.key -subj "/CN=dashboard" -out /opt/wazuh/certs/dashboard.csr
-  - openssl x509 -req -in /opt/wazuh/certs/dashboard.csr -CA /opt/wazuh/certs/rootCA.crt -CAkey /opt/wazuh/certs/rootCA.key -CAcreateserial -out /opt/wazuh/certs/dashboard.crt -days 365 -sha256
 #  - docker compose -f /opt/wazuh/docker-compose.yml up -d
