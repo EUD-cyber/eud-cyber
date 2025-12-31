@@ -48,37 +48,96 @@ write_files:
     owner: root:root
     permissions: '0644'
     content: |
-        services:
-          indexer:
-            image: wazuh/wazuh-indexer:4.14.1
-            hostname: indexer
-            ports:
-              - "9200:9200"
-            environment:
-              - OPENSEARCH_INITIAL_ADMIN_PASSWORD=admin
-            ulimits:
-              memlock:
-                soft: -1
-                hard: -1
-        
-          manager:
-            image: wazuh/wazuh-manager:4.14.1
-            hostname: manager
-            ports:
-              - "1514:1514/udp"
-              - "1515:1515"
-              - "55000:55000"
-        
-          dashboard:
-            image: wazuh/wazuh-dashboard:4.14.1
-            hostname: dashboard
-            depends_on:
-              - indexer
-            ports:
-              - "80:5601"
-            volumes:
-              - /opt/wazuh/dashboard-config:/usr/share/wazuh-dashboard/config:ro
-            restart: always
+      services:
+        wazuh.manager:
+          image: wazuh/wazuh-manager:4.14.1
+          hostname: wazuh.manager
+          container_name: single-node-wazuh.manager
+          restart: always
+          ulimits:
+            memlock:
+              soft: -1
+              hard: -1
+            nofile:
+              soft: 655360
+              hard: 655360
+          ports:
+            - "1514:1514"
+            - "1515:1515"
+            - "514:514/udp"
+            - "55000:55000"
+          environment:
+            - WAZUH_INDEXER_HOSTS=wazuh.indexer:9200
+            - WAZUH_NODE_NAME=manager
+            - WAZUH_CLUSTER_NODES=wazuh.manager
+            - WAZUH_CLUSTER_BIND_ADDR=wazuh.manager
+            - INDEXER_USERNAME=admin
+            - INDEXER_PASSWORD=admin
+            - API_USERNAME=wazuh-wui
+            - API_PASSWORD=MyS3cr37P450r.*-
+      
+        wazuh.indexer:
+          image: wazuh/wazuh-indexer:4.14.1
+          hostname: wazuh.indexer
+          container_name: single-node-wazuh.indexer
+          restart: always
+          ports:
+            - "9200:9200"
+          environment:
+            - OPENSEARCH_JAVA_OPTS=-Xms1g -Xmx1g
+            - bootstrap.memory_lock=true
+            - network.host=wazuh.indexer
+            - node.name=wazuh.indexer
+            - cluster.initial_cluster_manager_nodes=wazuh.indexer
+            - node.max_local_storage_nodes=1
+            - plugins.security.allow_default_init_securityindex=true
+            - NODES_DN=CN=wazuh.indexer,OU=Wazuh,O=Wazuh,L=California,C=US
+          ulimits:
+            memlock:
+              soft: -1
+              hard: -1
+            nofile:
+              soft: 65536
+              hard: 65536
+      
+        wazuh.dashboard:
+          image: wazuh/wazuh-dashboard:4.14.1
+          hostname: wazuh.dashboard
+          container_name: single-node-wazuh.dashboard
+          restart: always
+          ports:
+            - 80:5601
+          environment:
+            - SERVER_PORT=5601
+            - SERVER_HOST=0.0.0.0
+            - OPENSEARCH_HOSTS=https://wazuh.indexer:9200
+            - INDEXER_USERNAME=admin
+            - INDEXER_PASSWORD=admin
+            - WAZUH_API_URL=https://wazuh.manager
+            - DASHBOARD_USERNAME=kibanaserver
+            - DASHBOARD_PASSWORD=kibanaserver
+            - API_USERNAME=wazuh-wui
+            - API_PASSWORD=MyS3cr37P450r.*-
+          volumes:
+            - wazuh-dashboard-config:/usr/share/wazuh-dashboard/config
+          depends_on:
+            - wazuh.indexer
+          links:
+            - wazuh.indexer:wazuh.indexer
+            - wazuh.manager:wazuh.manager
+      
+      volumes:
+        wazuh_api_configuration:
+        wazuh_etc:
+        wazuh_logs:
+        wazuh_queue:
+        wazuh_var_multigroups:
+        wazuh_active_response:
+        wazuh_wodles:
+        wazuh-indexer-data:
+        wazuh-dashboard-config:
+        wazuh-dashboard-custom:
+
 
 runcmd:
   - apt-get update
