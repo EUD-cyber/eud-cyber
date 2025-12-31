@@ -23,6 +23,27 @@ packages:
   - docker.io
 
 write_files:
+  - path: /opt/wazuh/dashboard-config/opensearch_dashboards.yml
+    owner: root:root
+    permissions: '0644'
+    content: |
+      server.host: "0.0.0.0"
+      server.port: 5601
+
+      opensearch.hosts:
+        - https://indexer:9200
+
+      opensearch.ssl.verificationMode: none
+
+      opensearch.requestHeadersWhitelist: [ authorization, securitytenant ]
+
+      opensearch.username: "admin"
+      opensearch.password: "admin"
+
+      opensearch_security.multitenancy.enabled: true
+      opensearch_security.readonly_mode.roles: ["kibana_read_only"]
+      opensearch_security.cookie.secure: false
+
   - path: /opt/wazuh/docker-compose.yml
     owner: root:root
     permissions: '0644'
@@ -65,6 +86,7 @@ write_files:
             - WAZUH_DASHBOARD_SSL_KEY=/certs/dashboard.key
           volumes:
             - /opt/wazuh/certs:/certs:ro
+            - /opt/wazuh/dashboard-config:/usr/share/wazuh-dashboard/config:ro
 runcmd:
   - apt-get update
   - apt-get install -y docker-compose-v2 qemu-guest-agent
