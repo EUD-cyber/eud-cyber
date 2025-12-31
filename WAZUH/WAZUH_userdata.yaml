@@ -176,6 +176,7 @@ runcmd:
   - mkdir -p /opt/wazuh/certs
   - cd /opt/wazuh
   - chown -R 1000:1000 /opt/wazuh/dashboard-config
+  - chown -R 1000:1000 /opt/wazuh/certs
   - |
       # Generate certs in the background so cloud-init does not hang
       bash -c '
