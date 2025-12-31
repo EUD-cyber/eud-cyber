@@ -97,19 +97,15 @@ runcmd:
   - mkdir -p /opt/wazuh
   - mkdir -p /opt/wazuh/certs
   - cd /opt/wazuh
-  # --- Generate CA ---
-  #- openssl genrsa -out /opt/wazuh/certs/rootCA.key 4096
-  #- openssl req -x509 -new -nodes -key /opt/wazuh/certs/rootCA.key -sha256 -days 3650 -subj "/CN=wazuh-rootCA" -out /opt/wazuh/certs/rootCA.crt
-  # Indexer cert
-  #- openssl genrsa -out /opt/wazuh/certs/indexer.key 2048
-  #- openssl req -new -key /opt/wazuh/certs/indexer.key -subj "/CN=indexer" -out /opt/wazuh/certs/indexer.csr
-  #- openssl x509 -req -in /opt/wazuh/certs/indexer.csr -CA /opt/wazuh/certs/rootCA.crt -CAkey /opt/wazuh/certs/rootCA.key -CAcreateserial -out /opt/wazuh/certs/indexer.crt -days 365 -sha256
-  # Manager cert
-  #- openssl genrsa -out /opt/wazuh/certs/manager.key 2048
-  #- openssl req -new -key /opt/wazuh/certs/manager.key -subj "/CN=manager" -out /opt/wazuh/certs/manager.csr
-  #- openssl x509 -req -in /opt/wazuh/certs/manager.csr -CA /opt/wazuh/certs/rootCA.crt -CAkey /opt/wazuh/certs/rootCA.key -CAcreateserial -out /opt/wazuh/certs/manager.crt -days 365 -sha256
-  # Dashboard cert
-  #- openssl genrsa -out /opt/wazuh/certs/dashboard.key 2048
-  #- openssl req -new -key /opt/wazuh/certs/dashboard.key -subj "/CN=dashboard" -out /opt/wazuh/certs/dashboard.csr
-  #- openssl x509 -req -in /opt/wazuh/certs/dashboard.csr -CA /opt/wazuh/certs/rootCA.crt -CAkey /opt/wazuh/certs/rootCA.key -CAcreateserial -out /opt/wazuh/certs/dashboard.crt -days 365 -sha256
+  - openssl genrsa -out /opt/wazuh/certs/rootCA.key 4096
+  - openssl req -x509 -new -nodes -key /opt/wazuh/certs/rootCA.key -sha256 -days 3650 -subj "/CN=wazuh-rootCA" -out /opt/wazuh/certs/rootCA.crt
+  - openssl genrsa -out /opt/wazuh/certs/indexer.key 2048
+  - openssl req -new -key /opt/wazuh/certs/indexer.key -subj "/CN=indexer" -out /opt/wazuh/certs/indexer.csr
+  - openssl x509 -req -in /opt/wazuh/certs/indexer.csr -CA /opt/wazuh/certs/rootCA.crt -CAkey /opt/wazuh/certs/rootCA.key -CAcreateserial -out /opt/wazuh/certs/indexer.crt -days 365 -sha256
+  - openssl genrsa -out /opt/wazuh/certs/manager.key 2048
+  - openssl req -new -key /opt/wazuh/certs/manager.key -subj "/CN=manager" -out /opt/wazuh/certs/manager.csr
+  - openssl x509 -req -in /opt/wazuh/certs/manager.csr -CA /opt/wazuh/certs/rootCA.crt -CAkey /opt/wazuh/certs/rootCA.key -CAcreateserial -out /opt/wazuh/certs/manager.crt -days 365 -sha256
+  - openssl genrsa -out /opt/wazuh/certs/dashboard.key 2048
+  - openssl req -new -key /opt/wazuh/certs/dashboard.key -subj "/CN=dashboard" -out /opt/wazuh/certs/dashboard.csr
+  - openssl x509 -req -in /opt/wazuh/certs/dashboard.csr -CA /opt/wazuh/certs/rootCA.crt -CAkey /opt/wazuh/certs/rootCA.key -CAcreateserial -out /opt/wazuh/certs/dashboard.crt -days 365 -sha256
 #  - docker compose -f /opt/wazuh/docker-compose.yml up -d
