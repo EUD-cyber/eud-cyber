@@ -144,7 +144,7 @@ write_files:
             - /opt/wazuh/certs/dashboard.crt:/usr/share/wazuh-dashboard/config/certs/dashboard.pem
             - /opt/wazuh/certs/dashboard.key:/usr/share/wazuh-dashboard/config/certs/dashboard-key.pem
             - /opt/wazuh/certs/rootCA.crt:/usr/share/wazuh-dashboard/config/certs/root-ca.pem
-            - wazuh-dashboard-config:/usr/share/wazuh-dashboard/config
+            - /opt/wazuh/dashboard-config:/usr/share/wazuh-dashboard/config
             - wazuh-dashboard-custom:/usr/share/wazuh-dashboard/plugins/wazuh/public/assets/custom
           depends_on:
             - wazuh.indexer
