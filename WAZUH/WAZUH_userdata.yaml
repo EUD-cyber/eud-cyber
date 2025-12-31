@@ -189,19 +189,19 @@ runcmd:
 
       # Indexer cert
       openssl genrsa -out /opt/wazuh/certs/indexer.key 2048
-      openssl req -new -key /opt/wazuh/certs/indexer.key -subj "/CN=indexer" -out /opt/wazuh/certs/indexer.csr
+      openssl req -new -key /opt/wazuh/certs/indexer.key -subj "/CN=wazuh.indexer" -out /opt/wazuh/certs/indexer.csr
       openssl x509 -req -in /opt/wazuh/certs/indexer.csr -CA /opt/wazuh/certs/rootCA.crt -CAkey /opt/wazuh/certs/rootCA.key \
         -CAcreateserial -out /opt/wazuh/certs/indexer.crt -days 365 -sha256
 
       # Manager cert
       openssl genrsa -out /opt/wazuh/certs/manager.key 2048
-      openssl req -new -key /opt/wazuh/certs/manager.key -subj "/CN=manager" -out /opt/wazuh/certs/manager.csr
+      openssl req -new -key /opt/wazuh/certs/manager.key -subj "/CN=wazuh.manager" -out /opt/wazuh/certs/manager.csr
       openssl x509 -req -in /opt/wazuh/certs/manager.csr -CA /opt/wazuh/certs/rootCA.crt -CAkey /opt/wazuh/certs/rootCA.key \
         -CAcreateserial -out /opt/wazuh/certs/manager.crt -days 365 -sha256
 
       # Dashboard cert
       openssl genrsa -out /opt/wazuh/certs/dashboard.key 2048
-      openssl req -new -key /opt/wazuh/certs/dashboard.key -subj "/CN=dashboard" -out /opt/wazuh/certs/dashboard.csr
+      openssl req -new -key /opt/wazuh/certs/dashboard.key -subj "/CN=wazuh.dashboard" -out /opt/wazuh/certs/dashboard.csr
       openssl x509 -req -in /opt/wazuh/certs/dashboard.csr -CA /opt/wazuh/certs/rootCA.crt -CAkey /opt/wazuh/certs/rootCA.key \
         -CAcreateserial -out /opt/wazuh/certs/dashboard.crt -days 365 -sha256
 
