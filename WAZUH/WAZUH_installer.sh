@@ -14,6 +14,10 @@ BRIDGE1="lan1"
 BRIDGE2="oobm"
 CORES=4
 MEMORY=8192
+IP_ADDR="ip=192.168.2.20/24"
+DNS_SERVER="192.168.2.1"
+OOBM_IP="ip=172.20.0.20/24"
+IP_GW="gw=192.168.2.1"
 WORKDIR="$(pwd)/WAZUH/"
 SNIPPET_DIR="/var/lib/vz/snippets"
 SRC_USERDATA="$(pwd)/WAZUH/WAZUH_userdata.yaml"     # source file
@@ -88,6 +92,12 @@ qm set "$VMID" --ide2 "$DISK_STORAGE":cloudinit
 
 echo "➡ Setting boot options..."
 qm set "$VMID" --boot c --bootdisk scsi0
+
+qm set $VMID --ipconfig0 $IP_ADDR,$IP_GW \
+  --ipconfig1 $OOBM_IP \
+  --searchdomain cloud.local \
+  --nameserver $DNS_SERVER \
+  --ciupgrade \
 
 echo "➡ Attaching custom cloud-init config..."
 qm set "$VMID" --cicustom "user=local:snippets/WAZUH_userdata.yaml"
