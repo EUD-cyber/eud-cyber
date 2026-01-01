@@ -70,7 +70,7 @@ if [[ ! -f "$OVF_FILE" ]]; then
 fi
 
 echo "➡ Importing OVF..."
-qm importovf "$VMID" "$OVF_FILE" "$DISK_STORAGE" --format qcow2
+qm importovf "$VMID" "$OVF_FILE" "$DISK_STORAGE"
 
 echo "➡ Updating VM settings..."
 qm set "$VMID" \
