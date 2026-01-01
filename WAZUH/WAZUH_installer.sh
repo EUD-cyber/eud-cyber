@@ -69,8 +69,11 @@ if [[ ! -f "$OVF_FILE" ]]; then
   exit 1
 fi
 
-echo "➡ Creating VM $VMID..."
-qm create "$VMID" \
+echo "➡ Importing OVF..."
+qm importovf "$VMID" "$OVF_FILE" "$DISK_STORAGE" --format qcow2
+
+echo "➡ Updating VM settings..."
+qm set "$VMID" \
   --name "$VM_NAME" \
   --cores "$CORES" \
   --memory "$MEMORY" \
@@ -78,19 +81,15 @@ qm create "$VMID" \
   --net0 virtio,bridge="$BRIDGE1" \
   --net1 virtio,bridge="$BRIDGE2"
 
-echo "➡ Importing OVF..."
-qm importovf "$VMID" "$OVF_FILE" "$DISK_STORAGE" --format qcow2
-
-echo "➡ Attaching disk..."
-qm set "$VMID" --scsi0 "$DISK_STORAGE:vm-$VMID-disk-0"
+echo "➡ Adding cloud-init drive..."
+qm set "$VMID" --ide2 "$DISK_STORAGE":cloudinit
 
 echo "➡ Setting boot options..."
-qm set "$VMID" --boot c \ 
-    --bootdisk scsi0 \
-    --ide2 $DISK_STORAGE:cloudinit 
+qm set "$VMID" --boot c --bootdisk scsi0
 
 echo "➡ Attaching custom cloud-init config..."
-qm set "$VMID" --cicustom "user=local:snippets/WAZUH_userdata.yaml
+qm set "$VMID" --cicustom "user=local:snippets/WAZUH_userdata.yaml"
 
 echo "➡ Done — starting VM..."
 qm start "$VMID"
+
