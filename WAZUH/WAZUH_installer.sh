@@ -60,7 +60,7 @@ else
 fi
 
 echo "➡ Extracting OVA..."
-tar -xf "$IMG_PATH"
+tar -xf "$IMG_PATH" -C $WORKDIR
 
 OVF_FILE=$(ls "$WORKDIR"*.ovf | head -n 1)
 
