@@ -62,15 +62,12 @@ fi
 echo "➡ Extracting OVA..."
 tar -xf "$IMG_PATH" -C $WORKDIR
 
-OVF_FILE=$(ls "$WORKDIR"*.ovf | head -n 1)
+VMDK_FILE=$(ls "$WORKDIR"*.vmdk | head -n 1)
 
-if [[ ! -f "$OVF_FILE" ]]; then
-  echo "❌ OVF not found — aborting"
+if [[ ! -f "$VMDK_FILE" ]]; then
+  echo "❌ vmdk not found — aborting"
   exit 1
 fi
-
-echo "➡ Importing OVF..."
-qm importovf "$VMID" "$OVF_FILE" "$DISK_STORAGE"
 
 echo "➡ Updating VM settings..."
 qm set "$VMID" \
@@ -80,6 +77,8 @@ qm set "$VMID" \
   --scsihw virtio-scsi-pci \
   --net0 virtio,bridge="$BRIDGE1" \
   --net1 virtio,bridge="$BRIDGE2"
+
+qm importdisk "$VMID" "$VMDK" "$DISK_STORAGE" --format raw
 
 echo "➡ Adding cloud-init drive..."
 qm set "$VMID" --ide2 "$DISK_STORAGE":cloudinit
