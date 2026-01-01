@@ -34,6 +34,7 @@ iface $BRIDGE2 inet static
 auto $BRIDGE3
 iface $BRIDGE3 inet static
     ovs_type OVSBridge
+    address 172.20.0.100/24
 
 # ===== End Open vSwitch configuration =====
 EOF
