@@ -81,6 +81,7 @@ qm create "$VMID" \
 
 qm importdisk "$VMID" "$VMDK_FILE" "$DISK_STORAGE" --format raw
 
+qm set "$VMID" --scsi0 "local-lvm:vm-$VMID-disk-0"
 echo "➡ Adding cloud-init drive..."
 qm set "$VMID" --ide2 "$DISK_STORAGE":cloudinit
 
