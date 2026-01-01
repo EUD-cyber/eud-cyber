@@ -74,6 +74,7 @@ qm create "$VMID" \
   --name "$VM_NAME" \
   --cores "$CORES" \
   --memory "$MEMORY" \
+  --machine q35 \
   --scsihw virtio-scsi-pci \
   --net0 virtio,bridge="$BRIDGE1" \
   --net1 virtio,bridge="$BRIDGE2"
