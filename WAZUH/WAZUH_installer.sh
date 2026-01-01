@@ -79,7 +79,7 @@ qm create "$VMID" \
   --net0 virtio,bridge="$BRIDGE1" \
   --net1 virtio,bridge="$BRIDGE2"
 
-qm importdisk "$VMID" "$VMDK" "$DISK_STORAGE" --format raw
+qm importdisk "$VMID" "$VMDK_FILE" "$DISK_STORAGE" --format raw
 
 echo "➡ Adding cloud-init drive..."
 qm set "$VMID" --ide2 "$DISK_STORAGE":cloudinit
