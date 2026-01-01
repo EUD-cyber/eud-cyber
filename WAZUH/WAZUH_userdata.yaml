@@ -11,7 +11,7 @@ network:
         - 192.168.2.20/24
       routes:
       - to: 0.0.0.0/0
-        via: 192.168.20.1
+        via: 192.168.2.1
     eth1:
       dhcp4: false
       addresses:
