@@ -4,31 +4,65 @@ set -e
 # -----------------------------
 # CONFIG
 # -----------------------------
-VMID=150
-VMNAME="wazuh"
-OVA_URL="https://packages.wazuh.com/4.9/ova/wazuh-4.9.0.ova"
-
-STORAGE="local-lvm"
-BRIDGE1="vmbr0"
-BRIDGE2="vmbr1"
-
-CPU_CORES=4
-RAM_MB=8192
-
-WORKDIR="/tmp/wazuh-ova"
-CI_SNIPPET="/var/lib/vz/snippets/wazuh-userdata.yaml"
+START_VMID=100
+BASE_NAME="WAZUH"
+IMG_URL="https://packages.wazuh.com/4.x/vm/wazuh-4.14.1.ova"
+IMG_NAME="wazuh.ova"
+IMG_PATH="$(pwd)/WAZUH/$IMG_NAME"
+DISK_STORAGE="local-lvm"
+BRIDGE1="lan1"
+BRIDGE2="oobm"
+CORES=4
+MEMORY=8192
+WORKDIR="$(pwd)/WAZUH/"
+SNIPPET_DIR="/var/lib/vz/snippets"
+SRC_USERDATA="$(pwd)/WAZUH/WAZUH_userdata.yaml"     # source file
+DST_USERDATA="WAZUH_userdata.yaml"            # destination filename
 # -----------------------------
 
-mkdir -p "$WORKDIR"
-cd "$WORKDIR"
+DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
 
-echo "➡ Downloading Wazuh OVA..."
-wget -q --show-progress -O wazuh.ova "$OVA_URL"
+echo "Checking Cloud-Init user-data snippet..."
+
+# Check if snippet already exists
+if [[ -f "$DST_PATH" ]]; then
+  echo "User-data already exists: $DST_PATH"
+else
+  echo "User-data not found. Copying..."
+  cp "$SRC_USERDATA" "$DST_PATH"
+  chmod 644 "$DST_PATH"
+  echo "User-data copied to $DST_PATH"
+fi
+echo "Done."
+
+# ===== Find next free VMID =====
+VMID=$START_VMID
+while qm status $VMID &>/dev/null; do
+    VMID=$((VMID + 1))
+done
+echo "Selected free VMID: $VMID"
+
+# ===== Handle VM name collision =====
+VM_NAME="$BASE_NAME"
+COUNT=1
+while qm list | awk '{print $2}' | grep -x "$VM_NAME" &>/dev/null; do
+    VM_NAME="${BASE_NAME}-${COUNT}"
+    COUNT=$((COUNT + 1))
+done
+echo "VM name to use: $VM_NAME"
+
+# ===== Download IMG if missing =====
+if [ ! -f "$IMG_PATH" ]; then
+    echo "Downloading $IMG_NAME IMG..."
+    wget -q --show-progress -O "$IMG_PATH" "$IMG_URL"
+else
+    echo "IMG already exists: $IMG_PATH"
+fi
 
 echo "➡ Extracting OVA..."
-tar -xf wazuh.ova
+tar -xf "$IMG_PATH"
 
-OVF_FILE=$(ls *.ovf | head -n 1)
+OVF_FILE=$(ls "$WORKDIR"*.ovf | head -n 1)
 
 if [[ ! -f "$OVF_FILE" ]]; then
   echo "❌ OVF not found — aborting"
@@ -37,73 +71,26 @@ fi
 
 echo "➡ Creating VM $VMID..."
 qm create "$VMID" \
-  --name "$VMNAME" \
-  --cores "$CPU_CORES" \
-  --memory "$RAM_MB" \
+  --name "$VM_NAME" \
+  --cores "$CORES" \
+  --memory "$MEMORY" \
   --scsihw virtio-scsi-pci \
   --net0 virtio,bridge="$BRIDGE1" \
   --net1 virtio,bridge="$BRIDGE2"
 
 echo "➡ Importing OVF..."
-qm importovf "$VMID" "$OVF_FILE" "$STORAGE" --format qcow2
+qm importovf "$VMID" "$OVF_FILE" "$DISK_STORAGE" --format qcow2
 
 echo "➡ Attaching disk..."
-qm set "$VMID" --scsi0 "$STORAGE:vm-$VMID-disk-0"
+qm set "$VMID" --scsi0 "$DISK_STORAGE:vm-$VMID-disk-0"
 
 echo "➡ Setting boot options..."
-qm set "$VMID" --boot c --bootdisk scsi0
-
-echo "➡ Adding cloud-init disk..."
-qm set "$VMID" --ide2 "$STORAGE":cloudinit
-qm set "$VMID" --serial0 socket --vga serial0
-
-echo "➡ Creating cloud-init user-data..."
-mkdir -p "$(dirname "$CI_SNIPPET")"
-
-cat > "$CI_SNIPPET" <<EOF
-#cloud-config
-hostname: wazuh
-manage_etc_hosts: true
-
-users:
-  - name: ec2-user
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    shell: /bin/bash
-    ssh_authorized_keys: []
-ssh_pwauth: false
-
-network:
-  version: 2
-  ethernets:
-    eth0:
-      dhcp4: false
-      addresses:
-        - 192.168.2.20/24
-      gateway4: 192.168.20.1
-    eth1:
-      dhcp4: false
-      addresses:
-        - 172.20.0.20/24
-      routes:
-        - to: 0.0.0.0/0
-          via: 192.168.20.1
-nameservers:
-  addresses: [1.1.1.1, 8.8.8.8]
-
-runcmd:
-  - systemctl enable wazuh-manager || true
-  - systemctl restart wazuh-manager || true
-EOF
+qm set "$VMID" --boot c \ 
+    --bootdisk scsi0 \
+    --ide2 $DISK_STORAGE:cloudinit 
 
 echo "➡ Attaching custom cloud-init config..."
-qm set "$VMID" --cicustom "user=local:snippets/$(basename "$CI_SNIPPET")"
+qm set "$VMID" --cicustom "user=local:snippets/WAZUH_userdata.yaml
 
 echo "➡ Done — starting VM..."
 qm start "$VMID"
-
-echo
-echo "✔ Wazuh VM created"
-echo "   VMID: $VMID"
-echo "   Name: $VMNAME"
-echo "   NIC1: 192.168.2.20/24 (gw 192.168.20.1)"
-echo "   NIC2: 172.20.0.20/24"
