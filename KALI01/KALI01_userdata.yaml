@@ -31,31 +31,31 @@ packages:
   - tigervnc-common
   
 write_files:
-  - path: /home/kali/.vnc/xstartup
-    owner: root:root
-    permissions: "0755"
-    content: |
-      #!/bin/sh
-
-      unset SESSION_MANAGER
-      unset DBUS_SESSION_BUS_ADDRESS
-      startxfce4 &
-      
-  - path: /etc/systemd/system/vncserver.service
-    permissions: "0644"
-    content: |
-      [Unit]
-      Description=TightVNC server on Port 5901
-      After=Network.target
-      
-      [Service]
-      Type=forking
-      User=kali
-      ExecStart=/usr/bin/vncserver -localhost=no -geometry 1280x720 :1
-      ExecStop=/usr/bin/vncserver -kill :1
-      
-      [Install]
-      WantedBy=multi-user.target
+      - path: /home/kali/.vnc/xstartup
+        owner: root:root
+        permissions: "0755"
+        content: |
+          #!/bin/sh
+    
+          unset SESSION_MANAGER
+          unset DBUS_SESSION_BUS_ADDRESS
+          startxfce4 &
+          
+      - path: /etc/systemd/system/vncserver.service
+        permissions: "0644"
+        content: |
+          [Unit]
+          Description=TightVNC server on Port 5901
+          After=Network.target
+          
+          [Service]
+          Type=forking
+          User=kali
+          ExecStart=/usr/bin/vncserver -localhost=no -geometry 1280x720 :1
+          ExecStop=/usr/bin/vncserver -kill :1
+          
+          [Install]
+          WantedBy=multi-user.target
 
 runcmd:
   - DEBIAN_FRONTEND=noninteractive
