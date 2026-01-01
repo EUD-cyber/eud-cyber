@@ -70,7 +70,7 @@ if [[ ! -f "$VMDK_FILE" ]]; then
 fi
 
 echo "➡ Updating VM settings..."
-qm set "$VMID" \
+qm create "$VMID" \
   --name "$VM_NAME" \
   --cores "$CORES" \
   --memory "$MEMORY" \
