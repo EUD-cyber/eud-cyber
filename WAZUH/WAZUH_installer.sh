@@ -14,6 +14,7 @@ BRIDGE1="lan2"
 BRIDGE2="oobm"
 CORES=4
 MEMORY=16384
+DISK_SIZE=50
 IP_ADDR="ip=192.168.2.20/24"
 DNS_SERVER="192.168.2.1"
 OOBM_IP="ip=172.20.0.20/24"
@@ -85,6 +86,8 @@ qm create "$VMID" \
   --net1 virtio,bridge="$BRIDGE2"
 
 qm importdisk "$VMID" "$VMDK_FILE" "$DISK_STORAGE" --format raw
+
+qm disk resize $VMID scsi0 +$DISK_SIZE
 
 qm set "$VMID" --scsi0 "local-lvm:vm-$VMID-disk-0"
 echo "➡ Adding cloud-init drive..."
