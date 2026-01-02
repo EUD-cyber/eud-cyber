@@ -58,7 +58,7 @@ write_files:
           WantedBy=multi-user.target
 
 runcmd:
-  - DEBIAN_FRONTEND=noninteractive
+ # - DEBIAN_FRONTEND=noninteractive
   - apt-get update
   - apt install -y xfce4 xfce4-goodies xfce4-session kali-linux-default
   - systemctl enable ssh
