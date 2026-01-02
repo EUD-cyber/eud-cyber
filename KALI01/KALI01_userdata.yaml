@@ -58,15 +58,30 @@ write_files:
           WantedBy=multi-user.target
 
 runcmd:
-  - DEBIAN_FRONTEND=noninteractive
+  - set -x
+  - export DEBIAN_FRONTEND=noninteractive
+
+  # Update repositories
   - apt-get update
-  - apt install -y xfce4 xfce4-goodies xfce4-session 
-  - systemctl enable ssh
-  - systemctl set-default multi-user.target
+
+  # 1️⃣ Install desktop FIRST
+  - apt-get install -y xfce4 xfce4-goodies xfce4-session
+
+  # 2️⃣ Create VNC folders
   - mkdir -p /home/kali/.vnc
   - mkdir -p /home/kali/.config/tigervnc
   - chown -R kali:kali /home/kali
+
+  # 3️⃣ Enable SSH + boot target
+  - systemctl enable ssh
+  - systemctl set-default multi-user.target
+
+  # 4️⃣ Setup VNC password
   - su - kali -c "printf 'password\npassword\n\n' | vncpasswd"
+
+  # 5️⃣ Enable/start VNC
   - systemctl enable vncserver
   - systemctl start vncserver
-  - apt install -y kali-linux-default
+
+  # ⭐ Run Kali tools install in background ⭐
+  - nohup bash -c "set -x; export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y kali-linux-default" > /var/log/kali-install.log 2>&1 &
