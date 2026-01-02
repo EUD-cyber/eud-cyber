@@ -58,9 +58,9 @@ write_files:
           WantedBy=multi-user.target
 
 runcmd:
- # - DEBIAN_FRONTEND=noninteractive
+  - DEBIAN_FRONTEND=noninteractive
   - apt-get update
-  - apt install -y xfce4 xfce4-goodies xfce4-session kali-linux-default
+  - apt install -y xfce4 xfce4-goodies xfce4-session 
   - systemctl enable ssh
   - systemctl set-default multi-user.target
   - mkdir -p /home/kali/.vnc
@@ -69,3 +69,4 @@ runcmd:
   - su - kali -c "printf 'password\npassword\n\n' | vncpasswd"
   - systemctl enable vncserver
   - systemctl start vncserver
+  - apt install -y kali-linux-default
