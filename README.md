@@ -17,12 +17,14 @@ user: guacadmin pass: guacadmin
 ubuntu \
 user: ubuntu pass: Password1! 
 
+wazuh \
+user: wazuh-user pass: wazuh
+
 missing \
   ip address validation on vm opnsense and guacvm \
   download cloud img to default folder and check if exits on each vm creation \
   all input first so the script will run without input after \
   no docker on vulnsrv01 \
-  wazuh docker problem \
   Problem with the WIN11 image, needs more testing 
   
 Network \
