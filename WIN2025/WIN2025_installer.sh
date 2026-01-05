@@ -72,7 +72,7 @@ if [[ -f "$DST_WIN2025_PATH" ]]; then
 else
   echo "WIN2025 ISO not found. Copying..."
   cp "$IMG_PATH" "$DST_WIN2025_PATH"
-  echo "User-data copied to $DST_WIN2025_PATH"
+  echo "VIRTIO ISO copied to $DST_WIN2025_PATH"
 
 fi
   
