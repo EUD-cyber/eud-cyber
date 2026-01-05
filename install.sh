@@ -2,6 +2,7 @@
 set -e
 
 REPO="./repo.sh"
+GUACVM_IP="./GUACVM/GUACVM_ip.sh"
 GUACVM="./GUACVM/GUACVM_installer.sh"
 OPENVSWITCH="./open-vswitch.sh"
 VULNSRV01="./VULNSRV01/VULNSRV01_installer.sh"
@@ -50,6 +51,7 @@ case "$CHOICE" in
     ;;
   4)
     echo "Starting Guacamole VM creation..."
+    bash "$GUACVM_IP"
     bash "$GUACVM"
     ;;
   5)
@@ -96,6 +98,7 @@ case "$CHOICE" in
     bash "$OPNSENSE"
 
     echo "Starting Guacamole VM creation..."
+    bash "$GUACVM_IP"
     bash "$GUACVM"
 
     echo "Starting Vuln-server01 VM creation..."
