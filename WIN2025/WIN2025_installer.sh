@@ -111,9 +111,9 @@ qm create $VMID \
   --scsihw virtio-scsi-pci \
   --ostype win11
 
-qm set $VMID --ide2 $ISO_STORAGE:iso/$IMG_NAME,media=cdrom
-qm set $VMID --ide3 $ISO_STORAGE:iso/$VIRTIO_NAME,media=cdrom
-qm set $VMID --ide4 $ISO_STORAGE:iso/$AUTOISO_NAME,media=cdrom
+qm set $VMID --ide1 $ISO_STORAGE:iso/$IMG_NAME,media=cdrom
+qm set $VMID --ide2 $ISO_STORAGE:iso/$VIRTIO_NAME,media=cdrom
+qm set $VMID --ide3 $ISO_STORAGE:iso/$AUTOISO_NAME,media=cdrom
 qm set $VMID --scsi0 $DISK_STORAGE:$DISK_SIZE
 
 qm set $VMID --boot order=scsi0 \
