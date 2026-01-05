@@ -31,7 +31,7 @@ BRIDGE1="oobm"
 ISO_DIR="/var/lib/vz/template/iso"
 AUTO_FOLDER="$(pwd)/WIN2025/Autounattend/"
 AUTO_PATH="$(pwd)/WIN2025/Autounattend/Autounattend.xml"
-AUTOISO_PATH="$(pwd)/WIN2025/Autounattend/$AUTOZIP_NAME"
+AUTOISO_PATH="$ISO_DIR/$AUTOZIP_NAME"
 AUTOISO_NAME="Autounattend.iso"
 DST_WIN2025_PATH="$ISO_DIR/$IMG_NAME"
 DST_VIRTIO_PATH="$ISO_DIR/$VIRTIO_NAME"
@@ -98,6 +98,7 @@ else
   echo "Autounattend.iso is created $AUTOZIP_PATH""
 
 fi
+
 echo "Done."
 
 qm create $VMID \
