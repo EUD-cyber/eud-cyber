@@ -13,7 +13,7 @@ exec > >(tee -a "$LOGFILE") 2>&1
 echo "===== WIN2025 installation started at $(date) ====="
 
 
-START_VMID=100
+START_VMID="100"
 BASE_NAME="WIN2025"
 ISO_STORAGE="local"
 DISK_STORAGE="local-lvm"
