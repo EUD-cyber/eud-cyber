@@ -106,4 +106,5 @@ qm set $VMID --boot order=scsi0 \
    --bios ovmf \
    --efidisk0 $DISK_STORAGE:0,pre-enrolled-keys=1 \
    --tablet 0
+qm enroll-efi-keys $VMID
 qm start $VMID
