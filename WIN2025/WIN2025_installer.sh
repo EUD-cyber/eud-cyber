@@ -30,7 +30,8 @@ BRIDGE="lan2"
 BRIDGE1="oobm"
 ISO_DIR="/var/lib/vz/template/iso"
 AUTO_PATH="$(pwd)/WIN2025/Autounattend.xml"
-AUTOZIP_PATH="$(pwd)/WIN2025/Autounattend.zip"
+AUTOZIP_PATH="$(pwd)/WIN2025/$AUTOZIP_NAME"
+AUTOZIP_NAME="Autounattend.zip"
 DST_WIN2025_PATH="$ISO_DIR/$IMG_NAME"
 DST_VIRTIO_PATH="$ISO_DIR/$VIRTIO_NAME"
 
@@ -110,6 +111,7 @@ qm create $VMID \
 
 qm set $VMID --ide2 $ISO_STORAGE:iso/$IMG_NAME,media=cdrom
 qm set $VMID --ide3 $ISO_STORAGE:iso/$VIRTIO_NAME,media=cdrom
+qm set $VMID --ide4 $ISO_STORAGE:iso/$AUTOZIP_NAME,media=cdrom
 qm set $VMID --scsi0 $DISK_STORAGE:$DISK_SIZE
 
 qm set $VMID --boot order=scsi0 \
