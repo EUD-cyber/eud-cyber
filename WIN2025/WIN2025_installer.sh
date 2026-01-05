@@ -95,7 +95,7 @@ if [[ -f "$AUTOISO_PATH" ]]; then
 else
   echo "ISO file not found. Zipping " $AUTO_PATH
   genisoimage -o $AUTOISO_PATH -J -R $AUTO_FOLDER
-  echo "Autounattend.iso is created $AUTOZIP_PATH""
+  echo "Autounattend.iso is created $AUTOZIP_PATH"
 
 fi
 
