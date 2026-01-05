@@ -18,7 +18,8 @@ ubuntu \
 user: ubuntu pass: Password1! 
 
 wazuh \
-user: wazuh-user pass: wazuh
+user: wazuh-user pass: wazuh \
+webuser: admin webpass: admin
 
 missing \
   ip address validation on vm opnsense and guacvm \
