@@ -30,8 +30,8 @@ BRIDGE="lan2"
 BRIDGE1="oobm"
 ISO_DIR="/var/lib/vz/template/iso"
 
-DST_WIN2025_PATH="$ISO_DIR}/$IMG_NAME"
-DST_VIRTIO_PATH="$ISO_DIR}/$VIRTIO_NAME"
+DST_WIN2025_PATH="$ISO_DIR/$IMG_NAME"
+DST_VIRTIO_PATH="$ISO_DIR/$VIRTIO_NAME"
 
 
 # ===== Find next free VMID =====
