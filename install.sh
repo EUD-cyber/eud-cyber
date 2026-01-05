@@ -26,6 +26,7 @@ echo "6) Create Vuln-server02 VM"
 echo "7) Create KALI01 VM"
 echo "8) Create WAZUH VM"
 echo "9) Create Windows 11 VM"
+echo "10) Create Windows server 2025 VM"
 echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
 echo "99) Finish script"
@@ -71,6 +72,10 @@ case "$CHOICE" in
     echo "Starting Windows 11 VM creation... "
     bash "$WIN11"
     ;;
+ 10)
+    echo "Starting Windows server 2025 VM creation... "
+    bash "$WIN2025"
+    ;;
   89)
     echo "Change proxmox repo to no-enterprise"
     bash "$REPO"
@@ -107,6 +112,9 @@ case "$CHOICE" in
 
 #    echo "Starting Windows 11 VM creation... "
 #    bash "$WIN11"
+
+#    echo "Starting Windows server 2025 VM creation.... "
+#    bash "$WIN2025"
     
     echo "Start finishing script..."
     bash "$FINISH"
