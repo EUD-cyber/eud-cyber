@@ -105,6 +105,10 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
     </ssh>
   ${WAN_DNS_BLOCK}
   <nohttpreferercheck>yes</nohttpreferercheck>
+  <disablechecksumoffloading>1</disablechecksumoffloading>
+  <disablesegmentationoffloading>1</disablesegmentationoffloading>
+  <disablelargereceiveoffloading>1</disablelargereceiveoffloading>
+  <disablevlanhwfilter>1</disablevlanhwfilter>
   </system>
   <unbound>
     <enable>1</enable>
