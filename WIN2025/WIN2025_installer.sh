@@ -73,6 +73,8 @@ else
   echo "WIN2025 ISO not found. Copying..."
   cp "$IMG_PATH" "$DST_WIN2025_PATH"
   echo "User-data copied to $DST_WIN2025_PATH"
+
+fi
   
 # Check if VIRTIO ISO exits in iso folder
 if [[ -f "$DST_VIRTIO_PATH" ]]; then
@@ -80,8 +82,7 @@ if [[ -f "$DST_VIRTIO_PATH" ]]; then
 else
   echo "VIRTIO ISO not found. Copying..."
   cp "$VIRTIO_PATH" "$DST_VIRTIO_PATH"
-  echo "User-data copied to $DST_
-
+  echo "User-data copied to $DST_VIRTIO_PATH"
 
 fi
 echo "Done."
