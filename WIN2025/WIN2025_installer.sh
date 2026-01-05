@@ -29,7 +29,8 @@ DISK_SIZE="40"
 BRIDGE="lan2"
 BRIDGE1="oobm"
 ISO_DIR="/var/lib/vz/template/iso"
-UNATTEND_PATH="$(pwd)/WIN2025/Unattend.xml"
+AUTO_PATH="$(pwd)/WIN2025/Autounattend.xml"
+AUTOZIP_PATH="$(pwd)/WIN2025/Autounattend.zip"
 DST_WIN2025_PATH="$ISO_DIR/$IMG_NAME"
 DST_VIRTIO_PATH="$ISO_DIR/$VIRTIO_NAME"
 
@@ -82,7 +83,17 @@ if [[ -f "$DST_VIRTIO_PATH" ]]; then
 else
   echo "VIRTIO ISO not found. Copying..."
   cp "$VIRTIO_PATH" "$DST_VIRTIO_PATH"
-  echo "User-data copied to $DST_VIRTIO_PATH"
+  echo "VIRTIO ISO copied to $DST_VIRTIO_PATH"
+
+fi
+
+# Check if Autounattend is zipped
+if [[ -f "$AUTOZIP_PATH" ]]; then
+  echo "Autounattend is allready zipped: $AUTOZIP_PATH"
+else
+  echo "Zip file not found. Zipping..."
+  cp "$VIRTIO_PATH" "$DST_VIRTIO_PATH"
+  echo "Autounattend is zipped $AUTOZIP_PATH""
 
 fi
 echo "Done."
