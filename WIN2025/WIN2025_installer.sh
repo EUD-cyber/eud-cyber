@@ -21,7 +21,7 @@ IMG_URL="https://go.microsoft.com/fwlink/?linkid=2345730&clcid=0x409&culture=en-
 IMG_NAME="en-us_windows_server_2025_x64_dvd_b7ec10f3.iso"
 IMG_PATH="$(pwd)/$IMG_NAME"
 VIRTIO_URL="https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.285-1/virtio-win-0.1.285.iso"
-VIRTIO_NAME=virtio-win.iso
+VIRTIO_NAME="virtio-win.iso"
 VIRTIO_PATH="$(pwd)/$VIRTIO_NAME"
 MEMORY=8192       # in MB
 CORES=4
@@ -31,7 +31,7 @@ BRIDGE1="oobm"
 ISO_DIR="/var/lib/vz/template/iso"
 
 DST_WIN2025_PATH="$ISO_DIR}/$IMG_NAME"
-DST_VIRTIO_PATH=""$ISO_DIR}/$VIRTIO_NAME"
+DST_VIRTIO_PATH="$ISO_DIR}/$VIRTIO_NAME"
 
 
 # ===== Find next free VMID =====
