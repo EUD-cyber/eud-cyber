@@ -1,4 +1,4 @@
-GUACVM_FILE="$(pwd)/GUACVM_installer2.sh"
+GUACVM_FILE="$(pwd)/GUACVM/GUACVM_installer.sh"
 
 echo "Select network configuration:"
 echo "1) DHCP"
