@@ -99,12 +99,11 @@ qm create $VMID \
 
 qm set $VMID --ide2 $ISO_STORAGE:iso/$IMG_NAME,media=cdrom
 qm set $VMID --ide3 $ISO_STORAGE:iso/$VIRTIO_NAME,media=cdrom
-
 qm set $VMID --scsi0 $DISK_STORAGE:$DISK_SIZE
-qm set $VMID --boot order=scsi0
-qm set $VMID --machine q35
-qm set $VMID --bios ovmf
-qm set $VMID --efidisk0 $DISK_STORAGE:0,pre-enrolled-keys=1
-qm set $VMID --tablet 0
 
-qm start VMID
+qm set $VMID --boot order=scsi0 \
+   --machine q35 \
+   --bios ovmf \
+   --efidisk0 $DISK_STORAGE:0,pre-enrolled-keys=1 \
+   --tablet 0
+qm start $VMID
