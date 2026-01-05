@@ -91,8 +91,8 @@ fi
 if [[ -f "$AUTOZIP_PATH" ]]; then
   echo "Autounattend is allready zipped: $AUTOZIP_PATH"
 else
-  echo "Zip file not found. Zipping..."
-  cp "$VIRTIO_PATH" "$DST_VIRTIO_PATH"
+  echo "Zip file not found. Zipping " $AUTO_PATH
+  zip -r $AUTOZIP_PATH $AUTO_PATH
   echo "Autounattend is zipped $AUTOZIP_PATH""
 
 fi
