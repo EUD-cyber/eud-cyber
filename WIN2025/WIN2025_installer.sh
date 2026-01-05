@@ -29,9 +29,10 @@ DISK_SIZE="40"
 BRIDGE="lan2"
 BRIDGE1="oobm"
 ISO_DIR="/var/lib/vz/template/iso"
-AUTO_PATH="$(pwd)/WIN2025/Autounattend.xml"
-AUTOZIP_PATH="$(pwd)/WIN2025/$AUTOZIP_NAME"
-AUTOZIP_NAME="Autounattend.zip"
+AUTO_FOLDER="$(pwd)/WIN2025/Autounattend/"
+AUTO_PATH="$(pwd)/WIN2025/Autounattend/Autounattend.xml"
+AUTOISO_PATH="$(pwd)/WIN2025/Autounattend/$AUTOZIP_NAME"
+AUTOISO_NAME="Autounattend.iso"
 DST_WIN2025_PATH="$ISO_DIR/$IMG_NAME"
 DST_VIRTIO_PATH="$ISO_DIR/$VIRTIO_NAME"
 
@@ -88,13 +89,13 @@ else
 
 fi
 
-# Check if Autounattend is zipped
-if [[ -f "$AUTOZIP_PATH" ]]; then
-  echo "Autounattend is allready zipped: $AUTOZIP_PATH"
+# Check if Autounattend.iso exits
+if [[ -f "$AUTOISO_PATH" ]]; then
+  echo "Autounattend.iso exits: $AUTOISO_PATH"
 else
-  echo "Zip file not found. Zipping " $AUTO_PATH
-  zip -r $AUTOZIP_PATH $AUTO_PATH
-  echo "Autounattend is zipped $AUTOZIP_PATH""
+  echo "ISO file not found. Zipping " $AUTO_PATH
+  genisoimage -o $AUTOISO_PATH -J -R $AUTO_FOLDER
+  echo "Autounattend.iso is created $AUTOZIP_PATH""
 
 fi
 echo "Done."
