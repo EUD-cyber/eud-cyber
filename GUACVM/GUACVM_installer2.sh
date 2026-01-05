@@ -29,6 +29,8 @@ OOBM_IP="ip=172.20.0.1/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
 SRC_USERDATA="$(pwd)/GUACVM/GUAC_userdata.yaml"     # source file
 DST_USERDATA="GUAC_userdata.yaml"            # destination filename
+IP_ADDR=""
+DNS_SERVER=""
 # ==================
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
@@ -46,29 +48,6 @@ else
 fi
 echo "Done."
 
-# Ask user for network type
-echo "Select network configuration:"
-echo "1) DHCP"
-echo "2) Static"
-read -p "Enter choice [1-2]: " choice
-
-if [ "$choice" = "1" ]; then
-    IP_ADDR="ip=dhcp"
-    DNS_SERVER=""
-
-elif [ "$choice" = "2" ]; then
-
-    read -p "Enter static IP (e.g., 192.168.1.100/24): " STATIC_IP
-    read -p "Enter gateway (e.g., 192.168.1.1): " GATEWAY
-    read -p "Enter DNS servers (space separated, e.g., 8.8.8.8 1.1.1.1): " DNS
-
-    IP_ADDR="ip=${STATIC_IP},gw=${GATEWAY}"
-    DNS_SERVER="$DNS"
-
-else
-    echo "Invalid choice. Exiting."
-    exit 1
-fi
 # ===== Find next free VMID =====
 VMID=$START_VMID
 while qm status $VMID &>/dev/null; do
