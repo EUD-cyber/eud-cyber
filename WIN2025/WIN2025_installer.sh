@@ -19,10 +19,10 @@ ISO_STORAGE="local"
 DISK_STORAGE="local-lvm"
 IMG_URL="https://go.microsoft.com/fwlink/?linkid=2345730&clcid=0x409&culture=en-us&country=us"
 IMG_NAME="en-us_windows_server_2025_x64_dvd_b7ec10f3.iso"
-IMG_PATH="$(pwd)/$IMG_NAME"
+IMG_PATH="$(pwd)IMAGES/$IMG_NAME"
 VIRTIO_URL="https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.285-1/virtio-win-0.1.285.iso"
 VIRTIO_NAME="virtio-win.iso"
-VIRTIO_PATH="$(pwd)/$VIRTIO_NAME"
+VIRTIO_PATH="$(pwd)/IMAGES/$VIRTIO_NAME"
 MEMORY=8192       # in MB
 CORES=4
 DISK_SIZE="40"
