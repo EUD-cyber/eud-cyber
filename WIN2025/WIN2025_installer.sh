@@ -120,6 +120,7 @@ qm set $VMID --boot order=scsi0 \
    --machine q35 \
    --bios ovmf \
    --efidisk0 $DISK_STORAGE:0,pre-enrolled-keys=1 \
+   --tpmstate0 $DISK_STORAGE:0,version=v2.0 \
    --tablet 0
 qm enroll-efi-keys $VMID
 qm start $VMID
