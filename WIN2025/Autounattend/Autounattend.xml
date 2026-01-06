@@ -169,7 +169,7 @@
         <SynchronousCommand wcm:action="add" wcm:keyValue="2">
           <Order>2</Order>
           <Description>Copy scripts</Description>
-          <CommandLine>cmd.exe /c copy /y D:\post\* C:\Windows\Setup\Scripts\</CommandLine>
+          <CommandLine>cmd.exe /c copy /y E:\post\* C:\Windows\Setup\Scripts\</CommandLine>
         </SynchronousCommand>
       </FirstLogonCommands>
 
