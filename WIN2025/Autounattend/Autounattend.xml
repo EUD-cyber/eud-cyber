@@ -19,7 +19,7 @@
       <UserLocale>en-US</UserLocale>
     </component>
 
-    <!-- LOAD VIRTIO DRIVERS -->
+    <!-- FORCE LOAD VIRTIO DRIVERS -->
     <component name="Microsoft-Windows-PnpCustomizationsWinPE"
                processorArchitecture="amd64"
                publicKeyToken="31bf3856ad364e35"
@@ -87,79 +87,4 @@
               <PartitionID>3</PartitionID>
               <Label>Windows</Label>
               <Format>NTFS</Format>
-              <Letter>C</Letter>
-            </ModifyPartition>
-
-          </ModifyPartitions>
-
-        </Disk>
-
-        <WillShowUI>Never</WillShowUI>
-      </DiskConfiguration>
-
-      <!-- IMAGE -->
-      <ImageInstall>
-        <OSImage>
-          <InstallToAvailablePartition>true</InstallToAvailablePartition>
-
-          <InstallFrom>
-            <MetaData wcm:action="add">
-              <Key>/IMAGE/INDEX</Key>
-              <Value>3</Value>
-            </MetaData>
-          </InstallFrom>
-
-        </OSImage>
-      </ImageInstall>
-
-      <UserData>
-        <AcceptEula>true</AcceptEula>
-      </UserData>
-
-    </component>
-
-  </settings>
-
-  <!-- ================== OOBE ================== -->
-  <settings pass="oobeSystem">
-
-    <component name="Microsoft-Windows-International-Core"
-               processorArchitecture="amd64"
-               publicKeyToken="31bf3856ad364e35"
-               language="neutral"
-               versionScope="nonSxS">
-      <InputLocale>en-US</InputLocale>
-      <SystemLocale>en-US</SystemLocale>
-      <UILanguage>en-US</UILanguage>
-      <UserLocale>en-US</UserLocale>
-    </component>
-
-    <component name="Microsoft-Windows-Shell-Setup"
-               processorArchitecture="amd64"
-               publicKeyToken="31bf3856ad364e35"
-               language="neutral"
-               versionScope="nonSxS">
-
-      <OOBE>
-        <HideEULAPage>true</HideEULAPage>
-        <HideLocalAccountScreen>false</HideLocalAccountScreen>
-        <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
-        <NetworkLocation>Work</NetworkLocation>
-        <ProtectYourPC>3</ProtectYourPC>
-      </OOBE>
-
-      <!-- Local Administrator -->
-      <UserAccounts>
-        <AdministratorPassword>
-          <Value>Password1!</Value>
-          <PlainText>true</PlainText>
-        </AdministratorPassword>
-      </UserAccounts>
-
-      <TimeZone>UTC</TimeZone>
-
-    </component>
-
-  </settings>
-
-</unattend>
+              <Letter>C</Letter
