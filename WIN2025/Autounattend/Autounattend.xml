@@ -4,10 +4,8 @@
   xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
-  <!-- ================== WINDOWS PE ================== -->
   <settings pass="windowsPE">
 
-    <!-- Locale -->
     <component name="Microsoft-Windows-International-Core-WinPE"
                processorArchitecture="amd64"
                publicKeyToken="31bf3856ad364e35"
@@ -19,7 +17,6 @@
       <UserLocale>en-US</UserLocale>
     </component>
 
-    <!-- FORCE LOAD VIRTIO DRIVERS -->
     <component name="Microsoft-Windows-PnpCustomizationsWinPE"
                processorArchitecture="amd64"
                publicKeyToken="31bf3856ad364e35"
@@ -35,46 +32,38 @@
       </DriverPaths>
     </component>
 
-    <!-- Setup -->
     <component name="Microsoft-Windows-Setup"
                processorArchitecture="amd64"
                publicKeyToken="31bf3856ad364e35"
                language="neutral"
                versionScope="nonSxS">
 
-      <!-- FULL UEFI DISK LAYOUT -->
       <DiskConfiguration>
         <Disk wcm:action="add">
           <DiskID>0</DiskID>
           <WillWipeDisk>true</WillWipeDisk>
 
           <CreatePartitions>
-
-            <!-- EFI -->
             <CreatePartition wcm:action="add">
               <Order>1</Order>
               <Type>EFI</Type>
               <Size>100</Size>
             </CreatePartition>
 
-            <!-- MSR -->
             <CreatePartition wcm:action="add">
               <Order>2</Order>
               <Type>MSR</Type>
               <Size>16</Size>
             </CreatePartition>
 
-            <!-- OS -->
             <CreatePartition wcm:action="add">
               <Order>3</Order>
               <Type>Primary</Type>
               <Extend>true</Extend>
             </CreatePartition>
-
           </CreatePartitions>
 
           <ModifyPartitions>
-
             <ModifyPartition wcm:action="add">
               <Order>1</Order>
               <PartitionID>1</PartitionID>
@@ -89,7 +78,6 @@
               <Format>NTFS</Format>
               <Letter>C</Letter>
             </ModifyPartition>
-
           </ModifyPartitions>
 
         </Disk>
@@ -97,7 +85,6 @@
         <WillShowUI>Never</WillShowUI>
       </DiskConfiguration>
 
-      <!-- IMAGE -->
       <ImageInstall>
         <OSImage>
           <InstallToAvailablePartition>true</InstallToAvailablePartition>
@@ -105,7 +92,7 @@
           <InstallFrom>
             <MetaData wcm:action="add">
               <Key>/IMAGE/INDEX</Key>
-              <Value>2</Value>
+              <Value>2</Value> 
             </MetaData>
           </InstallFrom>
 
@@ -120,7 +107,6 @@
 
   </settings>
 
-  <!-- ================== OOBE ================== -->
   <settings pass="oobeSystem">
 
     <component name="Microsoft-Windows-International-Core"
@@ -148,7 +134,6 @@
         <ProtectYourPC>3</ProtectYourPC>
       </OOBE>
 
-      <!-- Local Administrator -->
       <UserAccounts>
         <AdministratorPassword>
           <Value>Password1!</Value>
@@ -158,25 +143,6 @@
 
       <TimeZone>UTC</TimeZone>
 
-      <!-- COPY & RUN POST SCRIPTS -->
-     <FirstLogonCommands>
-  <SynchronousCommand wcm:action="add" wcm:keyValue="1">
-    <Order>1</Order>
-    <Description>Create setup scripts folder</Description>
-    <CommandLine>cmd.exe /c mkdir C:\Windows\Setup\Scripts</CommandLine>
-  </SynchronousCommand>
-
-  <SynchronousCommand wcm:action="add" wcm:keyValue="2">
-    <Order>2</Order>
-    <Description>Copy scripts (auto detect ISO)</Description>
-    <CommandLine>
-      powershell -ExecutionPolicy Bypass -Command ^
-        "$drive = (Get-PSDrive -PSProvider FileSystem | Where-Object { Test-Path (Join-Path $_.Root 'post') } | Select-Object -First 1).Root; ^
-         if (-not $drive) { Write-Host 'No post folder found'; exit 1 }; ^
-         Copy-Item (Join-Path $drive 'post\*') 'C:\Windows\Setup\Scripts\' -Recurse -Force"
-    </CommandLine>
-  </SynchronousCommand>
-</FirstLogonCommands>
     </component>
 
   </settings>
