@@ -159,20 +159,24 @@
       <TimeZone>UTC</TimeZone>
 
       <!-- COPY & RUN POST SCRIPTS -->
-      <FirstLogonCommands>
-        <SynchronousCommand wcm:action="add" wcm:keyValue="1">
-          <Order>1</Order>
-          <Description>Create setup scripts folder</Description>
-          <CommandLine>cmd.exe /c mkdir C:\Windows\Setup\Scripts</CommandLine>
-        </SynchronousCommand>
+     <FirstLogonCommands>
+  <SynchronousCommand wcm:action="add" wcm:keyValue="1">
+    <Order>1</Order>
+    <Description>Create setup scripts folder</Description>
+    <CommandLine>cmd.exe /c mkdir C:\Windows\Setup\Scripts</CommandLine>
+  </SynchronousCommand>
 
-        <SynchronousCommand wcm:action="add" wcm:keyValue="2">
-          <Order>2</Order>
-          <Description>Copy scripts</Description>
-          <CommandLine>cmd.exe /c copy /y E:\post\* C:\Windows\Setup\Scripts\</CommandLine>
-        </SynchronousCommand>
-      </FirstLogonCommands>
-
+  <SynchronousCommand wcm:action="add" wcm:keyValue="2">
+    <Order>2</Order>
+    <Description>Copy scripts (auto detect ISO)</Description>
+    <CommandLine>
+      powershell -ExecutionPolicy Bypass -Command ^
+        "$drive = (Get-PSDrive -PSProvider FileSystem | Where-Object { Test-Path (Join-Path $_.Root 'post') } | Select-Object -First 1).Root; ^
+         if (-not $drive) { Write-Host 'No post folder found'; exit 1 }; ^
+         Copy-Item (Join-Path $drive 'post\*') 'C:\Windows\Setup\Scripts\' -Recurse -Force"
+    </CommandLine>
+  </SynchronousCommand>
+</FirstLogonCommands>
     </component>
 
   </settings>
