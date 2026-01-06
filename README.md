@@ -3,7 +3,8 @@ cyber eud
 
 This script is testet with proxmox 9.1
 
-<img width="788" height="507" alt="image" src="https://github.com/user-attachments/assets/ab18e1a6-4ed1-482e-bcca-e4934619c9b3" />
+<img width="762" height="512" alt="image" src="https://github.com/user-attachments/assets/993d4ccf-8124-481c-bb50-134729f64d9c" />
+
 
 
 passwords: 
