@@ -116,7 +116,7 @@ qm set $VMID --ide2 $ISO_STORAGE:iso/$VIRTIO_NAME,media=cdrom
 qm set $VMID --ide3 $ISO_STORAGE:iso/$AUTOISO_NAME,media=cdrom
 qm set $VMID --scsi0 $DISK_STORAGE:$DISK_SIZE
 
-qm set $VMID --boot order="scsi0;ide2" \
+qm set $VMID --boot order="ide1;scsi0" \
    --machine q35 \
    --bios ovmf \
    --efidisk0 $DISK_STORAGE:0,efitype=4m,ms-cert=2023,pre-enrolled-keys=1 \
