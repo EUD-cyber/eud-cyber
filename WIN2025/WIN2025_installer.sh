@@ -35,6 +35,8 @@ AUTOISO_PATH="/var/lib/vz/template/iso/Autounattend.iso"
 AUTOISO_NAME="Autounattend.iso"
 DST_WIN2025_PATH="$ISO_DIR/$IMG_NAME"
 DST_VIRTIO_PATH="$ISO_DIR/$VIRTIO_NAME"
+NOPROMPT_IMG_NAME="en-us_windows_server_2025_noprompt.iso"
+NOPROMPT_IMG_PATH="$ISO_DIR/$NOPROMPT_IMG_NAME"
 
 
 # ===== Find next free VMID =====
@@ -99,6 +101,106 @@ else
 
 fi
 
+# Build NO-PROMPT ISO via Ansible
+# =======================
+
+if [[ ! -f "$NOPROMPT_IMG_PATH" ]]; then
+  echo "Creating no-prompt Windows ISO with Ansible..."
+
+PLAYBOOK="/tmp/noprompt-iso.yml"
+
+  cat > "$PLAYBOOK" <<'EOF'
+- name: Build Windows No-Prompt ISO
+  hosts: localhost
+  become: true
+  gather_facts: false
+
+  vars:
+    iso_source: "{{ lookup('env', 'SRC_ISO') }}"
+    iso_output: "{{ lookup('env', 'DST_ISO') }}"
+    iso_mount: "/dev/shm/winiso/mount"
+    iso_extracted: "/dev/shm/winiso/extracted"
+    volume_label: "WINSETUP"
+
+  tasks:
+    - name: Create workspace
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ iso_mount }}"
+        - "{{ iso_extracted }}"
+
+    - name: Mount ISO
+      mount:
+        path: "{{ iso_mount }}"
+        src: "{{ iso_source }}"
+        fstype: udf
+        opts: loop,ro
+        state: mounted
+
+    - name: Copy ISO contents
+      synchronize:
+        src: "{{ iso_mount }}/"
+        dest: "{{ iso_extracted }}/"
+        archive: true
+
+    - name: Unmount ISO
+      mount:
+        path: "{{ iso_mount }}"
+        state: unmounted
+
+    - name: Ensure noprompt EFI file exists
+      stat:
+        path: "{{ iso_extracted }}/efi/microsoft/boot/efisys_noprompt.bin"
+      register: noprompt
+
+    - name: Abort if noprompt file missing
+      fail:
+        msg: "ISO has no efisys_noprompt.bin — cannot safely modify."
+      when: not noprompt.stat.exists
+
+    - name: Replace efisys.bin
+      copy:
+        remote_src: true
+        src: "{{ iso_extracted }}/efi/microsoft/boot/efisys_noprompt.bin"
+        dest: "{{ iso_extracted }}/efi/microsoft/boot/efisys.bin"
+
+    - name: Replace cdboot.efi
+      copy:
+        remote_src: true
+        src: "{{ iso_extracted }}/efi/microsoft/boot/cdboot_noprompt.efi"
+        dest: "{{ iso_extracted }}/efi/microsoft/boot/cdboot.efi"
+
+    - name: Build new ISO
+      shell: |
+        xorriso -as mkisofs \
+          -iso-level 3 \
+          -volid "{{ volume_label }}" \
+          -eltorito-boot boot/etfsboot.com \
+            -eltorito-catalog boot/boot.cat \
+            -no-emul-boot \
+            -boot-load-size 8 \
+            -boot-info-table \
+          -eltorito-alt-boot \
+            -e efi/microsoft/boot/efisys.bin \
+            -no-emul-boot \
+          -isohybrid-gpt-basdat \
+          -o "{{ iso_output }}" \
+          "{{ iso_extracted }}"
+    - name: Cleanup workspace
+      file:
+        path: "/dev/shm/winiso"
+        state: absent
+EOF
+
+  # Run playbook with environment variables
+  SRC_ISO="$DST_WIN2025_PATH" DST_ISO="$NOPROMPT_IMG_PATH" ansible-playbook "$PLAYBOOK"
+
+else
+  echo "No-prompt ISO already exists: $NOPROMPT_IMG_PATH"
+fi
+
 echo "Done."
 
 qm create $VMID \
@@ -111,7 +213,7 @@ qm create $VMID \
   --scsihw virtio-scsi-pci \
   --ostype win11
 
-qm set $VMID --ide1 $ISO_STORAGE:iso/$IMG_NAME,media=cdrom
+qm set $VMID --ide1 $ISO_STORAGE:iso/$NOPROMPT_IMG_NAME,media=cdrom
 qm set $VMID --ide2 $ISO_STORAGE:iso/$VIRTIO_NAME,media=cdrom
 qm set $VMID --ide3 $ISO_STORAGE:iso/$AUTOISO_NAME,media=cdrom
 qm set $VMID --scsi0 $DISK_STORAGE:$DISK_SIZE
