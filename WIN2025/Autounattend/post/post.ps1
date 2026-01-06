@@ -1,57 +1,96 @@
-# =========================
-# CONFIG - EDIT THESE
-# =========================
-
-$NewHostname   = "WIN2025-DC01"
-
-$InterfaceName = "Ethernet"
-$IPv4Address   = "192.168.1.50"
-$PrefixLength  = 24
-$Gateway       = "192.168.1.1"
-$DnsServers    = @("192.168.1.10","1.1.1.1")
-
-$JoinDomain    = $true
-$DomainName    = "lab.local"
-$DomainUser    = "LAB\\Administrator"
-$DomainPass    = "Password1!"     # consider updating later via LAPS or secrets
-
-$InstallAD     = $true
-$SafeModePass  = "Password1!"     # DSRM password for AD
-
-$CreateLocalUsers = @(
-    @{User="opsuser";  Password="Password1!"; Admin=$true},
-    @{User="helpdesk"; Password="Password1!"; Admin=$false}
-)
+Write-Host "Starting post configuration..." -ForegroundColor Cyan
 
 # =========================
-# START
+# Detect NICs
 # =========================
+$adapters = Get-NetAdapter |
+    Where-Object { $_.Status -eq "Up" } |
+    Sort-Object ifIndex
 
-Write-Host "Post install script running..."
-
-# Rename computer
-if ((hostname) -ne $NewHostname) {
-    Rename-Computer -NewName $NewHostname -Force
+if ($adapters.Count -lt 2) {
+    Write-Host "ERROR: Expected at least 2 NICs, found $($adapters.Count)." -ForegroundColor Red
+    exit 1
 }
 
-# Static IP
-Write-Host "Configuring networking..."
-Get-NetAdapter -Name $InterfaceName -ErrorAction Stop |
-    Set-NetIPInterface -Dhcp Disabled -ErrorAction Stop
+$nic1 = $adapters[0].Name   # Primary
+$nic2 = $adapters[1].Name   # Secondary
+
+Write-Host "Detected NIC1: $nic1"
+Write-Host "Detected NIC2: $nic2"
+
+# =========================
+# Rename NICs
+# =========================
+Write-Host "Renaming NICs..."
+
+Rename-NetAdapter -Name $nic1 -NewName "LAN" -PassThru -ErrorAction SilentlyContinue
+Rename-NetAdapter -Name $nic2 -NewName "OOB" -PassThru -ErrorAction SilentlyContinue
+
+$nic1 = "LAN"
+$nic2 = "OOB"
+
+# =========================
+# Disable IPv6 on both NICs
+# =========================
+Write-Host "Disabling IPv6..."
+
+Disable-NetAdapterBinding -Name $nic1 -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue
+Disable-NetAdapterBinding -Name $nic2 -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue
+
+# =========================
+# Configure IP addresses
+# =========================
+Write-Host "Configuring NIC1 (LAN)..."
+
+Set-NetIPInterface -InterfaceAlias $nic1 -Dhcp Disabled -ErrorAction SilentlyContinue
+Get-NetIPAddress -InterfaceAlias $nic1 -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
 
 New-NetIPAddress `
-    -InterfaceAlias $InterfaceName `
-    -IPAddress $IPv4Address `
-    -PrefixLength $PrefixLength `
-    -DefaultGateway $Gateway `
-    -ErrorAction SilentlyContinue
+    -InterfaceAlias $nic1 `
+    -IPAddress "192.168.2.22" `
+    -PrefixLength 24 `
+    -DefaultGateway "192.168.2.1" `
+    -AddressFamily IPv4
 
 Set-DnsClientServerAddress `
-    -InterfaceAlias $InterfaceName `
-    -ServerAddresses $DnsServers
+    -InterfaceAlias $nic1 `
+    -ServerAddresses "192.168.2.1"
 
+
+Write-Host "Configuring NIC2 (OOB)..."
+
+Set-NetIPInterface -InterfaceAlias $nic2 -Dhcp Disabled -ErrorAction SilentlyContinue
+Get-NetIPAddress -InterfaceAlias $nic2 -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
+
+New-NetIPAddress `
+    -InterfaceAlias $nic2 `
+    -IPAddress "172.20.0.22" `
+    -PrefixLength 24 `
+    -AddressFamily IPv4
+
+Set-DnsClientServerAddress `
+    -InterfaceAlias $nic2 `
+    -ResetServerAddresses
+
+
+# =========================
+# Rename HOSTNAME
+# =========================
+$targetName = "WIN2025"
+
+if ((hostname) -ne $targetName) {
+    Write-Host "Renaming computer to $targetName..."
+    Rename-Computer -NewName $targetName -Force
+}
+
+
+# =========================
 # Enable RDP
+# =========================
 Write-Host "Enabling RDP..."
+
 Set-ItemProperty `
   -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
   -Name fDenyTSConnections `
@@ -59,41 +98,6 @@ Set-ItemProperty `
 
 Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-# Create local users
-foreach ($u in $CreateLocalUsers) {
-    $secure = ConvertTo-SecureString $u.Password -AsPlainText -Force
 
-    if (-not (Get-LocalUser -Name $u.User -ErrorAction SilentlyContinue)) {
-        New-LocalUser -Name $u.User -Password $secure -FullName $u.User -PasswordNeverExpires $true
-    }
-
-    if ($u.Admin) {
-        Add-LocalGroupMember -Group "Administrators" -Member $u.User -ErrorAction SilentlyContinue
-    }
-}
-
-# Install AD DS (optional)
-if ($InstallAD) {
-    Write-Host "Installing AD DS..."
-    Install-WindowsFeature AD-Domain-Services -IncludeManagementTools
-
-    if ($JoinDomain) {
-        Write-Host "Promoting to domain controller..."
-        Install-ADDSForest `
-            -DomainName $DomainName `
-            -SafeModeAdministratorPassword (ConvertTo-SecureString $SafeModePass -AsPlainText -Force) `
-            -InstallDNS `
-            -Force
-    }
-}
-
-# Join domain (if not installing AD)
-if ($JoinDomain -and -not $InstallAD) {
-    $sec = ConvertTo-SecureString $DomainPass -AsPlainText -Force
-    $cred = New-Object System.Management.Automation.PSCredential($DomainUser,$sec)
-
-    Add-Computer -DomainName $DomainName -Credential $cred -Force
-}
-
-Write-Host "Rebooting..."
+Write-Host "Post configuration complete — rebooting..." -ForegroundColor Green
 Restart-Computer -Force
