@@ -117,24 +117,21 @@
                language="neutral"
                versionScope="nonSxS">
 
-      <RunSynchronous>
+    <RunSynchronous>
 
-        <RunSynchronousCommand wcm:action="add" wcm:keyValue="1">
-          <Order>1</Order>
-          <Description>Create Scripts folder</Description>
-          <Path>cmd.exe /c mkdir C:\Windows\Setup\Scripts</Path>
-        </RunSynchronousCommand>
+  <RunSynchronousCommand wcm:action="add" wcm:keyValue="1">
+    <Order>1</Order>
+    <Description>Create Scripts folder</Description>
+    <Path>cmd.exe /c mkdir C:\Windows\Setup\Scripts</Path>
+  </RunSynchronousCommand>
 
-        <RunSynchronousCommand wcm:action="add" wcm:keyValue="2">
-          <Order>2</Order>
-          <Description>Copy automation scripts (auto-detect ISO)</Description>
-          <Path>
-            powershell -ExecutionPolicy Bypass -Command ^
-              "$drive = (Get-PSDrive -PSProvider FileSystem | Where-Object { Test-Path (Join-Path $_.Root 'Scripts') } | Select-Object -First 1).Root; ^
-               if (-not $drive) { Write-Host 'No Scripts folder found'; exit 1 }; ^
-               Copy-Item (Join-Path $drive 'Scripts\*') 'C:\Windows\Setup\Scripts\' -Recurse -Force"
-          </Path>
-        </RunSynchronousCommand>
+  <RunSynchronousCommand wcm:action="add" wcm:keyValue="2">
+    <Order>2</Order>
+    <Description>Copy scripts from D:</Description>
+    <Path>cmd.exe /c copy /y F:\Scripts\* C:\Windows\Setup\Scripts\</Path>
+  </RunSynchronousCommand>
+
+</RunSynchronous>
 
       </RunSynchronous>
 
