@@ -4,6 +4,7 @@
   xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
+  <!-- ================== WINDOWS PE ================== -->
   <settings pass="windowsPE">
 
     <component name="Microsoft-Windows-International-Core-WinPE"
@@ -92,7 +93,7 @@
           <InstallFrom>
             <MetaData wcm:action="add">
               <Key>/IMAGE/INDEX</Key>
-              <Value>2</Value> 
+              <Value>2</Value>
             </MetaData>
           </InstallFrom>
 
@@ -107,6 +108,41 @@
 
   </settings>
 
+  <!-- ================== SPECIALIZE (copy Scripts BEFORE login) ================== -->
+  <settings pass="specialize">
+
+    <component name="Microsoft-Windows-Deployment"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral"
+               versionScope="nonSxS">
+
+      <RunSynchronous>
+
+        <RunSynchronousCommand wcm:action="add" wcm:keyValue="1">
+          <Order>1</Order>
+          <Description>Create Scripts folder</Description>
+          <Path>cmd.exe /c mkdir C:\Windows\Setup\Scripts</Path>
+        </RunSynchronousCommand>
+
+        <RunSynchronousCommand wcm:action="add" wcm:keyValue="2">
+          <Order>2</Order>
+          <Description>Copy automation scripts (auto-detect ISO)</Description>
+          <Path>
+            powershell -ExecutionPolicy Bypass -Command ^
+              "$drive = (Get-PSDrive -PSProvider FileSystem | Where-Object { Test-Path (Join-Path $_.Root 'Scripts') } | Select-Object -First 1).Root; ^
+               if (-not $drive) { Write-Host 'No Scripts folder found'; exit 1 }; ^
+               Copy-Item (Join-Path $drive 'Scripts\*') 'C:\Windows\Setup\Scripts\' -Recurse -Force"
+          </Path>
+        </RunSynchronousCommand>
+
+      </RunSynchronous>
+
+    </component>
+
+  </settings>
+
+  <!-- ================== OOBE ================== -->
   <settings pass="oobeSystem">
 
     <component name="Microsoft-Windows-International-Core"
