@@ -1,72 +1,165 @@
 <?xml version="1.0" encoding="utf-8"?>
-<unattend xmlns="urn:schemas-microsoft-com:unattend">
+<unattend
+  xmlns="urn:schemas-microsoft-com:unattend"
+  xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+  <!-- ================== WINDOWS PE ================== -->
   <settings pass="windowsPE">
-    <component name="Microsoft-Windows-International-Core-WinPE" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+
+    <!-- Locale -->
+    <component name="Microsoft-Windows-International-Core-WinPE"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral"
+               versionScope="nonSxS">
       <InputLocale>en-US</InputLocale>
       <SystemLocale>en-US</SystemLocale>
       <UILanguage>en-US</UILanguage>
       <UserLocale>en-US</UserLocale>
     </component>
 
-    <component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+    <!-- LOAD VIRTIO DRIVERS -->
+    <component name="Microsoft-Windows-PnpCustomizationsWinPE"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral"
+               versionScope="nonSxS">
+      <DriverPaths>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="1">
+          <Path>D:\vioscsi\2k25\amd64</Path>
+        </PathAndCredentials>
+        <PathAndCredentials wcm:action="add" wcm:keyValue="2">
+          <Path>D:\viostor\2k25\amd64</Path>
+        </PathAndCredentials>
+      </DriverPaths>
+    </component>
+
+    <!-- Setup -->
+    <component name="Microsoft-Windows-Setup"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral"
+               versionScope="nonSxS">
+
+      <!-- FULL UEFI DISK LAYOUT -->
       <DiskConfiguration>
         <Disk wcm:action="add">
           <DiskID>0</DiskID>
           <WillWipeDisk>true</WillWipeDisk>
+
           <CreatePartitions>
+
+            <!-- EFI -->
             <CreatePartition wcm:action="add">
               <Order>1</Order>
-              <Type>Primary</Type>
-              <Size>350</Size>
+              <Type>EFI</Type>
+              <Size>100</Size>
             </CreatePartition>
+
+            <!-- MSR -->
             <CreatePartition wcm:action="add">
               <Order>2</Order>
+              <Type>MSR</Type>
+              <Size>16</Size>
+            </CreatePartition>
+
+            <!-- OS -->
+            <CreatePartition wcm:action="add">
+              <Order>3</Order>
               <Type>Primary</Type>
               <Extend>true</Extend>
             </CreatePartition>
+
           </CreatePartitions>
+
+          <ModifyPartitions>
+
+            <ModifyPartition wcm:action="add">
+              <Order>1</Order>
+              <PartitionID>1</PartitionID>
+              <Label>System</Label>
+              <Format>FAT32</Format>
+            </ModifyPartition>
+
+            <ModifyPartition wcm:action="add">
+              <Order>2</Order>
+              <PartitionID>3</PartitionID>
+              <Label>Windows</Label>
+              <Format>NTFS</Format>
+              <Letter>C</Letter>
+            </ModifyPartition>
+
+          </ModifyPartitions>
+
         </Disk>
+
         <WillShowUI>Never</WillShowUI>
       </DiskConfiguration>
 
+      <!-- IMAGE -->
       <ImageInstall>
         <OSImage>
-          <InstallTo>
-            <DiskID>0</DiskID>
-            <PartitionID>2</PartitionID>
-          </InstallTo>
+          <InstallToAvailablePartition>true</InstallToAvailablePartition>
+
           <InstallFrom>
             <MetaData wcm:action="add">
               <Key>/IMAGE/INDEX</Key>
-              <Value>1</Value>
+              <Value>3</Value>
             </MetaData>
           </InstallFrom>
+
         </OSImage>
       </ImageInstall>
 
       <UserData>
         <AcceptEula>true</AcceptEula>
       </UserData>
+
     </component>
+
   </settings>
 
+  <!-- ================== OOBE ================== -->
   <settings pass="oobeSystem">
-    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+
+    <component name="Microsoft-Windows-International-Core"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral"
+               versionScope="nonSxS">
+      <InputLocale>en-US</InputLocale>
+      <SystemLocale>en-US</SystemLocale>
+      <UILanguage>en-US</UILanguage>
+      <UserLocale>en-US</UserLocale>
+    </component>
+
+    <component name="Microsoft-Windows-Shell-Setup"
+               processorArchitecture="amd64"
+               publicKeyToken="31bf3856ad364e35"
+               language="neutral"
+               versionScope="nonSxS">
+
       <OOBE>
         <HideEULAPage>true</HideEULAPage>
-        <HideLocalAccountScreen>true</HideLocalAccountScreen>
+        <HideLocalAccountScreen>false</HideLocalAccountScreen>
         <HideOEMRegistrationScreen>true</HideOEMRegistrationScreen>
         <NetworkLocation>Work</NetworkLocation>
         <ProtectYourPC>3</ProtectYourPC>
       </OOBE>
+
+      <!-- Local Administrator -->
       <UserAccounts>
         <AdministratorPassword>
-          <Value>P@ssw0rd!</Value>
+          <Value>Password1!</Value>
           <PlainText>true</PlainText>
         </AdministratorPassword>
       </UserAccounts>
+
       <TimeZone>UTC</TimeZone>
-      <RegisteredOwner>Server</RegisteredOwner>
+
     </component>
+
   </settings>
+
 </unattend>
