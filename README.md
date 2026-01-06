@@ -53,6 +53,6 @@ Network \
     lan1  192.168.1.101/24 (not done yet) \
     oobm 172.20.0.12/24 (not done yet) \
   server2025 (not done yet) \
-    lan2 10.0.0.2/24 (not done yet) \
-    oobm 172.20.0.20/24 (not done yet)
+    lan2 192.168.2.22/24 \
+    oobm 172.20.0.22/24 
     
