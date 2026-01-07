@@ -4,7 +4,7 @@
   xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State"
   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
-  <!-- ================== WINDOWS PE ================== -->
+  <!-- WINDOWS PE -->
   <settings pass="windowsPE">
 
     <component name="Microsoft-Windows-International-Core-WinPE"
@@ -108,7 +108,7 @@
 
   </settings>
 
-  <!-- ================== SPECIALIZE (copy Scripts BEFORE login) ================== -->
+  <!-- SPECIALIZE -->
   <settings pass="specialize">
 
     <component name="Microsoft-Windows-Deployment"
@@ -117,21 +117,19 @@
                language="neutral"
                versionScope="nonSxS">
 
-    <RunSynchronous>
+      <RunSynchronous>
 
-  <RunSynchronousCommand wcm:action="add" wcm:keyValue="1">
-    <Order>1</Order>
-    <Description>Create Scripts folder</Description>
-    <Path>cmd.exe /c mkdir C:\Windows\Setup\Scripts</Path>
-  </RunSynchronousCommand>
+        <RunSynchronousCommand wcm:action="add" wcm:keyValue="1">
+          <Order>1</Order>
+          <Description>Create Scripts folder</Description>
+          <Path>cmd.exe /c mkdir C:\Windows\Setup\Scripts</Path>
+        </RunSynchronousCommand>
 
-  <RunSynchronousCommand wcm:action="add" wcm:keyValue="2">
-    <Order>2</Order>
-    <Description>Copy scripts from D:</Description>
-    <Path>cmd.exe /c copy /y F:\Scripts\* C:\Windows\Setup\Scripts\</Path>
-  </RunSynchronousCommand>
-
-</RunSynchronous>
+        <RunSynchronousCommand wcm:action="add" wcm:keyValue="2">
+          <Order>2</Order>
+          <Description>Copy post setup scripts from F:</Description>
+          <Path>cmd.exe /c copy /y F:\Scripts\* C:\Windows\Setup\Scripts\</Path>
+        </RunSynchronousCommand>
 
       </RunSynchronous>
 
@@ -139,7 +137,7 @@
 
   </settings>
 
-  <!-- ================== OOBE ================== -->
+  <!-- OOBE -->
   <settings pass="oobeSystem">
 
     <component name="Microsoft-Windows-International-Core"
