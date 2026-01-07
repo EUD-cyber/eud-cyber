@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Cyber sikkerheds labs</title>
+
+<style>
+  body { margin:0; font-family: Arial; background:#0f172a; color:#e5e7eb; }
+  .layout { display:grid; grid-template-columns:260px 1fr; height:100vh; }
+
+  .sidebar { background:#111827; border-right:1px solid #1f2937; padding:14px; }
+  .title { font-size:22px; font-weight:bold; margin-bottom:10px; }
+
+  .nav-title { margin-top:12px; font-size:12px; color:#9ca3af; text-transform:uppercase; }
+
+  .nav-button, .conn-button {
+    display:block; width:100%; margin-bottom:8px;
+    padding:10px 12px; background:#1f2937; color:#fff;
+    border-radius:6px; text-decoration:none;
+  }
+  .nav-button:hover, .conn-button:hover { background:#2563eb; }
+
+  .content { padding:24px; overflow:auto; }
+</style>
+
+<script>
+  const HOST = window.location.hostname;
+  function link(path="") { return `http://${HOST}${path}`; }
+  function nat(port, https=false) {
+    return `${https?'https':'http'}://${HOST}:${port}`;
+  }
+</script>
+</head>
+
+<body>
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <div class="title">Lab Portal</div>
+
+    <div class="nav-title">Pages</div>
+    <a class="nav-button" href="index.html">Topologi</a>
+    <a class="nav-button" href="tasks.html">Tasks</a>
+    <a class="nav-button" href="page3.html">Page 3</a>
+    <a class="nav-button" href="page4.html">Page 4</a>
+
+    <div class="nav-title">Connections</div>
+
+    <!-- Guacamole connections -->
+    <a class="conn-button" target="_blank"
+       href="#" onclick="this.href = link('/guacamole/#/client/NwBjAHBvc3RncmVzcWw')">
+       OPNsense SSH
+    </a>
+
+    <a class="conn-button" target="_blank"
+       href="#" onclick="this.href = link('/guacamole/#/client/NABjAHBvc3RncmVzcWw')">
+       Wazuh SSH
+    </a>
+
+    <a class="conn-button" target="_blank"
+       href="#" onclick="this.href = link('/guacamole/#/client/NgBjAHBvc3RncmVzcWw')">
+       Kali01 VNC
+    </a>
+
+    <a class="conn-button" target="_blank"
+       href="#" onclick="this.href = link('/guacamole/#/client/MgBjAHBvc3RncmVzcWw')">
+       Kali01 SSH
+    </a>
+
+    <!-- NAT LINKS (now grouped under connections) -->
+    <a class="conn-button" target="_blank" href="#" onclick="this.href = nat(9001)">Proxmox</a>
+    <a class="conn-button" target="_blank" href="#" onclick="this.href = nat(9002)">Wazuh</a>
+    <a class="conn-button" target="_blank" href="#" onclick="this.href = nat(9003,true)">OPNsense</a>
+
+  </div>
+
+ <div class="content">
+  <h2>Tasks</h2>
+
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
+    <div style="background:#0b1220;border:1px solid #1f2937;border-radius:10px;padding:12px;">
+      <h3>Network</h3>
+      <a class="conn-button" href="#">Button 1</a>
+      <a class="conn-button" href="#">Button 2</a>
+    </div>
+
+    <div style="background:#0b1220;border:1px solid #1f2937;border-radius:10px;padding:12px;">
+      <h3>Application</h3>
+      <a class="conn-button" href="#">Button 1</a>
+      <a class="conn-button" href="#">Button 2</a>
+    </div>
+
+    <div style="background:#0b1220;border:1px solid #1f2937;border-radius:10px;padding:12px;">
+      <h3>Data</h3>
+      <a class="conn-button" href="#">Button 1</a>
+      <a class="conn-button" href="#">Button 2</a>
+    </div>
+
+    <div style="background:#0b1220;border:1px solid #1f2937;border-radius:10px;padding:12px;">
+      <h3>Other</h3>
+      <a class="conn-button" href="#">Button 1</a>
+      <a class="conn-button" href="#">Button 2</a>
+    </div>
+  </div>
+</div>
+
+
+</div>
+</body>
+</html>
