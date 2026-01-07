@@ -1,4 +1,4 @@
-Write-Host "Starting post configuration..." -ForegroundColor Cyan
+Write-Host "Starting post configuration..."
 
 # =========================
 # Wait for NICs
@@ -12,7 +12,7 @@ for ($i=0; $i -lt 30; $i++) {
 }
 
 if ($adapters.Count -lt 2) {
-    Write-Host "ERROR: Expected at least 2 NICs, found $($adapters.Count)." -ForegroundColor Red
+    Write-Host "ERROR: Expected at least 2 NICs, found $($adapters.Count)."
 } else {
 
     $nic1 = $adapters[0].Name
