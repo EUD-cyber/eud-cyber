@@ -208,8 +208,8 @@ qm create $VMID \
   --memory $MEMORY \
   --cores $CORES \
   --cpu host \
-  --net0 vxnet3,bridge=$BRIDGE \
-  --net1 vxnet3,bridge=$BRIDGE1 \
+  --net0 vmxnet3,bridge=$BRIDGE \
+  --net1 vmxnet3,bridge=$BRIDGE1 \
   --scsihw virtio-scsi-pci \
   --ostype win11
 
