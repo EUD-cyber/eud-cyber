@@ -108,7 +108,7 @@ runcmd:
   - mkdir /opt/guacamole/nginx/web
   - chmod -R +x ./init
   - wget -O /opt/guacamole/guacamole.sql.gz https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/guacamole.sql.gz
-  - wget -O /opt/guacamole/nginx/nginx.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/nxgin.conf
+  - wget -O /opt/guacamole/nginx/nginx.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/nginx.conf
   - wget -O /opt/guacamole/nginx/web/index.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/index.html
   - wget -O /opt/guacamole/nginx/web/task.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/task.html
   - wget -O /opt/guacamole/nginx/web/topologi.png https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/topologi.png
