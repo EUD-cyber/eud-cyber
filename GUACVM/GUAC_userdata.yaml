@@ -97,7 +97,7 @@ write_files:
 
 runcmd:
   - apt-get update
-  - apt-get install -y docker-compose-v2 qemu-guest-agent
+  - apt-get install -y docker-compose-v2 qemu-guest-agent netfilter-persistent
   - systemctl enable docker
   - systemctl start docker
   - systemctl enable qemu-guest-agent
@@ -116,9 +116,4 @@ runcmd:
   - gunzip -c /opt/guacamole/guacamole.sql.gz > ./init/02-restore.sql
   - mkdir ./record >/dev/null 2>&1
   - chmod -R 777 ./record
-  - sysctl -w net.ipv4.ip_forward=1
-  - echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
-  - sysctl -p
-  - iptables -t nat -A PREROUTING -p tcp --dport 9001 \ -j DNAT --to-destination 172.20.0.100:8006
-  - iptables -t nat -A POSTROUTING -p tcp -d 172.20.0.100 --dport 8006 \ -j SNAT --to-source 172.20.0.1 
   - docker compose -f /opt/guacamole/docker-compose.yml up -d
