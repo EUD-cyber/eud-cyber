@@ -60,6 +60,4 @@ if ((hostname) -ne $targetName) {
 Write-Host "Enabling RDP..."
 Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0
 Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-
-Write-Host "Post configuration complete — rebooting..."
 Restart-Computer -Force
