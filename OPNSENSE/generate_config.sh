@@ -109,6 +109,7 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
   <disablesegmentationoffloading>1</disablesegmentationoffloading>
   <disablelargereceiveoffloading>1</disablelargereceiveoffloading>
   <disablevlanhwfilter>1</disablevlanhwfilter>
+  <disablewebguireferercheck>yes</disablewebguireferercheck>
   </system>
   <unbound>
     <enable>1</enable>
