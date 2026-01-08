@@ -97,7 +97,8 @@ write_files:
 
 runcmd:
   - apt-get update
-  - apt-get install -y docker-compose-v2 qemu-guest-agent netfilter-persistent
+  - apt-get install -y docker-compose-v2 qemu-guest-agent netfilter-persistent python3-flask python3-paramiko python3 python3-pip
+  - pip3 install flask paramiko
   - systemctl enable docker
   - systemctl start docker
   - systemctl enable qemu-guest-agent
