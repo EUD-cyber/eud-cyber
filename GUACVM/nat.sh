@@ -19,7 +19,7 @@ echo ">>> NAT: Proxmox"
 
 PROXMOX_IP="172.20.0.100"
 PROXMOX_PORT=8006
-PROXMOX_OUTSIDE=10010   # http://GUAC:10010
+PROXMOX_OUTSIDE=9001   # http://GUAC:9001
 
 iptables -t nat -A PREROUTING -i $ETH_OUT -p tcp --dport $PROXMOX_OUTSIDE \
   -j DNAT --to-destination $PROXMOX_IP:$PROXMOX_PORT
