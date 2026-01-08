@@ -23,11 +23,11 @@ if ($adapters.Count -lt 2) {
 
     # Rename NICs
     Write-Host "Renaming NICs..."
-    Rename-NetAdapter -Name $nic2 -NewName "LAN" -PassThru -ErrorAction SilentlyContinue
-    Rename-NetAdapter -Name $nic1 -NewName "OOB" -PassThru -ErrorAction SilentlyContinue
+    Rename-NetAdapter -Name $nic1 -NewName "LAN" -PassThru -ErrorAction SilentlyContinue
+    Rename-NetAdapter -Name $nic2 -NewName "OOB" -PassThru -ErrorAction SilentlyContinue
 
-    $nic2 = "LAN"
-    $nic1 = "OOB"
+    $nic1 = "LAN"
+    $nic2 = "OOB"
 
     # Disable IPv6
     Write-Host "Disabling IPv6..."
@@ -35,18 +35,18 @@ if ($adapters.Count -lt 2) {
     Disable-NetAdapterBinding -Name $nic2 -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue
 
     # LAN IP
-    Write-Host "Configuring NIC2 (LAN)..."
-    Set-NetIPInterface -InterfaceAlias $nic2 -Dhcp Disabled -ErrorAction SilentlyContinue
-    Get-NetIPAddress -InterfaceAlias $nic2 -AddressFamily IPv4 -ErrorAction SilentlyContinue | Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
-    New-NetIPAddress -InterfaceAlias $nic2 -IPAddress "192.168.2.22" -PrefixLength 24 -DefaultGateway "192.168.2.1" -AddressFamily IPv4
-    Set-DnsClientServerAddress -InterfaceAlias $nic2 -ServerAddresses "192.168.2.1"
+    Write-Host "Configuring NIC1 (LAN)..."
+    Set-NetIPInterface -InterfaceAlias $nic1 -Dhcp Disabled -ErrorAction SilentlyContinue
+    Get-NetIPAddress -InterfaceAlias $nic1 -AddressFamily IPv4 -ErrorAction SilentlyContinue | Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
+    New-NetIPAddress -InterfaceAlias $nic1 -IPAddress "192.168.2.22" -PrefixLength 24 -DefaultGateway "192.168.2.1" -AddressFamily IPv4
+    Set-DnsClientServerAddress -InterfaceAlias $nic1 -ServerAddresses "192.168.2.1"
 
     # OOB IP
     Write-Host "Configuring NIC1 (OOB)..."
-    Set-NetIPInterface -InterfaceAlias $nic1 -Dhcp Disabled -ErrorAction SilentlyContinue
-    Get-NetIPAddress -InterfaceAlias $nic1 -AddressFamily IPv4 -ErrorAction SilentlyContinue | Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
-    New-NetIPAddress -InterfaceAlias $nic1 -IPAddress "172.20.0.22" -PrefixLength 24 -AddressFamily IPv4
-    Set-DnsClientServerAddress -InterfaceAlias $nic1 -ResetServerAddresses
+    Set-NetIPInterface -InterfaceAlias $nic2 -Dhcp Disabled -ErrorAction SilentlyContinue
+    Get-NetIPAddress -InterfaceAlias $nic2 -AddressFamily IPv4 -ErrorAction SilentlyContinue | Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
+    New-NetIPAddress -InterfaceAlias $nic2 -IPAddress "172.20.0.22" -PrefixLength 24 -AddressFamily IPv4
+    Set-DnsClientServerAddress -InterfaceAlias $nic2 -ResetServerAddresses
 }
 
 # Rename host
