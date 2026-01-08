@@ -119,5 +119,6 @@ runcmd:
   - gunzip -c /opt/guacamole/guacamole.sql.gz > ./init/02-restore.sql
   - mkdir ./record >/dev/null 2>&1
   - chmod -R 777 ./record
+  - chmod -R 600 /root/.ssh/shared_admin_ed25519
   - /opt/guacamole/nat.sh
   - docker compose -f /opt/guacamole/docker-compose.yml up -d
