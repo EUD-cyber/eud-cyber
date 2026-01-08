@@ -102,34 +102,50 @@
     </a>
   
   </div>
- <div class="content">
-  <h2>Tasks</h2>
+  <div class="content">
+<h2>Apache Control</h2>
 
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;">
-    <div style="background:#0b1220;border:1px solid #1f2937;border-radius:10px;padding:12px;">
-      <h3>Network</h3>
-      <a class="conn-button" href="#">Button 1</a>
-      <a class="conn-button" href="#">Button 2</a>
-    </div>
+<div class="task">
+  <h3>VULNSRV01 – Apache</h3>
+  <button onclick="start('vuln1')">▶ Start</button>
+  <button onclick="stop('vuln1')">■ Stop</button>
+  <span id="status-vuln1">Status: ...</span>
+</div>
 
-    <div style="background:#0b1220;border:1px solid #1f2937;border-radius:10px;padding:12px;">
-      <h3>Application</h3>
-      <a class="conn-button" href="#">Button 1</a>
-      <a class="conn-button" href="#">Button 2</a>
-    </div>
+<hr>
 
-    <div style="background:#0b1220;border:1px solid #1f2937;border-radius:10px;padding:12px;">
-      <h3>Data</h3>
-      <a class="conn-button" href="#">Button 1</a>
-      <a class="conn-button" href="#">Button 2</a>
-    </div>
+<div class="task">
+  <h3>VULNSRV02 – Apache</h3>
+  <button onclick="start('vuln2')">▶ Start</button>
+  <button onclick="stop('vuln2')">■ Stop</button>
+  <span id="status-vuln2">Status: ...</span>
+</div>
 
-    <div style="background:#0b1220;border:1px solid #1f2937;border-radius:10px;padding:12px;">
-      <h3>Other</h3>
-      <a class="conn-button" href="#">Button 1</a>
-      <a class="conn-button" href="#">Button 2</a>
-    </div>
-  </div>
+<script>
+async function update(target) {
+  let r = await fetch(`/api/${target}/status`);
+  let j = await r.json();
+  document.getElementById(`status-${target}`).innerText =
+    "Status: " + (j.status === "running" ? "🟢 running" : "🔴 stopped");
+}
+
+async function start(target) {
+  await fetch(`/api/${target}/start`);
+  update(target);
+}
+
+async function stop(target) {
+  await fetch(`/api/${target}/stop`);
+  update(target);
+}
+update("vuln1");
+update("vuln2");
+setInterval(() => {
+  update("vuln1");
+  update("vuln2");
+}, 5000);
+</script>
+
 </div>
 
 
