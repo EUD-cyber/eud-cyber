@@ -108,6 +108,7 @@ runcmd:
   - mkdir /opt/guacamole/nginx/web
   - chmod -R +x ./init
   - wget -O /root/.ssh/shared_admin_ed25519 https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/SSHKEYS/shared_admin_ed25519
+  - wget -O /root/.ssh/shared_admin_ed25519.pub https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/SSHKEYS/shared_admin_ed25519.pub
   - wget -O /opt/guacamole/guacamole.sql.gz https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/guacamole.sql.gz
   - wget -O /opt/guacamole/nginx/nginx.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/nginx.conf
   - wget -O /opt/guacamole/nginx/web/index.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/index.html
@@ -120,5 +121,6 @@ runcmd:
   - mkdir ./record >/dev/null 2>&1
   - chmod -R 777 ./record
   - chmod -R 600 /root/.ssh/shared_admin_ed25519
+  - chmod -R 600 /root/.ssh/shared_admin_ed25519.pub
   - /opt/guacamole/nat.sh
   - docker compose -f /opt/guacamole/docker-compose.yml up -d
