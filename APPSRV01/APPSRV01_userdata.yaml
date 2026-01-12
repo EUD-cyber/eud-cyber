@@ -23,12 +23,25 @@ packages:
 
 write_files:
 
+  # Docker Compose
   - path: /opt/radius/docker-compose.yml
     permissions: "0644"
     content: |
       version: "3.8"
 
       services:
+
+        mariadb:
+          image: mariadb:11
+          container_name: rd-db
+          restart: always
+          environment:
+            MYSQL_ROOT_PASSWORD: rootpass
+            MYSQL_DATABASE: rd
+            MYSQL_USER: rd
+            MYSQL_PASSWORD: rdpass
+          volumes:
+            - db_data:/var/lib/mysql
 
         ldap:
           image: osixia/openldap:1.5.0
@@ -57,21 +70,9 @@ write_files:
           depends_on:
             - ldap
 
-        mariadb:
-          image: mariadb:11
-          container_name: rd-db
-          restart: always
-          environment:
-            MYSQL_ROOT_PASSWORD: rootpass
-            MYSQL_DATABASE: rd
-            MYSQL_USER: rd
-            MYSQL_PASSWORD: rdpass
-          volumes:
-            - db_data:/var/lib/mysql
-
-        radiusdesk:
-          image: radiusdesk/radiusdesk:latest
-          container_name: radiusdesk
+        freeradius:
+          image: freeradius/freeradius-server:3.2
+          container_name: freeradius
           restart: always
           depends_on:
             - mariadb
@@ -79,17 +80,42 @@ write_files:
           ports:
             - "1812:1812/udp"
             - "1813:1813/udp"
+          volumes:
+            - radius_conf:/etc/freeradius
+
+        radiusdesk:
+          build: ./radiusdesk
+          container_name: radiusdesk
+          restart: always
+          depends_on:
+            - mariadb
+            - freeradius
+          ports:
             - "8080:80"
-          environment:
-            RD_DB_HOST: mariadb
-            RD_DB_NAME: rd
-            RD_DB_USER: rd
-            RD_DB_PASS: rdpass
 
       volumes:
         db_data:
         ldap_data:
         ldap_config:
+        radius_conf:
+
+  # RadiusDesk Dockerfile
+  - path: /opt/radius/radiusdesk/Dockerfile
+    permissions: "0644"
+    content: |
+      FROM php:8.2-apache
+
+      RUN apt update && apt install -y \
+        git mariadb-client unzip libpng-dev libjpeg-dev \
+        libonig-dev libxml2-dev curl && \
+        docker-php-ext-install mysqli pdo pdo_mysql gd
+
+      WORKDIR /var/www/html
+
+      RUN git clone https://github.com/RADIUSdesk/radiusdesk.git . \
+          && chown -R www-data:www-data .
+
+      EXPOSE 80
 
 runcmd:
   - curl -fsSL https://get.docker.com | sh
@@ -100,17 +126,18 @@ runcmd:
   - curl -SL https://github.com/docker/compose/releases/download/v2.25.0/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
   - chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
-  - mkdir -p /opt/radius
+  - cd /opt/radius && docker compose build
   - cd /opt/radius && docker compose up -d
 
 final_message: |
-  Identity Platform Installed
+  Identity system deployed
 
-  RadiusDesk (RADIUS GUI):
+  RadiusDesk GUI:
   http://SERVER_IP:8080
-  Login: root / admin
 
   LDAP GUI:
   http://SERVER_IP:8082
-  Login DN: cn=admin,dc=mycompany,dc=local
-  Password: Password1!
+
+  LDAP admin:
+  cn=admin,dc=mycompany,dc=local
+  Password1!
