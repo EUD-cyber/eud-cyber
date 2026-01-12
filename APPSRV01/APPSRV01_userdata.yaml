@@ -26,6 +26,8 @@ write_files:
   - path: /opt/radius/docker-compose.yml
     permissions: "0644"
     content: |
+      version: "3.8"
+
       services:
 
         ldap:
@@ -35,7 +37,7 @@ write_files:
           environment:
             LDAP_ORGANISATION: "MyCompany"
             LDAP_DOMAIN: "mycompany.local"
-            LDAP_ADMIN_PASSWORD: "StrongAdminPass123"
+            LDAP_ADMIN_PASSWORD: "Password1!"
             LDAP_TLS: "false"
           volumes:
             - ldap_data:/var/lib/ldap
@@ -57,19 +59,19 @@ write_files:
 
         mariadb:
           image: mariadb:11
-          container_name: radius-db
+          container_name: rd-db
           restart: always
           environment:
             MYSQL_ROOT_PASSWORD: rootpass
-            MYSQL_DATABASE: radius
-            MYSQL_USER: radius
-            MYSQL_PASSWORD: radiuspass
+            MYSQL_DATABASE: rd
+            MYSQL_USER: rd
+            MYSQL_PASSWORD: rdpass
           volumes:
             - db_data:/var/lib/mysql
 
-        freeradius:
-          image: freeradius/freeradius-server:3.2
-          container_name: freeradius
+        radiusdesk:
+          image: radiusdesk/radiusdesk:latest
+          container_name: radiusdesk
           restart: always
           depends_on:
             - mariadb
@@ -77,49 +79,17 @@ write_files:
           ports:
             - "1812:1812/udp"
             - "1813:1813/udp"
-          volumes:
-            - freeradius_conf:/etc/freeradius
-
-        daloradius:
-          image: henning/daloradius:latest
-          container_name: daloradius
-          restart: always
-          depends_on:
-            - mariadb
-          ports:
             - "8080:80"
           environment:
-            DB_HOST: mariadb
-            DB_NAME: radius
-            DB_USER: radius
-            DB_PASSWORD: radiuspass
+            RD_DB_HOST: mariadb
+            RD_DB_NAME: rd
+            RD_DB_USER: rd
+            RD_DB_PASS: rdpass
 
       volumes:
         db_data:
-        freeradius_conf:
         ldap_data:
         ldap_config:
-
-  - path: /opt/radius/freeradius/mods-enabled/ldap
-    permissions: "0644"
-    content: |
-      ldap {
-        server = "ldap"
-        port = 389
-        identity = "cn=admin,dc=mycompany,dc=local"
-        password = "Password1!"
-        base_dn = "dc=mycompany,dc=local"
-
-        user {
-          base_dn = "ou=users,dc=mycompany,dc=local"
-          filter = "(uid=%{%{Stripped-User-Name}:-%{User-Name}})"
-        }
-
-        group {
-          base_dn = "ou=groups,dc=mycompany,dc=local"
-          filter = "(memberUid=%{User-Name})"
-        }
-      }
 
 runcmd:
   - curl -fsSL https://get.docker.com | sh
@@ -130,21 +100,15 @@ runcmd:
   - curl -SL https://github.com/docker/compose/releases/download/v2.25.0/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
   - chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
 
-  - mkdir -p /opt/radius/freeradius/mods-enabled
+  - mkdir -p /opt/radius
   - cd /opt/radius && docker compose up -d
 
-  - sleep 30
-
-  # Initialize daloRADIUS DB
-  - docker exec radius-db mysql -uradius -pradiuspass radius < /usr/share/daloradius/contrib/db/mysql-daloradius.sql
-  - docker exec radius-db mysql -uradius -pradiuspass radius < /usr/share/daloradius/contrib/db/fr2-mysql-daloradius-and-freeradius.sql
-
 final_message: |
-  Full Identity Platform installed.
+  Identity Platform Installed
 
-  RADIUS GUI:
+  RadiusDesk (RADIUS GUI):
   http://SERVER_IP:8080
-  Login: administrator / radius
+  Login: root / admin
 
   LDAP GUI:
   http://SERVER_IP:8082
