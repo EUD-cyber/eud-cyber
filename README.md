@@ -22,6 +22,13 @@ wazuh \
 user: wazuh-user pass: wazuh \
 webuser: admin webpass: admin
 
+appsrv01\
+  freeradius \
+   user: administrator pass: radius
+  openldap \
+   user: admin pass: Password1! 
+
+
 missing \
   ip address validation on vm opnsense and guacvm \
   download cloud img to default folder and check if exits on each vm creation \
@@ -50,6 +57,9 @@ Network \
   wazuh
     lan2 192.168.2.20/24 \
     oobm 172.20.0.20 \
+  appsrv01 \
+    lan2 192.168.2.25/24 \
+    oobm 172.20.0.25 \
   win11 (not done yet) \
     lan1  192.168.1.101/24 (not done yet) \
     oobm 172.20.0.12/24 (not done yet) \
