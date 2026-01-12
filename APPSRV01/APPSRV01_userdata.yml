@@ -1,0 +1,235 @@
+#cloud-config
+
+hostname: appsrv01
+manage_etc_hosts: true
+
+users:
+  - name: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
+
+chpasswd:
+  expire: false
+
+packages:
+  - curl
+  - docker.io
+
+write_files:
+  - path: /opt/websploit/docker-compose.yml
+    owner: root:root
+    permissions: '0644'
+    content: |
+        services:
+
+        # OWASP WebGoat Lab
+          webgoat:
+            container_name: webgoat
+            image: santosomar/webgoat
+            platform: linux/amd64
+            restart: unless-stopped
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.11
+        
+        # OWASP Juice Shop Lab
+          juice-shop:
+            container_name: juice-shop
+            image: bkimminich/juice-shop
+            restart: unless-stopped
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.12
+        
+        # Damn Vulnerable Web Application Lab
+          dvwa:
+            container_name: dvwa
+            image: santosomar/dvwa
+            platform: linux/amd64
+            restart: unless-stopped
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.13
+        
+        # Sci-Fi themed CTF challenge
+          galactic-archives:
+            container_name: galactic-archives
+            image: santosomar/galactic-archives
+            platform: linux/amd64
+            restart: unless-stopped
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.20
+        
+        # Halo-themed CTF challenge
+          gravemind:
+            container_name: gravemind
+            image: santosomar/gravemind
+            platform: linux/amd64
+            restart: unless-stopped
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.23
+        
+        # Star Wars themed CTF challenge
+          y-wing:
+            container_name: y-wing
+            image: santosomar/ywing:latest
+            platform: linux/amd64
+            restart: unless-stopped
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.26
+        
+        # Multi-Vulnerability Gauntlet Lab
+          hydra-nexus:
+            container_name: hydra-nexus
+            build: ./additional-labs/Multi-Vulnerability-Gauntlet
+            restart: unless-stopped
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.30
+            ports:
+              - "5010:5010"
+        
+        # XSS Lab
+          phantom-script:
+            container_name: phantom-script
+            build: ./additional-labs/XSS
+            restart: unless-stopped
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.31
+            ports:
+              - "5011:5011"
+        
+        # SSRF Lab
+          trojan-relay:
+            container_name: trojan-relay
+            build: ./additional-labs/SSRF
+            restart: unless-stopped
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.32
+            ports:
+              - "5012:5012"
+        
+        # SQL Injection Lab
+          sqli-breach:
+            container_name: sqli-breach
+            build: ./additional-labs/SQLi
+            restart: unless-stopped
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.33
+            ports:
+              - "5001:5000"
+        
+        # Command Injection Lab
+          shell-inject:
+            container_name: shell-inject
+            build: ./additional-labs/Command_Injection
+            restart: unless-stopped
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.34
+            ports:
+              - "5002:5000"
+        
+        # Path Traversal Lab
+          maze-walker:
+            container_name: maze-walker
+            build: ./additional-labs/Path_Traversal
+            restart: unless-stopped
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.35
+            ports:
+              - "5003:81"
+        
+        # XXE Lab
+          entity-smuggler:
+            container_name: entity-smuggler
+            build: ./additional-labs/XXE
+            restart: unless-stopped
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.36
+            ports:
+              - "5013:5013"
+        
+          # JWT Vulnerability Lab
+          token-tower:
+            build: ./additional-labs/token-tower
+            container_name: token-tower
+            ports:
+              - "5020:5020"
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.40
+            restart: unless-stopped
+        
+          # Server-Side Template Injection Lab
+          render-reign:
+            build: ./additional-labs/render-reign
+            container_name: render-reign
+            ports:
+              - "5021:5021"
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.41
+            restart: unless-stopped
+        
+          # Insecure Deserialization Lab
+          deserial-gate:
+            build: ./additional-labs/deserial-gate
+            container_name: deserial-gate
+            ports:
+              - "5022:5022"
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.42
+            restart: unless-stopped
+        
+        # DEF CON 31 Challenge
+          redis-rogue:
+            container_name: redis-rogue
+            image: santosomar/dc31_01:latest
+            platform: linux/amd64
+            restart: unless-stopped
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.43
+        
+          # GraphQL Lab
+          graphql-galaxy:
+            build: ./additional-labs/GraphQL
+            container_name: graphql-galaxy
+            ports:
+              - "5023:5023"
+            networks:
+              websploit:
+                ipv4_address: 10.6.6.44
+            restart: unless-stopped
+        
+        # Network configuration
+        networks:
+          websploit:
+            driver: bridge
+            ipam:
+              config:
+                - subnet: 10.6.6.0/24
+                  gateway: 10.6.6.1
+
+runcmd:
+  - apt-get update
+  - apt-get install -y docker-compose-v2 qemu-guest-agent
+  - systemctl enable docker
+  - systemctl start docker
+  - systemctl enable qemu-guest-agent
+  - mkdir -p /opt/websploit
+ # - docker compose -f /opt/websploit/docker-compose.yml up -d
