@@ -8,6 +8,7 @@ OPENVSWITCH="./open-vswitch.sh"
 VULNSRV01="./VULNSRV01/VULNSRV01_installer.sh"
 VULNSRV02="./VULNSRV02/VULNSRV02_installer.sh"
 OPNSENSE="./OPNSENSE/OPNSENSE_installer.sh"
+APPSRV01="./APPSRV01/APPSRV01_installer.sh"
 PREREQ="./pre_req.sh"
 KALI01="./KALI01/KALI01_installer.sh"
 WAZUH="./WAZUH/WAZUH_installer.sh"
@@ -28,6 +29,7 @@ echo "7) Create KALI01 VM"
 echo "8) Create WAZUH VM"
 echo "9) Create Windows 11 VM"
 echo "10) Create Windows server 2025 VM"
+echo "11) Create APPSRV01 VM"
 echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
 echo "99) Finish script"
@@ -78,6 +80,10 @@ case "$CHOICE" in
     echo "Starting Windows server 2025 VM creation... "
     bash "$WIN2025"
     ;;
+  11)
+    echo "Starting APPSRV01 VM creation.... "
+    bash "$APPSRV01"
+    ;;
   89)
     echo "Change proxmox repo to no-enterprise"
     bash "$REPO"
@@ -113,11 +119,14 @@ case "$CHOICE" in
     echo "Starting Wazuh VM creation... "
     bash "$WAZUH"
 
+    echo "Starting APPSRV01 creation... "
+    bash "$APPSRV01"
+    
 #    echo "Starting Windows 11 VM creation... "
 #    bash "$WIN11"
 
-#    echo "Starting Windows server 2025 VM creation.... "
-#    bash "$WIN2025"
+     echo "Starting Windows server 2025 VM creation.... "
+     bash "$WIN2025"
     
     echo "Start finishing script..."
     bash "$FINISH"
