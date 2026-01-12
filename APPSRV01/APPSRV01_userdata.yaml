@@ -16,220 +16,139 @@ chpasswd:
   expire: false
 
 packages:
+  - ca-certificates
   - curl
-  - docker.io
+  - gnupg
+  - lsb-release
 
 write_files:
-  - path: /opt/websploit/docker-compose.yml
-    owner: root:root
-    permissions: '0644'
-    content: |
-        services:
 
-        # OWASP WebGoat Lab
-          webgoat:
-            container_name: webgoat
-            image: santosomar/webgoat
-            platform: linux/amd64
-            restart: unless-stopped
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.11
-        
-        # OWASP Juice Shop Lab
-          juice-shop:
-            container_name: juice-shop
-            image: bkimminich/juice-shop
-            restart: unless-stopped
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.12
-        
-        # Damn Vulnerable Web Application Lab
-          dvwa:
-            container_name: dvwa
-            image: santosomar/dvwa
-            platform: linux/amd64
-            restart: unless-stopped
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.13
-        
-        # Sci-Fi themed CTF challenge
-          galactic-archives:
-            container_name: galactic-archives
-            image: santosomar/galactic-archives
-            platform: linux/amd64
-            restart: unless-stopped
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.20
-        
-        # Halo-themed CTF challenge
-          gravemind:
-            container_name: gravemind
-            image: santosomar/gravemind
-            platform: linux/amd64
-            restart: unless-stopped
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.23
-        
-        # Star Wars themed CTF challenge
-          y-wing:
-            container_name: y-wing
-            image: santosomar/ywing:latest
-            platform: linux/amd64
-            restart: unless-stopped
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.26
-        
-        # Multi-Vulnerability Gauntlet Lab
-          hydra-nexus:
-            container_name: hydra-nexus
-            build: ./additional-labs/Multi-Vulnerability-Gauntlet
-            restart: unless-stopped
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.30
-            ports:
-              - "5010:5010"
-        
-        # XSS Lab
-          phantom-script:
-            container_name: phantom-script
-            build: ./additional-labs/XSS
-            restart: unless-stopped
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.31
-            ports:
-              - "5011:5011"
-        
-        # SSRF Lab
-          trojan-relay:
-            container_name: trojan-relay
-            build: ./additional-labs/SSRF
-            restart: unless-stopped
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.32
-            ports:
-              - "5012:5012"
-        
-        # SQL Injection Lab
-          sqli-breach:
-            container_name: sqli-breach
-            build: ./additional-labs/SQLi
-            restart: unless-stopped
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.33
-            ports:
-              - "5001:5000"
-        
-        # Command Injection Lab
-          shell-inject:
-            container_name: shell-inject
-            build: ./additional-labs/Command_Injection
-            restart: unless-stopped
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.34
-            ports:
-              - "5002:5000"
-        
-        # Path Traversal Lab
-          maze-walker:
-            container_name: maze-walker
-            build: ./additional-labs/Path_Traversal
-            restart: unless-stopped
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.35
-            ports:
-              - "5003:81"
-        
-        # XXE Lab
-          entity-smuggler:
-            container_name: entity-smuggler
-            build: ./additional-labs/XXE
-            restart: unless-stopped
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.36
-            ports:
-              - "5013:5013"
-        
-          # JWT Vulnerability Lab
-          token-tower:
-            build: ./additional-labs/token-tower
-            container_name: token-tower
-            ports:
-              - "5020:5020"
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.40
-            restart: unless-stopped
-        
-          # Server-Side Template Injection Lab
-          render-reign:
-            build: ./additional-labs/render-reign
-            container_name: render-reign
-            ports:
-              - "5021:5021"
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.41
-            restart: unless-stopped
-        
-          # Insecure Deserialization Lab
-          deserial-gate:
-            build: ./additional-labs/deserial-gate
-            container_name: deserial-gate
-            ports:
-              - "5022:5022"
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.42
-            restart: unless-stopped
-        
-        # DEF CON 31 Challenge
-          redis-rogue:
-            container_name: redis-rogue
-            image: santosomar/dc31_01:latest
-            platform: linux/amd64
-            restart: unless-stopped
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.43
-        
-          # GraphQL Lab
-          graphql-galaxy:
-            build: ./additional-labs/GraphQL
-            container_name: graphql-galaxy
-            ports:
-              - "5023:5023"
-            networks:
-              websploit:
-                ipv4_address: 10.6.6.44
-            restart: unless-stopped
-        
-        # Network configuration
-        networks:
-          websploit:
-            driver: bridge
-            ipam:
-              config:
-                - subnet: 10.6.6.0/24
-                  gateway: 10.6.6.1
+  - path: /opt/radius/docker-compose.yml
+    permissions: "0644"
+    content: |
+      version: "3.8"
+
+      services:
+
+        ldap:
+          image: osixia/openldap:1.5.0
+          container_name: ldap
+          restart: always
+          environment:
+            LDAP_ORGANISATION: "MyCompany"
+            LDAP_DOMAIN: "mycompany.local"
+            LDAP_ADMIN_PASSWORD: "StrongAdminPass123"
+            LDAP_TLS: "false"
+          volumes:
+            - ldap_data:/var/lib/ldap
+            - ldap_config:/etc/ldap/slapd.d
+          ports:
+            - "389:389"
+
+        ldapadmin:
+          image: osixia/phpldapadmin:0.9.0
+          container_name: phpldapadmin
+          restart: always
+          environment:
+            PHPLDAPADMIN_LDAP_HOSTS: ldap
+            PHPLDAPADMIN_HTTPS: "false"
+          ports:
+            - "8082:80"
+          depends_on:
+            - ldap
+
+        mariadb:
+          image: mariadb:11
+          container_name: radius-db
+          restart: always
+          environment:
+            MYSQL_ROOT_PASSWORD: rootpass
+            MYSQL_DATABASE: radius
+            MYSQL_USER: radius
+            MYSQL_PASSWORD: radiuspass
+          volumes:
+            - db_data:/var/lib/mysql
+
+        freeradius:
+          image: freeradius/freeradius-server:3.2
+          container_name: freeradius
+          restart: always
+          depends_on:
+            - mariadb
+            - ldap
+          ports:
+            - "1812:1812/udp"
+            - "1813:1813/udp"
+          volumes:
+            - freeradius_conf:/etc/freeradius
+
+        daloradius:
+          image: daloradius/daloradius:latest
+          container_name: daloradius
+          restart: always
+          depends_on:
+            - mariadb
+          ports:
+            - "8080:80"
+          environment:
+            DB_HOST: mariadb
+            DB_NAME: radius
+            DB_USER: radius
+            DB_PASSWORD: radiuspass
+
+      volumes:
+        db_data:
+        freeradius_conf:
+        ldap_data:
+        ldap_config:
+
+  - path: /opt/radius/freeradius/mods-enabled/ldap
+    permissions: "0644"
+    content: |
+      ldap {
+        server = "ldap"
+        port = 389
+        identity = "cn=admin,dc=mycompany,dc=local"
+        password = "Password1!"
+        base_dn = "dc=mycompany,dc=local"
+
+        user {
+          base_dn = "ou=users,dc=mycompany,dc=local"
+          filter = "(uid=%{%{Stripped-User-Name}:-%{User-Name}})"
+        }
+
+        group {
+          base_dn = "ou=groups,dc=mycompany,dc=local"
+          filter = "(memberUid=%{User-Name})"
+        }
+      }
 
 runcmd:
-  - apt-get update
-  - apt-get install -y docker-compose-v2 qemu-guest-agent
+  - curl -fsSL https://get.docker.com | sh
   - systemctl enable docker
   - systemctl start docker
-  - systemctl enable qemu-guest-agent
-  - mkdir -p /opt/websploit
- # - docker compose -f /opt/websploit/docker-compose.yml up -d
+
+  - mkdir -p /usr/local/lib/docker/cli-plugins
+  - curl -SL https://github.com/docker/compose/releases/download/v2.25.0/docker-compose-linux-x86_64 -o /usr/local/lib/docker/cli-plugins/docker-compose
+  - chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+  - mkdir -p /opt/radius/freeradius/mods-enabled
+  - cd /opt/radius && docker compose up -d
+
+  - sleep 30
+
+  # Initialize daloRADIUS DB
+  - docker exec radius-db mysql -uradius -pradiuspass radius < /usr/share/daloradius/contrib/db/mysql-daloradius.sql
+  - docker exec radius-db mysql -uradius -pradiuspass radius < /usr/share/daloradius/contrib/db/fr2-mysql-daloradius-and-freeradius.sql
+
+final_message: |
+  Identity platform deployed
+
+  RADIUS GUI:
+  http://SERVER_IP:8080
+  administrator / radius
+
+  LDAP GUI:
+  http://SERVER_IP:8082
+  Login DN: cn=admin,dc=mycompany,dc=local
+  Password: Password1!
