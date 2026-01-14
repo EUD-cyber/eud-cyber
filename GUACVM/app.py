@@ -8,23 +8,29 @@ app = Flask(__name__)
 # =========================
 SSH_KEY = "/root/.ssh/shared_admin_ed25519"
 
+# =========================
+# LAB TARGETS
+# =========================
 TARGETS = {
-    "vuln1": {
+    "juice-vuln1": {
         "host": "172.20.0.10",
         "user": "ubuntu",
-        "compose_dir": "/opt/labs/apache"
+        "compose_dir": "/opt/juiceshop"
     },
-    "vuln2": {
+    "juice-vuln2": {
         "host": "172.20.0.21",
         "user": "ubuntu",
-        "compose_dir": "/opt/labs/apache"
+        "compose_dir": "/opt/juiceshop"
     }
 }
 
 # =========================
-# SSH EXEC FUNCTION
+# SSH EXEC
 # =========================
 def run_ssh(target, cmd):
+    if target not in TARGETS:
+        return "INVALID_TARGET"
+
     t = TARGETS[target]
 
     ssh = paramiko.SSHClient()
@@ -44,16 +50,19 @@ def run_ssh(target, cmd):
     ssh.close()
 
     if err:
-        return f"ERROR:\n{err}"
+        return f"ERROR: {err}"
 
     return out
 
 
 # =========================
-# STATUS (CORRECT & RELIABLE)
+# STATUS (REAL RUNNING STATE)
 # =========================
 @app.route("/api/<target>/status")
 def status(target):
+    if target not in TARGETS:
+        return jsonify(error="Unknown lab"), 404
+
     t = TARGETS[target]
 
     cmd = (
@@ -68,38 +77,61 @@ def status(target):
     running = "true" in out.lower()
 
     return jsonify(
+        lab=target,
         status="running" if running else "stopped"
     )
 
 
 # =========================
-# START
+# START LAB
 # =========================
 @app.route("/api/<target>/start")
 def start(target):
+    if target not in TARGETS:
+        return jsonify(error="Unknown lab"), 404
+
     t = TARGETS[target]
 
     cmd = f"cd {t['compose_dir']} && docker compose up -d"
     out = run_ssh(target, cmd)
 
-    return jsonify(result=out if out else "started")
+    return jsonify(
+        lab=target,
+        result="started",
+        raw=out
+    )
 
 
 # =========================
-# STOP
+# STOP LAB
 # =========================
 @app.route("/api/<target>/stop")
 def stop(target):
+    if target not in TARGETS:
+        return jsonify(error="Unknown lab"), 404
+
     t = TARGETS[target]
 
     cmd = f"cd {t['compose_dir']} && docker compose down"
     out = run_ssh(target, cmd)
 
-    return jsonify(result=out if out else "stopped")
+    return jsonify(
+        lab=target,
+        result="stopped",
+        raw=out
+    )
 
 
 # =========================
-# RUN APP
+# LIST ALL LABS
+# =========================
+@app.route("/api/labs")
+def labs():
+    return jsonify(TARGETS)
+
+
+# =========================
+# RUN
 # =========================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
