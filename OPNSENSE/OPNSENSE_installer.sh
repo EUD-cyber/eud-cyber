@@ -29,7 +29,9 @@ LAN_BRIDGE="lan1"
 LAN_BRIDGE1="lan2"
 OOBM="oobm"
 
-OPN_VERSION="24.1"
+#OPN_VERSION="24.1"
+OPN_VERSION="25.7"
+
 IMG_BASE="OPNsense-${OPN_VERSION}-nano-amd64.img"
 IMG_BZ2="${IMG_BASE}.bz2"
 
