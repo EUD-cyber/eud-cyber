@@ -17,7 +17,7 @@ START_VMID=100
 BASE_NAME="opnsense"
 RAM=4096
 CORES=2
-DISK_SIZE=20
+DISK_SIZE=30
 
 # Proxmox storage
 DISK_STORAGE="local-lvm"
