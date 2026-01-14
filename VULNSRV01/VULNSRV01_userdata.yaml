@@ -62,5 +62,6 @@ runcmd:
   - systemctl enable docker
   - systemctl start docker
   - systemctl enable qemu-guest-agent
+  - usermod -aG docker ubuntu
   - mkdir -p /opt/juiceshop
  # - docker compose -f /opt/juiceshop/docker-compose.yml up -d
