@@ -52,7 +52,7 @@ write_files:
             volumes:
               - ./nginx.conf:/etc/nginx/nginx.conf:ro
         
-        volumes:
+         volumes:
           juice_data:
 
 
