@@ -17,7 +17,7 @@ START_VMID=100
 BASE_NAME="opnsense"
 RAM=4096
 CORES=2
-DISK_SIZE=30
+DISK_SIZE=30G
 
 # Proxmox storage
 DISK_STORAGE="local-lvm"
@@ -115,6 +115,9 @@ qm importdisk $VMID "$IMG_PATH" $DISK_STORAGE
 
 # Attach imported disk as scsi0
 qm set $VMID --scsi0 $DISK_STORAGE:vm-$VMID-disk-0
+
+qm disk resize $VMID scsi0 +$DISK_SIZE
+
 
 # Attach cdrom to vm
 qm set $VMID --ide2 local:iso/opnsense-config.iso,media=cdrom
