@@ -111,6 +111,10 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
   <disablevlanhwfilter>1</disablevlanhwfilter>
   <nohttpreferercheck>yes</nohttpreferercheck>
   <disablewebguireferercheck>yes</disablewebguireferercheck>
+  <webgui>
+    <protocol>http</protocol>
+    <nohttpreferercheck>1</nohttpreferercheck>
+  </webgui>
   </system>
   <unbound>
     <enable>1</enable>
