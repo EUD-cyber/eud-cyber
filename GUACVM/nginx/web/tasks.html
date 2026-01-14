@@ -107,8 +107,8 @@
 
 <div class="task">
   <h3>VULNSRV01 – Juiceshop</h3>
-  <button onclick="start('juice-vuln1')">▶ Start</button>
-  <button onclick="stop('juice-vuln1')">■ Stop</button>
+  <button onclick="startLab('juice-vuln1')">▶ Start</button>
+  <button onclick="stopLab('juice-vuln1')">■ Stop</button>
   <span id="status-juice-vuln1">Status: ...</span>
 </div>
 
@@ -116,33 +116,45 @@
 
 <div class="task">
   <h3>VULNSRV02 – Juiceshop</h3>
-  <button onclick="start('juice-vuln2')">▶ Start</button>
-  <button onclick="stop('juice-vuln2')">■ Stop</button>
+  <button onclick="startLab('juice-vuln2')">▶ Start</button>
+  <button onclick="stopLab('juice-vuln2')">■ Stop</button>
   <span id="status-juice-vuln2">Status: ...</span>
 </div>
 
 <script>
 async function update(target) {
-  let r = await fetch(`/api/${target}/status`);
-  let j = await r.json();
-  document.getElementById(`status-${target}`).innerText =
-    "Status: " + (j.status === "running" ? "🟢 running" : "🔴 stopped");
+  try {
+    const r = await fetch(`/api/${target}/status`);
+    if (!r.ok) throw new Error("API error");
+
+    const j = await r.json();
+    document.getElementById(`status-${target}`).innerText =
+      "Status: " + (j.status === "running" ? "🟢 running" : "🔴 stopped");
+
+  } catch (e) {
+    document.getElementById(`status-${target}`).innerText =
+      "Status: ⚠️ API error";
+  }
 }
 
-async function start(target) {
+async function startLab(target) {
   await fetch(`/api/${target}/start`);
-  update(target);
+  setTimeout(() => update(target), 1500);
 }
 
-async function stop(target) {
+async function stopLab(target) {
   await fetch(`/api/${target}/stop`);
-  update(target);
+  setTimeout(() => update(target), 1500);
 }
-update("vuln1");
-update("vuln2");
+
+// Initial load
+update("juice-vuln1");
+update("juice-vuln2");
+
+// Auto refresh every 5s
 setInterval(() => {
-  update("vuln1");
-  update("vuln2");
+  update("juice-vuln1");
+  update("juice-vuln2");
 }, 5000);
 </script>
 
