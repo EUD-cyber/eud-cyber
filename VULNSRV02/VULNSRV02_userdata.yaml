@@ -33,7 +33,7 @@ write_files:
             container_name: juiceshop
             restart: unless-stopped
             expose:
-              - "3000"
+              - "3000:3000"
             environment:
               - NODE_ENV=production
               - CTFSHOWDIFFICULTY=1
@@ -41,18 +41,7 @@ write_files:
               - SOLUTIONS=false
             volumes:
               - juice_data:/juice-shop/data
-        
-          nginx:
-            image: nginx:stable
-            container_name: juiceshop-proxy
-            restart: unless-stopped
-            ports:
-              - "80:80"
-            depends_on:
-              - juiceshop
-            volumes:
-              - ./nginx.conf:/etc/nginx/nginx.conf:ro
-        
+                  
          volumes:
           juice_data:
 
@@ -65,4 +54,4 @@ runcmd:
   - systemctl enable qemu-guest-agent
   - usermod -aG docker ubuntu
   - mkdir -p /opt/juiceshop
- # - docker compose -f /opt/juiceshop/docker-compose.yml up -d
+ 
