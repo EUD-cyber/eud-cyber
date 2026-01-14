@@ -93,6 +93,25 @@ write_files:
             - guacamole
             networks:
             - guacnetwork_compose
+
+  - path: /etc/systemd/system/lab-api.service
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Cyber Lab API (Flask)
+      After=network.target
+
+      [Service]
+      User=root
+      WorkingDirectory=/opt/guacamole
+      ExecStart=/usr/bin/python3 /opt/guacamole/app.py
+      Restart=always
+      RestartSec=5
+      Environment=PYTHONUNBUFFERED=1
+
+      [Install]
+      WantedBy=multi-user.target
             
 
 runcmd:
@@ -125,4 +144,7 @@ runcmd:
   - chmod -R 600 /root/.ssh/shared_admin_ed25519
   - chmod -R 600 /root/.ssh/shared_admin_ed25519.pub
   - /opt/guacamole/nat.sh
+  - systemctl daemon-reload
+  - systemctl enable lab-api
+  - systemctl start lab-api
   - docker compose -f /opt/guacamole/docker-compose.yml up -d
