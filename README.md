@@ -28,12 +28,15 @@ appsrv01\
   openldap \
    user: admin pass: Password1! 
 
+Vulnsrv01 and 02 pre installede with juiceshop docker (not started)
+
+api on guacamole that pulls status on the juiceshop docker and can start and stop them from the gui \
+the api is listing on port 5000 on guacvm and the tasks.html uses that for pulling the status \
+
 
 missing \
   ip address validation on vm opnsense and guacvm \
-  download cloud img to default folder and check if exits on each vm creation \
   all input first so the script will run without input after \
-  no docker on vulnsrv01 \
   Problem with the WIN11 image, needs more testing 
   
 Network \
