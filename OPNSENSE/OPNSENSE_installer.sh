@@ -1,3 +1,4 @@
+
 #!/bin/bash
 set -e
 
@@ -142,8 +143,24 @@ expect {
 
     "Select device to import from (e.g. ada0) or leave blank to exit" {
         send "\cd0\r"
-        exit
+        exp_continue
     }
+
+    "12 ) Update from console" {
+        send "\12\r"
+        exp_continue
+    }
+
+    "Proceed with this action?" {
+       send "\y\r"
+       exp_continue
+    }
+
+    "Howdy" {
+       send "\q\r"
+       exp_continue
+    }
+   
     eof
 }
 EOF
