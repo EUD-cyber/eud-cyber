@@ -146,7 +146,7 @@ expect {
         exp_continue
     }
 
-    "Update from console" {
+    "Enter an option:" {
         send "\12\r"
         exp_continue
     }
