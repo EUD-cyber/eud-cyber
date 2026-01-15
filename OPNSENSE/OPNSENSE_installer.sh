@@ -143,11 +143,6 @@ expect {
 
     "Select device to import from (e.g. ada0) or leave blank to exit" {
         send "\cd0\r"
-        exp_continue
-    }
-
-    "Enter an option:" {
-        send "\12\r"
         exit
     }
    eof
