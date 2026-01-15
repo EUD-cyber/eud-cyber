@@ -148,20 +148,9 @@ expect {
 
     "Enter an option:" {
         send "\12\r"
-        exp_continue
+        exit
     }
-
-    "Proceed with this action?" {
-       send "\y\r"
-       exp_continue
-    }
-
-    "Howdy" {
-       send "\q\r"
-       exp_continue
-    }
-   
-    eof
+   eof
 }
 EOF
 
