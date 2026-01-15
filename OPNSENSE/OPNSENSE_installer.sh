@@ -146,7 +146,7 @@ expect {
         exp_continue
     }
 
-    "12 ) Update from console" {
+    "Update from console" {
         send "\12\r"
         exp_continue
     }
