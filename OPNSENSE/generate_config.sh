@@ -8,15 +8,15 @@ echo "1) DHCP"
 echo "2) Static"
 read -rp "Select WAN mode [1-2]: " MODE
 
-#WAN_IF="vtnet1"
-#LAN_IF="vtnet0"
-#LAN2_IF="vtnet2"
-#OOBM_IF="vtnet3"
+WAN_IF="vtnet1"
+LAN_IF="vtnet0"
+LAN2_IF="vtnet2"
+OOBM_IF="vtnet3"
 
-WAN_IF="em1"
-LAN_IF="em0"
-LAN2_IF="em2"
-OOBM_IF="em3"
+#WAN_IF="em1"
+#LAN_IF="em0"
+#LAN2_IF="em2"
+#OOBM_IF="em3"
 
 
 HOSTNAME="opnsense"
