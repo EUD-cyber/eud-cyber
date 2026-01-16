@@ -32,7 +32,7 @@ write_files:
             image: bkimminich/juice-shop:latest
             container_name: juiceshop
             restart: unless-stopped
-            expose:
+            ports:
               - "3000:3000"
             environment:
               - NODE_ENV=production
