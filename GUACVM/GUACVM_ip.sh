@@ -31,7 +31,6 @@ fi
 
 # Replace lines if they exist
 sed -i \
-sed -i \
     -e "s|^IP_ADDR=.*|IP_ADDR=\"$IP_ADDR\"|" \
     -e "s|^DNS_SERVER=.*|DNS_SERVER=\"$DNS_SERVER\"|" \
     "$GUACVM_FILE"
