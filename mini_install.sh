@@ -59,7 +59,6 @@ case "$CHOICE" in
     GUACVM_FILE="$(pwd)/GUACVM/GUACVM_installer.sh"
     # Replace lines if they exist
     sed -i \
-    sed -i \
     -e "s|^MEMORY=.*|MEMORY=\"MEMORY=\"|" \
     -e "s|^CORES=.*|CORES=\"$CORES\"|" \
     "$GUACVM_FILE"
