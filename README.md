@@ -3,6 +3,12 @@ cyber eud
 
 This script is testet with proxmox 9.1
 
+run install.sh \
+then 3 options \
+1 full install \
+2 mini install requires, 4 cores, 32 gb memory, 500 gb hdd \
+3 install mulitple labs on single proxmox or proxmox cluster \
+
 <img width="762" height="512" alt="image" src="https://github.com/user-attachments/assets/993d4ccf-8124-481c-bb50-134729f64d9c" />
 
 
