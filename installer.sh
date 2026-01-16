@@ -1,9 +1,9 @@
 #!/bin/bash
 set -e
 
-FULL_INSTALL ="./full_install.sh"
-MINI_INSTALL ="./mini_install.sh"
-MULTI_INSTALL ="./multi_install.sh"
+FULL_INSTALL="./full_install.sh"
+MINI_INSTALL="./mini_install.sh"
+MULTI_INSTALL="./multi_install.sh"
 
 clear
 echo "===================================="
