@@ -103,10 +103,10 @@ qm create $VMID \
   --bios seabios \
   --ostype l26 \
   --scsihw virtio-scsi-pci \
-  --net0 virtio,bridge=$LAN_BRIDGE \
-  --net1 virtio,bridge=$WAN_BRIDGE \
-  --net2 virtio,bridge=$LAN_BRIDGE1 \
-  --net3 virtio,bridge=$OOBM \
+  --net0 e1000,bridge=$LAN_BRIDGE \
+  --net1 e1000,bridge=$WAN_BRIDGE \
+  --net2 e1000,bridge=$LAN_BRIDGE1 \
+  --net3 e1000,bridge=$OOBM \
   --boot order=scsi0 \
   --serial0 socket \
   --vga std
