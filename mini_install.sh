@@ -3,22 +3,22 @@ set -e
 
 REPO="./repo.sh"
 GUACVM_IP="./GUACVM/GUACVM_ip.sh"
-GUACVM="./GUACVM/GUACVM_installer.sh"
+GUACVM="./GUACVM/GUACVM_mini_installer.sh"
 OPENVSWITCH="./open-vswitch.sh"
-VULNSRV01="./VULNSRV01/VULNSRV01_installer.sh"
-VULNSRV02="./VULNSRV02/VULNSRV02_installer.sh"
-OPNSENSE="./OPNSENSE/OPNSENSE_installer.sh"
-APPSRV01="./APPSRV01/APPSRV01_installer.sh"
+VULNSRV01="./VULNSRV01/VULNSRV01_mini_installer.sh"
+VULNSRV02="./VULNSRV02/VULNSRV02_mini_installer.sh"
+OPNSENSE="./OPNSENSE/OPNSENSE_mini_installer.sh"
+APPSRV01="./APPSRV01/APPSRV01_mini_installer.sh"
 PREREQ="./pre_req.sh"
-KALI01="./KALI01/KALI01_installer.sh"
-WAZUH="./WAZUH/WAZUH_installer.sh"
-WIN11="./WIN11/WIN11_installer.sh"
-WIN2025="./WIN2025/WIN2025_installer.sh"
+KALI01="./KALI01/KALI01_mini_installer.sh"
+WAZUH="./WAZUH/WAZUH_mini_installer.sh"
+WIN11="./WIN11/WIN11_mini_installer.sh"
+WIN2025="./WIN2025/WIN2025_mini_installer.sh"
 FINISH="./finish.sh"
 
 
 echo "=============================="
-echo " Proxmox Deployment Menu"
+echo " Proxmox mini install Deployment Menu"
 echo "=============================="
 echo "1) Check packages & snippets (PREREQ)"
 echo "2) Install & configure Open vSwitch"
@@ -54,16 +54,6 @@ case "$CHOICE" in
     ;;
   4)
     echo "Starting Guacamole VM creation..."
-    MEMORY=2048       # in MB
-    CORES=2
-    GUACVM_FILE="$(pwd)/GUACVM/GUACVM_installer.sh"
-    # Replace lines if they exist
-    sed -i \
-    -e "s|^MEMORY=.*|MEMORY=\"$MEMORY=\"|" \
-    -e "s|^CORES=.*|CORES=\"$CORES\"|" \
-    "$GUACVM_FILE"
-    echo "Updated $GUACVM_FILE:"
-    cat "$GUACVM_FILE"
     bash "$GUACVM_IP"
     bash "$GUACVM"
     ;;
