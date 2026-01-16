@@ -54,12 +54,12 @@ case "$CHOICE" in
     ;;
   4)
     echo "Starting Guacamole VM creation..."
-    MEMORY=2096       # in MB
+    MEMORY=2048       # in MB
     CORES=2
     GUACVM_FILE="$(pwd)/GUACVM/GUACVM_installer.sh"
     # Replace lines if they exist
     sed -i \
-    -e "s|^MEMORY=.*|MEMORY=\"MEMORY=\"|" \
+    -e "s|^MEMORY=.*|MEMORY=\"$MEMORY=\"|" \
     -e "s|^CORES=.*|CORES=\"$CORES\"|" \
     "$GUACVM_FILE"
     echo "Updated $GUACVM_FILE:"
