@@ -31,8 +31,8 @@ write_files:
             image: bkimminich/juice-shop:latest
             container_name: juiceshop
             restart: unless-stopped
-            expose:
-              - "3000"
+            ports:
+              - "3000:3000"
             environment:
               - NODE_ENV=production
               - CTFSHOWDIFFICULTY=1
