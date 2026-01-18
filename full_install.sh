@@ -105,15 +105,17 @@ case "$CHOICE" in
     echo "Checking packages and snippets..."
     bash "$PREREQ"
 
+    echo "IP settings on Guacamole and Opnsense"
+    bash "$OPNSENSECONF"
+    bash "$GUACVM_IP"
+    
     echo "Starting Open vSwitch installation and configuration"
     bash "$OPENVSWITCH"
 
     echo "Starting OPNsense VM creation..."
-    bash "$OPNSENSECONF"
     bash "$OPNSENSE"
 
     echo "Starting Guacamole VM creation..."
-    bash "$GUACVM_IP"
     bash "$GUACVM"
 
     echo "Staring Client01 VM creation..."
