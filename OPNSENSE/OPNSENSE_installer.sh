@@ -42,17 +42,17 @@ IMG_BZ2_PATH="${IMG_DIR}/${IMG_BZ2}"
 
 ISO_PATH="/var/lib/vz/template/iso/opnsense-config.iso"
 
-GENERATESH="$(pwd)/OPNSENSE/generate_config.sh"
+#GENERATESH="$(pwd)/OPNSENSE/generate_config.sh"
 CONFIG_ISO="$(pwd)/OPNSENSE/iso"
 CONFIG_SRC="$(pwd)/OPNSENSE/iso/conf/config.xml"
 
 
 ## ===== CHECKS =====
-if [[ ! -f "$CONFIG_SRC" ]]; then
+#if [[ ! -f "$CONFIG_SRC" ]]; then
 #  echo "ERROR: config.xml not found at $CONFIG_SRC"
-  echo "generating config.xml"
-  bash $GENERATESH
-fi
+#  echo "generating config.xml"
+#  bash $GENERATESH
+#fi
 
 #mkdir -p "$IMG_DIR"
 
