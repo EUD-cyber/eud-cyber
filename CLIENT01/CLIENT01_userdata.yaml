@@ -49,7 +49,6 @@ write_files:
 
 packages:
   - ubuntu-desktop-minimal
-  - xrdp
   - gnome-tweaks
  
 runcmd:
@@ -59,8 +58,6 @@ runcmd:
   - apt-get install -y qemu-guest-agent xfce4 xfce4-goodies xfce4-session tigervnc-standalone-server dbus-x11
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
-  - systemctl enable xrdp
-  - systemctl start xrdp
   - sed -i 's/^#WaylandEnable=false/WaylandEnable=false/' /etc/gdm3/custom.conf
   - apt-get install -y 
   - mkdir -p /home/ubuntu/.vnc
