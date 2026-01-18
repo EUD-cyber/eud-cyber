@@ -47,9 +47,9 @@ write_files:
       WantedBy=multi-user.target
 
 
-packages:
-  - ubuntu-desktop-minimal
-  - gnome-tweaks
+#packages:
+#  - ubuntu-desktop-minimal
+#  - gnome-tweaks
  
 runcmd:
   - set -x
@@ -58,12 +58,11 @@ runcmd:
   - apt-get install -y qemu-guest-agent xfce4 xfce4-goodies xfce4-session tigervnc-standalone-server dbus-x11
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
-  - sed -i 's/^#WaylandEnable=false/WaylandEnable=false/' /etc/gdm3/custom.conf
-  - apt-get install -y 
   - mkdir -p /home/ubuntu/.vnc
   - chown -R ubuntu:ubuntu /home/ubuntu
-  - systemctl enable ssh
   - systemctl set-default multi-user.target
+  - systemctl disable gdm3 lightdm sddm || true
+  - systemctl enable ssh
   - su - ubuntu -c "printf 'password\npassword\n\n' | vncpasswd"
   - systemctl daemon-reload
   - systemctl enable vncserver
