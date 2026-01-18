@@ -15,56 +15,21 @@ users:
 chpasswd:
   expire: false
 
-package_update: true
-package_upgrade: true
+packages:
+  - ubuntu-desktop-minimal
+  - gnome-remote-desktop
+  - qemu-guest-agent
 
-write_files:
-  - path: /home/ubuntu/.vnc/xstartup
-    owner: root:root
-    permissions: "0755"
-    content: |
-      #!/bin/sh
-      unset SESSION_MANAGER
-      unset DBUS_SESSION_BUS_ADDRESS
-      exec dbus-launch --exit-with-session startxfce4 &
-
-  - path: /etc/systemd/system/vncserver.service
-    permissions: "0644"
-    content: |
-      [Unit]
-      Description=VNC server on display :1
-      After=network.target
-
-      [Service]
-      Type=forking
-      User=ubuntu
-      WorkingDirectory=/home/ubuntu
-      ExecStart=/usr/bin/vncserver -localhost=no -geometry 1280x720 :1
-      ExecStop=/usr/bin/vncserver -kill :1
-      Restart=on-failure
-
-      [Install]
-      WantedBy=multi-user.target
-
-
-#packages:
-#  - ubuntu-desktop-minimal
-#  - gnome-tweaks
- 
 runcmd:
   - set -x
-  - export DEBIAN_FRONTEND=noninteractive
   - apt-get update
-  - apt-get install -y qemu-guest-agent xfce4 xfce4-goodies xfce4-session tigervnc-standalone-server dbus-x11
+  - apt-get install -y ubuntu-desktop-minimal gnome-remote-desktop qemu-guest-agent
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
-  - mkdir -p /home/ubuntu/.vnc
-  - chown -R ubuntu:ubuntu /home/ubuntu
-  - systemctl set-default multi-user.target
-  - systemctl disable gdm3 lightdm sddm || true
-  - systemctl enable ssh
-  - su - ubuntu -c "printf 'password\npassword\n\n' | vncpasswd"
-  - systemctl daemon-reload
-  - systemctl enable vncserver
-  - systemctl start vncserver
+  - systemctl set-default graphical.target
+  - systemctl enable gdm3
+  - |
+    sed -i 's/^#  AutomaticLoginEnable = true/AutomaticLoginEnable = true/' /etc/gdm3/custom.conf
+    sed -i 's/^#  AutomaticLogin = ubuntu/AutomaticLogin = ubuntu/' /etc/gdm3/custom.conf
   - reboot
+
