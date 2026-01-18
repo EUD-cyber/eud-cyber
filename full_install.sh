@@ -8,7 +8,9 @@ OPENVSWITCH="./open-vswitch.sh"
 VULNSRV01="./VULNSRV01/VULNSRV01_installer.sh"
 VULNSRV02="./VULNSRV02/VULNSRV02_installer.sh"
 OPNSENSE="./OPNSENSE/OPNSENSE_installer.sh"
+OPNSENSCONF="./OPNSENSE/generate_config.sh"
 APPSRV01="./APPSRV01/APPSRV01_installer.sh"
+CLIENT01="./CLIENT01/CLIENT01_installer.sh"
 PREREQ="./pre_req.sh"
 KALI01="./KALI01/KALI01_installer.sh"
 WAZUH="./WAZUH/WAZUH_installer.sh"
@@ -30,6 +32,7 @@ echo "8) Create WAZUH VM"
 echo "9) Create Windows 11 VM"
 echo "10) Create Windows server 2025 VM"
 echo "11) Create APPSRV01 VM"
+echo "12) Create Client01 VM"
 echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
 echo "99) Finish script"
@@ -49,6 +52,7 @@ case "$CHOICE" in
     ;;
   3)
     echo "Starting OPNsense VM creation..."
+    bash "$OPNSENSECONF"
     bash "$OPNSENSE"
     ;;
   4)
@@ -84,6 +88,10 @@ case "$CHOICE" in
     echo "Starting APPSRV01 VM creation.... "
     bash "$APPSRV01"
     ;;
+  12)
+    echo "Staring Client01 VM creation... "
+    bash "$CLIENT01"
+    ;;
   89)
     echo "Change proxmox repo to no-enterprise"
     bash "$REPO"
@@ -101,11 +109,15 @@ case "$CHOICE" in
     bash "$OPENVSWITCH"
 
     echo "Starting OPNsense VM creation..."
+    bash "$OPNSENSECONF"
     bash "$OPNSENSE"
 
     echo "Starting Guacamole VM creation..."
     bash "$GUACVM_IP"
     bash "$GUACVM"
+
+    echo "Staring Client01 VM creation..."
+    bash "$CLIENT01"
 
     echo "Starting Vuln-server01 VM creation..."
     bash "$VULNSRV01"
