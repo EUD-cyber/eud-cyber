@@ -81,5 +81,9 @@ runcmd:
   - systemctl enable vncserver
   - systemctl start vncserver
 
+  - wget -P /home/kali/Desktop https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/testips.sh
+  - chmod +x /home/kali/Desktop/testips.sh
+  - chown kali:kali /home/kali/Desktop/testips.sh
+
   # ⭐ Run Kali tools install in background ⭐
   - nohup bash -c "set -x; export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y kali-linux-default" > /var/log/kali-install.log 2>&1 &
