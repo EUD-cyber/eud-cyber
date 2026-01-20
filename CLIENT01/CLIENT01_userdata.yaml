@@ -20,16 +20,58 @@ packages:
   - gnome-remote-desktop
   - qemu-guest-agent
 
+write_files:
+  - path: /usr/local/bin/enable-gnome-vnc.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -e
+
+      # Set VNC password
+      echo -n "password" | gnome-remote-desktop-credentials set vnc
+
+      # Enable VNC (password-only)
+      gsettings set org.gnome.desktop.remote-desktop.vnc enable true
+      gsettings set org.gnome.desktop.remote-desktop.vnc auth-method 'password'
+      gsettings set org.gnome.desktop.remote-desktop.vnc view-only false
+
+      # Start service
+      systemctl --user enable gnome-remote-desktop.service
+      systemctl --user restart gnome-remote-desktop.service
+
+  - path: /etc/systemd/user/enable-gnome-vnc.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Enable GNOME VNC automatically
+      After=graphical-session.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/enable-gnome-vnc.sh
+
+      [Install]
+      WantedBy=default.target
+
+
+
 runcmd:
   - set -x
   - apt-get update
   - apt-get install -y ubuntu-desktop-minimal gnome-remote-desktop qemu-guest-agent
+
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
+
   - systemctl set-default graphical.target
   - systemctl enable gdm3
+
   - |
-    sed -i 's/^#  AutomaticLoginEnable = true/AutomaticLoginEnable = true/' /etc/gdm3/custom.conf
-    sed -i 's/^#  AutomaticLogin = ubuntu/AutomaticLogin = ubuntu/' /etc/gdm3/custom.conf
+    sed -i 's/^#\s*AutomaticLoginEnable\s*=.*/AutomaticLoginEnable = true/' /etc/gdm3/custom.conf
+    sed -i 's/^#\s*AutomaticLogin\s*=.*/AutomaticLogin = ubuntu/' /etc/gdm3/custom.conf
+
+  - su - ubuntu -c "systemctl --user daemon-reexec"
+  - su - ubuntu -c "systemctl --user enable enable-gnome-vnc.service"
+
   - reboot
 
