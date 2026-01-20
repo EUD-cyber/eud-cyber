@@ -176,6 +176,7 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
       <destination>
         <any/>
       </destination>
+      <quick>1</quick>
     </rule>
     <rule>
       <type>pass</type>
@@ -188,6 +189,7 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
       <destination>
         <any/>
       </destination>
+      <quick>1</quick>
     </rule>  
     <rule>
       <type>pass</type>
@@ -199,6 +201,7 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
       <destination>
         <any/>
       </destination>
+      <quick>1</quick>
     </rule>
   </filter>
   ${WAN_GATEWAY_BLOCK}
