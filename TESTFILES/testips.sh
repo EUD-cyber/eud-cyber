@@ -1,13 +1,14 @@
 #!/bin/bash
 
-echo "==============================="
-echo " OPNsense / Suricata IPS Test "
-echo "==============================="
+echo "======================================"
+echo " OPNsense / Suricata IPS Test Menu"
+echo "======================================"
 echo
 echo "1) curl http://testmyids.com"
 echo "2) nikto http://testphp.vulnweb.com"
+echo "3) gobuster dir (testphp.vulnweb.com)"
 echo
-read -p "Select an option (1 or 2): " choice
+read -p "Select an option (1, 2, or 3): " choice
 
 case "$choice" in
   1)
@@ -19,6 +20,30 @@ case "$choice" in
     echo
     echo "[*] Running Nikto scan against testphp.vulnweb.com"
     nikto -h http://testphp.vulnweb.com -C all
+    ;;
+  3)
+    WORDLIST="/usr/share/seclists/Discovery/Web-Content/directory-list-2.3-small.txt"
+
+    if [ ! -f "$WORDLIST" ]; then
+      echo
+      echo "[!] Wordlist not found:"
+      echo "    $WORDLIST"
+      echo
+      echo "    Install it with:"
+      echo "    sudo apt install seclists"
+      exit 1
+    fi
+
+    echo
+    echo "[*] Running Gobuster directory brute force"
+    echo "[*] Target: http://testphp.vulnweb.com"
+    echo "[*] Wordlist: $WORDLIST"
+    echo
+
+    gobuster dir \
+      -u http://testphp.vulnweb.com \
+      -w "$WORDLIST" \
+      -t 50
     ;;
   *)
     echo
