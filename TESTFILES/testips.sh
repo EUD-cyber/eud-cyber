@@ -7,8 +7,9 @@ echo
 echo "1) curl http://testmyids.com"
 echo "2) nikto http://testphp.vulnweb.com"
 echo "3) gobuster dir (testphp.vulnweb.com)"
+echo "4) sqlmap (testphp.vulnweb.com)"
 echo
-read -p "Select an option (1, 2, or 3): " choice
+read -p "Select an option (1, 2, 3, or 4): " choice
 
 case "$choice" in
   1)
@@ -22,7 +23,7 @@ case "$choice" in
     nikto -h http://testphp.vulnweb.com -C all
     ;;
   3)
-    WORDLIST="/usr/share/seclists/Discovery/Web-Content/common.txt"
+    WORDLIST="/usr/share/seclists/Discovery/Web-Content/directory-list-2.3-small.txt"
 
     if [ ! -f "$WORDLIST" ]; then
       echo
@@ -45,11 +46,14 @@ case "$choice" in
       -w "$WORDLIST" \
       -t 50
     ;;
+  4)
+    echo
+    echo "[*] Running SQLMap test against testphp.vulnweb.com"
+    echo "[*] Target: listproducts.php?cat=1"
+    echo
+
+    sqlmap -u "http://testphp.vulnweb.com/listproducts.php?cat=1" --batch
+    ;;
   *)
     echo
-    echo "[!] Invalid option"
-    ;;
-esac
-
-echo
-read -p "Press ENTER to close..."
+    echo "[!] Invalid
