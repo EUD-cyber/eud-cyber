@@ -63,7 +63,7 @@ runcmd:
   - apt-get update
 
   # 1️⃣ Install desktop FIRST
-  - apt-get install -y xfce4 xfce4-goodies xfce4-session
+  - apt-get install -y xfce4 xfce4-goodies xfce4-session seclists
 
   # 2️⃣ Create VNC folders
   - mkdir -p /home/kali/.vnc
