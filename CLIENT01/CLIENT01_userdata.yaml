@@ -1,5 +1,4 @@
 #cloud-config
-
 hostname: client01
 manage_etc_hosts: true
 
@@ -12,78 +11,51 @@ users:
     ssh_authorized_keys:
       - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
 
-chpasswd:
-  expire: false
+ssh_pwauth: false
+disable_root: true
+
+package_update: true
+package_upgrade: true
 
 packages:
-  - xfce4
-  - xfce4-goodies
-  - xfce4-session
-  - dbus-x11
+  - ubuntu-desktop-minimal
+  - gdm3
+  - x11vnc
   - openssh-server
-  - tigervnc-standalone-server
-  - tigervnc-common
-  - curl
   - qemu-guest-agent
 
 write_files:
-  - path: /home/ubuntu/.vnc/xstartup
-    owner: root:root
-    permissions: "0755"
-    content: |
-      #!/bin/sh
-      unset SESSION_MANAGER
-      unset DBUS_SESSION_BUS_ADDRESS
-      exec dbus-launch --exit-with-session startxfce4 &
-
-  - path: /etc/systemd/system/vncserver.service
+  - path: /etc/systemd/system/x11vnc.service
     permissions: "0644"
     content: |
       [Unit]
-      Description=TigerVNC server on display :1
-      After=network.target
-      
+      Description=x11vnc server for GNOME
+      After=display-manager.service
+      Requires=display-manager.service
+
       [Service]
       Type=simple
-      User=ubuntu
-      WorkingDirectory=/home/ubuntu
-      
-      # Kill any stale VNC session first
-      ExecStartPre=/usr/bin/vncserver -kill :1 || true
-      
-      # Run in foreground so systemd can track it
-      ExecStart=/usr/bin/vncserver -localhost=no -geometry 1280x720 -fg :1
-      
-      Restart=on-failure
-      RestartSec=5
-      
-      [Install]
-      WantedBy=multi-user.target
+      ExecStart=/usr/bin/x11vnc -display :0 -auth guess -forever -shared -rfbport 5900
+      Restart=always
 
+      [Install]
+      WantedBy=graphical.target
 
 runcmd:
-  - set -x
-  - export DEBIAN_FRONTEND=noninteractive
-
-  # Ensure SSH + agent
   - systemctl enable ssh
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
 
-  # Create VNC directories
-  - mkdir -p /home/ubuntu/.vnc
-  - mkdir -p /home/ubuntu/.config/tigervnc
-  - chown -R ubuntu:ubuntu /home/ubuntu
+  # GNOME must boot
+  - systemctl set-default graphical.target
+  - systemctl enable gdm3
 
-  # Boot headless (no console desktop)
-  - systemctl set-default multi-user.target
+  # Set x11vnc password (non-interactive)
+  - x11vnc -storepasswd password /etc/x11vnc.pass
+  - sed -i 's|ExecStart=.*|ExecStart=/usr/bin/x11vnc -display :0 -auth guess -rfbauth /etc/x11vnc.pass -forever -shared -rfbport 5900|' /etc/systemd/system/x11vnc.service
 
-  # Set VNC password
-  - su - ubuntu -c "printf 'password\npassword\n\n' | vncpasswd"
-
-  # Enable VNC service
   - systemctl daemon-reload
-  - systemctl enable vncserver
-  - systemctl start vncserver
+  - systemctl enable x11vnc
+  - systemctl start x11vnc
 
   - reboot
