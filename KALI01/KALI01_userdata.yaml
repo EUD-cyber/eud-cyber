@@ -19,9 +19,6 @@ disable_root: true
 chpasswd:
   expire: false
 
-package_update: true
-package_upgrade: true
-
 packages:
   - kali-desktop-xfce
   - xorg
@@ -29,6 +26,7 @@ packages:
   - openssh-server
   - tigervnc-standalone-server
   - tigervnc-common
+  - curl
   
 write_files:
       - path: /home/kali/.vnc/xstartup
