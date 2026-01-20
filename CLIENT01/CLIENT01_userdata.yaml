@@ -22,7 +22,7 @@ package_update: true
 package_upgrade: true
 
 packages:
-  - ubuntu-desktop-minimal
+  - ubuntu-desktop
   - xrdp
   - xorgxrdp
   - openssh-server
