@@ -1,4 +1,5 @@
 #cloud-config
+
 hostname: client01
 manage_etc_hosts: true
 
@@ -11,51 +12,48 @@ users:
     ssh_authorized_keys:
       - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
 
-ssh_pwauth: false
+ssh_pwauth: true
 disable_root: true
+
+chpasswd:
+  expire: false
 
 package_update: true
 package_upgrade: true
 
 packages:
   - ubuntu-desktop-minimal
-  - gdm3
-  - x11vnc
+  - xrdp
+  - xorgxrdp
   - openssh-server
   - qemu-guest-agent
 
 write_files:
-  - path: /etc/systemd/system/x11vnc.service
+  - path: /etc/gdm3/custom.conf
     permissions: "0644"
     content: |
-      [Unit]
-      Description=x11vnc server for GNOME
-      After=display-manager.service
-      Requires=display-manager.service
-
-      [Service]
-      Type=simple
-      ExecStart=/usr/bin/x11vnc -display :0 -auth guess -forever -shared -rfbport 5900
-      Restart=always
-
-      [Install]
-      WantedBy=graphical.target
+      [daemon]
+      WaylandEnable=false
+      AutomaticLoginEnable=false
 
 runcmd:
+  - set -x
+  - export DEBIAN_FRONTEND=noninteractive
+
+  # Enable required services
   - systemctl enable ssh
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
 
-  # GNOME must boot
+  # Force graphical boot
   - systemctl set-default graphical.target
   - systemctl enable gdm3
 
-  # Set x11vnc password (non-interactive)
-  - x11vnc -storepasswd password /etc/x11vnc.pass
-  - sed -i 's|ExecStart=.*|ExecStart=/usr/bin/x11vnc -display :0 -auth guess -rfbauth /etc/x11vnc.pass -forever -shared -rfbport 5900|' /etc/systemd/system/x11vnc.service
+  # Enable XRDP
+  - systemctl enable xrdp
+  - systemctl restart xrdp
 
-  - systemctl daemon-reload
-  - systemctl enable x11vnc
-  - systemctl start x11vnc
+  # Allow XRDP to access SSL cert
+  - adduser xrdp ssl-cert
 
   - reboot
