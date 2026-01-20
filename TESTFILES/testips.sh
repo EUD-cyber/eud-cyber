@@ -48,6 +48,8 @@ case "$choice" in
   *)
     echo
     echo "[!] Invalid option"
-    exit 1
     ;;
 esac
+
+echo
+read -p "Press ENTER to close..."
