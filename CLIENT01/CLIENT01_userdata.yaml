@@ -42,17 +42,24 @@ write_files:
       [Unit]
       Description=TigerVNC server on display :1
       After=network.target
-
+      
       [Service]
-      Type=forking
+      Type=simple
       User=ubuntu
       WorkingDirectory=/home/ubuntu
-      ExecStart=/usr/bin/vncserver -localhost=no -geometry 1280x720 :1
-      ExecStop=/usr/bin/vncserver -kill :1
+      
+      # Kill any stale VNC session first
+      ExecStartPre=/usr/bin/vncserver -kill :1 || true
+      
+      # Run in foreground so systemd can track it
+      ExecStart=/usr/bin/vncserver -localhost=no -geometry 1280x720 -fg :1
+      
       Restart=on-failure
-
+      RestartSec=5
+      
       [Install]
       WantedBy=multi-user.target
+
 
 runcmd:
   - set -x
