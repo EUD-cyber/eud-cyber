@@ -16,62 +16,67 @@ chpasswd:
   expire: false
 
 packages:
-  - ubuntu-desktop-minimal
-  - gnome-remote-desktop
+  - xfce4
+  - xfce4-goodies
+  - xfce4-session
+  - dbus-x11
+  - openssh-server
+  - tigervnc-standalone-server
+  - tigervnc-common
+  - curl
   - qemu-guest-agent
 
 write_files:
-  - path: /usr/local/bin/enable-gnome-vnc.sh
+  - path: /home/ubuntu/.vnc/xstartup
+    owner: root:root
     permissions: "0755"
     content: |
-      #!/bin/bash
-      set -e
+      #!/bin/sh
+      unset SESSION_MANAGER
+      unset DBUS_SESSION_BUS_ADDRESS
+      exec dbus-launch --exit-with-session startxfce4 &
 
-      # Set VNC password
-      echo -n "password" | gnome-remote-desktop-credentials set vnc
-
-      # Enable VNC (password-only)
-      gsettings set org.gnome.desktop.remote-desktop.vnc enable true
-      gsettings set org.gnome.desktop.remote-desktop.vnc auth-method 'password'
-      gsettings set org.gnome.desktop.remote-desktop.vnc view-only false
-
-      # Start service
-      systemctl --user enable gnome-remote-desktop.service
-      systemctl --user restart gnome-remote-desktop.service
-
-  - path: /etc/systemd/user/enable-gnome-vnc.service
+  - path: /etc/systemd/system/vncserver.service
     permissions: "0644"
     content: |
       [Unit]
-      Description=Enable GNOME VNC automatically
-      After=graphical-session.target
+      Description=TigerVNC server on display :1
+      After=network.target
 
       [Service]
-      Type=oneshot
-      ExecStart=/usr/local/bin/enable-gnome-vnc.sh
+      Type=forking
+      User=ubuntu
+      WorkingDirectory=/home/ubuntu
+      ExecStart=/usr/bin/vncserver -localhost=no -geometry 1280x720 :1
+      ExecStop=/usr/bin/vncserver -kill :1
+      Restart=on-failure
 
       [Install]
-      WantedBy=default.target
-
-
+      WantedBy=multi-user.target
 
 runcmd:
   - set -x
-  - apt-get update
-  - apt-get install -y ubuntu-desktop-minimal gnome-remote-desktop qemu-guest-agent
+  - export DEBIAN_FRONTEND=noninteractive
 
+  # Ensure SSH + agent
+  - systemctl enable ssh
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
 
-  - systemctl set-default graphical.target
-  - systemctl enable gdm3
+  # Create VNC directories
+  - mkdir -p /home/ubuntu/.vnc
+  - mkdir -p /home/ubuntu/.config/tigervnc
+  - chown -R ubuntu:ubuntu /home/ubuntu
 
-  - |
-    sed -i 's/^#\s*AutomaticLoginEnable\s*=.*/AutomaticLoginEnable = true/' /etc/gdm3/custom.conf
-    sed -i 's/^#\s*AutomaticLogin\s*=.*/AutomaticLogin = ubuntu/' /etc/gdm3/custom.conf
+  # Boot headless (no console desktop)
+  - systemctl set-default multi-user.target
 
-  - su - ubuntu -c "systemctl --user daemon-reexec"
-  - su - ubuntu -c "systemctl --user enable enable-gnome-vnc.service"
+  # Set VNC password
+  - su - ubuntu -c "printf 'password\npassword\n\n' | vncpasswd"
+
+  # Enable VNC service
+  - systemctl daemon-reload
+  - systemctl enable vncserver
+  - systemctl start vncserver
 
   - reboot
-
