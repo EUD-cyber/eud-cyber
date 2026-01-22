@@ -57,3 +57,5 @@ case "$choice" in
   *)
     echo
     echo "[!] Invalid
+    ;;
+esac
