@@ -23,7 +23,7 @@ case "$choice" in
     nikto -h http://testphp.vulnweb.com -C all
     ;;
   3)
-    WORDLIST="/usr/share/seclists/Discovery/Web-Content/directory-list-2.3-small.txt"
+    WORDLIST="/usr/share/seclists/Discovery/Web-Content/common.txt"
 
     if [ ! -f "$WORDLIST" ]; then
       echo
