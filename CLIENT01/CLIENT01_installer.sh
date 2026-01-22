@@ -104,7 +104,11 @@ qm set $VMID --agent enabled=1
 qm set $VMID --onboot 1
 
 # ===== Cloud-init =====
-qm set $VMID --ciupgrade \
+qm set $VMID --ipconfig0 $IP_ADDR,$IP_GW \
+  --ipconfig1 $OOBM_IP \
+  --searchdomain cloud.local \
+  --nameserver $DNS_SERVER \
+  --ciupgrade \
   --cicustom "user=local:snippets/CLIENT01_userdata.yaml"
 
 # ===== Start VM =====
