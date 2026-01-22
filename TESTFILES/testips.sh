@@ -56,6 +56,6 @@ case "$choice" in
     ;;
   *)
     echo
-    echo "[!] Invalid
+    echo "[!] Invalid"
     ;;
 esac
