@@ -3,6 +3,23 @@
 hostname: client01
 manage_etc_hosts: true
 
+network:
+  version: 2
+  renderer: NetworkManager
+  ethernets:
+    eth0:
+      dhcp4: false
+      addresses:
+        - 192.168.1.120/24
+      gateway4: 192.168.1.1
+      nameservers:
+        addresses:
+          - 8.8.8.8
+    eth1:
+      dhcp4: false
+      addresses:
+        - 172.20.0.15/24
+      
 users:
   - name: ubuntu
     sudo: ALL=(ALL) NOPASSWD:ALL
@@ -36,8 +53,8 @@ write_files:
       WaylandEnable=false
       AutomaticLoginEnable=false
 
+
 runcmd:
-  - set -x
   - export DEBIAN_FRONTEND=noninteractive
 
   # Enable required services
@@ -52,8 +69,8 @@ runcmd:
   # Enable XRDP
   - systemctl enable xrdp
   - systemctl restart xrdp
-
-  # Allow XRDP to access SSL cert
   - adduser xrdp ssl-cert
 
+  # Safe delayed reboot
+  - sleep 10
   - reboot
