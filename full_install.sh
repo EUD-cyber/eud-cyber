@@ -13,12 +13,11 @@ REPO="./repo.sh"
 PREREQ="./pre_req.sh"
 OPENVSWITCH="./open-vswitch.sh"
 
-OPNSENSECONF="./OPNSENSE/generate_config.sh"
+OPNSENSECONF="./OPNSENSE/generate_config.sh"   # INTERACTIVE
+GUACVM_IP="./GUACVM/GUACVM_ip.sh"               # INTERACTIVE
 OPNSENSE="./OPNSENSE/OPNSENSE_installer.sh"
 
-GUACVM_IP="./GUACVM/GUACVM_ip.sh"
 GUACVM="./GUACVM/GUACVM_installer.sh"
-
 CLIENT01="./CLIENT01/CLIENT01_installer.sh"
 VULNSRV01="./VULNSRV01/VULNSRV01_installer.sh"
 VULNSRV02="./VULNSRV02/VULNSRV02_installer.sh"
@@ -37,7 +36,7 @@ LOGFILE="/var/log/proxmox-install.log"
 ########################################
 # FOREGROUND PROGRESS
 ########################################
-FG_TOTAL=5
+FG_TOTAL=6
 FG_STEP=0
 
 fg_progress() {
@@ -48,7 +47,7 @@ fg_progress() {
 }
 
 ########################################
-# BACKGROUND WORK
+# BACKGROUND WORK (NON-INTERACTIVE ONLY)
 ########################################
 run_background() {
   STEP=0
@@ -60,9 +59,6 @@ run_background() {
     echo "[$STEP/$TOTAL] $1"
     echo "----------------------------------------"
   }
-
-  progress "Create Guacamole VM"
-  bash "$GUACVM"
 
   progress "Create Client01 VM"
   bash "$CLIENT01"
@@ -110,8 +106,8 @@ echo " Proxmox Deployment Menu"
 echo "=============================="
 echo "1) Check packages & snippets (PREREQ)"
 echo "2) Install & configure Open vSwitch"
-echo "3) Create OPNsense VM"
-echo "4) Create Guacamole VM"
+echo "3) Create OPNsense VM (interactive)"
+echo "4) Create Guacamole VM (interactive IP)"
 echo "5) Create Vuln-server01 VM"
 echo "6) Create Vuln-server02 VM"
 echo "7) Create KALI01 VM"
@@ -120,7 +116,7 @@ echo "9) Create Windows Server 2025 VM"
 echo "10) Create APPSRV01 VM"
 echo "11) Create Client01 VM"
 echo "89) Change Proxmox repo to no-subscription"
-echo "90) Run FULL install (foreground + background)"
+echo "90) Run FULL install"
 echo "99) Finish"
 echo "0) Exit"
 echo "=============================="
@@ -170,7 +166,7 @@ case "$CHOICE" in
     ;;
   90)
     echo
-    echo "===== FOREGROUND PREPARATION PHASE ====="
+    echo "===== FOREGROUND (INTERACTIVE) PHASE ====="
 
     fg_progress "Switch Proxmox repo to no-subscription"
     bash "$REPO"
@@ -178,8 +174,10 @@ case "$CHOICE" in
     fg_progress "Check prerequisites & snippets"
     bash "$PREREQ"
 
-    fg_progress "Generate IP configuration"
+    fg_progress "OPNsense WAN/LAN configuration"
     bash "$OPNSENSECONF"
+
+    fg_progress "Guacamole IP configuration"
     bash "$GUACVM_IP"
 
     fg_progress "Install Open vSwitch"
@@ -188,8 +186,10 @@ case "$CHOICE" in
     fg_progress "Create OPNsense VM (blocking)"
     bash "$OPNSENSE"
 
+    fg_progress "Create Guacamole VM"
+    bash "$GUACVM"
+
     echo
-    echo "OPNsense installation finished successfully"
     echo "===== STARTING BACKGROUND PHASE ====="
     echo
 
