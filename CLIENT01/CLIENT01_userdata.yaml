@@ -19,7 +19,7 @@ network:
       dhcp4: false
       addresses:
         - 172.20.0.15/24
-      
+
 users:
   - name: ubuntu
     sudo: ALL=(ALL) NOPASSWD:ALL
@@ -39,38 +39,38 @@ package_update: true
 package_upgrade: true
 
 packages:
-  - ubuntu-desktop
+  - xfce4
+  - xfce4-goodies
   - xrdp
   - xorgxrdp
+  - network-manager
   - openssh-server
   - qemu-guest-agent
 
 write_files:
-  - path: /etc/gdm3/custom.conf
+  # Tell XRDP to start XFCE (CRITICAL)
+  - path: /home/ubuntu/.xsession
+    owner: ubuntu:ubuntu
     permissions: "0644"
     content: |
-      [daemon]
-      WaylandEnable=false
-      AutomaticLoginEnable=false
-
+      startxfce4
 
 runcmd:
   - export DEBIAN_FRONTEND=noninteractive
 
-  # Enable required services
+  # Enable base services
   - systemctl enable ssh
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
 
-  # Force graphical boot
-  - systemctl set-default graphical.target
-  - systemctl enable gdm3
-
-  # Enable XRDP
+  # XRDP setup
+  - adduser xrdp ssl-cert
   - systemctl enable xrdp
   - systemctl restart xrdp
-  - adduser xrdp ssl-cert
 
-  # Safe delayed reboot
+  # Ensure correct ownership
+  - chown ubuntu:ubuntu /home/ubuntu/.xsession
+
+  # Reboot after install
   - sleep 10
   - reboot
