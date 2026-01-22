@@ -2,21 +2,29 @@
 set -e
 
 ########################################
+# FORCE REAL-TIME OUTPUT
+########################################
+export PYTHONUNBUFFERED=1
+
+########################################
 # PATHS
 ########################################
 REPO="./repo.sh"
+PREREQ="./pre_req.sh"
+OPENVSWITCH="./open-vswitch.sh"
+
+OPNSENSECONF="./OPNSENSE/generate_config.sh"
+OPNSENSE="./OPNSENSE/OPNSENSE_installer.sh"
+
 GUACVM_IP="./GUACVM/GUACVM_ip.sh"
 GUACVM="./GUACVM/GUACVM_installer.sh"
-OPENVSWITCH="./open-vswitch.sh"
+
+CLIENT01="./CLIENT01/CLIENT01_installer.sh"
 VULNSRV01="./VULNSRV01/VULNSRV01_installer.sh"
 VULNSRV02="./VULNSRV02/VULNSRV02_installer.sh"
-OPNSENSE="./OPNSENSE/OPNSENSE_installer.sh"
-OPNSENSECONF="./OPNSENSE/generate_config.sh"
-APPSRV01="./APPSRV01/APPSRV01_installer.sh"
-CLIENT01="./CLIENT01/CLIENT01_installer.sh"
-PREREQ="./pre_req.sh"
 KALI01="./KALI01/KALI01_installer.sh"
 WAZUH="./WAZUH/WAZUH_installer.sh"
+APPSRV01="./APPSRV01/APPSRV01_installer.sh"
 WIN2025="./WIN2025/WIN2025_installer.sh"
 FINISH="./finish.sh"
 
@@ -27,60 +35,31 @@ SESSION="proxmox-install"
 LOGFILE="/var/log/proxmox-install.log"
 
 ########################################
-# PROGRESS
+# FOREGROUND PROGRESS
 ########################################
-TOTAL_STEPS=13
-STEP=0
+FG_TOTAL=5
+FG_STEP=0
 
-progress() {
-  STEP=$((STEP+1))
-  echo ""
-  echo "[$STEP/$TOTAL_STEPS] $1"
+fg_progress() {
+  FG_STEP=$((FG_STEP+1))
+  echo
+  echo "[$FG_STEP/$FG_TOTAL] $1"
   echo "----------------------------------------"
 }
 
 ########################################
-# BACKGROUND BOOTSTRAP
+# BACKGROUND WORK
 ########################################
-if [ "$1" = "--run-all" ] && [ -z "$INSIDE_TMUX" ]; then
-  echo "Starting FULL installation in background"
-  echo "tmux session: $SESSION"
-  echo "Log file: $LOGFILE"
-  echo ""
-  echo "Attach with:"
-  echo "  tmux attach -t $SESSION"
-  echo ""
+run_background() {
+  STEP=0
+  TOTAL=8
 
-  tmux new-session -d -s "$SESSION" \
-    "INSIDE_TMUX=1 bash $0 --run-all | tee -a $LOGFILE"
-
-  exit 0
-fi
-
-########################################
-# RUN ALL (OPTION 90)
-########################################
-run_all() {
-  echo "===== PROXMOX FULL LAB INSTALL ====="
-  date
-  echo "==================================="
-
-  progress "Switch Proxmox repo to no-subscription"
-  bash "$REPO"
-
-  progress "Check prerequisites & snippets"
-  bash "$PREREQ"
-
-  progress "Generate IP configuration"
-  bash "$OPNSENSECONF"
-  bash "$GUACVM_IP"
-
-  progress "Install Open vSwitch"
-  bash "$OPENVSWITCH"
-
-  progress "Create OPNsense VM (blocking)"
-  bash "$OPNSENSE"
-  echo "OPNsense installation finished"
+  progress() {
+    STEP=$((STEP+1))
+    echo
+    echo "[$STEP/$TOTAL] $1"
+    echo "----------------------------------------"
+  }
 
   progress "Create Guacamole VM"
   bash "$GUACVM"
@@ -109,18 +88,17 @@ run_all() {
   progress "Final cleanup"
   bash "$FINISH"
 
-  echo ""
-  echo "==================================="
-  echo "INSTALLATION COMPLETED SUCCESSFULLY"
-  echo "==================================="
-  date
+  echo
+  echo "========================================"
+  echo "BACKGROUND INSTALLATION COMPLETED"
+  echo "========================================"
 }
 
 ########################################
-# AUTO MODE (NO MENU)
+# BACKGROUND ENTRYPOINT
 ########################################
-if [ "$1" = "--run-all" ]; then
-  run_all
+if [ "$1" = "--background" ]; then
+  run_background
   exit 0
 fi
 
@@ -141,29 +119,99 @@ echo "8) Create WAZUH VM"
 echo "9) Create Windows Server 2025 VM"
 echo "10) Create APPSRV01 VM"
 echo "11) Create Client01 VM"
-echo "89) Change proxmox repo to no-subscription"
-echo "90) Run ALL (background)"
+echo "89) Change Proxmox repo to no-subscription"
+echo "90) Run FULL install (foreground + background)"
 echo "99) Finish"
 echo "0) Exit"
 echo "=============================="
-
 read -rp "Enter your choice: " CHOICE
 
+########################################
+# MENU LOGIC
+########################################
 case "$CHOICE" in
-  1) bash "$PREREQ" ;;
-  2) bash "$OPENVSWITCH" ;;
-  3) bash "$OPNSENSECONF"; bash "$OPNSENSE" ;;
-  4) bash "$GUACVM_IP"; bash "$GUACVM" ;;
-  5) bash "$VULNSRV01" ;;
-  6) bash "$VULNSRV02" ;;
-  7) bash "$KALI01" ;;
-  8) bash "$WAZUH" ;;
-  9) bash "$WIN2025" ;;
- 10) bash "$APPSRV01" ;;
- 11) bash "$CLIENT01" ;;
- 89) bash "$REPO" ;;
- 90) bash "$0" --run-all ;;
- 99) bash "$FINISH" ;;
-  0) exit 0 ;;
-  *) echo "❌ Invalid option" ;;
+  1)
+    bash "$PREREQ"
+    ;;
+  2)
+    bash "$OPENVSWITCH"
+    ;;
+  3)
+    bash "$OPNSENSECONF"
+    bash "$OPNSENSE"
+    ;;
+  4)
+    bash "$GUACVM_IP"
+    bash "$GUACVM"
+    ;;
+  5)
+    bash "$VULNSRV01"
+    ;;
+  6)
+    bash "$VULNSRV02"
+    ;;
+  7)
+    bash "$KALI01"
+    ;;
+  8)
+    bash "$WAZUH"
+    ;;
+  9)
+    bash "$WIN2025"
+    ;;
+  10)
+    bash "$APPSRV01"
+    ;;
+  11)
+    bash "$CLIENT01"
+    ;;
+  89)
+    bash "$REPO"
+    ;;
+  90)
+    echo
+    echo "===== FOREGROUND PREPARATION PHASE ====="
+
+    fg_progress "Switch Proxmox repo to no-subscription"
+    bash "$REPO"
+
+    fg_progress "Check prerequisites & snippets"
+    bash "$PREREQ"
+
+    fg_progress "Generate IP configuration"
+    bash "$OPNSENSECONF"
+    bash "$GUACVM_IP"
+
+    fg_progress "Install Open vSwitch"
+    bash "$OPENVSWITCH"
+
+    fg_progress "Create OPNsense VM (blocking)"
+    bash "$OPNSENSE"
+
+    echo
+    echo "OPNsense installation finished successfully"
+    echo "===== STARTING BACKGROUND PHASE ====="
+    echo
+
+    command -v tmux >/dev/null || {
+      echo "ERROR: tmux is not installed"
+      echo "Install with: apt install tmux"
+      exit 1
+    }
+
+    tmux new-session -d -s "$SESSION" \
+      "stdbuf -oL -eL bash $0 --background | tee -a $LOGFILE"
+
+    echo "Background install started"
+    echo "Attach with: tmux attach -t $SESSION"
+    ;;
+  99)
+    bash "$FINISH"
+    ;;
+  0)
+    exit 0
+    ;;
+  *)
+    echo "❌ Invalid option"
+    ;;
 esac
