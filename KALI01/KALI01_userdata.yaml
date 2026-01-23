@@ -33,7 +33,7 @@ packages:
 
 write_files:
   - path: /home/kali/.vnc/xstartup
-    owner: kali:kali
+    owner: root:root
     permissions: "0755"
     content: |
       #!/bin/sh
