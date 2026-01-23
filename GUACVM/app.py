@@ -7,9 +7,10 @@ app = Flask(__name__)
 # SSH CONFIG
 # =========================
 SSH_KEY = "/root/.ssh/shared_admin_ed25519"
+SSH_TIMEOUT = 10
 
 # =========================
-# LAB TARGETS
+# TARGETS
 # =========================
 TARGETS = {
     "juice-vuln1": {
@@ -21,50 +22,65 @@ TARGETS = {
         "host": "172.20.0.21",
         "user": "ubuntu",
         "compose_dir": "/opt/juiceshop"
+    },
+    "proxmox": {
+        "host": "172.20.0.100",
+        "user": "root",
+        "compose_dir": None
     }
 }
 
 # =========================
-# SSH EXEC
+# MIRROR CONFIG
+# =========================
+MIRROR = {
+    "bridge": "lan1",
+    "src": "lan1",
+    "dst": "tap100i0",
+    "name": "lan1-mirror"
+}
+
+# =========================
+# SSH HELPER
 # =========================
 def run_ssh(target, cmd):
     if target not in TARGETS:
-        return "INVALID_TARGET"
+        return {"error": "invalid target"}
 
     t = TARGETS[target]
 
-    ssh = paramiko.SSHClient()
-    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-    ssh.connect(
-        hostname=t["host"],
-        username=t["user"],
-        key_filename=SSH_KEY,
-        timeout=10
-    )
+    try:
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        ssh.connect(
+            hostname=t["host"],
+            username=t["user"],
+            key_filename=SSH_KEY,
+            timeout=SSH_TIMEOUT
+        )
 
-    stdin, stdout, stderr = ssh.exec_command(cmd)
+        stdin, stdout, stderr = ssh.exec_command(cmd)
+        out = stdout.read().decode().strip()
+        err = stderr.read().decode().strip()
+        ssh.close()
 
-    out = stdout.read().decode().strip()
-    err = stderr.read().decode().strip()
+        if err:
+            return {"error": err}
 
-    ssh.close()
+        return {"output": out}
 
-    if err:
-        return f"ERROR: {err}"
-
-    return out
-
+    except Exception as e:
+        return {"error": str(e)}
 
 # =========================
-# STATUS (REAL RUNNING STATE)
+# LAB STATUS
 # =========================
-@app.route("/api/<target>/status")
-def status(target):
-    if target not in TARGETS:
+@app.route("/api/<lab>/status")
+def lab_status(lab):
+    if lab not in TARGETS or not TARGETS[lab]["compose_dir"]:
         return jsonify(error="Unknown lab"), 404
 
-    t = TARGETS[target]
-
+    t = TARGETS[lab]
     cmd = (
         f"cd {t['compose_dir']} && "
         "for c in $(docker compose ps -q); do "
@@ -72,63 +88,86 @@ def status(target):
         "done"
     )
 
-    out = run_ssh(target, cmd)
-
-    running = "true" in out.lower()
+    r = run_ssh(lab, cmd)
+    running = "true" in r.get("output", "").lower()
 
     return jsonify(
-        lab=target,
+        lab=lab,
         status="running" if running else "stopped"
     )
-
 
 # =========================
 # START LAB
 # =========================
-@app.route("/api/<target>/start")
-def start(target):
-    if target not in TARGETS:
+@app.route("/api/<lab>/start")
+def lab_start(lab):
+    if lab not in TARGETS or not TARGETS[lab]["compose_dir"]:
         return jsonify(error="Unknown lab"), 404
 
-    t = TARGETS[target]
+    cmd = f"cd {TARGETS[lab]['compose_dir']} && docker compose up -d"
+    r = run_ssh(lab, cmd)
 
-    cmd = f"cd {t['compose_dir']} && docker compose up -d"
-    out = run_ssh(target, cmd)
-
-    return jsonify(
-        lab=target,
-        result="started",
-        raw=out
-    )
-
+    return jsonify(lab=lab, result="started", raw=r)
 
 # =========================
 # STOP LAB
 # =========================
-@app.route("/api/<target>/stop")
-def stop(target):
-    if target not in TARGETS:
+@app.route("/api/<lab>/stop")
+def lab_stop(lab):
+    if lab not in TARGETS or not TARGETS[lab]["compose_dir"]:
         return jsonify(error="Unknown lab"), 404
 
-    t = TARGETS[target]
+    cmd = f"cd {TARGETS[lab]['compose_dir']} && docker compose down"
+    r = run_ssh(lab, cmd)
 
-    cmd = f"cd {t['compose_dir']} && docker compose down"
-    out = run_ssh(target, cmd)
-
-    return jsonify(
-        lab=target,
-        result="stopped",
-        raw=out
-    )
-
+    return jsonify(lab=lab, result="stopped", raw=r)
 
 # =========================
-# LIST ALL LABS
+# MIRROR ENABLE
+# =========================
+@app.route("/api/mirror/enable", methods=["POST"])
+def mirror_enable():
+    m = MIRROR
+
+    cmd = f"""
+ovs-vsctl \
+-- --id=@dst get Port {m['dst']} \
+-- --id=@m create Mirror name={m['name']} \
+select-all=true \
+output-port=@dst \
+-- set Bridge {m['bridge']} mirrors=@m
+"""
+    r = run_ssh("proxmox", cmd)
+    return jsonify(enabled=True, raw=r)
+
+# =========================
+# MIRROR DISABLE
+# =========================
+@app.route("/api/mirror/disable", methods=["POST"])
+def mirror_disable():
+    m = MIRROR
+    cmd = f"""
+ovs-vsctl clear Bridge {m['bridge']} mirrors
+ovs-vsctl -- --all destroy Mirror
+"""
+    r = run_ssh("proxmox", cmd)
+    return jsonify(enabled=False, raw=r)
+
+# =========================
+# MIRROR STATUS
+# =========================
+@app.route("/api/mirror/status")
+def mirror_status():
+    r = run_ssh("proxmox", "ovs-vsctl list Mirror | grep name")
+    enabled = MIRROR["name"] in r.get("output", "")
+    return jsonify(enabled=enabled)
+
+# =========================
+# LIST LABS
 # =========================
 @app.route("/api/labs")
-def labs():
+def list_labs():
     return jsonify(TARGETS)
-
 
 # =========================
 # RUN
