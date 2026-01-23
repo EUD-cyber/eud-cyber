@@ -65,6 +65,9 @@ runcmd:
   - set -x
   - export DEBIAN_FRONTEND=noninteractive
 
+  - ip addr flush dev eth2
+  - ip link set eth2 up
+
   # Update repositories
   - apt-get update
 
