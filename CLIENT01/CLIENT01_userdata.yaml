@@ -22,8 +22,8 @@ package_update: true
 package_upgrade: true
 
 packages:
-  - xfce4
-  - xfce4-goodies
+  - ubuntu-mate-core
+  - lightdm
   - xrdp
   - xorgxrdp
   - network-manager
@@ -31,27 +31,31 @@ packages:
   - qemu-guest-agent
 
 write_files:
-  # Tell XRDP to start XFCE (CRITICAL)
+  # Force XRDP to start MATE (critical)
   - path: /home/ubuntu/.xsession
     owner: root:root
     permissions: "0644"
     content: |
-      startxfce4
+      exec mate-session
 
 runcmd:
   - export DEBIAN_FRONTEND=noninteractive
 
-  # Enable base services
+  # Base services
   - systemctl enable ssh
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
 
-  # XRDP setup
+  # Display manager
+  - systemctl disable gdm3 || true
+  - systemctl enable lightdm
+
+  # XRDP
   - adduser xrdp ssl-cert
   - systemctl enable xrdp
   - systemctl restart xrdp
 
-  # Ensure correct ownership
+  # Safety: ensure correct ownership
   - chown ubuntu:ubuntu /home/ubuntu/.xsession
 
   # Reboot after install
