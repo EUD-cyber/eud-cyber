@@ -22,8 +22,8 @@ package_update: true
 package_upgrade: true
 
 packages:
-  - ubuntu-mate-core
-  - lightdm
+  - lxqt
+  - dbus-x11
   - xrdp
   - xorgxrdp
   - network-manager
@@ -31,12 +31,21 @@ packages:
   - qemu-guest-agent
 
 write_files:
-  # Force XRDP to start MATE (critical)
+  # XRDP session startup (no display manager)
   - path: /home/ubuntu/.xsession
     owner: root:root
-    permissions: "0644"
+    permissions: "0755"
     content: |
-      exec mate-session
+      exec dbus-launch --exit-with-session startlxqt
+
+  # Force XRDP WM startup
+  - path: /etc/xrdp/startwm.sh
+    permissions: "0755"
+    content: |
+      #!/bin/sh
+      unset DBUS_SESSION_BUS_ADDRESS
+      unset XDG_RUNTIME_DIR
+      exec dbus-launch --exit-with-session startlxqt
 
 runcmd:
   - export DEBIAN_FRONTEND=noninteractive
@@ -46,18 +55,15 @@ runcmd:
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
 
-  # Display manager
-  - systemctl disable gdm3 || true
-  - systemctl enable lightdm
-
   # XRDP
   - adduser xrdp ssl-cert
   - systemctl enable xrdp
   - systemctl restart xrdp
+  - systemctl restart xrdp-sesman
 
-  # Safety: ensure correct ownership
+  # Safety ownership fix
   - chown ubuntu:ubuntu /home/ubuntu/.xsession
-
-  # Reboot after install
+  
+  # Reboot once
   - sleep 10
   - reboot
