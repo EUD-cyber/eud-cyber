@@ -27,11 +27,10 @@ BRIDGE="vmbr0"
 BRIDGE1="oobm"
 OOBM_IP="ip=172.20.0.1/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
-SRC_USERDATA="$(pwd)/GUACVM/GUAC_userdata.yaml"     # source file
-DST_USERDATA="GUAC_userdata.yaml"            # destination filename
+SRC_USERDATA="$(pwd)/GUACVM/GUAC_userdata.yaml"    
+DST_USERDATA="GUAC_userdata.yaml"            
 IP_ADDR=""
 DNS_SERVER=""
-# ==================
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
 
