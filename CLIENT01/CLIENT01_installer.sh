@@ -78,6 +78,8 @@ qm create $VMID \
   --name "$VM_NAME" \
   --memory $MEMORY \
   --cores $CORES \
+  --bios seabios \
+  --machine q35 \
   --cpu host \
   --net0 virtio,bridge=$BRIDGE \
   --net1 virtio,bridge=$BRIDGE1 \
@@ -96,6 +98,7 @@ qm set $VMID \
   --ide2 $DISK_STORAGE:cloudinit \
   --boot c \
   --bootdisk scsi0 \
+  --vga std
 
 # ===== Enable QEMU Guest Agent =====
 qm set $VMID --agent enabled=1
