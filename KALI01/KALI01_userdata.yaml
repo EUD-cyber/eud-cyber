@@ -55,6 +55,12 @@ write_files:
           [Install]
           WantedBy=multi-user.target
 
+      - path: /etc/profile.d/qt-x11.sh
+        permissions: "0644"
+        content: |
+          export QT_QPA_PLATFORM=xcb
+
+
 runcmd:
   - set -x
   - export DEBIAN_FRONTEND=noninteractive
@@ -84,6 +90,11 @@ runcmd:
   - wget -P /home/kali/Desktop https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/testips.sh
   - chmod +x /home/kali/Desktop/testips.sh
   - chown kali:kali /home/kali/Desktop/testips.sh
+
+  - sed -i 's|^Exec=wireshark|Exec=env QT_QPA_PLATFORM=xcb wireshark|' /usr/share/applications/wireshark.desktop
+  - update-desktop-database
+  - dpkg-reconfigure -f noninteractive wireshark-common
+  - usermod -aG wireshark kali
 
   # ⭐ Run Kali tools install in background ⭐
   - nohup bash -c "set -x; export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y kali-linux-default" > /var/log/kali-install.log 2>&1 &
