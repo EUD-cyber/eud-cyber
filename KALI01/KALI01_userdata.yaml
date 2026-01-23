@@ -96,8 +96,13 @@ runcmd:
 
   - sed -i 's|^Exec=wireshark|Exec=env QT_QPA_PLATFORM=xcb wireshark|' /usr/share/applications/wireshark.desktop
   - update-desktop-database
+
+  - echo "wireshark-common wireshark-common/install-setuid boolean true" | debconf-set-selections
   - dpkg-reconfigure -f noninteractive wireshark-common
   - usermod -aG wireshark kali
+
+  # Ensure dumpcap has correct capabilities (failsafe)
+  - setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap || true
 
   # ⭐ Run Kali tools install in background ⭐
   - nohup bash -c "set -x; export DEBIAN_FRONTEND=noninteractive; apt-get update && apt-get install -y kali-linux-default" > /var/log/kali-install.log 2>&1 &
