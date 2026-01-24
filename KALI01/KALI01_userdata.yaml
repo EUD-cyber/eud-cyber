@@ -19,12 +19,6 @@ disable_root: true
 chpasswd:
   expire: false
 
-#power_state:
-#  mode: reboot
-#  message: "Reboot after initial cloud-init setup"
-#  timeout: 30
-#  condition: true
-
 packages:
   - kali-desktop-xfce
   - xorg
@@ -115,3 +109,9 @@ runcmd:
   - systemctl enable kali-tools-install.service
   - sed -i 's|^Exec=wireshark|Exec=env QT_QPA_PLATFORM=xcb wireshark|' /usr/share/applications/wireshark.desktop
   - update-desktop-database
+
+#power_state:
+#  mode: reboot
+#  message: "Reboot after initial cloud-init setup"
+#  timeout: 30
+#  condition: true
