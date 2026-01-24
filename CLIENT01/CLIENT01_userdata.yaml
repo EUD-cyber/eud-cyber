@@ -40,7 +40,7 @@ write_files:
       unset XAUTHORITY
       unset SESSION_MANAGER
       unset DBUS_SESSION_BUS_ADDRESS
-      exec gnome-session &
+      exec startxfce4 &
 
    # Override service to allow external VNC
   - path: /etc/systemd/system/tigervncserver@:1.service.d/override.conf
