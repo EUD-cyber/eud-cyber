@@ -32,6 +32,7 @@ packages:
   - openssh-server
   - tigervnc-standalone-server
   - tigervnc-common
+  - tigervnc-xorg-extension
   - curl
   - wireshark
   - ethtool
@@ -46,22 +47,6 @@ write_files:
       unset SESSION_MANAGER
       unset DBUS_SESSION_BUS_ADDRESS
       exec startxfce4 &
-
-  - path: /etc/systemd/system/vncserver.service
-    permissions: "0644"
-    content: |
-      [Unit]
-      Description=TigerVNC server
-      After=network.target
-
-      [Service]
-      Type=forking
-      User=kali
-      ExecStart=/usr/bin/vncserver -localhost=no -geometry 1280x720 :1
-      ExecStop=/usr/bin/vncserver -kill :1
-
-      [Install]
-      WantedBy=multi-user.target
 
   - path: /etc/profile.d/qt-x11.sh
     permissions: "0644"
@@ -93,52 +78,37 @@ write_files:
       [Install]
       WantedBy=multi-user.target
 
+  - path: /etc/tigervnc/vncserver.users
+    permissions: "0644"
+    content: |
+      :1=kali
+      
 runcmd:
   - set -x
   - export DEBIAN_FRONTEND=noninteractive
-
-  # -------------------------
-  # Enable SSH
-  # -------------------------
   - systemctl enable ssh
 
-  # -------------------------
-  # Wireshark non-root capture
-  # -------------------------
   - echo "wireshark-common wireshark-common/install-setuid boolean true" | debconf-set-selections
   - dpkg-reconfigure -f noninteractive wireshark-common
   - usermod -aG wireshark kali
   - setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap || true
 
-  # -------------------------
-  # Create passive TAP device
-  # -------------------------
   - ip tuntap add dev tap_mirror0 mode tap user kali || true
   - ip link set tap_mirror0 up
   - ip addr flush dev tap_mirror0
 
-  # Disable all offloading (failsafe)
   - ethtool -K tap_mirror0 tx off rx off tso off gso off gro off lro off || true
 
-  # -------------------------
-  # VNC setup
-  # -------------------------
   - mkdir -p /home/kali/.vnc
   - mkdir -p /home/kali/.config/tigervnc
+  - touch /home/kali/.Xauthority
+  - chown kali:kali /home/kali/.Xauthority
+  - chmod 600 /home/kali/.Xauthority
   - chown -R kali:kali /home/kali/.vnc
   - chown -R kali:kali /home/kali/.config
   - su - kali -c "printf 'password\npassword\n' | vncpasswd"
-  - systemctl enable vncserver
-  - systemctl start vncserver
-
-  # -------------------------
-  # Desktop fix for Wireshark
-  # -------------------------
+  - systemctl daemon-reload
+  - systemctl enable tigervncserver@:1.service
+  - systemctl enable kali-tools-install.service
   - sed -i 's|^Exec=wireshark|Exec=env QT_QPA_PLATFORM=xcb wireshark|' /usr/share/applications/wireshark.desktop
   - update-desktop-database
-  - systemctl daemon-reload
-  - systemctl enable kali-tools-install.service
-  # -------------------------
-  # Optional Kali tools (background)
-  # -------------------------
- #  - nohup bash -c "apt-get update && apt-get install -y kali-linux-default" > /var/log/kali-install.log 2>&1 &
