@@ -83,6 +83,30 @@ write_files:
 
       [Install]
       WantedBy=multi-user.target
+
+  - path: /usr/local/bin/create-mirror-tap.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      ip tuntap add dev tap_mirror0 mode tap user kali || true
+      ip link set tap_mirror0 up
+      ip addr flush dev tap_mirror0
+      ethtool -K tap_mirror0 tx off rx off tso off gso off gro off lro off || true
+
+  - path: /etc/systemd/system/tap-mirror.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Create mirror TAP interface
+      After=network.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/create-mirror-tap.sh
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
       
 runcmd:
   - set -x
@@ -107,6 +131,8 @@ runcmd:
   - systemctl enable tigervncserver@:1.service
   - systemctl start tigervncserver@:1.service
   - systemctl enable kali-tools-install.service
+  - systemctl enable tap-mirror.service
+  - systemctl start tap-mirror.service
   - sed -i 's|^Exec=wireshark|Exec=env QT_QPA_PLATFORM=xcb wireshark|' /usr/share/applications/wireshark.desktop
   - update-desktop-database
 
