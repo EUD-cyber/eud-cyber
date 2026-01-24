@@ -36,9 +36,8 @@ TARGETS = {
 MIRROR = {
     "bridge": "lan1",
     "mirror_name": "lan1-mirror",
-    "int_port": "mirror-int",
-    "veth_ovs": "veth-mirror",
-    "veth_kali": "veth-kali"
+    "vm_prefix": "kali01",
+    "nic_index": 2   # eth2
 }
 
 # =========================
@@ -67,40 +66,45 @@ def run_ssh(target, cmd):
     return {"output": out}
 
 # =========================
-# MIRROR ENABLE (SAFE)
+# PROXMOX HELPERS
+# =========================
+def get_vmid_by_prefix(prefix):
+    cmd = f"qm list | awk '$2 ~ /^{prefix}/ {{print $1}}'"
+    r = run_ssh("proxmox", cmd)
+    vmids = r.get("output", "").splitlines()
+    return vmids[0] if vmids else None
+
+def get_tap_for_vm(prefix, nic_index):
+    vmid = get_vmid_by_prefix(prefix)
+    if not vmid:
+        return None
+    return f"tap{vmid}i{nic_index}"
+
+# =========================
+# MIRROR ENABLE
 # =========================
 @app.route("/api/mirror/enable", methods=["POST"])
 def mirror_enable():
     m = MIRROR
 
+    tap = get_tap_for_vm(m["vm_prefix"], m["nic_index"])
+    if not tap:
+        return jsonify(error="Kali VM not found"), 404
+
     cmd = f"""
-# --- Ensure internal mirror port ---
-ovs-vsctl --may-exist add-port {m['bridge']} {m['int_port']} \
--- set Interface {m['int_port']} type=internal
-
-# --- Ensure veth pair ---
-ip link show {m['veth_ovs']} >/dev/null 2>&1 || \
-ip link add {m['veth_ovs']} type veth peer name {m['veth_kali']}
-
-# --- Attach veth to OVS ---
-ovs-vsctl --may-exist add-port {m['bridge']} {m['veth_ovs']}
-ip link set {m['veth_ovs']} up
-
-# --- Clean existing mirrors ---
 ovs-vsctl clear Bridge {m['bridge']} mirrors
 ovs-vsctl -- --all destroy Mirror
 
-# --- Create mirror to INTERNAL PORT ONLY ---
 ovs-vsctl \
--- --id=@dst get Port {m['int_port']} \
+-- --id=@dst get Port {tap} \
 -- --id=@m create Mirror name={m['mirror_name']} select-all=true output-port=@dst \
 -- set Bridge {m['bridge']} mirrors=@m
 """
     r = run_ssh("proxmox", cmd)
+
     return jsonify(
         enabled=True,
-        output_port=m["int_port"],
-        veth=m["veth_ovs"],
+        output_port=tap,
         raw=r
     )
 
@@ -127,7 +131,7 @@ def mirror_status():
     return jsonify(enabled=enabled)
 
 # =========================
-# LAB CONTROL
+# LAB STATUS
 # =========================
 @app.route("/api/<lab>/status")
 def lab_status(lab):
@@ -146,6 +150,9 @@ def lab_status(lab):
 
     return jsonify(lab=lab, status="running" if running else "stopped")
 
+# =========================
+# START LAB
+# =========================
 @app.route("/api/<lab>/start")
 def lab_start(lab):
     if lab not in TARGETS or not TARGETS[lab]["compose_dir"]:
@@ -155,6 +162,9 @@ def lab_start(lab):
     r = run_ssh(lab, cmd)
     return jsonify(lab=lab, result="started", raw=r)
 
+# =========================
+# STOP LAB
+# =========================
 @app.route("/api/<lab>/stop")
 def lab_stop(lab):
     if lab not in TARGETS or not TARGETS[lab]["compose_dir"]:
