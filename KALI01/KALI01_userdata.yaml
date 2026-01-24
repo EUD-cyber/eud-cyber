@@ -19,11 +19,11 @@ disable_root: true
 chpasswd:
   expire: false
 
-power_state:
-  mode: reboot
-  message: "Reboot after initial cloud-init setup"
-  timeout: 30
-  condition: true
+#power_state:
+#  mode: reboot
+#  message: "Reboot after initial cloud-init setup"
+#  timeout: 30
+#  condition: true
 
 packages:
   - kali-desktop-xfce
