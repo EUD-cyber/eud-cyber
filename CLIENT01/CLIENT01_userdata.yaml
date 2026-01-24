@@ -22,48 +22,41 @@ package_update: true
 package_upgrade: true
 
 packages:
-  - lxqt
+  - tigervnc-standalone-server
+  - tigervnc-common
+  - ubuntu-desktop
   - dbus-x11
-  - xrdp
-  - xorgxrdp
-  - network-manager
+  - xauth
   - openssh-server
   - qemu-guest-agent
 
 write_files:
-  # XRDP session startup (no display manager)
-  - path: /home/ubuntu/.xsession
-    owner: root:root
-    permissions: "0755"
-    content: |
-      exec dbus-launch --exit-with-session startlxqt
-
-  # Force XRDP WM startup
-  - path: /etc/xrdp/startwm.sh
+  - path: /home/ubuntu/.vnc/xstartup
+    owner: ubuntu:ubuntu
     permissions: "0755"
     content: |
       #!/bin/sh
+      unset SESSION_MANAGER
       unset DBUS_SESSION_BUS_ADDRESS
-      unset XDG_RUNTIME_DIR
-      exec dbus-launch --exit-with-session startlxqt
+      exec gnome-session &
+
+  - path: /etc/tigervnc/vncserver.users
+    permissions: "0644"
+    content: |
+      :1=ubuntu
 
 runcmd:
   - export DEBIAN_FRONTEND=noninteractive
-
-  # Base services
   - systemctl enable ssh
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
-
-  # XRDP
-  - adduser xrdp ssl-cert
-  - systemctl enable xrdp
-  - systemctl restart xrdp
-  - systemctl restart xrdp-sesman
-
-  # Safety ownership fix
-  - chown ubuntu:ubuntu /home/ubuntu/.xsession
+  - mkdir -p /home/ubuntu/.vnc
+  - chown -R ubuntu:ubuntu /home/ubuntu/.vnc
+  - touch /home/ubuntu/.Xauthority
+  - chown ubuntu:ubuntu /home/ubuntu/.Xauthority
+  - chmod 600 /home/ubuntu/.Xauthority
+  - su - ubuntu -c "printf 'password\n' | vncpasswd -f > /home/ubuntu/.vnc/passwd"
+  - chmod 600 /home/ubuntu/.vnc/passwd
+  - systemctl daemon-reload
+  - systemctl enable tigervncserver@:1.service
   
-  # Reboot once
-  - sleep 10
-  - reboot
