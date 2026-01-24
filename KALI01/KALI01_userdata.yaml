@@ -70,6 +70,8 @@ runcmd:
   # Enable SSH
   # -------------------------
   - systemctl enable ssh
+  - apt update
+  - apt install xclip xsel
 
   # -------------------------
   # Wireshark non-root capture
