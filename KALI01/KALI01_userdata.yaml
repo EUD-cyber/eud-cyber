@@ -51,9 +51,13 @@ write_files:
 
   - path: /etc/systemd/system/tigervncserver@:1.service.d/override.conf
     permissions: "0644"
-    content: |
-      [Service]
-      ExecStart=/usr/bin/vncserver -localhost=no -geometry 1280x720 :1
+      content: |
+        [Service]
+        User=kali
+        Environment="HOME=/home/kali"
+        ExecStart=
+        ExecStart=/usr/bin/vncserver -localhost=no -geometry 1280x720 :1
+
 
   - path: /etc/profile.d/qt-x11.sh
     permissions: "0644"
