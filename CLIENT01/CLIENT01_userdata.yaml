@@ -64,7 +64,7 @@ runcmd:
   - echo ":1=kali" > /etc/tigervnc/vncserver.users
   
   # VNC password (no xauth involved)
-  - su - ubuntu -c "printf 'password\n' | vncpasswd -f > /home/ubuntu/.vnc/passwd"
+  - su - ubuntu -c "printf 'password\npassword\n' | vncpasswd"
   - chmod 600 /home/ubuntu/.vnc/passwd
   - chown ubuntu:ubuntu /home/ubuntu/.vnc/passwd
   - chown ubuntu:ubuntu /home/ubuntu
