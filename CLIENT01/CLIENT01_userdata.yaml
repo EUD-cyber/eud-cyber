@@ -41,19 +41,16 @@ write_files:
       unset DBUS_SESSION_BUS_ADDRESS
       exec gnome-session &
 
-  # TigerVNC user mapping
-  - path: /etc/tigervnc/vncserver.users
-    permissions: "0644"
-    content: |
-      :1=ubuntu
-
-  # Override service to allow external VNC
+   # Override service to allow external VNC
   - path: /etc/systemd/system/tigervncserver@:1.service.d/override.conf
     permissions: "0644"
     content: |
       [Service]
+      Type=simple
+      User=ubuntu
+      Environment="HOME=/home/ubuntu"
       ExecStart=
-      ExecStart=/usr/bin/vncserver -localhost=no -geometry 1280x720 :1
+      ExecStart=/usr/bin/vncserver -fg -localhost=no -geometry 1280x720 :1
 
 runcmd:
   - export DEBIAN_FRONTEND=noninteractive
@@ -62,15 +59,18 @@ runcmd:
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
 
-  # VNC dirs
   - mkdir -p /home/ubuntu/.vnc
-  - chown -R ubuntu:ubuntu /home/ubuntu/.vnc
-
+  - mkdir -p /home/kali/.config/tigervnc
+  - echo ":1=kali" > /etc/tigervnc/vncserver.users
+  
   # VNC password (no xauth involved)
   - su - ubuntu -c "printf 'password\n' | vncpasswd -f > /home/ubuntu/.vnc/passwd"
   - chmod 600 /home/ubuntu/.vnc/passwd
   - chown ubuntu:ubuntu /home/ubuntu/.vnc/passwd
   - chown ubuntu:ubuntu /home/ubuntu
+  - chown ubuntu:ubuntu /home/ubuntu/.vnc
+  - chown ubuntu:ubuntu /home/ubuntu/tigervnc
+  - echo ":1=ubuntu" > /etc/tigervnc/vncserver.users
 
 
   # Enable VNC service
