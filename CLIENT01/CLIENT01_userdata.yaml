@@ -24,7 +24,7 @@ package_upgrade: true
 packages:
   - tigervnc-standalone-server
   - tigervnc-common
-  - ubuntu-desktop
+  - ubuntu-desktop-minimal
   - dbus-x11
   - xauth
   - openssh-server
