@@ -18,6 +18,12 @@ disable_root: true
 chpasswd:
   expire: false
 
+power_state:
+  mode: reboot
+  message: "Reboot after cloud-init setup"
+  timeout: 30
+  condition: true
+
 package_update: true
 package_upgrade: true
 
