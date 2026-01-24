@@ -61,8 +61,7 @@ runcmd:
   - systemctl start qemu-guest-agent
 
   - mkdir -p /home/ubuntu/.vnc
-  - mkdir -p /home/kali/.config/tigervnc
-  - echo ":1=kali" > /etc/tigervnc/vncserver.users
+  - mkdir -p /home/ubuntu/.config/tigervnc
   
   # VNC password (no xauth involved)
   - su - ubuntu -c "printf 'password\npassword\n' | vncpasswd"
