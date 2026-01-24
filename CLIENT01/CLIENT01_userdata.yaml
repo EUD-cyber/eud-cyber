@@ -41,6 +41,13 @@ write_files:
       unset DBUS_SESSION_BUS_ADDRESS
       exec /etc/X11/Xsession startxfce4
 
+  - path: /etc/tigervnc/vncserver-config-defaults
+    permissions: "0644"
+    content: |
+      Default: $localhost = "no";
+      Default: $geometry = "1920x1200";
+
+
 runcmd:
   - export DEBIAN_FRONTEND=noninteractive
 
