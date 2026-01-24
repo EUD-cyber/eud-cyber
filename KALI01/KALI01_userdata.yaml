@@ -93,6 +93,7 @@ runcmd:
   # VNC setup
   # -------------------------
   - mkdir -p /home/kali/.vnc
+  - mkdir -p /home/kali/.config/tigervnc
   - chown -R kali:kali /home/kali/.vnc
   - su - kali -c "printf 'password\npassword\n\n' | vncpasswd"
   - systemctl enable vncserver
