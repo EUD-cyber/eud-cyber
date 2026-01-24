@@ -94,7 +94,7 @@ write_files:
       WantedBy=multi-user.target
 
 runcmd:
-  - set -eux
+  - set -x
   - export DEBIAN_FRONTEND=noninteractive
 
   # -------------------------
@@ -127,7 +127,7 @@ runcmd:
   - mkdir -p /home/kali/.config/tigervnc
   - chown -R kali:kali /home/kali/.vnc
   - chown -R kali:kali /home/kali/.config
-  - su - kali -c "printf 'password\npassword\n\n' | vncpasswd"
+  - su - kali -c "printf 'password\npassword\n' | vncpasswd -f" || true
   - systemctl enable vncserver
   - systemctl start vncserver
 
