@@ -39,9 +39,9 @@ write_files:
       #!/bin/sh
       unset SESSION_MANAGER
       unset DBUS_SESSION_BUS_ADDRESS
-      exec /etc/X11/Xsession startxfce4 &
+      exec /etc/X11/Xsession startxfce4
 
-  runcmd:
+runcmd:
   - export DEBIAN_FRONTEND=noninteractive
 
   - systemctl enable ssh
