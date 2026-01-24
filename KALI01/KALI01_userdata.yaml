@@ -53,7 +53,6 @@ write_files:
     permissions: "0644"
     content: |
       [Service]
-      ExecStart=
       ExecStart=/usr/bin/vncserver -localhost=no -geometry 1280x720 :1
 
   - path: /etc/profile.d/qt-x11.sh
