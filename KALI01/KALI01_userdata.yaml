@@ -116,10 +116,18 @@ runcmd:
   - dpkg-reconfigure -f noninteractive wireshark-common
   - usermod -aG wireshark kali
   - setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap || true
+
   #- ip tuntap add dev tap_mirror0 mode tap user kali || true
   #- ip link set tap_mirror0 up
   #- ip addr flush dev tap_mirror0
   #- ethtool -K tap_mirror0 tx off rx off tso off gso off gro off lro off || true
+  #new config test
+  - ip addr flush dev eth2
+  - ip link set eth2 up
+  - ethtool -K eth2 tx off rx off tso off gso off gro off lro off || true
+  - sysctl -w net.ipv4.ip_forward=0
+  - iptables -P FORWARD DROP
+  #new config test stop
   - mkdir -p /home/kali/.vnc
   - mkdir -p /home/kali/.config/tigervnc
   - echo ":1=kali" > /etc/tigervnc/vncserver.users
