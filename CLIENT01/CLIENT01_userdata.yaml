@@ -39,7 +39,7 @@ write_files:
       #!/bin/sh
       unset SESSION_MANAGER
       unset DBUS_SESSION_BUS_ADDRESS
-      exec startxfce4 &
+      exec /etc/X11/Xsession startxfce4 &
 
   runcmd:
   - export DEBIAN_FRONTEND=noninteractive
@@ -50,11 +50,13 @@ write_files:
 
   - mkdir -p /home/ubuntu/.vnc
   - mkdir -p /home/ubuntu/.config/tigervnc
+  - touch /home/ubuntu/.Xauthority
   
   # VNC password (no xauth involved)
   - chown -R ubuntu:ubuntu /home/ubuntu
   - chown -R ubuntu:ubuntu /home/ubuntu/.vnc
   - chown -R ubuntu:ubuntu /home/ubuntu/tigervnc
+  - chown -R ubuntu:ubuntu /home/ubuntu/.Xauthority
   - echo ":1=ubuntu" > /etc/tigervnc/vncserver.users
   - su - ubuntu -c "printf 'password\npassword\n' | vncpasswd"
 
