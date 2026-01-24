@@ -24,7 +24,8 @@ package_upgrade: true
 packages:
   - tigervnc-standalone-server
   - tigervnc-common
-  - ubuntu-desktop-minimal
+  - xfce4
+  - xfce4-goodies
   - dbus-x11
   - openssh-server
   - qemu-guest-agent
