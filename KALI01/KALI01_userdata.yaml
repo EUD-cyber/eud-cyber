@@ -19,6 +19,12 @@ disable_root: true
 chpasswd:
   expire: false
 
+power_state:
+  mode: reboot
+  message: "Reboot after initial cloud-init setup"
+  timeout: 30
+  condition: true
+
 packages:
   - kali-desktop-xfce
   - xorg
@@ -61,6 +67,31 @@ write_files:
     permissions: "0644"
     content: |
       export QT_QPA_PLATFORM=xcb
+
+  - path: /usr/local/bin/install-kali-tools.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -e
+      apt-get update
+      apt-get install -y kali-linux-default
+      touch /var/lib/kali-tools-installed
+
+  - path: /etc/systemd/system/kali-tools-install.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Install Kali tools after first boot
+      After=network-online.target
+      Wants=network-online.target
+      ConditionPathExists=!/var/lib/kali-tools-installed
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/install-kali-tools.sh
+
+      [Install]
+      WantedBy=multi-user.target
 
 runcmd:
   - set -eux
@@ -105,8 +136,9 @@ runcmd:
   # -------------------------
   - sed -i 's|^Exec=wireshark|Exec=env QT_QPA_PLATFORM=xcb wireshark|' /usr/share/applications/wireshark.desktop
   - update-desktop-database
-
+  - systemctl daemon-reload
+  - systemctl enable kali-tools-install.service
   # -------------------------
   # Optional Kali tools (background)
   # -------------------------
-  - nohup bash -c "apt-get update && apt-get install -y kali-linux-default" > /var/log/kali-install.log 2>&1 &
+ #  - nohup bash -c "apt-get update && apt-get install -y kali-linux-default" > /var/log/kali-install.log 2>&1 &
