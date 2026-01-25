@@ -24,33 +24,25 @@ package_upgrade: true
 packages:
   - tigervnc-standalone-server
   - tigervnc-common
-  - xfce4
-  - xfce4-goodies
-  - dbus-x11
+  - tigervnc-xorg-extension
+  - tigervnc-viewer
+  - ubuntu-gnome-desktop
   - openssh-server
   - qemu-guest-agent
 
 write_files:
-  # xstartup (NO XAUTHORITY)
   - path: /home/ubuntu/.vnc/xstartup
     owner: root:root
     permissions: "0755"
     content: |
       #!/bin/sh
-      unset SESSION_MANAGER
-      unset DBUS_SESSION_BUS_ADDRESS
-      exec /etc/X11/Xsession startxfce4
-
-  - path: /etc/tigervnc/vncserver-config-defaults
-    permissions: "0644"
-    content: |
-      Default: $localhost = "no";
-      Default: $geometry = "1920x1200";
-
+      [ -x /etc/vnc/xstartup ] && exec /etc/vnc/xstartup
+      [ -r $HOME/.Xresources ] && xrdb $HOME/.Xresources
+      vncconfig -iconic &
+      dbus-launch --exit-with-session gnome-session &
 
 runcmd:
   - export DEBIAN_FRONTEND=noninteractive
-
   - systemctl enable ssh
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
@@ -67,11 +59,10 @@ runcmd:
   - echo ":1=ubuntu" > /etc/tigervnc/vncserver.users
   - su - ubuntu -c "printf 'password\npassword\n' | vncpasswd"
 
-
-
-  # Enable VNC service
   - systemctl daemon-reload
-  - systemctl enable tigervncserver@:1.service
+#  - systemctl enable tigervncserver@:1.service
+  - systemctl enable gdm
+  - systemctl start gdm
 
 #power_state:
 #  mode: reboot
