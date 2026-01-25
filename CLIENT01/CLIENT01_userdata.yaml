@@ -26,6 +26,7 @@ packages:
   - tigervnc-common
   - tigervnc-xorg-extension
   - tigervnc-viewer
+  - dbus-x11
   - ubuntu-gnome-desktop
   - openssh-server
   - qemu-guest-agent
