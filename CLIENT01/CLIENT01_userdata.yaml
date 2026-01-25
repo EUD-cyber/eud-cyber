@@ -22,49 +22,33 @@ package_update: true
 package_upgrade: true
 
 packages:
-  - tigervnc-standalone-server
-  - tigervnc-common
-  - tigervnc-xorg-extension
-  - tigervnc-viewer
+  - ubuntu-desktop
+  - xrdp
+  - gnome-flashback
+  - metacity
   - dbus-x11
-  - xterm
-  - ubuntu-gnome-desktop
   - openssh-server
   - qemu-guest-agent
 
 write_files:
-  - path: /home/ubuntu/.vnc/xstartup
+  - path: /home/ubuntu/.xsession
     owner: root:root
-    permissions: "0755"
+    permissions: '0755'
     content: |
       #!/bin/sh
-      [ -x /etc/vnc/xstartup ] && exec /etc/vnc/xstartup
-      [ -r $HOME/.Xresources ] && xrdb $HOME/.Xresources
-      vncconfig -iconic &
-      dbus-launch --exit-with-session gnome-session &
+      gsettings set org.gnome.gnome-flashback.desktop show-desktop-icons true
+      exec gnome-session --session=gnome-flashback-metacity
+  
 
 runcmd:
   - export DEBIAN_FRONTEND=noninteractive
   - systemctl enable ssh
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
-
-  - mkdir -p /home/ubuntu/.vnc
-  - mkdir -p /home/ubuntu/.config/tigervnc
-  - touch /home/ubuntu/.Xauthority
-  
-  # VNC password (no xauth involved)
-  - chown -R ubuntu:ubuntu /home/ubuntu
-  - chown -R ubuntu:ubuntu /home/ubuntu/.vnc
-  - chown -R ubuntu:ubuntu /home/ubuntu/tigervnc
-  - chown -R ubuntu:ubuntu /home/ubuntu/.Xauthority
-  - echo ":1=ubuntu" > /etc/tigervnc/vncserver.users
-  - su - ubuntu -c "printf 'password\npassword\n' | vncpasswd"
-
+  - chown -R ubuntu:ubuntu /home/ubuntu/.xsession
   - systemctl daemon-reload
-#  - systemctl enable tigervncserver@:1.service
-  - systemctl enable gdm
-  - systemctl start gdm
+  - systemctl enable xrdp
+  - systemctl restart xrdp
 
 #power_state:
 #  mode: reboot
