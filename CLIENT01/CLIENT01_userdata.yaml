@@ -47,7 +47,8 @@ runcmd:
   - systemctl enable ssh
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
-  - chown -R ubuntu:ubuntu /home/ubuntu/.xsession
+  - chown -R ubuntu:ubuntu /home/ubuntu
+  - chown -R ubuntu:ubuntu /home/ubuntu/.xsession 
   - systemctl daemon-reload
   - systemctl enable xrdp
   - systemctl restart xrdp
