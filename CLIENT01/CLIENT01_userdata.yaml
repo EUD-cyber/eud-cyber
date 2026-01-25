@@ -29,6 +29,8 @@ packages:
   - dbus-x11
   - openssh-server
   - qemu-guest-agent
+  - gnome-panel metacity
+
 
 write_files:
   - path: /home/ubuntu/.xsession
