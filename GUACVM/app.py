@@ -1,17 +1,12 @@
 from flask import Flask, jsonify
 import paramiko
+import re
 
 app = Flask(__name__)
 
-# =========================
-# SSH CONFIG
-# =========================
 SSH_KEY = "/root/.ssh/shared_admin_ed25519"
 SSH_TIMEOUT = 10
 
-# =========================
-# TARGETS
-# =========================
 TARGETS = {
     "juice-vuln1": {
         "host": "172.20.0.10",
@@ -30,14 +25,9 @@ TARGETS = {
     }
 }
 
-# =========================
-# MIRROR CONFIG (FINAL)
-# =========================
 MIRROR = {
     "bridge": "lan1",
-    "mirror_name": "lan1-mirror",
-    "vm_prefix": "kali01",
-    "nic_index": 2   # eth2
+    "mirror_name": "lan1-mirror"
 }
 
 # =========================
@@ -56,57 +46,68 @@ def run_ssh(target, cmd):
     )
 
     stdin, stdout, stderr = ssh.exec_command(cmd)
-    out = stdout.read().decode().strip()
-    err = stderr.read().decode().strip()
+    out = stdout.read().decode()
+    err = stderr.read().decode()
     ssh.close()
 
-    if err:
-        return {"error": err}
+    if err.strip():
+        return {"error": err.strip()}
 
-    return {"output": out}
+    return {"output": out.strip()}
+
 
 # =========================
-# PROXMOX HELPERS
+# FIND KALI TAP INTERFACE
 # =========================
-def get_vmid_by_prefix(prefix):
-    cmd = f"qm list | awk '$2 ~ /^{prefix}/ {{print $1}}'"
+def find_kali_tap():
+    cmd = "qm list"
     r = run_ssh("proxmox", cmd)
-    vmids = r.get("output", "").splitlines()
-    return vmids[0] if vmids else None
 
-def get_tap_for_vm(prefix, nic_index):
-    vmid = get_vmid_by_prefix(prefix)
-    if not vmid:
-        return None
-    return f"tap{vmid}i{nic_index}"
+    if "output" not in r:
+        return None, "qm list failed"
+
+    for line in r["output"].splitlines():
+        if re.search(r"kali", line, re.IGNORECASE):
+            parts = line.split()
+            vmid = parts[0]
+            tap = f"tap{vmid}i2"
+            return tap, None
+
+    return None, "No Kali VM found"
+
 
 # =========================
 # MIRROR ENABLE
 # =========================
 @app.route("/api/mirror/enable", methods=["POST"])
 def mirror_enable():
+
+    tap_iface, err = find_kali_tap()
+    if err:
+        return jsonify(error=err), 500
+
     m = MIRROR
 
-    tap = get_tap_for_vm(m["vm_prefix"], m["nic_index"])
-    if not tap:
-        return jsonify(error="Kali VM not found"), 404
-
     cmd = f"""
+# Clean old mirrors
 ovs-vsctl clear Bridge {m['bridge']} mirrors
 ovs-vsctl -- --all destroy Mirror
 
+# Create mirror to Kali TAP interface
 ovs-vsctl \
--- --id=@dst get Port {tap} \
+-- --id=@dst get Port {tap_iface} \
 -- --id=@m create Mirror name={m['mirror_name']} select-all=true output-port=@dst \
 -- set Bridge {m['bridge']} mirrors=@m
 """
+
     r = run_ssh("proxmox", cmd)
 
     return jsonify(
         enabled=True,
-        output_port=tap,
+        kali_interface=tap_iface,
         raw=r
     )
+
 
 # =========================
 # MIRROR DISABLE
@@ -121,17 +122,19 @@ ovs-vsctl -- --all destroy Mirror
     r = run_ssh("proxmox", cmd)
     return jsonify(enabled=False, raw=r)
 
+
 # =========================
 # MIRROR STATUS
 # =========================
 @app.route("/api/mirror/status")
 def mirror_status():
-    r = run_ssh("proxmox", "ovs-vsctl list Mirror | grep name")
+    r = run_ssh("proxmox", "ovs-vsctl list Mirror")
     enabled = MIRROR["mirror_name"] in r.get("output", "")
     return jsonify(enabled=enabled)
 
+
 # =========================
-# LAB STATUS
+# LAB CONTROL
 # =========================
 @app.route("/api/<lab>/status")
 def lab_status(lab):
@@ -150,9 +153,7 @@ def lab_status(lab):
 
     return jsonify(lab=lab, status="running" if running else "stopped")
 
-# =========================
-# START LAB
-# =========================
+
 @app.route("/api/<lab>/start")
 def lab_start(lab):
     if lab not in TARGETS or not TARGETS[lab]["compose_dir"]:
@@ -162,9 +163,7 @@ def lab_start(lab):
     r = run_ssh(lab, cmd)
     return jsonify(lab=lab, result="started", raw=r)
 
-# =========================
-# STOP LAB
-# =========================
+
 @app.route("/api/<lab>/stop")
 def lab_stop(lab):
     if lab not in TARGETS or not TARGETS[lab]["compose_dir"]:
@@ -174,12 +173,14 @@ def lab_stop(lab):
     r = run_ssh(lab, cmd)
     return jsonify(lab=lab, result="stopped", raw=r)
 
+
 # =========================
 # LIST LABS
 # =========================
 @app.route("/api/labs")
 def list_labs():
     return jsonify(TARGETS)
+
 
 # =========================
 # RUN
