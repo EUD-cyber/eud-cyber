@@ -1,16 +1,34 @@
 services:
 
-  mariadb:
-    image: mariadb:11
-    container_name: rd-db
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: rd
-      MYSQL_USER: rd
-      MYSQL_PASSWORD: rdpass
+  rdmariadb:
+    image: bitnami/mariadb:10.5
+    container_name: radiusdesk-mariadb
+    restart: unless-stopped
     volumes:
-      - db_data:/var/lib/mysql
+      - rd_data:/bitnami/mariadb
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+      - MARIADB_ROOT_PASSWORD=rd
+      - MARIADB_USER=rd
+      - MARIADB_PASSWORD=rd
+      - MARIADB_DATABASE=rd
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-u", "root", "-prd"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  radiusdesk:
+    image: keegan337/radiusdesk:4.0.2
+    container_name: radiusdesk
+    restart: unless-stopped
+    depends_on:
+      rdmariadb:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+      - "1812:1812/udp"
+      - "1813:1813/udp"
 
   ldap:
     image: osixia/openldap:1.5.0
@@ -39,19 +57,7 @@ services:
     depends_on:
       - ldap
 
-  radiusdesk:
-    image: keegan337/radiusdesk:4.0.2
-    container_name: radiusdesk
-    restart: always
-    depends_on:
-      - mariadb
-      - ldap
-    ports:
-      - "8080:80"
-      - "1812:1812/udp"
-      - "1813:1813/udp"
-
 volumes:
-  db_data:
+  rd_data:
   ldap_data:
   ldap_config:
