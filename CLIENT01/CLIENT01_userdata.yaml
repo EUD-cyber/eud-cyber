@@ -22,33 +22,33 @@ package_update: true
 package_upgrade: true
 
 packages:
-  - ubuntu-desktop
   - xrdp
-  - gnome-flashback
-  - metacity
+  - xfce4
+  - xfce4-goodies
+  - thunar-volman
   - dbus-x11
+  - policykit-1
   - openssh-server
   - qemu-guest-agent
 
 write_files:
-  - path: /home/ubuntu/.xsession
-    owner: root:root
+  - path: /etc/xrdp/startwm.sh
     permissions: '0755'
     content: |
       #!/bin/sh
-      gsettings set org.gnome.gnome-flashback.desktop show-desktop-icons true
-      exec gnome-session --session=gnome-flashback-metacity
-  
+      unset DBUS_SESSION_BUS_ADDRESS
+      unset XDG_RUNTIME_DIR
+      exec startxfce4
 
 runcmd:
   - export DEBIAN_FRONTEND=noninteractive
   - systemctl enable ssh
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
-  - chown -R ubuntu:ubuntu /home/ubuntu/.xsession
   - systemctl daemon-reload
   - systemctl enable xrdp
   - systemctl restart xrdp
+  - chown -R ubuntu:ubuntu /home/ubuntu
 
 #power_state:
 #  mode: reboot
