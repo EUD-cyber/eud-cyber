@@ -1,25 +1,15 @@
 services:
-
   radius-db:
     image: mariadb:10.11
-    container_name: radius-db
-    restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: radius
       MYSQL_DATABASE: radius
       MYSQL_USER: radius
       MYSQL_PASSWORD: radius
-    volumes:
-      - db_data:/var/lib/mysql
 
   daloradius:
     build: ./daloradius
-    container_name: daloradius
-    restart: unless-stopped
     depends_on:
       - radius-db
     ports:
       - "8080:80"
-
-volumes:
-  db_data:
