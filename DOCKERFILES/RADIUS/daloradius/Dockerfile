@@ -1,13 +1,20 @@
-FROM php:7.4-apache-buster
+FROM php:7.4-apache
 
 RUN apt-get update && apt-get install -y \
     mariadb-client \
     unzip \
     curl \
-    ca-certificates \
-    php-pear && \
-    pear install DB && \
+    ca-certificates && \
     docker-php-ext-install mysqli
+
+# Install PEAR manually
+RUN curl -L https://pear.php.net/go-pear.phar -o /tmp/go-pear.phar && \
+    php /tmp/go-pear.phar <<EOF
+auto
+EOF
+
+# Install DB package for PEAR
+RUN pear install DB
 
 # Download daloRADIUS
 RUN rm -rf /var/www/html/* && \
