@@ -23,8 +23,12 @@ packages:
   - docker.io
 
 runcmd:
+  - apt-get update
+  - apt-get install -y docker-compose-v2 qemu-guest-agent
   - systemctl enable docker
   - systemctl start docker
+  - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent
   - mkdir /opt/radius
   - sudo mkdir -p /opt/radius
   - wget -P /opt/radius https://raw.githubusercontent.com/EUD-cyber/eud-cyber/DOCKERFILES/RADIUS/docker-compose.yml
