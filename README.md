@@ -31,9 +31,7 @@ webuser: admin webpass: admin
 appsrv01\
   freeradius \
    user: administrator pass: radius
-  openldap \
-   user: admin pass: Password1! 
-
+  
 Vulnsrv01 and 02 pre installede with juiceshop docker (not started)
 
 api on guacamole that pulls status on the juiceshop docker and can start and stop them from the gui \
