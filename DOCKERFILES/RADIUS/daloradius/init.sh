@@ -21,6 +21,7 @@ EOF
 
 chown www-data:www-data $CONFIG_FILE
 
+echo "Importing schema..."
 mysql -h radius-db -u radius -pradius radius < /var/www/html/contrib/db/mysql-daloradius.sql
 mysql -h radius-db -u radius -pradius radius < /var/www/html/contrib/db/fr2-mysql-daloradius-and-freeradius.sql
 
