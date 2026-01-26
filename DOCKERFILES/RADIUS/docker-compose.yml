@@ -2,34 +2,29 @@ services:
 
   mariadb:
     image: mariadb:10.11
-    container_name: radius-db
+    container_name: radiusdesk-db
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: radius
-      MYSQL_DATABASE: radius
-      MYSQL_USER: radius
-      MYSQL_PASSWORD: radius
+      MYSQL_ROOT_PASSWORD: radiusdesk
+      MYSQL_DATABASE: radiusdesk
+      MYSQL_USER: radiusdesk
+      MYSQL_PASSWORD: radiusdesk
     volumes:
       - db_data:/var/lib/mysql
 
-  freeradius:
-    build: ./freeradius
-    container_name: freeradius
-    restart: unless-stopped
-    depends_on:
-      - mariadb
-    ports:
-      - "1812:1812/udp"
-      - "1813:1813/udp"
-
-  daloradius:
-    build: ./daloradius
-    container_name: daloradius
+  radiusdesk:
+    image: chriswayg/radiusdesk:latest
+    container_name: radiusdesk
     restart: unless-stopped
     depends_on:
       - mariadb
     ports:
       - "8080:80"
+    environment:
+      DB_HOST: mariadb
+      DB_NAME: radiusdesk
+      DB_USER: radiusdesk
+      DB_PASS: radiusdesk
 
 volumes:
   db_data:
