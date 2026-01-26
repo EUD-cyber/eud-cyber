@@ -1,7 +1,10 @@
-FROM php:7.4-apache
+FROM php:7.4-apache-buster
 
 RUN apt-get update && apt-get install -y \
-    mariadb-client unzip curl ca-certificates \
+    mariadb-client \
+    unzip \
+    curl \
+    ca-certificates \
     php-pear && \
     pear install DB && \
     docker-php-ext-install mysqli
