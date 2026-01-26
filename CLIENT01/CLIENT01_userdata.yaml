@@ -22,33 +22,22 @@ package_update: true
 package_upgrade: true
 
 packages:
-  - xrdp
   - xfce4
   - xfce4-goodies
-  - thunar-volman
+  - xrdp
   - dbus-x11
-  - policykit-1
-  - openssh-server
-  - qemu-guest-agent
+  - sudo
 
-write_files:
-  - path: /etc/xrdp/startwm.sh
-    permissions: '0755'
-    content: |
-      #!/bin/sh
-      unset DBUS_SESSION_BUS_ADDRESS
-      unset XDG_RUNTIME_DIR
-      exec startxfce4
 
 runcmd:
   - export DEBIAN_FRONTEND=noninteractive
   - systemctl enable ssh
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
-  - systemctl daemon-reload
+  - echo "startxfce4" > /home/ubuntu/.xsession
+  - chown ubuntu:ubuntu /home/ubuntu/.xsession
   - systemctl enable xrdp
   - systemctl restart xrdp
-  - chown -R ubuntu:ubuntu /home/ubuntu
 
 #power_state:
 #  mode: reboot
