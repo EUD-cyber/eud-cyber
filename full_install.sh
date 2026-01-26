@@ -11,6 +11,7 @@ OPNSENSE="./OPNSENSE/OPNSENSE_installer.sh"
 OPNSENSECONF="./OPNSENSE/generate_config.sh"
 APPSRV01="./APPSRV01/APPSRV01_installer.sh"
 CLIENT01="./CLIENT01/CLIENT01_installer.sh"
+PACKETFENCE="./PACKETFENCE/PACKETFENCE_installer.sh"
 PREREQ="./pre_req.sh"
 KALI01="./KALI01/KALI01_installer.sh"
 WAZUH="./WAZUH/WAZUH_installer.sh"
@@ -33,6 +34,7 @@ echo "9) Create Windows 11 VM"
 echo "10) Create Windows server 2025 VM"
 echo "11) Create APPSRV01 VM"
 echo "12) Create Client01 VM"
+echo "13( Create PACKETFENCE VM"
 echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
 echo "99) Finish script"
@@ -91,6 +93,10 @@ case "$CHOICE" in
   12)
     echo "Staring Client01 VM creation... "
     bash "$CLIENT01"
+    ;;
+  13)
+    echo "Starting PACKETFENCE VM creation..."
+    bach $PACKETFENCE"
     ;;
   89)
     echo "Change proxmox repo to no-enterprise"
