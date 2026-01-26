@@ -12,16 +12,6 @@ services:
     volumes:
       - db_data:/var/lib/mysql
 
-  freeradius:
-    build: ./freeradius
-    container_name: freeradius
-    restart: unless-stopped
-    depends_on:
-      - radius-db
-    ports:
-      - "1812:1812/udp"
-      - "1813:1813/udp"
-
   daloradius:
     build: ./daloradius
     container_name: daloradius
