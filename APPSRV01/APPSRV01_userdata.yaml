@@ -20,7 +20,7 @@ packages:
   - curl
   - gnupg
   - lsb-release
-  - docker
+  - docker.io
 
 runcmd:
   - systemctl enable docker
