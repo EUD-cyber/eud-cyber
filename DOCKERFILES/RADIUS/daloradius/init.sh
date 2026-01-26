@@ -1,6 +1,5 @@
 #!/bin/bash
 
-echo "Waiting for database..."
 until mysql -h radius-db -u radius -pradius -e "SELECT 1" >/dev/null 2>&1; do
   sleep 5
 done
@@ -21,7 +20,6 @@ EOF
 
 chown www-data:www-data $CONFIG_FILE
 
-echo "Importing schema..."
 mysql -h radius-db -u radius -pradius radius < /var/www/html/contrib/db/mysql-daloradius.sql
 mysql -h radius-db -u radius -pradius radius < /var/www/html/contrib/db/fr2-mysql-daloradius-and-freeradius.sql
 
