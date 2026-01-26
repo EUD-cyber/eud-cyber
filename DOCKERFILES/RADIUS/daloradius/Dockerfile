@@ -1,29 +1,19 @@
-FROM ubuntu:24.04
+FROM php:7.4-apache
 
-RUN apt update && DEBIAN_FRONTEND=noninteractive apt install -y \
-    apache2 \
-    php \
-    php-cli \
-    php-mysql \
-    php-gd \
-    php-xml \
-    php-curl \
-    php-mbstring \
-    php-pear \
-    php-db \
-    unzip \
-    curl \
-    mariadb-client \
-    ca-certificates && \
-    rm -rf /var/www/html/*
+RUN apt-get update && apt-get install -y \
+    mariadb-client unzip curl ca-certificates \
+    php-pear && \
+    pear install DB && \
+    docker-php-ext-install mysqli
 
 # Download daloRADIUS
-RUN curl -L https://github.com/lirantal/daloradius/archive/refs/heads/master.zip -o /tmp/daloradius.zip && \
+RUN rm -rf /var/www/html/* && \
+    curl -L https://github.com/lirantal/daloradius/archive/refs/heads/master.zip -o /tmp/daloradius.zip && \
     unzip /tmp/daloradius.zip -d /tmp && \
     cp -r /tmp/daloradius-*/* /var/www/html/ && \
     rm -rf /tmp/daloradius.zip /tmp/daloradius-*
 
-# Fix Apache web root
+# Fix Apache webroot
 RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/app/operators|g' /etc/apache2/sites-enabled/000-default.conf && \
     echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
