@@ -1,6 +1,7 @@
 services:
   radius-db:
     image: mariadb:10.11
+    container_name: radius-db
     environment:
       MYSQL_ROOT_PASSWORD: radius
       MYSQL_DATABASE: radius
