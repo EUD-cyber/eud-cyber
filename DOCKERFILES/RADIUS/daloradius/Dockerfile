@@ -1,7 +1,8 @@
 FROM ubuntu:24.04
 
 RUN apt update && DEBIAN_FRONTEND=noninteractive apt install -y \
-    apache2 php php-mysql unzip curl mariadb-client ca-certificates && \
+    apache2 php php-mysql php-gd php-xml php-curl php-mbstring \
+    php-pear php-db unzip curl mariadb-client ca-certificates && \
     rm -rf /var/www/html/* && \
     curl -L https://github.com/lirantal/daloradius/archive/refs/heads/master.zip -o /tmp/daloradius.zip && \
     unzip /tmp/daloradius.zip -d /tmp && \
