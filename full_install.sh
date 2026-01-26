@@ -96,7 +96,7 @@ case "$CHOICE" in
     ;;
   13)
     echo "Starting PACKETFENCE VM creation..."
-    bash $PACKETFENCE"
+    bash "$PACKETFENCE"
     ;;
   89)
     echo "Change proxmox repo to no-enterprise"
