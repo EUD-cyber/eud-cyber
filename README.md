@@ -42,7 +42,6 @@ the api is listing on port 5000 on guacvm and the tasks.html uses that for pulli
 
 missing \
   ip address validation on vm opnsense and guacvm \
-  all input first so the script will run without input after \
   Problem with the WIN11 image, needs more testing 
   
 Network \
