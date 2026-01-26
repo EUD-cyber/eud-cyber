@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
 
   mariadb:
@@ -15,7 +13,7 @@ services:
       - db_data:/var/lib/mysql
 
   radiusdesk:
-    image: radiusdesk/radiusdesk:latest
+    image: chriswayg/radiusdesk:latest
     container_name: radiusdesk
     restart: unless-stopped
     depends_on:
