@@ -1,6 +1,6 @@
 services:
 
-  mariadb:
+  radius-db:
     image: mariadb:10.11
     container_name: radius-db
     restart: unless-stopped
@@ -17,7 +17,7 @@ services:
     container_name: freeradius
     restart: unless-stopped
     depends_on:
-      - mariadb
+      - radius-db
     ports:
       - "1812:1812/udp"
       - "1813:1813/udp"
@@ -27,7 +27,7 @@ services:
     container_name: daloradius
     restart: unless-stopped
     depends_on:
-      - mariadb
+      - radius-db
     ports:
       - "8080:80"
 
