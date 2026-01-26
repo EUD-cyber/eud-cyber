@@ -1,8 +1,20 @@
 FROM ubuntu:24.04
 
 RUN apt update && DEBIAN_FRONTEND=noninteractive apt install -y \
-    apache2 php php-mysql php-gd php-xml php-curl php-mbstring \
-    php-pear php-db unzip curl mariadb-client ca-certificates && \
+    apache2 \
+    php \
+    php-cli \
+    php-mysql \
+    php-gd \
+    php-xml \
+    php-curl \
+    php-mbstring \
+    php-pear \
+    php-db \
+    unzip \
+    curl \
+    mariadb-client \
+    ca-certificates && \
     rm -rf /var/www/html/*
 
 # Download daloRADIUS
@@ -11,11 +23,10 @@ RUN curl -L https://github.com/lirantal/daloradius/archive/refs/heads/master.zip
     cp -r /tmp/daloradius-*/* /var/www/html/ && \
     rm -rf /tmp/daloradius.zip /tmp/daloradius-*
 
-# Apache webroot
+# Fix Apache web root
 RUN sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/app/operators|g' /etc/apache2/sites-enabled/000-default.conf && \
     echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
-# Copy init script
 COPY init.sh /init.sh
 RUN chmod +x /init.sh
 
