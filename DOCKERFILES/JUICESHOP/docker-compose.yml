@@ -13,5 +13,5 @@ services:
               - SOLUTIONS=false
             volumes:
               - juice_data:/juice-shop/data
- volumes:
-    juice_data:
+          volumes:
+            juice_data:
