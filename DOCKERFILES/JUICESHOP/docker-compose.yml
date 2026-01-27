@@ -1,17 +1,17 @@
 services:
         
-          juiceshop:
-            image: bkimminich/juice-shop:latest
-            container_name: juiceshop
-            restart: unless-stopped
-            ports:
-              - "3000:3000"
-            environment:
-              - NODE_ENV=production
-              - CTFSHOWDIFFICULTY=1
-              - CTF_SHOW_HINTS=true
-              - SOLUTIONS=false
-            volumes:
-              - juice_data:/juice-shop/data
-          volumes:
-            juice_data:
+  juiceshop:
+    image: bkimminich/juice-shop:latest
+    container_name: juiceshop
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - CTFSHOWDIFFICULTY=1
+      - CTF_SHOW_HINTS=true
+      - SOLUTIONS=false
+    volumes:
+      - juice_data:/juice-shop/data
+volumes:
+  juice_data:
