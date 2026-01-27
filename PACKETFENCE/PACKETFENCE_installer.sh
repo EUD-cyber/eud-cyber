@@ -66,7 +66,7 @@ qm create $VMID \
   --bios seabios \
   --net0 virtio,bridge=$BRIDGE \
   --net1 virtio,bridge=$BRIDGE1 \
-  --ostype l26
+  --ostype l26 \
   --scsi0 ${DISK_STORAGE}:64 \
   --ide2 local:iso/$IMG_NAME,media=cdrom \
   --boot order="scsi0;ide2" \
@@ -74,10 +74,6 @@ qm create $VMID \
   --vga serial0 \
   --onboot 1
 
-cd /var/lib/vz/snippets
-python3 -m http.server 8000
-
-qm set VMID --args "-inst.ks=http://PROXMOX_IP:8000/packetfence.ks"
 
 # ===== Start VM =====
 echo "Starting VM $VMID ($VM_NAME)..."
