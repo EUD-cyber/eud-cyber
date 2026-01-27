@@ -20,31 +20,6 @@ packages:
   - curl
   - docker.io
 
-write_files:
-  - path: /opt/juiceshop/docker-compose.yml
-    owner: root:root
-    permissions: '0644'
-    content: |
-         services:
-        
-          juiceshop:
-            image: bkimminich/juice-shop:latest
-            container_name: juiceshop
-            restart: unless-stopped
-            ports:
-              - "3000:3000"
-            environment:
-              - NODE_ENV=production
-              - CTFSHOWDIFFICULTY=1
-              - CTF_SHOW_HINTS=true
-              - SOLUTIONS=false
-            volumes:
-              - juice_data:/juice-shop/data
-        
-         volumes:
-          juice_data:
-
-
 runcmd:
   - apt-get update
   - apt-get install -y docker-compose-v2 qemu-guest-agent
@@ -53,4 +28,5 @@ runcmd:
   - systemctl enable qemu-guest-agent
   - usermod -aG docker ubuntu
   - mkdir -p /opt/juiceshop
+  - wget -O /opt/juicehop/docker-compose.yaml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/JUICESHOP/docker-compose.yaml
 
