@@ -65,7 +65,7 @@ write_files:
       #!/bin/bash
       set -e
       apt-get update
-      apt-get install -y kali-linux-default
+      apt-get install -y kali-linux-default nikto 
       touch /var/lib/kali-tools-installed
 
   - path: /etc/systemd/system/kali-tools-install.service
