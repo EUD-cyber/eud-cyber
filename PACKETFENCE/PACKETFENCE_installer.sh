@@ -15,9 +15,10 @@ echo "===== PACKETFENCE installation started at $(date) ====="
 # ===== CONFIG =====
 START_VMID=100
 BASE_NAME="PACKETFENCE"
-IMG_URL="https://dl.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud.latest.x86_64.qcow2"
-IMG_NAME="Rocky-9-GenericCloud.latest.x86_64.qcow2"
-IMG_PATH="$(pwd)/$IMG_NAME"
+ISO_DIR=/var/lib/vz/template/iso
+IMG_NAME="PacketFence-13.1.0.iso"
+IMG_URL="https://us-ord-1.linodeobjects.com/packetfence-iso/v15.0.0/PacketFence-ISO-v15.0.0.iso"
+IMG_PATH=$ISO_DIR/$IMG_NAME
 ISO_STORAGE="local"
 DISK_STORAGE="local-lvm"
 MEMORY=8192      # in MB
