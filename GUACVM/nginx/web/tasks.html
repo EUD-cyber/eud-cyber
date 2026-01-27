@@ -142,6 +142,15 @@
 <hr>
 
 <div class="task">
+  <h3>APPSRV01 – Suricata</h3>
+  <button onclick="startLab('suracata-appsrv01')">▶ Start</button>
+  <button onclick="stopLab('suracata-appsrv01')">■ Stop</button>
+  <span id="status-suracata-appsrv01">Status: ...</span>
+</div>
+
+<hr>
+    
+<div class="task">
   <h3>LAN1 – Traffic Mirror (Kali)</h3>
   <button onclick="enableMirror()">🪞 Enable</button>
   <button onclick="disableMirror()">❌ Disable</button>
@@ -205,11 +214,13 @@ updateMirror();
 // Initial load
 update("juice-vuln1");
 update("juice-vuln2");
+update("suricata-appsrv01");
 
 // Auto refresh every 5s
 setInterval(() => {
   update("juice-vuln1");
   update("juice-vuln2");
+  update("suricata-appsrv01");
   updateMirror();
 }, 5000);
 </script>
