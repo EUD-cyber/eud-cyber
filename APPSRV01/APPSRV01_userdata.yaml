@@ -34,5 +34,6 @@ runcmd:
   - wget -O /opt/suricata/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/SURICATA/docker-compose.yml
   - mkdir -p /opt/suricata/suricata
   - wget -O /opt/suricata/suricata/suricata.yaml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/SURICATA/suricata/suricata.yaml
+  - wget -O /opt/suricata/suricata/suricata.rules https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/SURICATA/suricata/suricata.rules
   - chown -R ubuntu:ubuntu /opt
 
