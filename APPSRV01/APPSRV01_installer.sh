@@ -81,6 +81,7 @@ qm create $VMID \
   --cpu host \
   --net0 virtio,bridge=$BRIDGE \
   --net1 virtio,bridge=$BRIDGE1 \
+  --net2 virtio,bridge=$BRIDGE \
   --ostype l26
 
 # ===== Add LVM disk =====
