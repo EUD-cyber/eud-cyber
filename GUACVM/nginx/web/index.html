@@ -73,7 +73,7 @@
        href="#" onclick="this.href = link('/guacamole/#/client/MTIAYwBwb3N0Z3Jlc3Fs')">
        VULNSRV01 SSH
     </a>
-        
+
     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = link('/guacamole/#/client/NQBjAHBvc3RncmVzcWw')">
        VULNSRV02 SSH
@@ -83,17 +83,17 @@
        href="#" onclick="this.href = link('/guacamole/#/client/MQBjAHBvc3RncmVzcWw')">
        APPSRV01 SSH
     </a>
-    
+
     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = nat(9002, true)">
        Wazuh GUI
     </a>
-    
+
     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = link('/guacamole/#/client/NABjAHBvc3RncmVzcWw')">
        Wazuh SSH
     </a>
-    
+
     <a class="conn-button" target="_blank"
        href="#"
        onclick="this.href = nat(9003)">
@@ -104,58 +104,84 @@
        href="#" onclick="this.href = link('/guacamole/#/client/OABjAHBvc3RncmVzcWw')">
        OPNsense SSH
     </a>
-    
+
     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = link('/guacamole/#/client/NwBjAHBvc3RncmVzcWw')">
        WIN2025 RDP
     </a>
-    
+
     <a class="conn-button" target="_blank"
      href="#" onclick="this.href = nat(9001, true)">
      Proxmox GUI
     </a>
-    
+
     <a class="conn-button" target="_blank"
      href="#" onclick="this.href = link('/guacamole/#/client/MTEAYwBwb3N0Z3Jlc3Fs')">
-     Proxmox SSH 
+     Proxmox SSH
     </a>
 
   </div>
 <div class="content">
-  <h2>Homepage</h2>
+  <h2>Home</h2>
 
-  <div style="
-      background:#111827;
-      border:1px solid #1f2937;
-      border-radius:12px;
-      padding:16px;
-      max-width:1000px;
-  ">
+<div style="
+  background:#111827;
+  border:1px solid #1f2937;
+  border-radius:12px;
+  padding:16px;
+  max-width:1000px;
+  line-height:1.6;
+">
 
-    <div style="
-        background:#0b1220;
-        border:1px solid #1f2937;
-        border-radius:10px;
-        padding:16px;
-        line-height:1.6;
-        font-family: monospace;
-    ">
-      <b>Network Topology (Text View)</b><br><br>
+  <h3>Welcome to the EUD Cyber Environment</h3>
 
-      Internet<br>
-      &nbsp;&nbsp;│<br>
-      &nbsp;&nbsp;└── OPNsense Firewall<br>
-      &nbsp;&nbsp;&nbsp;&nbsp;│<br>
-      &nbsp;&nbsp;&nbsp;&nbsp;├── Wazuh Server<br>
-      &nbsp;&nbsp;&nbsp;&nbsp;├── Proxmox Server<br>
-      &nbsp;&nbsp;&nbsp;&nbsp;├── Kali01<br>
-      &nbsp;&nbsp;&nbsp;&nbsp;├── Client01<br>
-      &nbsp;&nbsp;&nbsp;&nbsp;├── VULNSRV01<br>
-      &nbsp;&nbsp;&nbsp;&nbsp;├── VULNSRV02<br>
-      &nbsp;&nbsp;&nbsp;&nbsp;└── APPSRV01<br>
-    </div>
+  <p>
+    This site uses Guacamole to connect to each server. If you need to paste something into a VM, press
+    <b>Shift + Ctrl + Alt</b>. A sidebar will appear on the left where you can input text.
+    Press the keys again to hide it.
+  </p>
 
-  </div>
+  <h3>Username and Password Information</h3>
+
+  <h4>Guacamole Connection</h4>
+  <ul>
+    <li><b>User:</b> guacadmin</li>
+    <li><b>Pass:</b> guacadmin</li>
+  </ul>
+
+  <h4>Kali01</h4>
+  <ul>
+    <li><b>User:</b> kali</li>
+    <li><b>Pass:</b> Password1!</li>
+  </ul>
+
+  <h4>Client01, VULN-SRV01, VULN-SRV02 and APPSRV01</h4>
+  <ul>
+    <li><b>User:</b> ubuntu</li>
+    <li><b>Pass:</b> Password1!</li>
+  </ul>
+
+  <h4>Wazuh GUI</h4>
+  <ul>
+    <li><b>User:</b> admin</li>
+    <li><b>Pass:</b> admin</li>
+  </ul>
+
+  <h4>Wazuh SSH</h4>
+  <ul>
+    <li><b>User:</b> wazuh</li>
+    <li><b>Pass:</b> wazuh</li>
+  </ul>
+
+  <h4>OPNsense</h4>
+  <ul>
+    <li><b>User:</b> root</li>
+    <li><b>Pass:</b> opnsense</li>
+  </ul>
+
+</div>
+
+
 </div>
 
 
