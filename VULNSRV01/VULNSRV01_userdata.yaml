@@ -29,4 +29,5 @@ runcmd:
   - usermod -aG docker ubuntu
   - mkdir -p /opt/juiceshop
   - wget -O /opt/juiceshop/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/JUICESHOP/docker-compose.yml
+  - chown -R ubuntu:ubuntu /opt
 
