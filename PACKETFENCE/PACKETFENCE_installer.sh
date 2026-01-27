@@ -31,23 +31,6 @@ DNS_SERVER="192.168.2.1"
 IP_GW="gw=192.168.2.1"
 OOBM_IP="ip=172.20.0.30/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
-SRC_USERDATA="$(pwd)/PACKETFENCE/PACKETFENCE_userdata.yaml"     # source file
-DST_USERDATA="PACKETFENCE_userdata.yaml"            # destination filename
-
-DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
-
-echo "Checking Cloud-Init user-data snippet..."
-
-# Check if snippet already exists
-if [[ -f "$DST_PATH" ]]; then
-  echo "User-data already exists: $DST_PATH"
-else
-  echo "User-data not found. Copying..."
-  cp "$SRC_USERDATA" "$DST_PATH"
-  chmod 644 "$DST_PATH"
-  echo "User-data copied to $DST_PATH"
-fi
-echo "Done."
 
 # ===== Find next free VMID =====
 VMID=$START_VMID
@@ -84,33 +67,17 @@ qm create $VMID \
   --net0 virtio,bridge=$BRIDGE \
   --net1 virtio,bridge=$BRIDGE1 \
   --ostype l26
+  --scsi0 ${DISK_STORAGE}:64 \
+  --ide2 local:iso/$IMG_NAME,media=cdrom \
+  --boot order="scsi0;ide2" \
+  --serial0 socket \
+  --vga serial0 \
+  --onboot 1
 
-# ===== Add LVM disk =====
-qm importdisk $VMID $IMG_NAME $DISK_STORAGE
-qm set $VMID \
-  --scsihw virtio-scsi-pci \
-  --scsi0 ${DISK_STORAGE}:"vm-$VMID-disk-0"
+cd /var/lib/vz/snippets
+python3 -m http.server 8000
 
-qm disk resize $VMID scsi0 +$DISK_SIZE
-
-# ===== Boot order and console =====
-qm set $VMID \
-  --ide2 $DISK_STORAGE:cloudinit \
-  --boot order=scsi0
-
-# ===== Enable QEMU Guest Agent =====
-qm set $VMID --agent enabled=1
-
-# ===== Set autostart =====
-qm set $VMID --onboot 1
-
-# ===== Cloud-init =====
-qm set $VMID --ipconfig0 $IP_ADDR,$IP_GW \
-  --ipconfig1 $OOBM_IP \
-  --searchdomain cloud.local \
-  --nameserver $DNS_SERVER \
-  --ciupgrade \
-  --cicustom "user=local:snippets/PACKETFENCE_userdata.yaml"
+qm set VMID --args "-inst.ks=http://PROXMOX_IP:8000/packetfence.ks"
 
 # ===== Start VM =====
 echo "Starting VM $VMID ($VM_NAME)..."
