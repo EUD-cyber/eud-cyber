@@ -29,7 +29,8 @@ runcmd:
   - systemctl start docker
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
-  - mkdir /opt/radius
-  - sudo mkdir -p /opt/radius
-  - wget -P /opt/radius https://raw.githubusercontent.com/EUD-cyber/eud-cyber/DOCKERFILES/RADIUS/docker-compose.yml
+  - usermod -aG docker ubuntu
+  - mkdir -p /opt/suricata
+  - wget -O /opt/suricata/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/SURICATA/docker-compose.yml
+  - chown -R ubuntu:ubuntu /opt
 
