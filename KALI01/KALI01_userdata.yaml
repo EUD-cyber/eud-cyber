@@ -65,7 +65,7 @@ write_files:
       #!/bin/bash
       set -e
       apt-get update
-      apt-get install -y kali-linux-default nikto 
+      apt-get install -y kali-linux-default nikto seclists gobuster
       touch /var/lib/kali-tools-installed
 
   - path: /etc/systemd/system/kali-tools-install.service
@@ -128,8 +128,8 @@ runcmd:
   - systemctl enable kali-tools-install.service
   - systemctl enable mirror-eth2.service
   - wget -O /home/kali/Desktop/IPS/testips.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/testips.sh
-  - wget -O /home/kali/Desktop/wireshark/rsasnakeoil2.cap https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/wireshark/rsasnakeoil2.cap
-  - wget -O /home/kali/Desktop/wireshark/rsasnakeoil2.key https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/wireshark/rsasnakeoil2.key
+  - wget -O /home/kali/Desktop/wireshark/rsasnakeoil2.cap https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.cap
+  - wget -O /home/kali/Desktop/wireshark/rsasnakeoil2.key https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.key
   - sed -i 's|^Exec=wireshark|Exec=env QT_QPA_PLATFORM=xcb wireshark|' /usr/share/applications/wireshark.desktop
   - update-desktop-database
 
