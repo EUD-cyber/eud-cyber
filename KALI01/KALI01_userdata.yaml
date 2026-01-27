@@ -65,7 +65,7 @@ write_files:
       #!/bin/bash
       set -e
       apt-get update
-      apt-get install -y kali-linux-default nikto seclists gobuster
+      apt-get install -y kali-linux-default nikto seclists gobuster sqlmap
       touch /var/lib/kali-tools-installed
 
   - path: /etc/systemd/system/kali-tools-install.service
