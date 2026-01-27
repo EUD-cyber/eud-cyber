@@ -22,6 +22,28 @@ packages:
   - lsb-release
   - docker.io
 
+write_file:
+
+  - path: /etc/sysctl.d/99-mirror.conf
+      permissions: "0644"
+      content: |
+         net.ipv4.ip_forward=0
+      
+  - path: /etc/systemd/system/mirror-eth2.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      After=network.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/sbin/ip addr flush dev eth2
+      ExecStart=/sbin/ip link set eth2 up
+      ExecStart=/sbin/ethtool -K eth2 tx off rx off tso off gso off gro off lro off
+
+      [Install]
+      WantedBy=multi-user.target
+      
 runcmd:
   - apt-get update
   - apt-get install -y docker-compose-v2 qemu-guest-agent
