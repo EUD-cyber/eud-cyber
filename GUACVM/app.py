@@ -18,6 +18,11 @@ TARGETS = {
         "user": "ubuntu",
         "compose_dir": "/opt/juiceshop"
     },
+    "suricata-appsrv01": {
+        "host": "172.20.0.25",
+        "user": "ubuntu",
+        "compose_dir": "/opt/suricata"
+    },
     "proxmox": {
         "host": "172.20.0.100",
         "user": "root",
