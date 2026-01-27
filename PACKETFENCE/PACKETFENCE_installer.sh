@@ -79,6 +79,7 @@ qm create $VMID \
   --memory $MEMORY \
   --cores $CORES \
   --cpu host \
+  --bios seabios \
   --net0 virtio,bridge=$BRIDGE \
   --net1 virtio,bridge=$BRIDGE1 \
   --ostype l26
@@ -94,8 +95,7 @@ qm disk resize $VMID scsi0 +$DISK_SIZE
 # ===== Boot order and console =====
 qm set $VMID \
   --ide2 $DISK_STORAGE:cloudinit \
-  --boot c \
-  --bootdisk scsi0 \
+  --boot order=scsi0
 
 # ===== Enable QEMU Guest Agent =====
 qm set $VMID --agent enabled=1
