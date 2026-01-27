@@ -28,5 +28,5 @@ runcmd:
   - systemctl enable qemu-guest-agent
   - usermod -aG docker ubuntu
   - mkdir -p /opt/juiceshop
-  - wget -O /opt/juicehop/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/JUICESHOP/docker-compose.yml
+  - wget -O /opt/juiceshop/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/JUICESHOP/docker-compose.yml
 
