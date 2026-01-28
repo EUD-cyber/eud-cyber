@@ -25,6 +25,7 @@ CORES=4
 DISK_SIZE="32G"    # the number is in GB
 BRIDGE="lan2"
 BRIDGE1="oobm"
+BRIDGE2="lan1"
 IP_ADDR="ip=192.168.2.25/24"
 DNS_SERVER="192.168.2.1"
 IP_GW="gw=192.168.2.1"
@@ -81,7 +82,7 @@ qm create $VMID \
   --cpu host \
   --net0 virtio,bridge=$BRIDGE \
   --net1 virtio,bridge=$BRIDGE1 \
-  --net2 virtio,bridge=$BRIDGE \
+  --net2 virtio,bridge=$BRIDGE2 \
   --ostype l26
 
 # ===== Add LVM disk =====
