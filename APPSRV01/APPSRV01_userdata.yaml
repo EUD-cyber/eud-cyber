@@ -66,6 +66,7 @@ runcmd:
   - wget -O /opt/radius/freeradius/clients.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/freeradius/clients.conf
   - wget -O /opt/radius/freeradius/radiusd.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/freeradius/radiusd.conf
   - wget -O /opt/radius/freeradius/mods-enabled/ldap https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/freeradius/mods-enabled/ldap
+  - wget -O /opt/radius/freeradius/sites-enabled/default https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/freeradius/sites-enabled/default
   - wget -O /opt/radius/ldap/base.ldif https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/ldap/base.ldif
   - wget -O /opt/radius/ldap/users.ldif https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/ldap/users.ldif
    - chown -R ubuntu:ubuntu /opt
