@@ -1,1 +1,20 @@
+ldap {
+    server = "ldap"
+    identity = "cn=admin,dc=mycompany,dc=local"
+    password = "Password1!"
+    base_dn = "dc=mycompany,dc=local"
 
+    user {
+        base_dn = "ou=users,dc=mycompany,dc=local"
+        filter = "(uid=%{User-Name})"
+    }
+
+    group {
+        base_dn = "ou=groups,dc=mycompany,dc=local"
+        filter = "(objectClass=groupOfNames)"
+    }
+
+    tls {
+        start_tls = no
+    }
+}
