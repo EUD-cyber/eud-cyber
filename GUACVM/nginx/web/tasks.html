@@ -151,6 +151,15 @@
 <hr>
 
 <div class="task">
+  <h3>APPSRV01 – Radius</h3>
+  <button onclick="startLab('radius-appsrv01')">▶ Start</button>
+  <button onclick="stopLab('radius-appsrv01')">■ Stop</button>
+  <span id="status-radius-appsrv01">Status: ...</span>
+</div>
+
+<hr>
+    
+<div class="task">
   <h3>LAN1 – Traffic Mirror</h3>
   <button onclick="enableMirror('kali')">🪞 Enable Kali</button>
   <button onclick="enableMirror('appsrv')">🪞 Enable APPSRV01</button>
@@ -222,12 +231,14 @@ updateMirror();
 update("juice-vuln1");
 update("juice-vuln2");
 update("suricata-appsrv01");
+update("radius-appsrv01");
 
 // Auto refresh every 5s
 setInterval(() => {
   update("juice-vuln1");
   update("juice-vuln2");
   update("suricata-appsrv01");
+  update("radius-appsrv01");
   updateMirror();
 }, 5000);
 </script>
