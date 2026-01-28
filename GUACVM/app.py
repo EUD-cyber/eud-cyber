@@ -8,31 +8,25 @@ SSH_KEY = "/root/.ssh/shared_admin_ed25519"
 SSH_TIMEOUT = 10
 
 TARGETS = {
-    "juice-vuln1": {
-        "host": "172.20.0.10",
-        "user": "ubuntu",
-        "compose_dir": "/opt/juiceshop"
-    },
-    "juice-vuln2": {
-        "host": "172.20.0.21",
-        "user": "ubuntu",
-        "compose_dir": "/opt/juiceshop"
-    },
-    "suricata-appsrv01": {
-        "host": "172.20.0.25",
-        "user": "ubuntu",
-        "compose_dir": "/opt/suricata"
-    },
-    "proxmox": {
-        "host": "172.20.0.100",
-        "user": "root",
-        "compose_dir": None
-    }
+    "juice-vuln1": {"host": "172.20.0.10", "user": "ubuntu", "compose_dir": "/opt/juiceshop"},
+    "juice-vuln2": {"host": "172.20.0.21", "user": "ubuntu", "compose_dir": "/opt/juiceshop"},
+    "suricata-appsrv01": {"host": "172.20.0.25", "user": "ubuntu", "compose_dir": "/opt/suricata"},
+    "proxmox": {"host": "172.20.0.100", "user": "root", "compose_dir": None}
 }
 
-MIRROR = {
-    "bridge": "lan1",
-    "mirror_name": "lan1-mirror"
+MIRROR_CONFIGS = {
+    "kali": {
+        "vm_prefix": "kali",
+        "mirror_name": "mirror_kali",
+        "bridge": "lan1",
+        "nic_index": 2
+    },
+    "appsrv": {
+        "vm_prefix": "appsrv",
+        "mirror_name": "mirror_appsrv",
+        "bridge": "lan1",
+        "nic_index": 2
+    }
 }
 
 # =========================
@@ -40,7 +34,6 @@ MIRROR = {
 # =========================
 def run_ssh(target, cmd):
     t = TARGETS[target]
-
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
     ssh.connect(
@@ -49,94 +42,100 @@ def run_ssh(target, cmd):
         key_filename=SSH_KEY,
         timeout=SSH_TIMEOUT
     )
-
     stdin, stdout, stderr = ssh.exec_command(cmd)
     out = stdout.read().decode()
     err = stderr.read().decode()
     ssh.close()
-
-    if err.strip():
-        return {"error": err.strip()}
-
-    return {"output": out.strip()}
-
+    return out.strip(), err.strip()
 
 # =========================
-# FIND KALI TAP INTERFACE
+# PROXMOX HELPERS
 # =========================
-def find_kali_tap():
-    cmd = "qm list"
-    r = run_ssh("proxmox", cmd)
+def get_vmid_by_prefix(prefix):
+    out, _ = run_ssh("proxmox", "qm list")
+    for line in out.splitlines():
+        if re.search(prefix, line, re.IGNORECASE):
+            return line.split()[0]
+    return None
 
-    if "output" not in r:
-        return None, "qm list failed"
 
-    for line in r["output"].splitlines():
-        if re.search(r"kali", line, re.IGNORECASE):
-            parts = line.split()
-            vmid = parts[0]
-            tap = f"tap{vmid}i2"
-            return tap, None
+def get_tap_interface(vmid, nic_index):
+    return f"tap{vmid}i{nic_index}"
 
-    return None, "No Kali VM found"
 
+def tap_exists(bridge, tap):
+    out, _ = run_ssh("proxmox", f"ovs-vsctl list-ports {bridge}")
+    return tap in out.splitlines()
+
+
+def clear_all_mirrors():
+    cmd = """
+ovs-vsctl clear Bridge lan1 mirrors
+ovs-vsctl -- --all destroy Mirror
+"""
+    return run_ssh("proxmox", cmd)
 
 # =========================
 # MIRROR ENABLE
 # =========================
-@app.route("/api/mirror/enable", methods=["POST"])
-def mirror_enable():
+@app.route("/api/mirror/<target>/enable", methods=["POST"])
+def mirror_enable(target):
+    if target not in MIRROR_CONFIGS:
+        return jsonify(error="Unknown mirror target"), 404
 
-    tap_iface, err = find_kali_tap()
-    if err:
-        return jsonify(error=err), 500
+    m = MIRROR_CONFIGS[target]
+    vmid = get_vmid_by_prefix(m["vm_prefix"])
 
-    m = MIRROR
+    if not vmid:
+        return jsonify(error="VM not found"), 404
+
+    tap = get_tap_interface(vmid, m["nic_index"])
+
+    if not tap_exists(m["bridge"], tap):
+        return jsonify(error="Tap port not found", tap=tap), 409
 
     cmd = f"""
-# Clean old mirrors
 ovs-vsctl clear Bridge {m['bridge']} mirrors
 ovs-vsctl -- --all destroy Mirror
 
-# Create mirror to Kali TAP interface
 ovs-vsctl \
--- --id=@dst get Port {tap_iface} \
+-- --id=@dst get Port {tap} \
 -- --id=@m create Mirror name={m['mirror_name']} select-all=true output-port=@dst \
 -- set Bridge {m['bridge']} mirrors=@m
 """
 
-    r = run_ssh("proxmox", cmd)
+    out, err = run_ssh("proxmox", cmd)
 
     return jsonify(
         enabled=True,
-        kali_interface=tap_iface,
-        raw=r
+        mirror=m["mirror_name"],
+        vmid=vmid,
+        tap=tap,
+        output=out,
+        error=err
     )
-
 
 # =========================
 # MIRROR DISABLE
 # =========================
 @app.route("/api/mirror/disable", methods=["POST"])
 def mirror_disable():
-    m = MIRROR
-    cmd = f"""
-ovs-vsctl clear Bridge {m['bridge']} mirrors
-ovs-vsctl -- --all destroy Mirror
-"""
-    r = run_ssh("proxmox", cmd)
-    return jsonify(enabled=False, raw=r)
-
+    out, err = clear_all_mirrors()
+    return jsonify(enabled=False, output=out, error=err)
 
 # =========================
 # MIRROR STATUS
 # =========================
 @app.route("/api/mirror/status")
 def mirror_status():
-    r = run_ssh("proxmox", "ovs-vsctl list Mirror")
-    enabled = MIRROR["mirror_name"] in r.get("output", "")
-    return jsonify(enabled=enabled)
+    out, _ = run_ssh("proxmox", "ovs-vsctl list Mirror")
 
+    active = None
+    for key, cfg in MIRROR_CONFIGS.items():
+        if cfg["mirror_name"] in out:
+            active = key
+
+    return jsonify(active_mirror=active)
 
 # =========================
 # LAB CONTROL
@@ -147,14 +146,9 @@ def lab_status(lab):
         return jsonify(error="Unknown lab"), 404
 
     t = TARGETS[lab]
-    cmd = (
-        f"cd {t['compose_dir']} && "
-        "docker compose ps -q | "
-        "xargs -r docker inspect -f '{{.State.Running}}'"
-    )
-
-    r = run_ssh(lab, cmd)
-    running = "true" in r.get("output", "").lower()
+    cmd = f"cd {t['compose_dir']} && docker compose ps -q | xargs -r docker inspect -f '{{{{.State.Running}}}}'"
+    out, _ = run_ssh(lab, cmd)
+    running = "true" in out.lower()
 
     return jsonify(lab=lab, status="running" if running else "stopped")
 
@@ -165,8 +159,8 @@ def lab_start(lab):
         return jsonify(error="Unknown lab"), 404
 
     cmd = f"cd {TARGETS[lab]['compose_dir']} && docker compose up -d"
-    r = run_ssh(lab, cmd)
-    return jsonify(lab=lab, result="started", raw=r)
+    out, err = run_ssh(lab, cmd)
+    return jsonify(lab=lab, result="started", output=out, error=err)
 
 
 @app.route("/api/<lab>/stop")
@@ -175,9 +169,8 @@ def lab_stop(lab):
         return jsonify(error="Unknown lab"), 404
 
     cmd = f"cd {TARGETS[lab]['compose_dir']} && docker compose down"
-    r = run_ssh(lab, cmd)
-    return jsonify(lab=lab, result="stopped", raw=r)
-
+    out, err = run_ssh(lab, cmd)
+    return jsonify(lab=lab, result="stopped", output=out, error=err)
 
 # =========================
 # LIST LABS
@@ -185,7 +178,6 @@ def lab_stop(lab):
 @app.route("/api/labs")
 def list_labs():
     return jsonify(TARGETS)
-
 
 # =========================
 # RUN
