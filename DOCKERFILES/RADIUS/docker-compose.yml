@@ -17,7 +17,7 @@ services:
       - ./ldap:/container/service/slapd/assets/config/bootstrap/ldif/custom
 
   freeradius:
-    image: freeradius/freeradius-server:3.2
+    image: freeradius/freeradius-server:3.2.3
     container_name: freeradius
     restart: always
     depends_on:
