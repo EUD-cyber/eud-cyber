@@ -72,7 +72,7 @@
        href="#" onclick="this.href = link('/guacamole/#/client/MTIAYwBwb3N0Z3Jlc3Fs')">
        VULNSRV01 SSH
     </a>
-        
+
     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = link('/guacamole/#/client/NQBjAHBvc3RncmVzcWw')">
        VULNSRV02 SSH
@@ -82,17 +82,17 @@
        href="#" onclick="this.href = link('/guacamole/#/client/MQBjAHBvc3RncmVzcWw')">
        APPSRV01 SSH
     </a>
-    
+
     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = nat(9002, true)">
        Wazuh GUI
     </a>
-    
+
     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = link('/guacamole/#/client/NABjAHBvc3RncmVzcWw')">
        Wazuh SSH
     </a>
-    
+
     <a class="conn-button" target="_blank"
        href="#"
        onclick="this.href = nat(9003)">
@@ -103,22 +103,22 @@
        href="#" onclick="this.href = link('/guacamole/#/client/OABjAHBvc3RncmVzcWw')">
        OPNsense SSH
     </a>
-    
+
     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = link('/guacamole/#/client/NwBjAHBvc3RncmVzcWw')">
        WIN2025 RDP
     </a>
-    
+
     <a class="conn-button" target="_blank"
      href="#" onclick="this.href = nat(9001, true)">
      Proxmox GUI
     </a>
-    
+
     <a class="conn-button" target="_blank"
      href="#" onclick="this.href = link('/guacamole/#/client/MTEAYwBwb3N0Z3Jlc3Fs')">
-     Proxmox SSH 
+     Proxmox SSH
     </a>
-  
+
   </div>
   <div class="content">
 <h2>Lab Control</h2>
@@ -149,13 +149,16 @@
 </div>
 
 <hr>
-    
+
 <div class="task">
-  <h3>LAN1 – Traffic Mirror (Kali)</h3>
-  <button onclick="enableMirror()">🪞 Enable</button>
+  <h3>LAN1 – Traffic Mirror</h3>
+  <button onclick="enableMirror('kali')">🪞 Enable Kali</button>
+  <button onclick="enableMirror('appsrv')">🪞 Enable APPSRV01</button>
   <button onclick="disableMirror()">❌ Disable</button>
   <span id="status-mirror">Status: ...</span>
 </div>
+
+
 
 
 <script>
@@ -186,11 +189,15 @@ async function stopLab(target) {
 async function updateMirror() {
   try {
     const r = await fetch(`/api/mirror/status`);
-    if (!r.ok) throw new Error();
-
     const j = await r.json();
-    document.getElementById("status-mirror").innerText =
-      "Status: " + (j.enabled ? "🟢 enabled" : "🔴 disabled");
+
+    if (j.active_mirror) {
+      document.getElementById("status-mirror").innerText =
+        "Status: 🪞 active → " + j.active_mirror;
+    } else {
+      document.getElementById("status-mirror").innerText =
+        "Status: 🔴 disabled";
+    }
 
   } catch (e) {
     document.getElementById("status-mirror").innerText =
@@ -198,8 +205,8 @@ async function updateMirror() {
   }
 }
 
-async function enableMirror() {
-  await fetch(`/api/mirror/enable`, { method: "POST" });
+async function enableMirror(target) {
+  await fetch(`/api/mirror/${target}/enable`, { method: "POST" });
   setTimeout(updateMirror, 1000);
 }
 
