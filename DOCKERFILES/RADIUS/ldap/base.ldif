@@ -1,1 +1,12 @@
+dn: dc=mycompany,dc=local
+objectClass: top
+objectClass: dcObject
+objectClass: organization
+o: MyCompany
+dc: mycompany
 
+dn: cn=admin,dc=mycompany,dc=local
+objectClass: simpleSecurityObject
+objectClass: organizationalRole
+cn: admin
+userPassword: Password1!
