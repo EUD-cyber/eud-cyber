@@ -11,6 +11,7 @@ TARGETS = {
     "juice-vuln1": {"host": "172.20.0.10", "user": "ubuntu", "compose_dir": "/opt/juiceshop"},
     "juice-vuln2": {"host": "172.20.0.21", "user": "ubuntu", "compose_dir": "/opt/juiceshop"},
     "suricata-appsrv01": {"host": "172.20.0.25", "user": "ubuntu", "compose_dir": "/opt/suricata"},
+    "radius-appsrv01": {"host": "172.20.0.25", "user": "ubuntu", "compose_dir": "/opt/radius"},
     "proxmox": {"host": "172.20.0.100", "user": "root", "compose_dir": None}
 }
 
