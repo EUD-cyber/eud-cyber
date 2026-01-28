@@ -1,30 +1,36 @@
 services:
 
-  mariadb:
-    image: mariadb:10.11
-    container_name: radiusdesk-db
-    restart: unless-stopped
+  ldap:
+    image: osixia/openldap:1.5.0
+    container_name: openldap
+    restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: radiusdesk
-      MYSQL_DATABASE: radiusdesk
-      MYSQL_USER: radiusdesk
-      MYSQL_PASSWORD: radiusdesk
-    volumes:
-      - db_data:/var/lib/mysql
-
-  radiusdesk:
-    image: chriswayg/radiusdesk:latest
-    container_name: radiusdesk
-    restart: unless-stopped
-    depends_on:
-      - mariadb
+      LDAP_ORGANISATION: "MyCompany"
+      LDAP_DOMAIN: "mycompany.local"
+      LDAP_ADMIN_PASSWORD: "Password1!"
+      LDAP_TLS: "false"
     ports:
-      - "8080:80"
-    environment:
-      DB_HOST: mariadb
-      DB_NAME: radiusdesk
-      DB_USER: radiusdesk
-      DB_PASS: radiusdesk
+      - "389:389"
+    volumes:
+      - ldap_data:/var/lib/ldap
+      - ldap_config:/etc/ldap/slapd.d
+      - ./ldap:/container/service/slapd/assets/config/bootstrap/ldif/custom
+
+  freeradius:
+    image: freeradius/freeradius-server:3.2
+    container_name: freeradius
+    restart: always
+    depends_on:
+      - ldap
+    ports:
+      - "1812:1812/udp"
+      - "1813:1813/udp"
+    volumes:
+      - ./freeradius/clients.conf:/etc/freeradius/clients.conf
+      - ./freeradius/radiusd.conf:/etc/freeradius/radiusd.conf
+      - ./freeradius/mods-enabled/ldap:/etc/freeradius/mods-enabled/ldap
+    command: ["freeradius", "-X"]
 
 volumes:
-  db_data:
+  ldap_data:
+  ldap_config:
