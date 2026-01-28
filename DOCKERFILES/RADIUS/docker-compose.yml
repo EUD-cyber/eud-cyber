@@ -9,6 +9,7 @@ services:
       LDAP_DOMAIN: "mycompany.local"
       LDAP_ADMIN_PASSWORD: "Password1!"
       LDAP_TLS: "false"
+      LDAP_REMOVE_CONFIG_AFTER_SETUP: "false"
     ports:
       - "389:389"
     volumes:
