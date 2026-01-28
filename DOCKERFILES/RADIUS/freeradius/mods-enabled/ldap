@@ -9,12 +9,8 @@ ldap {
         filter = "(uid=%{User-Name})"
     }
 
-    group {
-        base_dn = "ou=groups,dc=mycompany,dc=local"
-        filter = "(objectClass=groupOfNames)"
-    }
-
     tls {
         start_tls = no
+        require_cert = "never"
     }
 }
