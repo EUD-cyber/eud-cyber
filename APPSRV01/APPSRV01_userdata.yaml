@@ -36,9 +36,9 @@ write_files:
 
       [Service]
       Type=oneshot
-      ExecStart=/sbin/ip addr flush dev eth2
-      ExecStart=/sbin/ip link set eth2 up
-      ExecStart=/sbin/ethtool -K eth2 tx off rx off tso off gso off gro off lro off
+      ExecStart=/sbin/ip addr flush dev ens20
+      ExecStart=/sbin/ip link set ens20 up
+      ExecStart=/sbin/ethtool -K ens20 tx off rx off tso off gso off gro off lro off
 
       [Install]
       WantedBy=multi-user.target
