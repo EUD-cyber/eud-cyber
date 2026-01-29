@@ -13,13 +13,29 @@ listen {
 }
 
 authorize {
+    preprocess
+    chap
+    mschap
+    digest
+    suffix
+
+    eap {
+        ok = return
+    }
+
     ldap
+    pap
 }
 
 authenticate {
     Auth-Type LDAP {
         ldap
     }
+
+    pap
+    chap
+    mschap
+    eap
 }
 
 post-auth {
