@@ -67,8 +67,8 @@ runcmd:
   - wget -O /opt/radius/freeradius/clients.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/freeradius/clients.conf
   - wget -O /opt/radius/freeradius/mods-enabled/ldap https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/freeradius/mods-enabled/ldap
   - wget -O /opt/radius/freeradius/sites-enabled/default https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/freeradius/sites-enabled/default
-  - wget -O /opt/radius/ldap/base.ldif https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/ldap/base.ldif
-  - wget -O /opt/radius/ldap/users.ldif https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/ldap/users.ldif
+  - wget -O /opt/radius/ldap/01-ou.ldif https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/ldap/01-ou.ldif
+  - wget -O /opt/radius/ldap/02-users.ldif https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/ldap/02-users.ldif
   - chown -R ubuntu:ubuntu /opt
 
 power_state:
