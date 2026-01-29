@@ -169,7 +169,7 @@ def lab_stop(lab):
     if lab not in TARGETS or not TARGETS[lab]["compose_dir"]:
         return jsonify(error="Unknown lab"), 404
 
-    cmd = f"cd {TARGETS[lab]['compose_dir']} && docker compose down"
+    cmd = f"cd {TARGETS[lab]['compose_dir']} && docker compose down -v"
     out, err = run_ssh(lab, cmd)
     return jsonify(lab=lab, result="stopped", output=out, error=err)
 
