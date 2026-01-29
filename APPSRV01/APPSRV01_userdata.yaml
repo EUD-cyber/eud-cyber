@@ -65,7 +65,6 @@ runcmd:
   - mkdir -p /opt/radius/ldap
   - wget -O /opt/radius/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/docker-compose.yml
   - wget -O /opt/radius/freeradius/clients.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/freeradius/clients.conf
-  - wget -O /opt/radius/freeradius/radiusd.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/freeradius/radiusd.conf
   - wget -O /opt/radius/freeradius/mods-enabled/ldap https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/freeradius/mods-enabled/ldap
   - wget -O /opt/radius/freeradius/sites-enabled/default https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/freeradius/sites-enabled/default
   - wget -O /opt/radius/ldap/base.ldif https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/ldap/base.ldif
