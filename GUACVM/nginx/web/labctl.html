@@ -121,64 +121,40 @@
 
   </div>
 <div class="content">
-  <h2>Home</h2>
+  <h2>Lab Control</h2>
 
-<div style="
-  background:#111827;
-  border:1px solid #1f2937;
-  border-radius:12px;
-  padding:16px;
-  max-width:1000px;
-  line-height:1.6;
-">
+  <div style="
+    background:#111827;
+    border:1px solid #1f2937;
+    border-radius:12px;
+    padding:16px;
+    max-width:600px;
+  ">
 
-  <h3>Welcome to the EUD Cyber Environment</h3>
+    <h3>Reset Virtual Machines</h3>
+    <p>Click a button to reset the selected VM.</p>
 
-  <p>
-    This site uses Guacamole to connect to each server. If you need to paste something into a VM, press
-    <b>Shift + Ctrl + Alt</b>. A sidebar will appear on the left where you can input text.
-    Press the keys again to hide it.
-  </p>
+    <button class="nav-button" onclick="resetVM('opnsense')">Reset OPNsense</button>
+    <button class="nav-button" onclick="resetVM('vuln-srv01')">Reset VULN-SRV01</button>
+    <button class="nav-button" onclick="resetVM('vuln-srv02')">Reset VULN-SRV02</button>
+    <button class="nav-button" onclick="resetVM('appsrv01')">Reset APPSRV01</button>
+    <button class="nav-button" onclick="resetVM('kali01')">Reset Kali01</button>
+    <button class="nav-button" onclick="resetVM('client01')">Reset Client01</button>
+    <button class="nav-button" onclick="resetVM('wazuh')">Reset Wazuh</button>
+    <button class="nav-button" onclick="resetVM('win2025')">Reset WIN2025</button>
 
-  <h3>Username and Password Information</h3>
-
-  <h4>Guacamole Connection</h4>
-  <ul>
-    <li><b>User:</b> guacadmin</li>
-    <li><b>Pass:</b> guacadmin</li>
-  </ul>
-
-  <h4>Kali01</h4>
-  <ul>
-    <li><b>User:</b> kali</li>
-    <li><b>Pass:</b> Password1!</li>
-  </ul>
-
-  <h4>Client01, VULN-SRV01, VULN-SRV02 and APPSRV01</h4>
-  <ul>
-    <li><b>User:</b> ubuntu</li>
-    <li><b>Pass:</b> Password1!</li>
-  </ul>
-
-  <h4>Wazuh GUI</h4>
-  <ul>
-    <li><b>User:</b> admin</li>
-    <li><b>Pass:</b> admin</li>
-  </ul>
-
-  <h4>Wazuh SSH</h4>
-  <ul>
-    <li><b>User:</b> wazuh</li>
-    <li><b>Pass:</b> wazuh</li>
-  </ul>
-
-  <h4>OPNsense</h4>
-  <ul>
-    <li><b>User:</b> root</li>
-    <li><b>Pass:</b> opnsense</li>
-  </ul>
-
+  </div>
 </div>
+
+<script>
+function resetVM(vm) {
+  if(confirm("Are you sure you want to reset " + vm + "?")) {
+    fetch(`/resetvm?name=${vm}`)
+      .then(r => alert(vm + " reset command sent"))
+      .catch(e => alert("Failed to reset " + vm));
+  }
+}
+</script>
 
 
 </div>
