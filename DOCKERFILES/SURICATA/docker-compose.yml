@@ -10,5 +10,5 @@ services:
       - ./suricata:/etc/suricata
       - ./logs:/var/log/suricata
     command: >
-      suricata -c /etc/suricata/suricata.yaml -i eth0
+      suricata -c /etc/suricata/suricata.yaml -i ens20
     restart: unless-stopped
