@@ -148,10 +148,11 @@
 
 <script>
 function resetVM(vm) {
-  if(confirm("Are you sure you want to reset " + vm + "?")) {
-    fetch(`/resetvm?name=${vm}`)
-      .then(r => alert(vm + " reset command sent"))
-      .catch(e => alert("Failed to reset " + vm));
+  if(confirm("Revert snapshot for " + vm + "?")) {
+    fetch("/api/resetvm/" + vm, { method: "POST" })
+      .then(r => r.json())
+      .then(data => alert("Reset started for " + vm))
+      .catch(err => alert("Error resetting VM"));
   }
 }
 </script>
