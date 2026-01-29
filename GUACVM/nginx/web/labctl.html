@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Cyber sikkerheds labs</title>
+
+<style>
+  body { margin:0; font-family: Arial; background:#0f172a; color:#e5e7eb; }
+  .layout { display:grid; grid-template-columns:260px 1fr; height:100vh; }
+
+  .sidebar { background:#111827; border-right:1px solid #1f2937; padding:14px; }
+  .title { font-size:22px; font-weight:bold; margin-bottom:10px; }
+
+  .nav-title { margin-top:12px; font-size:12px; color:#9ca3af; text-transform:uppercase; }
+
+  .nav-button, .conn-button {
+    display:block; width:100%; margin-bottom:8px;
+    padding:10px 12px; background:#1f2937; color:#fff;
+    border-radius:6px; text-decoration:none;
+  }
+  .nav-button:hover, .conn-button:hover { background:#2563eb; }
+
+  .content { padding:24px; overflow:auto; }
+</style>
+
+<script>
+  const HOST = window.location.hostname;
+  function link(path="") { return `http://${HOST}${path}`; }
+  function nat(port, https=false) {
+    return `${https?'https':'http'}://${HOST}:${port}`;
+  }
+</script>
+</head>
+
+<body>
+<div class="layout">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <div class="title">Lab Portal</div>
+
+    <div class="nav-title">Pages</div>
+    <a class="nav-button" href="index.html">Home</a>
+    <a class="nav-button" href="tasks.html">Tasks</a>
+    <a class="nav-button" href="topology.html">Topology</a>
+    <a class="nav-button" href="labctl.html">Lab control</a>
+
+    <div class="nav-title">Connections</div>
+
+    <!-- Guacamole connections -->
+   <a class="conn-button" target="_blank"
+       href="#" onclick="this.href = link('/guacamole/#/client/NgBjAHBvc3RncmVzcWw')">
+       Kali01 VNC
+    </a>
+
+    <a class="conn-button" target="_blank"
+       href="#" onclick="this.href = link('/guacamole/#/client/MgBjAHBvc3RncmVzcWw')">
+       Kali01 SSH
+    </a>
+
+    <a class="conn-button" target="_blank"
+       href="#" onclick="this.href = link('/guacamole/#/client/MTAAYwBwb3N0Z3Jlc3Fs')">
+       Client01 RDP
+    </a>
+
+    <a class="conn-button" target="_blank"
+       href="#" onclick="this.href = link('/guacamole/#/client/OQBjAHBvc3RncmVzcWw')">
+       Client01 SSH
+    </a>
+
+    <a class="conn-button" target="_blank"
+       href="#" onclick="this.href = link('/guacamole/#/client/MTIAYwBwb3N0Z3Jlc3Fs')">
+       VULNSRV01 SSH
+    </a>
+
+    <a class="conn-button" target="_blank"
+       href="#" onclick="this.href = link('/guacamole/#/client/NQBjAHBvc3RncmVzcWw')">
+       VULNSRV02 SSH
+    </a>
+
+     <a class="conn-button" target="_blank"
+       href="#" onclick="this.href = link('/guacamole/#/client/MQBjAHBvc3RncmVzcWw')">
+       APPSRV01 SSH
+    </a>
+
+    <a class="conn-button" target="_blank"
+       href="#" onclick="this.href = nat(9002, true)">
+       Wazuh GUI
+    </a>
+
+    <a class="conn-button" target="_blank"
+       href="#" onclick="this.href = link('/guacamole/#/client/NABjAHBvc3RncmVzcWw')">
+       Wazuh SSH
+    </a>
+
+    <a class="conn-button" target="_blank"
+       href="#" onclick="this.href = nat(9003, true)">
+       OPNsense GUI
+    </a>
+
+    <a class="conn-button" target="_blank"
+       href="#" onclick="this.href = link('/guacamole/#/client/OABjAHBvc3RncmVzcWw')">
+       OPNsense SSH
+    </a>
+
+    <a class="conn-button" target="_blank"
+       href="#" onclick="this.href = link('/guacamole/#/client/NwBjAHBvc3RncmVzcWw')">
+       WIN2025 RDP
+    </a>
+
+    <a class="conn-button" target="_blank"
+     href="#" onclick="this.href = nat(9001, true)">
+     Proxmox GUI
+    </a>
+
+    <a class="conn-button" target="_blank"
+     href="#" onclick="this.href = link('/guacamole/#/client/MTEAYwBwb3N0Z3Jlc3Fs')">
+     Proxmox SSH
+    </a>
+
+  </div>
+<div class="content">
+  <h2>Home</h2>
+
+<div style="
+  background:#111827;
+  border:1px solid #1f2937;
+  border-radius:12px;
+  padding:16px;
+  max-width:1000px;
+  line-height:1.6;
+">
+
+  <h3>Welcome to the EUD Cyber Environment</h3>
+
+  <p>
+    This site uses Guacamole to connect to each server. If you need to paste something into a VM, press
+    <b>Shift + Ctrl + Alt</b>. A sidebar will appear on the left where you can input text.
+    Press the keys again to hide it.
+  </p>
+
+  <h3>Username and Password Information</h3>
+
+  <h4>Guacamole Connection</h4>
+  <ul>
+    <li><b>User:</b> guacadmin</li>
+    <li><b>Pass:</b> guacadmin</li>
+  </ul>
+
+  <h4>Kali01</h4>
+  <ul>
+    <li><b>User:</b> kali</li>
+    <li><b>Pass:</b> Password1!</li>
+  </ul>
+
+  <h4>Client01, VULN-SRV01, VULN-SRV02 and APPSRV01</h4>
+  <ul>
+    <li><b>User:</b> ubuntu</li>
+    <li><b>Pass:</b> Password1!</li>
+  </ul>
+
+  <h4>Wazuh GUI</h4>
+  <ul>
+    <li><b>User:</b> admin</li>
+    <li><b>Pass:</b> admin</li>
+  </ul>
+
+  <h4>Wazuh SSH</h4>
+  <ul>
+    <li><b>User:</b> wazuh</li>
+    <li><b>Pass:</b> wazuh</li>
+  </ul>
+
+  <h4>OPNsense</h4>
+  <ul>
+    <li><b>User:</b> root</li>
+    <li><b>Pass:</b> opnsense</li>
+  </ul>
+
+</div>
+
+
+</div>
+
+
+</div>
+</body>
+</html>
