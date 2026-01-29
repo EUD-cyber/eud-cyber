@@ -121,6 +121,7 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
     <protocol>https</protocol>
     <nohttpreferercheck>1</nohttpreferercheck>
     <ssl-certref>default</ssl-certref>
+    <ssl-ciphers>AES128-GCM-SHA256:ECDHE-RSA-AES128-SHA256</ssl-ciphers>
     <port>443</port>
    </webgui>
   </system>
