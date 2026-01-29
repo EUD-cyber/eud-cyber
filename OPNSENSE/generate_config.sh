@@ -117,10 +117,12 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
   <disablevlanhwfilter>1</disablevlanhwfilter>
   <nohttpreferercheck>yes</nohttpreferercheck>
   <disablewebguireferercheck>yes</disablewebguireferercheck>
-  <webgui>
-    <protocol>http</protocol>
+   <webgui>
+    <protocol>https</protocol>
     <nohttpreferercheck>1</nohttpreferercheck>
-  </webgui>
+    <ssl-certref>default</ssl-certref>
+    <port>443</port>
+   </webgui>
   </system>
   <unbound>
     <enable>1</enable>
