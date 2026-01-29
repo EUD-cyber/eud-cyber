@@ -6,6 +6,8 @@ vars:
     HOME_NET: "[192.168.0.0/16]"
     EXTERNAL_NET: "!$HOME_NET"
 
+default-rule-path: /etc/suricata
+
 rule-files:
   - suricata.rules
 
