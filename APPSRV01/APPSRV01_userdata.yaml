@@ -69,7 +69,7 @@ runcmd:
   - wget -O /opt/radius/freeradius/sites-enabled/default https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/freeradius/sites-enabled/default
   - wget -O /opt/radius/ldap/base.ldif https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/ldap/base.ldif
   - wget -O /opt/radius/ldap/users.ldif https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/ldap/users.ldif
-   - chown -R ubuntu:ubuntu /opt
+  - chown -R ubuntu:ubuntu /opt
 
 power_state:
   mode: reboot
