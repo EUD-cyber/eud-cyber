@@ -1,7 +1,7 @@
 dn: dc=mycompany,dc=local
 objectClass: top
 objectClass: dcObject
-objectclass: organization
+objectClass: organization
 o: MyCompany
 dc: mycompany
 
