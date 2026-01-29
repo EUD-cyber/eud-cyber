@@ -28,7 +28,7 @@ write_files:
     content: |
          net.ipv4.ip_forward=0
       
-  - path: /etc/systemd/system/mirror-eth2.service
+  - path: /etc/systemd/system/mirror-ens20.service
     permissions: "0644"
     content: |
       [Unit]
