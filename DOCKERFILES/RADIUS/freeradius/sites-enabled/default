@@ -1,5 +1,11 @@
 server default {
 
+listen {
+    type = auth
+    ipaddr = *
+    port = 1812
+}
+
 authorize {
     ldap
 }
