@@ -28,6 +28,7 @@ services:
       - "1813:1813/udp"
     volumes:
       - ./freeradius/clients.conf:/etc/freeradius/clients.conf
+      - ./freeradius/radiusd.conf:/etc/freeradius/radiusd.conf
       - ./freeradius/mods-enabled/ldap:/etc/freeradius/mods-enabled/ldap
       - ./freeradius/sites-enabled/default:/etc/freeradius/sites-enabled/default
     command: ["freeradius", "-X"]
