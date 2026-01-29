@@ -22,8 +22,7 @@ packages:
   - lsb-release
   - docker.io
 
-write_file:
-
+write_files:
   - path: /etc/sysctl.d/99-mirror.conf
     permissions: "0644"
     content: |
