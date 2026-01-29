@@ -1,8 +1,9 @@
 ldap {
     server = "ldap"
     port = 389
+
     identity = "cn=admin,dc=mycompany,dc=local"
-    password = "Password1!"
+    password = Password1!
 
     base_dn = "dc=mycompany,dc=local"
 
@@ -12,12 +13,14 @@ ldap {
     }
 
     group {
-        base_dn = "ou=users,dc=mycompany,dc=local"
+        base_dn = "dc=mycompany,dc=local"
+        name_attribute = cn
     }
 
-    timeout = 4
-    timelimit = 3
-    net_timeout = 1
+    options {
+        chase_referrals = yes
+        rebind = yes
+    }
 
     tls {
         start_tls = no
