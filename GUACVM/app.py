@@ -15,6 +15,19 @@ TARGETS = {
     "proxmox": {"host": "172.20.0.100", "user": "root", "compose_dir": None}
 }
 
+SNAPSHOT_NAME = "First_snapshot"
+
+VM_RESET_MAP = {
+    "opnsense": "opnsense",
+    "vuln-srv01": "vuln",
+    "vuln-srv02": "vuln",
+    "appsrv01": "appsrv",
+    "kali01": "kali",
+    "client01": "client",
+    "wazuh": "wazuh",
+    "win2025": "win2025"
+}
+
 MIRROR_CONFIGS = {
     "kali": {
         "vm_prefix": "kali",
@@ -172,6 +185,35 @@ def lab_stop(lab):
     cmd = f"cd {TARGETS[lab]['compose_dir']} && docker compose down -v"
     out, err = run_ssh(lab, cmd)
     return jsonify(lab=lab, result="stopped", output=out, error=err)
+
+
+# =========================
+# RESET LABS
+# =========================
+@app.route("/api/resetvm/<vmname>", methods=["POST"])
+def reset_vm(vmname):
+
+    if vmname not in VM_RESET_MAP:
+        return jsonify(error="Unknown VM"), 404
+
+    prefix = VM_RESET_MAP[vmname]
+    vmid = get_vmid_by_prefix(prefix)
+
+    if not vmid:
+        return jsonify(error="VM not found"), 404
+
+    cmd = f"qm rollback {vmid} {SNAPSHOT_NAME}"
+    out, err = run_ssh("proxmox", cmd)
+
+    return jsonify(
+        vm=vmname,
+        vmid=vmid,
+        snapshot=SNAPSHOT_NAME,
+        output=out,
+        error=err,
+        status="rollback started"
+    )
+
 
 # =========================
 # LIST LABS
