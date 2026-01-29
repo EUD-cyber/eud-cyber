@@ -3,7 +3,7 @@ ldap {
     port = 389
 
     identity = "cn=admin,dc=mycompany,dc=local"
-    password = Password1!
+    password = "Password1!"
 
     base_dn = "dc=mycompany,dc=local"
 
@@ -15,6 +15,10 @@ ldap {
     group {
         base_dn = "dc=mycompany,dc=local"
         name_attribute = cn
+    }
+
+    update {
+        control:Cleartext-Password := 'userPassword'
     }
 
     options {
