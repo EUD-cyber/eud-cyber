@@ -6,6 +6,9 @@ vars:
     HOME_NET: "[192.168.0.0/16]"
     EXTERNAL_NET: "!$HOME_NET"
 
+rule-files:
+  - suricata.rules
+
 outputs:
   - fast:
       enabled: yes
@@ -24,6 +27,3 @@ af-packet:
     cluster-id: 99
     cluster-type: cluster_flow
     defrag: yes
-
-rule-files:
-  - suricata.rules
