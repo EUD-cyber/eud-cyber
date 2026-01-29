@@ -1,10 +1,12 @@
-dn: ou=users,dc=mycompany,dc=local
-objectClass: organizationalUnit
-ou: users
-
 dn: uid=testuser,ou=users,dc=mycompany,dc=local
 objectClass: inetOrgPerson
+objectClass: posixAccount
+objectClass: top
 cn: Test User
 sn: User
 uid: testuser
+uidNumber: 10000
+gidNumber: 10000
+homeDirectory: /home/testuser
+loginShell: /bin/bash
 userPassword: testpass
