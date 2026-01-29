@@ -1,12 +1,13 @@
 dn: uid=testuser,ou=users,dc=mycompany,dc=local
 objectClass: inetOrgPerson
-objectClass: posixAccount
-objectClass: top
-cn: Test User
-sn: User
+cn: testuser
+sn: user
 uid: testuser
-uidNumber: 10000
-gidNumber: 10000
-homeDirectory: /home/testuser
-loginShell: /bin/bash
 userPassword: testpass
+
+dn: uid=admin,ou=users,dc=mycompany,dc=local
+objectClass: inetOrgPerson
+cn: admin
+sn: admin
+uid: admin
+userPassword: Password1!
