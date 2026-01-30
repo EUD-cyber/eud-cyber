@@ -35,6 +35,7 @@ echo "11) Create APPSRV01 VM"
 echo "12) Create Client01 VM"
 echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
+echo "99) Cleanup all installation"
 echo "0) Exit"
 echo "=============================="
 
@@ -138,6 +139,10 @@ case "$CHOICE" in
      echo "Starting Windows server 2025 VM creation.... "
      bash "$WIN2025"
      ;;
+  99)
+     rm -rf ./eud-cyber
+     rm -rf /var/lib/vz/snippets/*
+     rm -rf /var/lib/vz/template/iso/*
   0)
     echo "Exiting."
     exit 0
