@@ -28,19 +28,15 @@ wazuh \
 user: wazuh-user pass: wazuh \
 webuser: admin webpass: admin
 
-appsrv01\
-  freeradius \
-   user: administrator pass: radius
-  
-Vulnsrv01 and 02 pre installede with juiceshop docker (not started)
-
 api on guacamole that pulls status on the juiceshop docker and can start and stop them from the gui \
 the api is listing on port 5000 on guacvm and the tasks.html uses that for pulling the status \
 
 
 missing \
   ip address validation on vm opnsense and guacvm \
-  Problem with the WIN11 image, needs more testing 
+  Problem with the WIN2025 image, needs more testing, gets no ip adresse
+  kali don't install the apps after reboot, its a service needs testing
+  option 3 install multilab not done yet
   
 Network \
   guacvm \
@@ -49,10 +45,10 @@ Network \
   opnsense \
     vmbri0  static/dhcp \
     lan1  192.168.1.1/24 \
-    lan2  10.0.0.1/24 \
+    lan2  192.168.2.1/24 \
     oobm  172.20.0.2/24 \
   vulnsrv01 \
-    lan1  192.168.1.20 \
+    lan1  192.168.1.20/24 \
     oobm  172.20.0.10/24 \
   vulnsrv02 \
     lan2 192.168.2.21/24 \
@@ -69,10 +65,7 @@ Network \
   appsrv01 \
     lan2 192.168.2.25/24 \
     oobm 172.20.0.25 \
-  win11 (not done yet) \
-    lan1  192.168.1.101/24 (not done yet) \
-    oobm 172.20.0.12/24 (not done yet) \
-  server2025 (not done yet) \
+  server2025 \
     lan2 192.168.2.22/24 \
     oobm 172.20.0.22/24 
     
