@@ -116,6 +116,9 @@ else
   echo "DHCP enabled no DNS server needed"
 fi
 
+#Creating first snapshot of the VM 
+qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
+
 # ===== Start VM =====
 echo "Starting VM $VMID ($VM_NAME)..."
 qm start $VMID
