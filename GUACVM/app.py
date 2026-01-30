@@ -194,26 +194,71 @@ def lab_stop(lab):
 def reset_vm(vmname):
 
     if vmname not in VM_RESET_MAP:
-        return jsonify(error="Unknown VM"), 404
+        return jsonify(status="error", message="Unknown VM"), 404
 
     prefix = VM_RESET_MAP[vmname]
     vmid = get_vmid_by_prefix(prefix)
 
     if not vmid:
-        return jsonify(error="VM not found"), 404
+        return jsonify(status="error", message="VM not found"), 404
 
-    cmd = f"qm rollback {vmid} {SNAPSHOT_NAME}"
+    cmd = f"""
+qm rollback {vmid} {SNAPSHOT_NAME}
+sleep 2
+qm start {vmid}
+"""
+
     out, err = run_ssh("proxmox", cmd)
 
+    if err:
+        return jsonify(
+            status="error",
+            vm=vmname,
+            vmid=vmid,
+            snapshot=SNAPSHOT_NAME,
+            error=err,
+            output=out
+        ), 500
+
     return jsonify(
+        status="success",
         vm=vmname,
         vmid=vmid,
         snapshot=SNAPSHOT_NAME,
-        output=out,
-        error=err,
-        status="rollback started"
+        message="Snapshot rolled back and VM started",
+        output=out
     )
 
+@app.route("/api/resetvm_all", methods=["POST"])
+def reset_all_vms():
+
+    results = {}
+
+    for vmname, prefix in VM_RESET_MAP.items():
+        vmid = get_vmid_by_prefix(prefix)
+
+        if not vmid:
+            results[vmname] = "VM not found"
+            continue
+
+        cmd = f"""
+qm rollback {vmid} {SNAPSHOT_NAME}
+sleep 2
+qm start {vmid}
+"""
+
+        out, err = run_ssh("proxmox", cmd)
+
+        if err:
+            results[vmname] = f"error: {err}"
+        else:
+            results[vmname] = "reset started"
+
+    return jsonify(
+        status="success",
+        snapshot=SNAPSHOT_NAME,
+        results=results
+    )
 
 # =========================
 # LIST LABS
