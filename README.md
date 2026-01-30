@@ -35,8 +35,8 @@ webuser: admin webpass: admin
 win2025 \
 user: administrator pass: Password1! 
 
-api on guacamole that pulls status on the juiceshop docker and can start and stop them from the gui \
-the api is listing on port 5000 on guacvm and the tasks.html uses that for pulling the status 
+api on guacamole that pulls status on the docker on different server and can start and stop them from the gui \
+the api is listing on port 5000 on guacvm and the tasks.html uses that for pulling the status and labctl uses it to control the vm from proxmox
 
 
 missing \
