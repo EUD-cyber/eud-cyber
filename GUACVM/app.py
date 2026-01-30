@@ -15,18 +15,18 @@ TARGETS = {
     "proxmox": {"host": "172.20.0.100", "user": "root", "compose_dir": None}
 }
 
-SNAPSHOT_NAME = "First_snapshot"
-
-VM_RESET_MAP = {
+VM_MAP = {
     "opnsense": "opnsense",
-    "vuln-srv01": "vuln",
-    "vuln-srv02": "vuln",
+    "vuln-srv01": "vuln-srv01",
+    "vuln-srv02": "vuln-srv02",
     "appsrv01": "appsrv",
     "kali01": "kali",
     "client01": "client",
     "wazuh": "wazuh",
     "win2025": "win2025"
 }
+
+SNAPSHOT_NAME = "First_snapshot"
 
 MIRROR_CONFIGS = {
     "kali": {
@@ -190,51 +190,61 @@ def lab_stop(lab):
 # =========================
 # RESET LABS
 # =========================
-@app.route("/api/resetvm/<vmname>", methods=["POST"])
-def reset_vm(vmname):
 
-    if vmname not in VM_RESET_MAP:
-        return jsonify(status="error", message="Unknown VM"), 404
+@app.route("/api/vm/<vmname>/status")
+def vm_status(vmname):
+    if vmname not in VM_MAP:
+        return jsonify(error="Unknown VM"), 404
 
-    prefix = VM_RESET_MAP[vmname]
-    vmid = get_vmid_by_prefix(prefix)
+    vmid = get_vmid_by_prefix(VM_MAP[vmname])
+    out, _ = run_ssh("proxmox", f"qm status {vmid}")
 
-    if not vmid:
-        return jsonify(status="error", message="VM not found"), 404
+    status = "running" if "running" in out else "stopped"
+
+    return jsonify(vm=vmname, vmid=vmid, status=status)
+
+
+@app.route("/api/vm/<vmname>/start", methods=["POST"])
+def vm_start(vmname):
+    vmid = get_vmid_by_prefix(VM_MAP[vmname])
+    out, err = run_ssh("proxmox", f"qm start {vmid}")
+    return jsonify(vm=vmname, action="start", output=out, error=err)
+
+
+@app.route("/api/vm/<vmname>/stop", methods=["POST"])
+def vm_stop(vmname):
+    vmid = get_vmid_by_prefix(VM_MAP[vmname])
+    out, err = run_ssh("proxmox", f"qm stop {vmid}")
+    return jsonify(vm=vmname, action="stop", output=out, error=err)
+
+
+@app.route("/api/vm/<vmname>/reset", methods=["POST"])
+def vm_reset(vmname):
+    vmid = get_vmid_by_prefix(VM_MAP[vmname])
 
     cmd = f"""
+qm stop {vmid}
+sleep 2
 qm rollback {vmid} {SNAPSHOT_NAME}
 sleep 2
 qm start {vmid}
 """
-
     out, err = run_ssh("proxmox", cmd)
 
-    if err:
-        return jsonify(
-            status="error",
-            vm=vmname,
-            vmid=vmid,
-            snapshot=SNAPSHOT_NAME,
-            error=err,
-            output=out
-        ), 500
-
     return jsonify(
-        status="success",
         vm=vmname,
-        vmid=vmid,
+        action="reset",
         snapshot=SNAPSHOT_NAME,
-        message="Snapshot rolled back and VM started",
-        output=out
+        output=out,
+        error=err
     )
 
-@app.route("/api/resetvm_all", methods=["POST"])
+@app.route("/api/vm/resetall", methods=["POST"])
 def reset_all_vms():
 
     results = {}
 
-    for vmname, prefix in VM_RESET_MAP.items():
+    for vmname, prefix in VM_MAP.items():
         vmid = get_vmid_by_prefix(prefix)
 
         if not vmid:
@@ -242,6 +252,8 @@ def reset_all_vms():
             continue
 
         cmd = f"""
+qm stop {vmid}
+sleep 2
 qm rollback {vmid} {SNAPSHOT_NAME}
 sleep 2
 qm start {vmid}
@@ -252,12 +264,13 @@ qm start {vmid}
         if err:
             results[vmname] = f"error: {err}"
         else:
-            results[vmname] = "reset started"
+            results[vmname] = "reset OK"
 
     return jsonify(
-        status="success",
+        action="resetall",
         snapshot=SNAPSHOT_NAME,
-        results=results
+        results=results,
+        status="completed"
     )
 
 # =========================
