@@ -32,7 +32,6 @@ the api is listing on port 5000 on guacvm and the tasks.html uses that for pulli
 
 
 missing \
-  ip address validation on vm opnsense and guacvm \
   Problem with the WIN2025 image, needs more testing, gets no ip adresse
   kali don't install the apps after reboot, its a service needs testing
   option 3 install multilab not done yet
