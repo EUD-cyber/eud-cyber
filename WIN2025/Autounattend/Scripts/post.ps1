@@ -60,4 +60,23 @@ if ((hostname) -ne $targetName) {
 Write-Host "Enabling RDP..."
 Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0
 Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+# install domain service and config lab.local
+Write-Host "Installing AD DS role..."
+Install-WindowsFeature AD-Domain-Services -IncludeManagementTools
+
+Import-Module ADDSDeployment
+
+$DomainName = "lab.local"
+$SafeModePassword = ConvertTo-SecureString "P@ssw0rd123!" -AsPlainText -Force
+
+Write-Host "Promoting server to Domain Controller..."
+
+Install-ADDSForest `
+    -DomainName $DomainName `
+    -DomainNetbiosName "LAB" `
+    -SafeModeAdministratorPassword $SafeModePassword `
+    -InstallDns `
+    -Force `
+    -NoRebootOnCompletion:$false
+# reboot last
 Restart-Computer -Force
