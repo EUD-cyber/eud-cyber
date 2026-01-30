@@ -17,7 +17,6 @@ KALI01="./KALI01/KALI01_installer.sh"
 WAZUH="./WAZUH/WAZUH_installer.sh"
 WIN11="./WIN11/WIN11_installer.sh"
 WIN2025="./WIN2025/WIN2025_installer.sh"
-FINISH="./finish.sh"
 
 echo "=============================="
 echo " Proxmox Deployment Menu"
@@ -36,7 +35,6 @@ echo "11) Create APPSRV01 VM"
 echo "12) Create Client01 VM"
 echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
-echo "99) Finish script"
 echo "0) Exit"
 echo "=============================="
 
@@ -137,22 +135,12 @@ case "$CHOICE" in
     echo "Starting APPSRV01 creation... "
     bash "$APPSRV01"
     
-#    echo "Starting Windows 11 VM creation... "
-#    bash "$WIN11"
-
      echo "Starting Windows server 2025 VM creation.... "
      bash "$WIN2025"
-    
-    echo "Start finishing script..."
-    bash "$FINISH"
-    ;;
+     ;;
   0)
     echo "Exiting."
     exit 0
-    ;;
-  99)
-    echo "Start finishing script..."
-    bash "$FINISH"
     ;;
   *)
     echo "❌ Invalid choice"
