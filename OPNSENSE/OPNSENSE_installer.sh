@@ -123,6 +123,9 @@ qm disk resize $VMID scsi0 +$DISK_SIZE
 # Attach cdrom to vm
 qm set $VMID --ide2 local:iso/opnsense-config.iso,media=cdrom
 
+#Creating first snapshot of the VM 
+qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
+
 ### ===== START VM =====
 qm start $VMID
 
