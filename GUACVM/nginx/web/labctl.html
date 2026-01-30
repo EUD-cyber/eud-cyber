@@ -142,24 +142,42 @@
     <button class="nav-button" onclick="resetVM('client01')">Reset Client01</button>
     <button class="nav-button" onclick="resetVM('wazuh')">Reset Wazuh</button>
     <button class="nav-button" onclick="resetVM('win2025')">Reset WIN2025</button>
-
+    <button class="nav-button" style="background:#dc2626"onclick="resetAllVMs()"> 🔥 Reset ALL VMs</button>
   </div>
 </div>
 
 <script>
 function resetVM(vm) {
-  if(confirm("Revert snapshot for " + vm + "?")) {
+  if(confirm("Revert snapshot and restart " + vm + "?")) {
     fetch("/api/resetvm/" + vm, { method: "POST" })
       .then(r => r.json())
-      .then(data => alert("Reset started for " + vm))
-      .catch(err => alert("Error resetting VM"));
+      .then(data => {
+        if(data.status === "success") {
+          alert("✅ " + vm + " reset started");
+        } else {
+          alert("❌ Error: " + data.message);
+        }
+      })
+      .catch(err => alert("Request failed"));
+  }
+}
+</script
+
+<script>
+function resetAllVMs() {
+  if(confirm("⚠️ This will reset ALL VMs. Are you sure?")) {
+    fetch("/api/resetvm_all", { method: "POST" })
+      .then(r => r.json())
+      .then(data => {
+        alert("All VMs reset started");
+        console.log(data);
+      })
+      .catch(err => alert("Failed to reset all VMs"));
   }
 }
 </script>
 
-
 </div>
-
 
 </div>
 </body>
