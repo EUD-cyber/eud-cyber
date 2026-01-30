@@ -111,6 +111,9 @@ qm set $VMID --ipconfig0 $IP_ADDR,$IP_GW \
   --ciupgrade \
   --cicustom "user=local:snippets/VULNSRV01_userdata.yaml"
 
+#Creating first snapshot of the VM 
+qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
+
 # ===== Start VM =====
 echo "Starting VM $VMID ($VM_NAME)..."
 qm start $VMID
