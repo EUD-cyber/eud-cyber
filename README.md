@@ -41,7 +41,8 @@ the api is listing on port 5000 on guacvm and the tasks.html uses that for pulli
 
 missing \
   Problem with the WIN2025 image, needs more testing, gets no ip adresse \
-  option 3 install multilab not done yet 
+  option 3 install multilab not done yet \
+  remove auth from guacamole its only a lab env.
  
   
 Network \
