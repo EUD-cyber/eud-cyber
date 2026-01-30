@@ -4,7 +4,7 @@ services:
     container_name: dvwa
     restart: always
     ports:
-      - "8080:80"         # Visit http://localhost:8080
+      - "80:80"         # Visit http://localhost:80
     environment:
       # DVWA uses these to connect to the DB
       MYSQL_HOST: db
