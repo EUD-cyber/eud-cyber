@@ -9,7 +9,7 @@ then 3 options \
 2 mini install requires, 4 cores, 32 gb memory, 500 gb hdd \
 3 install mulitple labs on single proxmox or proxmox cluster 
 
-Remember when the vm is created and startede the cloud-init goes to work so it can be some time before all things work, to check this use proxmox and login to the vm and type "cloud-init status" if it "running" grap a cop of coffee and wait for it to be "done"
+Remember when the vm is created and started the cloud-init goes to work so it can be some time before all things work, to check this use proxmox and login to the vm and type "cloud-init status" if it "running" grap a cop of coffee and wait for it to be "done"
 
 <img width="798" height="468" alt="image" src="https://github.com/user-attachments/assets/775c2eaa-e9af-4ec5-8daf-6e31d3102e4e" />
 
