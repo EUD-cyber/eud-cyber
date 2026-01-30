@@ -22,6 +22,7 @@ packages:
   - ca-certificates
   - curl
   - docker.io
+  - qemu-guest-agent
 
 write_files:
   - path: /opt/guacamole/docker-compose.yml
@@ -116,11 +117,12 @@ write_files:
 
 runcmd:
   - apt-get update
-  - apt-get install -y docker-compose-v2 qemu-guest-agent netfilter-persistent python3-flask python3-paramiko python3 python3-pip
+  - apt-get install -y docker-compose-v2 netfilter-persistent python3-flask python3-paramiko python3 python3-pip
   - pip3 install flask paramiko
   - systemctl enable docker
   - systemctl start docker
   - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent
   - mkdir -p /opt/guacamole
   - cd /opt/guacamole
   - mkdir ./init >/dev/null 2>&1
