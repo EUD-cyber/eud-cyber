@@ -143,6 +143,7 @@ case "$CHOICE" in
      rm -rf ./eud-cyber
      rm -rf /var/lib/vz/snippets/*
      rm -rf /var/lib/vz/template/iso/*
+     ;;
   0)
     echo "Exiting."
     exit 0
