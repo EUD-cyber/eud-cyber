@@ -7,7 +7,7 @@ run install.sh \
 then 3 options \
 1 full install \
 2 mini install requires, 4 cores, 32 gb memory, 500 gb hdd \
-3 install mulitple labs on single proxmox or proxmox cluster \
+3 install mulitple labs on single proxmox or proxmox cluster 
 
 <img width="798" height="468" alt="image" src="https://github.com/user-attachments/assets/775c2eaa-e9af-4ec5-8daf-6e31d3102e4e" />
 
