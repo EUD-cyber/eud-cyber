@@ -21,7 +21,7 @@ IMG_PATH="$(pwd)/KALI01/$IMG_NAME"
 DISK="disk.raw"
 ISO_STORAGE="local"
 DISK_STORAGE="local-lvm"
-MEMORY=2048    # in MB
+MEMORY=4096      # in MB
 CORES=2
 DISK_SIZE="32G" # the number is in GB
 BRIDGE="lan1"
@@ -85,6 +85,7 @@ qm create $VMID \
   --cpu host \
   --net0 virtio,bridge=$BRIDGE \
   --net1 virtio,bridge=$BRIDGE1 \
+  --net2 virtio,bridge=$BRIDGE \
   --ostype l26
 
 # ===== Add LVM disk =====
@@ -115,6 +116,9 @@ qm set $VMID --ipconfig0 $IP_ADDR \
   --nameserver $DNS_SERVER \
   --ciupgrade 1 \
   --cicustom "user=local:snippets/KALI01_userdata.yaml"
+
+#Creating first snapshot of the VM 
+qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
 
 # ===== Start VM =====
 echo "Starting VM $VMID ($VM_NAME)..."
