@@ -104,6 +104,9 @@ qm set $VMID --ipconfig0 $IP_ADDR,$IP_GW \
 echo "➡ Attaching custom cloud-init config..."
 qm set "$VMID" --cicustom "user=local:snippets/WAZUH_userdata.yaml"
 
+#Creating first snapshot of the VM 
+qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
+
 echo "➡ Done — starting VM..."
 qm start "$VMID"
 
