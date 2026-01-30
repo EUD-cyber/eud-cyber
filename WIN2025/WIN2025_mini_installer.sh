@@ -225,4 +225,8 @@ qm set $VMID --boot order="scsi0;ide1" \
    --tpmstate0 $DISK_STORAGE:0,version=v2.0 \
    --tablet 0
 qm enroll-efi-keys $VMID
+
+#Creating first snapshot of the VM 
+qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
+
 qm start $VMID
