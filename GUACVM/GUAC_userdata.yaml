@@ -136,7 +136,7 @@ runcmd:
   - wget -O /opt/guacamole/nginx/web/tasks.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/tasks.html
   - wget -O /opt/guacamole/nginx/web/topology.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/topology.html
   - wget -O /opt/guacamole/nginx/web/labctl.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/labctl.html
-  - wget -O /opt/guacamole/nginx/web/topologi.png https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/topologi.png
+  - wget -O /opt/guacamole/nginx/web/topology.png https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/topology.png
   - wget -O /opt/guacamole/nat.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nat.sh
   - chmod +x /opt/guacamole/nat.sh
   - docker run --rm 'guacamole/guacamole:1.6.0' /opt/guacamole/bin/initdb.sh --postgresql > ./init/initdb.sql
