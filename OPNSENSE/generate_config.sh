@@ -104,8 +104,6 @@ elif [ "$MODE" = "2" ]; then
         $valid_dns && break
     done
 
-fi
-
   WAN_DNS_BLOCK="<dnsserver>${WAN_DNS}</dnsserver>"
 
   WAN_IP_BLOCK="<ipaddr>${WAN_IP}</ipaddr>
