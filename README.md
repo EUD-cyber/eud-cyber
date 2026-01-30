@@ -36,12 +36,12 @@ win2025 \
 user: administrator pass: Password1! 
 
 api on guacamole that pulls status on the juiceshop docker and can start and stop them from the gui \
-the api is listing on port 5000 on guacvm and the tasks.html uses that for pulling the status \
+the api is listing on port 5000 on guacvm and the tasks.html uses that for pulling the status 
 
 
 missing \
   Problem with the WIN2025 image, needs more testing, gets no ip adresse \
-  option 3 install multilab not done yet \
+  option 3 install multilab not done yet 
  
   
 Network \
