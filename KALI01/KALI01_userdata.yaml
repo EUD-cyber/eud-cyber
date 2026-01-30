@@ -64,6 +64,9 @@ write_files:
     content: |
       #!/bin/bash
       set -e
+      cat > /etc/apt/sources.list <<EOF
+      deb https://http.kali.org/kali kali-rolling main contrib non-free non-free-firmware
+      EOF
       apt-get update
       apt-get install -y kali-linux-default nikto seclists gobuster sqlmap
       touch /var/lib/kali-tools-installed
