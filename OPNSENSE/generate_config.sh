@@ -3,21 +3,10 @@ set -e
 
 mkdir -p $(pwd)/OPNSENSE/iso/conf
 
-echo "=== OPNsense WAN IP Configuration ==="
-echo "1) DHCP"
-echo "2) Static"
-read -rp "Select WAN mode [1-2]: " MODE
-
 WAN_IF="vtnet1"
 LAN_IF="vtnet0"
 LAN2_IF="vtnet2"
 OOBM_IF="vtnet3"
-
-#WAN_IF="em1"
-#LAN_IF="em0"
-#LAN2_IF="em2"
-#OOBM_IF="em3"
-
 
 HOSTNAME="opnsense"
 DOMAIN="local"
@@ -40,15 +29,82 @@ WAN_DNS=""
 # Default password: opnsense
 ROOT_PASSWORD_HASH='$2y$10$YRVoF4SgskIsrXOvOQjGieB9XqHPRra9R7d80B3BZdbY/j21TwBfS'
 
+echo "=== OPNsense WAN IP Configuration ==="
+echo "1) DHCP"
+echo "2) Static"
+read -rp "Select WAN mode [1-2]: " MODE
+
+# Function to validate IPv4
+validate_ip() {
+    local ip=$1
+    if [[ $ip =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+        for octet in ${ip//./ }; do
+            ((octet >= 0 && octet <= 255)) || return 1
+        done
+        return 0
+    fi
+    return 1
+}
+
+# Validate CIDR (0–32)
+validate_cidr() {
+    [[ "$1" =~ ^([0-9]|[1-2][0-9]|3[0-2])$ ]]
+}
+
 if [ "$MODE" = "1" ]; then
-  WAN_IP_BLOCK="<ipaddr>dhcp</ipaddr>"
-  WAN_GATEWAY_BLOCK=""
-  WAN_DNS=""
+    WAN_IP_BLOCK="<ipaddr>dhcp</ipaddr>"
+    WAN_GATEWAY_BLOCK=""
+    WAN_DNS=""
+
 elif [ "$MODE" = "2" ]; then
-  read -rp "WAN IP address: " WAN_IP
-  read -rp "WAN CIDR (e.g. 24): " WAN_CIDR
-  read -rp "WAN Gateway: " WAN_GW
-  read -rp "WAN dns: " WAN_DNS
+
+    # ---- WAN IP ----
+    while true; do
+        read -rp "WAN IP address: (e.g. 10.0.0.100) " WAN_IP
+        if validate_ip "$WAN_IP"; then
+            break
+        else
+            echo "❌ Invalid WAN IP address."
+        fi
+    done
+
+    # ---- WAN CIDR ----
+    while true; do
+        read -rp "WAN CIDR (e.g. 24): " WAN_CIDR
+        if validate_cidr "$WAN_CIDR"; then
+            break
+        else
+            echo "❌ Invalid CIDR (must be 0-32)."
+        fi
+    done
+
+    # ---- WAN Gateway ----
+    while true; do
+        read -rp "WAN Gateway: (e.g 10.0.0.1)" WAN_GW
+        if validate_ip "$WAN_GW"; then
+            break
+        else
+            echo "❌ Invalid gateway IP."
+        fi
+    done
+
+    # ---- WAN DNS ----
+    while true; do
+        read -rp "WAN DNS (e.g 8.8.8.8): " WAN_DNS
+        valid_dns=true
+
+        for dns_ip in $WAN_DNS; do
+            if ! validate_ip "$dns_ip"; then
+                echo "❌ Invalid DNS server: $dns_ip"
+                valid_dns=false
+                break
+            fi
+        done
+
+        $valid_dns && break
+    done
+
+fi
 
   WAN_DNS_BLOCK="<dnsserver>${WAN_DNS}</dnsserver>"
 
