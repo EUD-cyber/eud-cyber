@@ -120,7 +120,6 @@ runcmd:
   - mkdir -p /home/kali/Desktop/IPS
   - mkdir -p /home/kali/Desktop/wireshark  
   - echo ":1=kali" > /etc/tigervnc/vncserver.users
-  - chown -R kali:kali /home/kali/
   - chown -R kali:kali /home/kali/.vnc
   - chown -R kali:kali /home/kali/.config
   - chown -R kali:kali /home/kali/Desktop/IPS
@@ -134,6 +133,7 @@ runcmd:
   - wget -O /home/kali/Desktop/wireshark/rsasnakeoil2.cap https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.cap
   - wget -O /home/kali/Desktop/wireshark/rsasnakeoil2.key https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.key
   - sed -i 's|^Exec=wireshark|Exec=env QT_QPA_PLATFORM=xcb wireshark|' /usr/share/applications/wireshark.desktop
+  - chown -R kali:kali /home/kali/
   - update-desktop-database
 
 power_state:
