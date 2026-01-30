@@ -32,6 +32,9 @@ wazuh \
 user: wazuh-user pass: wazuh \
 webuser: admin webpass: admin
 
+win2025 \
+user: administrator pass: Password1! 
+
 api on guacamole that pulls status on the juiceshop docker and can start and stop them from the gui \
 the api is listing on port 5000 on guacvm and the tasks.html uses that for pulling the status \
 
