@@ -21,17 +21,16 @@ IMG_PATH="$(pwd)/$IMG_NAME"
 ISO_STORAGE="local"
 DISK_STORAGE="local-lvm"
 MEMORY=4096       # in MB
-CORES=2
+CORES=4
 DISK_SIZE="32G"    # the number is in GB
 BRIDGE="vmbr0"
 BRIDGE1="oobm"
 OOBM_IP="ip=172.20.0.1/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
-SRC_USERDATA="$(pwd)/GUACVM/GUAC_userdata.yaml"     # source file
-DST_USERDATA="GUAC_userdata.yaml"            # destination filename
+SRC_USERDATA="$(pwd)/GUACVM/GUAC_userdata.yaml"    
+DST_USERDATA="GUAC_userdata.yaml"            
 IP_ADDR=""
 DNS_SERVER=""
-# ==================
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
 
@@ -116,6 +115,9 @@ if [[ "$IP_ADDR" != "ip=dhcp" ]]; then
 else
   echo "DHCP enabled no DNS server needed"
 fi
+
+#Creating first snapshot of the VM 
+qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
 
 # ===== Start VM =====
 echo "Starting VM $VMID ($VM_NAME)..."
