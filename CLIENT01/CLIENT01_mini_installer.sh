@@ -20,7 +20,7 @@ IMG_NAME="noble-server-cloudimg-amd64.img"
 IMG_PATH="$(pwd)/$IMG_NAME"
 ISO_STORAGE="local"
 DISK_STORAGE="local-lvm"
-MEMORY=2048     # in MB
+MEMORY=4096     # in MB
 CORES=2
 DISK_SIZE="32G"    # the number is in GB
 BRIDGE="lan1"
@@ -78,6 +78,8 @@ qm create $VMID \
   --name "$VM_NAME" \
   --memory $MEMORY \
   --cores $CORES \
+  --bios seabios \
+  --machine q35 \
   --cpu host \
   --net0 virtio,bridge=$BRIDGE \
   --net1 virtio,bridge=$BRIDGE1 \
@@ -96,6 +98,7 @@ qm set $VMID \
   --ide2 $DISK_STORAGE:cloudinit \
   --boot c \
   --bootdisk scsi0 \
+  --vga std
 
 # ===== Enable QEMU Guest Agent =====
 qm set $VMID --agent enabled=1
@@ -110,6 +113,9 @@ qm set $VMID --ipconfig0 $IP_ADDR,$IP_GW \
   --nameserver $DNS_SERVER \
   --ciupgrade \
   --cicustom "user=local:snippets/CLIENT01_userdata.yaml"
+
+#Creating first snapshot of the VM 
+qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
 
 # ===== Start VM =====
 echo "Starting VM $VMID ($VM_NAME)..."
