@@ -1,9 +1,9 @@
 # eud-cyber
-cyber eud
+This github if created for the cyber education on danish technical colleges to create a safe and automated lab environment for the students to pratice in, but its free for all to download and play with
 
 This script is testet with proxmox 9.1 and 9.1.1
 
-run install.sh \
+just git clone this site and run  run install.sh \
 then 3 options \
 1 full install \
 2 mini install requires, 4 cores, 32 gb memory, 500 gb hdd \
