@@ -17,10 +17,36 @@
     display:block; width:100%; margin-bottom:8px;
     padding:10px 12px; background:#1f2937; color:#fff;
     border-radius:6px; text-decoration:none;
+    border:none; cursor:pointer;
   }
   .nav-button:hover, .conn-button:hover { background:#2563eb; }
 
   .content { padding:24px; overflow:auto; }
+
+  /* VM GRID */
+  .vm-grid {
+    display:grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap:16px;
+    max-width:900px;
+  }
+
+  .vm-card {
+    background:#111827;
+    border:1px solid #1f2937;
+    border-radius:12px;
+    padding:14px;
+  }
+
+  .vm-buttons {
+    display:flex;
+    gap:8px;
+  }
+
+  .vm-buttons .nav-button {
+    width:auto;
+  }
+
 </style>
 
 <script>
@@ -35,150 +61,171 @@
 <body>
 <div class="layout">
 
-  <!-- SIDEBAR -->
-  <div class="sidebar">
+<!-- SIDEBAR -->
+<div class="sidebar">
 
-    <div class="title">Lab Portal</div>
+  <div class="title">Lab Portal</div>
 
-    <div class="nav-title">Pages</div>
-    <a class="nav-button" href="index.html">Home</a>
-    <a class="nav-button" href="tasks.html">Tasks</a>
-    <a class="nav-button" href="topology.html">Topology</a>
-    <a class="nav-button" href="labctl.html">Lab control</a>
+  <div class="nav-title">Pages</div>
+  <a class="nav-button" href="index.html">Home</a>
+  <a class="nav-button" href="tasks.html">Tasks</a>
+  <a class="nav-button" href="topology.html">Topology</a>
+  <a class="nav-button" href="labctl.html">Lab control</a>
 
-    <div class="nav-title">Connections</div>
+  <div class="nav-title">Connections</div>
 
-    <!-- Guacamole connections -->
-   <a class="conn-button" target="_blank"
-       href="#" onclick="this.href = link('/guacamole/#/client/NgBjAHBvc3RncmVzcWw')">
-       Kali01 VNC
-    </a>
+  <a class="conn-button" target="_blank" href="#" onclick="this.href = link('/guacamole/#/client/NgBjAHBvc3RncmVzcWw')">Kali01 VNC</a>
+  <a class="conn-button" target="_blank" href="#" onclick="this.href = link('/guacamole/#/client/MgBjAHBvc3RncmVzcWw')">Kali01 SSH</a>
+  <a class="conn-button" target="_blank" href="#" onclick="this.href = link('/guacamole/#/client/MTAAYwBwb3N0Z3Jlc3Fs')">Client01 RDP</a>
+  <a class="conn-button" target="_blank" href="#" onclick="this.href = link('/guacamole/#/client/OQBjAHBvc3RncmVzcWw')">Client01 SSH</a>
+  <a class="conn-button" target="_blank" href="#" onclick="this.href = link('/guacamole/#/client/MTIAYwBwb3N0Z3Jlc3Fs')">VULNSRV01 SSH</a>
+  <a class="conn-button" target="_blank" href="#" onclick="this.href = link('/guacamole/#/client/NQBjAHBvc3RncmVzcWw')">VULNSRV02 SSH</a>
+  <a class="conn-button" target="_blank" href="#" onclick="this.href = link('/guacamole/#/client/MQBjAHBvc3RncmVzcWw')">APPSRV01 SSH</a>
+  <a class="conn-button" target="_blank" href="#" onclick="this.href = nat(9002, true)">Wazuh GUI</a>
+  <a class="conn-button" target="_blank" href="#" onclick="this.href = link('/guacamole/#/client/NABjAHBvc3RncmVzcWw')">Wazuh SSH</a>
+  <a class="conn-button" target="_blank" href="#" onclick="this.href = nat(9003, true)">OPNsense GUI</a>
+  <a class="conn-button" target="_blank" href="#" onclick="this.href = link('/guacamole/#/client/OABjAHBvc3RncmVzcWw')">OPNsense SSH</a>
+  <a class="conn-button" target="_blank" href="#" onclick="this.href = link('/guacamole/#/client/NwBjAHBvc3RncmVzcWw')">WIN2025 RDP</a>
+  <a class="conn-button" target="_blank" href="#" onclick="this.href = nat(9001, true)">Proxmox GUI</a>
+  <a class="conn-button" target="_blank" href="#" onclick="this.href = link('/guacamole/#/client/MTEAYwBwb3N0Z3Jlc3Fs')">Proxmox SSH</a>
 
-    <a class="conn-button" target="_blank"
-       href="#" onclick="this.href = link('/guacamole/#/client/MgBjAHBvc3RncmVzcWw')">
-       Kali01 SSH
-    </a>
+</div>
 
-    <a class="conn-button" target="_blank"
-       href="#" onclick="this.href = link('/guacamole/#/client/MTAAYwBwb3N0Z3Jlc3Fs')">
-       Client01 RDP
-    </a>
-
-    <a class="conn-button" target="_blank"
-       href="#" onclick="this.href = link('/guacamole/#/client/OQBjAHBvc3RncmVzcWw')">
-       Client01 SSH
-    </a>
-
-    <a class="conn-button" target="_blank"
-       href="#" onclick="this.href = link('/guacamole/#/client/MTIAYwBwb3N0Z3Jlc3Fs')">
-       VULNSRV01 SSH
-    </a>
-
-    <a class="conn-button" target="_blank"
-       href="#" onclick="this.href = link('/guacamole/#/client/NQBjAHBvc3RncmVzcWw')">
-       VULNSRV02 SSH
-    </a>
-
-     <a class="conn-button" target="_blank"
-       href="#" onclick="this.href = link('/guacamole/#/client/MQBjAHBvc3RncmVzcWw')">
-       APPSRV01 SSH
-    </a>
-
-    <a class="conn-button" target="_blank"
-       href="#" onclick="this.href = nat(9002, true)">
-       Wazuh GUI
-    </a>
-
-    <a class="conn-button" target="_blank"
-       href="#" onclick="this.href = link('/guacamole/#/client/NABjAHBvc3RncmVzcWw')">
-       Wazuh SSH
-    </a>
-
-    <a class="conn-button" target="_blank"
-       href="#" onclick="this.href = nat(9003, true)">
-       OPNsense GUI
-    </a>
-
-    <a class="conn-button" target="_blank"
-       href="#" onclick="this.href = link('/guacamole/#/client/OABjAHBvc3RncmVzcWw')">
-       OPNsense SSH
-    </a>
-
-    <a class="conn-button" target="_blank"
-       href="#" onclick="this.href = link('/guacamole/#/client/NwBjAHBvc3RncmVzcWw')">
-       WIN2025 RDP
-    </a>
-
-    <a class="conn-button" target="_blank"
-     href="#" onclick="this.href = nat(9001, true)">
-     Proxmox GUI
-    </a>
-
-    <a class="conn-button" target="_blank"
-     href="#" onclick="this.href = link('/guacamole/#/client/MTEAYwBwb3N0Z3Jlc3Fs')">
-     Proxmox SSH
-    </a>
-
-  </div>
+<!-- CONTENT -->
 <div class="content">
-  <h2>Lab Control</h2>
 
-  <div style="
-    background:#111827;
-    border:1px solid #1f2937;
-    border-radius:12px;
-    padding:16px;
-    max-width:600px;
-  ">
+<h3>Virtual Machine Control</h3>
+<p>Start, stop, reset and view status of each VM.</p>
 
-    <h3>Reset Virtual Machines</h3>
-    <p>Click a button to revert the VM to default.</p>
+<div class="vm-grid">
 
-    <button class="nav-button" onclick="resetVM('opnsense')">Reset OPNsense</button>
-    <button class="nav-button" onclick="resetVM('vuln-srv01')">Reset VULN-SRV01</button>
-    <button class="nav-button" onclick="resetVM('vuln-srv02')">Reset VULN-SRV02</button>
-    <button class="nav-button" onclick="resetVM('appsrv01')">Reset APPSRV01</button>
-    <button class="nav-button" onclick="resetVM('kali01')">Reset Kali01</button>
-    <button class="nav-button" onclick="resetVM('client01')">Reset Client01</button>
-    <button class="nav-button" onclick="resetVM('wazuh')">Reset Wazuh</button>
-    <button class="nav-button" onclick="resetVM('win2025')">Reset WIN2025</button>
-    <button class="nav-button" style="background:#dc2626"onclick="resetAllVMs()"> 🔥 Reset ALL VMs</button>
+  <!-- VM cards -->
+  <div class="vm-card">
+    <h4>OPNsense</h4>
+    Status: <span id="status-opnsense">Loading...</span><br><br>
+    <div class="vm-buttons">
+      <button class="nav-button" onclick="vmAction('opnsense','start')">Start</button>
+      <button class="nav-button" onclick="vmAction('opnsense','stop')">Stop</button>
+      <button class="nav-button" onclick="vmAction('opnsense','reset')">Reset</button>
+    </div>
   </div>
+
+  <div class="vm-card">
+    <h4>VULN-SRV01</h4>
+    Status: <span id="status-vuln-srv01">Loading...</span><br><br>
+    <div class="vm-buttons">
+      <button class="nav-button" onclick="vmAction('vuln-srv01','start')">Start</button>
+      <button class="nav-button" onclick="vmAction('vuln-srv01','stop')">Stop</button>
+      <button class="nav-button" onclick="vmAction('vuln-srv01','reset')">Reset</button>
+    </div>
+  </div>
+
+  <div class="vm-card">
+    <h4>VULN-SRV02</h4>
+    Status: <span id="status-vuln-srv02">Loading...</span><br><br>
+    <div class="vm-buttons">
+      <button class="nav-button" onclick="vmAction('vuln-srv02','start')">Start</button>
+      <button class="nav-button" onclick="vmAction('vuln-srv02','stop')">Stop</button>
+      <button class="nav-button" onclick="vmAction('vuln-srv02','reset')">Reset</button>
+    </div>
+  </div>
+
+  <div class="vm-card">
+    <h4>APPSRV01</h4>
+    Status: <span id="status-appsrv01">Loading...</span><br><br>
+    <div class="vm-buttons">
+      <button class="nav-button" onclick="vmAction('appsrv01','start')">Start</button>
+      <button class="nav-button" onclick="vmAction('appsrv01','stop')">Stop</button>
+      <button class="nav-button" onclick="vmAction('appsrv01','reset')">Reset</button>
+    </div>
+  </div>
+
+  <div class="vm-card">
+    <h4>Kali01</h4>
+    Status: <span id="status-kali01">Loading...</span><br><br>
+    <div class="vm-buttons">
+      <button class="nav-button" onclick="vmAction('kali01','start')">Start</button>
+      <button class="nav-button" onclick="vmAction('kali01','stop')">Stop</button>
+      <button class="nav-button" onclick="vmAction('kali01','reset')">Reset</button>
+    </div>
+  </div>
+
+  <div class="vm-card">
+    <h4>Client01</h4>
+    Status: <span id="status-client01">Loading...</span><br><br>
+    <div class="vm-buttons">
+      <button class="nav-button" onclick="vmAction('client01','start')">Start</button>
+      <button class="nav-button" onclick="vmAction('client01','stop')">Stop</button>
+      <button class="nav-button" onclick="vmAction('client01','reset')">Reset</button>
+    </div>
+  </div>
+
+  <div class="vm-card">
+    <h4>Wazuh</h4>
+    Status: <span id="status-wazuh">Loading...</span><br><br>
+    <div class="vm-buttons">
+      <button class="nav-button" onclick="vmAction('wazuh','start')">Start</button>
+      <button class="nav-button" onclick="vmAction('wazuh','stop')">Stop</button>
+      <button class="nav-button" onclick="vmAction('wazuh','reset')">Reset</button>
+    </div>
+  </div>
+
+  <div class="vm-card">
+    <h4>WIN2025</h4>
+    Status: <span id="status-win2025">Loading...</span><br><br>
+    <div class="vm-buttons">
+      <button class="nav-button" onclick="vmAction('win2025','start')">Start</button>
+      <button class="nav-button" onclick="vmAction('win2025','stop')">Stop</button>
+      <button class="nav-button" onclick="vmAction('win2025','reset')">Reset</button>
+    </div>
+  </div>
+
+</div>
+
+<br>
+
+<button class="nav-button" style="background:#dc2626; max-width:300px;" onclick="resetAllVMs()">
+  🔥 Reset ALL VMs
+</button>
+
+</div>
 </div>
 
 <script>
-function resetVM(vm) {
-  if(confirm("Revert snapshot and restart " + vm + "?")) {
-    fetch("/api/resetvm/" + vm, { method: "POST" })
-      .then(r => r.json())
-      .then(data => {
-        if(data.status === "success") {
-          alert("✅ " + vm + " reset started");
-        } else {
-          alert("❌ Error: " + data.message);
-        }
-      })
-      .catch(err => alert("Request failed"));
-  }
-}
-</script>
+const VMS = ["opnsense","vuln-srv01","vuln-srv02","appsrv01","kali01","client01","wazuh","win2025"];
 
-<script>
+function vmAction(vm, action) {
+  fetch(`/api/vm/${vm}/${action}`, { method: "POST" })
+    .then(r => r.json())
+    .then(() => loadStatus(vm));
+}
+
+function loadStatus(vm) {
+  fetch(`/api/vm/${vm}/status`)
+    .then(r => r.json())
+    .then(data => {
+      const el = document.getElementById("status-" + vm);
+      if (data.status === "running") {
+        el.innerText = "running";
+        el.style.color = "#22c55e";
+      } else {
+        el.innerText = "stopped";
+        el.style.color = "#ef4444";
+      }
+    });
+}
+
 function resetAllVMs() {
   if(confirm("⚠️ This will reset ALL VMs. Are you sure?")) {
-    fetch("/api/resetvm_all", { method: "POST" })
+    fetch("/api/vm/resetall", { method: "POST" })
       .then(r => r.json())
-      .then(data => {
-        alert("All VMs reset started");
-        console.log(data);
-      })
-      .catch(err => alert("Failed to reset all VMs"));
+      .then(() => alert("All VMs reset started"));
   }
 }
+
+VMS.forEach(loadStatus);
+setInterval(() => { VMS.forEach(loadStatus); }, 5000);
 </script>
 
-</div>
-
-</div>
 </body>
 </html>
