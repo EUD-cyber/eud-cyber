@@ -13,6 +13,9 @@ Remember when the vm is created and started the cloud-init goes to work so it ca
 
 <img width="798" height="468" alt="image" src="https://github.com/user-attachments/assets/775c2eaa-e9af-4ec5-8daf-6e31d3102e4e" />
 
+When the GUACVM is up and running and the cloud-init is done, just http://ip_address (the ip adresse you gave it on the installation) \
+Then theres a guacamole/nat connection to all vm's on either ssh, gui, vnc or rdp, for there you can start labs on the vm's (docker compose) 
+
 
 passwords: 
 
