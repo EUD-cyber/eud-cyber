@@ -21,6 +21,7 @@ packages:
   - gnupg
   - lsb-release
   - docker.io
+  - qemu-guest-agent
 
 write_files:
   - path: /etc/sysctl.d/99-mirror.conf
@@ -45,7 +46,7 @@ write_files:
       
 runcmd:
   - apt-get update
-  - apt-get install -y docker-compose-v2 qemu-guest-agent
+  - apt-get install -y docker-compose-v2 
   - systemctl enable docker
   - systemctl start docker
   - systemctl enable qemu-guest-agent
