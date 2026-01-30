@@ -19,13 +19,15 @@ packages:
   - ca-certificates
   - curl
   - docker.io
+  - qemu-guest-agent
 
 runcmd:
   - apt-get update
-  - apt-get install -y docker-compose-v2 qemu-guest-agent
+  - apt-get install -y docker-compose-v2 
   - systemctl enable docker
   - systemctl start docker
   - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent
   - usermod -aG docker ubuntu
   - mkdir -p /opt/juiceshop
   - wget -O /opt/juiceshop/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/JUICESHOP/docker-compose.yml
