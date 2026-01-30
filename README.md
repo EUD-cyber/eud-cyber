@@ -1,7 +1,7 @@
 # eud-cyber
 cyber eud
 
-This script is testet with proxmox 9.1
+This script is testet with proxmox 9.1 and 9.1.1
 
 run install.sh \
 then 3 options \
