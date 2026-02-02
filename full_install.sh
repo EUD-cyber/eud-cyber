@@ -125,28 +125,21 @@ case "$CHOICE" in
 
     echo 'Change proxmox repo to no-enterprise'
     bash '$REPO'
-    wall "REPO done"
 
     echo 'Checking packages and snippets...'
     bash '$PREREQ'
-    wall "PREREQ done"
     
     echo 'Starting Open vSwitch installation and configuration'
     bash '$OPENVSWITCH'
-    wall "OPENVSWITCH done"
 
     echo 'Starting Guacamole VM creation'
     bash '$GUACVM'
-    wall "GuacVM done"
-
 
     echo 'Starting Client01 VM creation'
     bash '$CLIENT01'
-    wall "Client01 done"
 
     echo 'Starting Vuln-server01 VM creation'
     bash '$VULNSRV01'
-    wall "Vulnsrv01 done"
 
     echo 'Starting Vuln-server02 VM creation'
     bash '$VULNSRV02'
