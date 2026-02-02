@@ -21,7 +21,7 @@ WIN11="./WIN11/WIN11_installer.sh"
 WIN2025="./WIN2025/WIN2025_installer.sh"
 
   
-    read -rp "How many labs to prepare (1–16): " LABCOUNT
+read -rp "How many labs to prepare (1–16): " LABCOUNT
 
     if ! [[ "$LABCOUNT" =~ ^[0-9]+$ ]] || [ "$LABCOUNT" -lt 1 ] || [ "$LABCOUNT" -gt 16 ]; then
       echo "❌ Invalid number. Must be between 1 and 16."
@@ -39,17 +39,26 @@ WIN2025="./WIN2025/WIN2025_installer.sh"
 
     echo
     echo "===== Open vSwitch pre-setup ====="
-    bash $OPENVSWITCHPRE || exit 1
+    bash "$OPENVSWITCHPRE" || exit 1
 
     echo
-    echo "===== Preparing $LABCOUNT labs ====="
+    echo "===== Phase 1: Creating Open vSwitch bridges ====="
+
+    for i in $(seq 1 "$LABCOUNT"); do
+      echo "Creating OVS bridges for lab $i"
+      bash "$OPENVSWITCH" "$i" || exit 1
+    done
+
+    echo
+    echo "===== Open vSwitch post-setup ====="
+    bash "$OPENVSWITCHLAST" || exit 1
+
+    echo
+    echo "===== Phase 2: Creating lab configurations ====="
 
     for i in $(seq 1 "$LABCOUNT"); do
       echo
       echo "----- Lab $i -----"
-
-      echo "Creating Open vSwitch bridges for lab $i"
-      bash $OPENVSWITCH "$i" || exit 1
 
       echo "Generating OPNsense config for lab $i"
       bash "$OPNSENSECONF" || exit 1
@@ -57,10 +66,6 @@ WIN2025="./WIN2025/WIN2025_installer.sh"
       echo "Configuring Guacamole IP for lab $i"
       bash "$GUACVM_IP" || exit 1
     done
-
-    echo
-    echo "===== Open vSwitch post-setup ====="
-    bash $OPENVSWITCHLAST || exit 1
 
     echo
     echo "✅ $LABCOUNT labs prepared successfully"
