@@ -65,17 +65,6 @@ WIN2025="./WIN2025/WIN2025_installer.sh"
       bash "$OPNSENSECONF" || exit 1
       bash "$GUACVM_IP" || exit 1
 
-      if [[ "$SPEC" == "full" ]]; then
-        echo "Full spec placeholder for lab $i"
-        # later:
-        # bash "$VULNSRV01"
-        # bash "$KALI01"
-        # bash "$WAZUH"
-      else
-        echo "Mini spec (core only) for lab $i"
-      fi
-    done
-
     echo
     echo "✅ $LABCOUNT labs prepared ($SPEC spec)"
 
