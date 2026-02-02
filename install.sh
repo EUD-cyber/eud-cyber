@@ -4,6 +4,7 @@ set -e
 FULL_INSTALL="./full_install.sh"
 MINI_INSTALL="./mini_install.sh"
 MULTI_INSTALL="./multi_install.sh"
+MULTI_INSTALL_MINI="./multi_install_mini.sh"
 
 clear
 echo "===================================="
@@ -11,7 +12,8 @@ echo "        Proxmox Deployment"
 echo "===================================="
 echo "1) Standalone Proxmox (Full Lab)"
 echo "2) Standalone Proxmox (Mini Lab low spec)"
-echo "3) Single Proxmox Cluster (multilabs on same proxmox"
+echo "3) Multilabs full spec on same proxmox"
+echo "4) Multilabs mini spec on same proxmox"
 echo "0) Exit"
 echo "===================================="
 read -rp "Select deployment type: " choice
@@ -29,10 +31,13 @@ case "$choice" in
     ;;
 
   3)
-    echo "▶ Single Proxmox Cluster (multilabs on same proxmox"
+    echo "▶ Multilabs full spec on same proxmox"
     bash "$MULTI_INSTALL"
     ;;
-
+  4)
+    echo "▶ Multilabs mini spec on same proxmox"
+    bash "$MULTI_INSTALL_MINI"
+    ;;
   0)
     echo "Exiting..."
     exit 0
