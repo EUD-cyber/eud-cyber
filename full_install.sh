@@ -96,22 +96,31 @@ case "$CHOICE" in
     echo "Change proxmox repo to no-enterprise"
     bash "$REPO"
     ;;
-    90)
+  90)
     SESSION="deploy-all"
 
+    echo "===== Phase 1: Interactive configuration ====="
+    bash "$OPNSENSECONF" || exit 1
+    bash "$GUACVM_IP" || exit 1
+
+    echo "===== Phase 2: Run OPNsense installer (expect, outside tmux) ====="
+    bash "$OPNSENSE" || exit 1
+
     if ! command -v tmux >/dev/null 2>&1; then
-      echo "❌ tmux is not installed. Install it with: apt install tmux"
+      echo "❌ tmux not installed. Install with: apt install tmux"
       exit 1
     fi
 
-    echo "===== Phase 1: Collect interactive configuration ====="
-    bash "$OPNSENSECONF"
-    bash "$GUACVM_IP"
+    if tmux has-session -t "$SESSION" 2>/dev/null; then
+      echo "❌ tmux session '$SESSION' already exists."
+      echo "Attach with: tmux attach -t $SESSION"
+      exit 1
+    fi
 
-    echo "===== Phase 2: Starting deployment in tmux session: $SESSION ====="
-    echo "Attach anytime with: tmux attach -t $SESSION"
+    echo "===== Phase 3: Starting remaining installs in tmux session: $SESSION ====="
+    echo "Attach with: tmux attach -t $SESSION"
 
-    tmux new-session -d -s "$SESSION" bash -c "
+    tmux new-session -s "$SESSION" bash -c "
       set -e
       exec > >(tee -a deploy.log) 2>&1
 
@@ -123,9 +132,6 @@ case "$CHOICE" in
 
       echo 'Starting Open vSwitch installation and configuration'
       bash '$OPENVSWITCH'
-
-      echo 'Starting OPNsense VM creation'
-      bash '$OPNSENSE'
 
       echo 'Starting Guacamole VM creation'
       bash '$GUACVM'
@@ -155,11 +161,8 @@ case "$CHOICE" in
       read -p 'Press Enter to close tmux session...'
     "
 
-    echo "Deployment launched in tmux."
-    echo "Use: tmux attach -t $SESSION"
     exit 0
     ;;
-
 
   99)
      rm -rf ./eud-cyber
