@@ -20,16 +20,6 @@ WAZUH="./WAZUH/WAZUH_installer.sh"
 WIN11="./WIN11/WIN11_installer.sh"
 WIN2025="./WIN2025/WIN2025_installer.sh"
 
-  
-case "$CHOICE" in
-
-  1|2)
-    if [[ "$CHOICE" == "1" ]]; then
-      SPEC="full"
-    else
-      SPEC="mini"
-    fi
-
     read -rp "How many labs to prepare (1–16): " LABCOUNT
 
     if ! [[ "$LABCOUNT" =~ ^[0-9]+$ ]] || [ "$LABCOUNT" -lt 1 ] || [ "$LABCOUNT" -gt 16 ]; then
