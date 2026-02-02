@@ -21,24 +21,15 @@ WIN11="./WIN11/WIN11_installer.sh"
 WIN2025="./WIN2025/WIN2025_installer.sh"
 
   
-# =========================
-# Menu
-# =========================
-echo "=============================="
-echo " Multi Lab Installer"
-echo "=============================="
-echo "A) Prepare N labs (OVS + config)"
-echo "0) Exit"
-echo "=============================="
-
-read -rp "Enter your choice: " CHOICE
-
-# =========================
-# Case
-# =========================
 case "$CHOICE" in
 
-  A|a)
+  1|2)
+    if [[ "$CHOICE" == "1" ]]; then
+      SPEC="full"
+    else
+      SPEC="mini"
+    fi
+
     read -rp "How many labs to prepare (1–16): " LABCOUNT
 
     if ! [[ "$LABCOUNT" =~ ^[0-9]+$ ]] || [ "$LABCOUNT" -lt 1 ] || [ "$LABCOUNT" -gt 16 ]; then
@@ -46,14 +37,25 @@ case "$CHOICE" in
       exit 1
     fi
 
-    echo "===== Base setup (run once) ====="
+    echo
+    echo "===== Preparing $LABCOUNT labs ($SPEC spec) ====="
+
+    # -------------------------
+    # Base setup (once)
+    # -------------------------
+    echo "Change proxmox repo to no-enterprise"
     bash "$REPO" || exit 1
+
+    echo "Checking packages and snippets..."
     bash "$PREREQ" || exit 1
 
     echo "===== Open vSwitch pre ====="
     bash "$OPENVSWITCHPRE" || exit 1
 
-    echo "===== Phase 1: OVS (all labs) ====="
+    # -------------------------
+    # Phase 1: OVS (all labs)
+    # -------------------------
+    echo "===== Creating Open vSwitch bridges ====="
     for i in $(seq 1 "$LABCOUNT"); do
       echo "Creating OVS bridges for lab $i"
       bash "$OPENVSWITCH" "$i" || exit 1
@@ -62,14 +64,30 @@ case "$CHOICE" in
     echo "===== Open vSwitch post ====="
     bash "$OPENVSWITCHLAST" || exit 1
 
-    echo "===== Phase 2: Lab configs ====="
+    # -------------------------
+    # Phase 2: Lab configs
+    # -------------------------
+    echo "===== Creating lab configs ====="
     for i in $(seq 1 "$LABCOUNT"); do
-      echo "Lab $i configs"
+      echo
+      echo "----- Lab $i ($SPEC) -----"
+
       bash "$OPNSENSECONF" || exit 1
       bash "$GUACVM_IP" || exit 1
+
+      if [[ "$SPEC" == "full" ]]; then
+        echo "Full spec placeholder for lab $i"
+        # later:
+        # bash "$VULNSRV01"
+        # bash "$KALI01"
+        # bash "$WAZUH"
+      else
+        echo "Mini spec (core only) for lab $i"
+      fi
     done
 
-    echo "✅ $LABCOUNT labs prepared successfully"
+    echo
+    echo "✅ $LABCOUNT labs prepared ($SPEC spec)"
     ;;
 
   0)
