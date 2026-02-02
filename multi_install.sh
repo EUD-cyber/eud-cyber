@@ -21,8 +21,6 @@ WIN11="./WIN11/WIN11_installer.sh"
 WIN2025="./WIN2025/WIN2025_installer.sh"
 
   
-  
-  A|a)
     read -rp "How many labs to prepare (1–16): " LABCOUNT
 
     if ! [[ "$LABCOUNT" =~ ^[0-9]+$ ]] || [ "$LABCOUNT" -lt 1 ] || [ "$LABCOUNT" -gt 16 ]; then
