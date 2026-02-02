@@ -146,6 +146,7 @@ case "$CHOICE" in
 
     echo 'Starting Vuln-server01 VM creation'
     bash '$VULNSRV01'
+    wall "Vulnsrv01 done"
 
     echo 'Starting Vuln-server02 VM creation'
     bash '$VULNSRV02'
