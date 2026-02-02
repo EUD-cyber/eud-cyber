@@ -96,49 +96,73 @@ case "$CHOICE" in
     echo "Change proxmox repo to no-enterprise"
     bash "$REPO"
     ;;
-  90)
-    echo "Running ALL steps..."
-    
-    echo "Change proxmox repo to no-enterprise"
-    bash "$REPO"
-    
-    echo "Checking packages and snippets..."
-    bash "$PREREQ"
+   90)
+    SESSION="deploy-all"
 
-    echo "IP settings on Guacamole and Opnsense"
-    bash "$OPNSENSECONF"
-    bash "$GUACVM_IP"
-    
-    echo "Starting Open vSwitch installation and configuration"
-    bash "$OPENVSWITCH"
+    if ! command -v tmux >/dev/null 2>&1; then
+      echo "❌ tmux is not installed. Please install it first: apt install tmux"
+      exit 1
+    fi
 
-    echo "Starting OPNsense VM creation..."
-    bash "$OPNSENSE"
+    echo "Starting deployment in tmux session: $SESSION"
+    echo "Attach anytime with: tmux attach -t $SESSION"
 
-    echo "Starting Guacamole VM creation..."
-    bash "$GUACVM"
+    tmux new-session -d -s "$SESSION" bash -c "
 
-    echo "Staring Client01 VM creation..."
-    bash "$CLIENT01"
+    set -e
+    exec > >(tee -a deploy.log) 2>&1
 
-    echo "Starting Vuln-server01 VM creation..."
-    bash "$VULNSRV01"
+    echo '===== Proxmox Deployment Started ====='
 
-    echo "Starting Vuln-server02 VM creation..."
-    bash "$VULNSRV02"
-    
-    echo "Starting KALI01 VM creation... "
-    bash "$KALI01"
+    echo 'Change proxmox repo to no-enterprise'
+    bash '$REPO'
 
-    echo "Starting Wazuh VM creation... "
-    bash "$WAZUH"
+    echo 'Checking packages and snippets...'
+    bash '$PREREQ'
 
-    echo "Starting APPSRV01 creation... "
-    bash "$APPSRV01"
-    
-     echo "Starting Windows server 2025 VM creation.... "
-     bash "$WIN2025"
-     ;;
+    echo 'Collecting IP settings (interactive)'
+    bash '$OPNSENSECONF'
+    bash '$GUACVM_IP'
+
+    echo 'Starting Open vSwitch installation and configuration'
+    bash '$OPENVSWITCH'
+
+    echo 'Starting OPNsense VM creation (expect)'
+    bash '$OPNSENSE'
+
+    echo 'Starting Guacamole VM creation'
+    bash '$GUACVM'
+
+    echo 'Starting Client01 VM creation'
+    bash '$CLIENT01'
+
+    echo 'Starting Vuln-server01 VM creation'
+    bash '$VULNSRV01'
+
+    echo 'Starting Vuln-server02 VM creation'
+    bash '$VULNSRV02'
+
+    echo 'Starting KALI01 VM creation'
+    bash '$KALI01'
+
+    echo 'Starting Wazuh VM creation'
+    bash '$WAZUH'
+
+    echo 'Starting APPSRV01 creation'
+    bash '$APPSRV01'
+
+    echo 'Starting Windows server 2025 VM creation'
+    bash '$WIN2025'
+
+    echo '===== Deployment completed successfully ====='
+    read -p 'Press Enter to exit tmux session...'
+    "
+
+    echo "Deployment started in background tmux session."
+    echo "Use: tmux attach -t $SESSION"
+    exit 0
+    ;;
+
   99)
      rm -rf ./eud-cyber
      rm -rf /var/lib/vz/snippets/*
