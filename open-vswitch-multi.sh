@@ -2,9 +2,9 @@
 set -e
 
 ### VARIABLES (EDIT THESE) ###
-BRIDGE1="lan1"
-BRIDGE2="lan2"
-BRIDGE3="oobm"
+BRIDGE1=""
+BRIDGE2=""
+BRIDGE3=""
 
 ### CHECK ROOT ###
 if [[ $EUID -ne 0 ]]; then
