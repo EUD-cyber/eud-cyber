@@ -8,9 +8,9 @@ if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-BRIDGE1="lab${LAB}-lan1"
-BRIDGE2="lab${LAB}-lan2"
-BRIDGE3="lab${LAB}-oobm"
+BRIDGE1="lab${LAB}_lan1"
+BRIDGE2="lab${LAB}_lan2"
+BRIDGE3="lab${LAB}_oobm"
 
 # Prevent duplicates
 if grep -q "auto $BRIDGE1" /etc/network/interfaces; then
