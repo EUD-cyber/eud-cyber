@@ -35,6 +35,7 @@ echo "11) Create APPSRV01 VM"
 echo "12) Create Client01 VM"
 echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
+echo "95) Run ALL in background"
 echo "99) Cleanup all installation"
 echo "0) Exit"
 echo "=============================="
@@ -97,6 +98,49 @@ case "$CHOICE" in
     bash "$REPO"
     ;;
   90)
+    echo "Running ALL steps..."
+    
+    echo "Change proxmox repo to no-enterprise"
+    bash "$REPO"
+    
+    echo "Checking packages and snippets..."
+    bash "$PREREQ"
+
+    echo "IP settings on Guacamole and Opnsense"
+    bash "$OPNSENSECONF"
+    bash "$GUACVM_IP"
+    
+    echo "Starting Open vSwitch installation and configuration"
+    bash "$OPENVSWITCH"
+
+    echo "Starting OPNsense VM creation..."
+    bash "$OPNSENSE"
+
+    echo "Starting Guacamole VM creation..."
+    bash "$GUACVM"
+
+    echo "Staring Client01 VM creation..."
+    bash "$CLIENT01"
+
+    echo "Starting Vuln-server01 VM creation..."
+    bash "$VULNSRV01"
+
+    echo "Starting Vuln-server02 VM creation..."
+    bash "$VULNSRV02"
+    
+    echo "Starting KALI01 VM creation... "
+    bash "$KALI01"
+
+    echo "Starting Wazuh VM creation... "
+    bash "$WAZUH"
+
+    echo "Starting APPSRV01 creation... "
+    bash "$APPSRV01"
+    
+     echo "Starting Windows server 2025 VM creation.... "
+     bash "$WIN2025"
+     ;;
+  95)
   SESSION="deploy-all"
 
   echo "===== Phase 1: Interactive configuration ====="
