@@ -78,5 +78,4 @@ WIN2025="./WIN2025/WIN2025_installer.sh"
 
     echo
     echo "✅ $LABCOUNT labs prepared ($SPEC spec)"
-    ;;
 
