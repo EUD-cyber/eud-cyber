@@ -35,6 +35,7 @@ echo "11) Create APPSRV01 VM"
 echo "12) Create Client01 VM"
 echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
+echo "95) Run ALL in background"
 echo "99) Cleanup all installation"
 echo "0) Exit"
 echo "=============================="
@@ -139,6 +140,77 @@ case "$CHOICE" in
      echo "Starting Windows server 2025 VM creation.... "
      bash "$WIN2025"
      ;;
+  95)
+  SESSION="deploy-all"
+
+  echo "===== Phase 1: Interactive configuration ====="
+  bash "$OPNSENSECONF" || exit 1
+  bash "$GUACVM_IP" || exit 1
+
+  echo "===== Phase 2: Run OPNsense installer (expect, outside tmux) ====="
+  bash "$OPNSENSE" || exit 1
+
+  if ! command -v tmux >/dev/null 2>&1; then
+    echo "❌ tmux not installed. Install with: apt install tmux"
+    exit 1
+  fi
+
+  if tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "❌ tmux session '$SESSION' already exists."
+    echo "Attach with: tmux attach -t $SESSION"
+    exit 1
+  fi
+
+  echo "===== Phase 3: Starting remaining installs in background (tmux) ====="
+
+  tmux new-session -d -s "$SESSION" bash -c "
+    set -e
+    exec > >(tee -a deploy.log) 2>&1
+
+    echo 'Change proxmox repo to no-enterprise'
+    bash '$REPO'
+
+    echo 'Checking packages and snippets...'
+    bash '$PREREQ'
+    
+    echo 'Starting Open vSwitch installation and configuration'
+    bash '$OPENVSWITCH'
+
+    echo 'Starting Guacamole VM creation'
+    bash '$GUACVM'
+
+    echo 'Starting Client01 VM creation'
+    bash '$CLIENT01'
+
+    echo 'Starting Vuln-server01 VM creation'
+    bash '$VULNSRV01'
+
+    echo 'Starting Vuln-server02 VM creation'
+    bash '$VULNSRV02'
+
+    echo 'Starting KALI01 VM creation'
+    bash '$KALI01'
+
+    echo 'Starting Wazuh VM creation'
+    bash '$WAZUH'
+
+    echo 'Starting APPSRV01 creation'
+    bash '$APPSRV01'
+
+    echo 'Starting Windows server 2025 VM creation'
+    bash '$WIN2025'
+
+    echo '===== Deployment completed successfully ====='
+  "
+
+  echo "Deployment running in background tmux session: $SESSION"
+  echo "Attach anytime with: tmux attach -t $SESSION"
+  echo "Check logs with: tail -f deploy.log"
+
+  exit 0
+  ;;
+
+
   99)
      rm -rf ./eud-cyber
      rm -rf /var/lib/vz/snippets/*
