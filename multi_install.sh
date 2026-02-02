@@ -80,13 +80,3 @@ WIN2025="./WIN2025/WIN2025_installer.sh"
     echo "✅ $LABCOUNT labs prepared ($SPEC spec)"
     ;;
 
-  0)
-    echo "Exiting."
-    exit 0
-    ;;
-
-  *)
-    echo "❌ Invalid choice"
-    exit 1
-    ;;
-esac
