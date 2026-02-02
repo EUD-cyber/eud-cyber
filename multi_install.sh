@@ -1,4 +1,24 @@
+#!/bin/bash
+set -e
 
+REPO="./repo.sh"
+GUACVM_IP="./GUACVM/GUACVM_ip.sh"
+GUACVM="./GUACVM/GUACVM_installer.sh"
+OPENVSWITCHPRE="./openvswitch-multi-pre.sh"
+OPENVSWITCH="./open-vswitch-multi.sh"
+OPENVSWITCHLAST="./openvswitch-multi-last.sh"
+VULNSRV01="./VULNSRV01/VULNSRV01_installer.sh"
+VULNSRV02="./VULNSRV02/VULNSRV02_installer.sh"
+OPNSENSE="./OPNSENSE/OPNSENSE_installer.sh"
+OPNSENSECONF="./OPNSENSE/generate_config.sh"
+APPSRV01="./APPSRV01/APPSRV01_installer.sh"
+CLIENT01="./CLIENT01/CLIENT01_installer.sh"
+PACKETFENCE="./PACKETFENCE/PACKETFENCE_installer.sh"
+PREREQ="./pre_req.sh"
+KALI01="./KALI01/KALI01_installer.sh"
+WAZUH="./WAZUH/WAZUH_installer.sh"
+WIN11="./WIN11/WIN11_installer.sh"
+WIN2025="./WIN2025/WIN2025_installer.sh"
 
   
   
@@ -21,7 +41,7 @@
 
     echo
     echo "===== Open vSwitch pre-setup ====="
-    bash "./openvswitch-pre.sh" || exit 1
+    bash $OPENVSWITCHPRE || exit 1
 
     echo
     echo "===== Preparing $LABCOUNT labs ====="
@@ -31,7 +51,7 @@
       echo "----- Lab $i -----"
 
       echo "Creating Open vSwitch bridges for lab $i"
-      bash "./openvswitch-lab.sh" "$i" || exit 1
+      bash $OPENVSWITCH "$i" || exit 1
 
       echo "Generating OPNsense config for lab $i"
       bash "$OPNSENSECONF" || exit 1
@@ -42,7 +62,7 @@
 
     echo
     echo "===== Open vSwitch post-setup ====="
-    bash "./openvswitch-post.sh" || exit 1
+    bash $OPENVSWITCHLAST || exit 1
 
     echo
     echo "✅ $LABCOUNT labs prepared successfully"
