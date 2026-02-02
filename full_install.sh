@@ -97,72 +97,75 @@ case "$CHOICE" in
     bash "$REPO"
     ;;
   90)
-    SESSION="deploy-all"
+  SESSION="deploy-all"
 
-    echo "===== Phase 1: Interactive configuration ====="
-    bash "$OPNSENSECONF" || exit 1
-    bash "$GUACVM_IP" || exit 1
+  echo "===== Phase 1: Interactive configuration ====="
+  bash "$OPNSENSECONF" || exit 1
+  bash "$GUACVM_IP" || exit 1
 
-    echo "===== Phase 2: Run OPNsense installer (expect, outside tmux) ====="
-    bash "$OPNSENSE" || exit 1
+  echo "===== Phase 2: Run OPNsense installer (expect, outside tmux) ====="
+  bash "$OPNSENSE" || exit 1
 
-    if ! command -v tmux >/dev/null 2>&1; then
-      echo "❌ tmux not installed. Install with: apt install tmux"
-      exit 1
-    fi
+  if ! command -v tmux >/dev/null 2>&1; then
+    echo "❌ tmux not installed. Install with: apt install tmux"
+    exit 1
+  fi
 
-    if tmux has-session -t "$SESSION" 2>/dev/null; then
-      echo "❌ tmux session '$SESSION' already exists."
-      echo "Attach with: tmux attach -t $SESSION"
-      exit 1
-    fi
-
-    echo "===== Phase 3: Starting remaining installs in tmux session: $SESSION ====="
+  if tmux has-session -t "$SESSION" 2>/dev/null; then
+    echo "❌ tmux session '$SESSION' already exists."
     echo "Attach with: tmux attach -t $SESSION"
+    exit 1
+  fi
 
-    tmux new-session -s "$SESSION" bash -c "
-      set -e
-      exec > >(tee -a deploy.log) 2>&1
+  echo "===== Phase 3: Starting remaining installs in background (tmux) ====="
 
-      echo 'Change proxmox repo to no-enterprise'
-      bash '$REPO'
+  tmux new-session -d -s "$SESSION" bash -c "
+    set -e
+    exec > >(tee -a deploy.log) 2>&1
 
-      echo 'Checking packages and snippets...'
-      bash '$PREREQ'
+    echo 'Change proxmox repo to no-enterprise'
+    bash '$REPO'
 
-      echo 'Starting Open vSwitch installation and configuration'
-      bash '$OPENVSWITCH'
+    echo 'Checking packages and snippets...'
+    bash '$PREREQ'
 
-      echo 'Starting Guacamole VM creation'
-      bash '$GUACVM'
+    echo 'Starting Open vSwitch installation and configuration'
+    bash '$OPENVSWITCH'
 
-      echo 'Starting Client01 VM creation'
-      bash '$CLIENT01'
+    echo 'Starting Guacamole VM creation'
+    bash '$GUACVM'
 
-      echo 'Starting Vuln-server01 VM creation'
-      bash '$VULNSRV01'
+    echo 'Starting Client01 VM creation'
+    bash '$CLIENT01'
 
-      echo 'Starting Vuln-server02 VM creation'
-      bash '$VULNSRV02'
+    echo 'Starting Vuln-server01 VM creation'
+    bash '$VULNSRV01'
 
-      echo 'Starting KALI01 VM creation'
-      bash '$KALI01'
+    echo 'Starting Vuln-server02 VM creation'
+    bash '$VULNSRV02'
 
-      echo 'Starting Wazuh VM creation'
-      bash '$WAZUH'
+    echo 'Starting KALI01 VM creation'
+    bash '$KALI01'
 
-      echo 'Starting APPSRV01 creation'
-      bash '$APPSRV01'
+    echo 'Starting Wazuh VM creation'
+    bash '$WAZUH'
 
-      echo 'Starting Windows server 2025 VM creation'
-      bash '$WIN2025'
+    echo 'Starting APPSRV01 creation'
+    bash '$APPSRV01'
 
-      echo '===== Deployment completed successfully ====='
-      read -p 'Press Enter to close tmux session...'
-    "
+    echo 'Starting Windows server 2025 VM creation'
+    bash '$WIN2025'
 
-    exit 0
-    ;;
+    echo '===== Deployment completed successfully ====='
+  "
+
+  echo "Deployment running in background tmux session: $SESSION"
+  echo "Attach anytime with: tmux attach -t $SESSION"
+  echo "Check logs with: tail -f deploy.log"
+
+  exit 0
+  ;;
+
 
   99)
      rm -rf ./eud-cyber
