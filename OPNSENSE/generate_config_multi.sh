@@ -9,8 +9,9 @@ if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-
-mkdir -p $(pwd)/OPNSENSE/iso/conf
+OUTDIR="$(pwd)/OPNSENSE/iso/conf"
+OUTFILE="${OUTDIR}/lab${LAB}-config.xml"
+mkdir -p "$OUTDIR"
 
 WAN_IF="vtnet1"
 LAN_IF="vtnet0"
@@ -136,7 +137,7 @@ else
   exit 1
 fi
 
-cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
+cat > "$OUTFILE" <<EOF
 <?xml version="1.0"?>
 <opnsense>
   <system>
@@ -275,4 +276,5 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
 EOF
 
 echo
-echo "✔ WAN config generated at /root/opnsense/config.xml"
+echo "✔ OPNsense config generated for lab $LAB"
+echo "  → $OUTFILE"
