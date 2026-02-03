@@ -120,8 +120,8 @@ for i in $(seq 1 "$LABCOUNT"); do
     echo 'Starting Client01 VM creation'
     bash '$CLIENT01' '$i'
 
-#    echo 'Starting Vuln-server01 VM creation'
-#    bash '$VULNSRV01' '$i'
+    echo 'Starting Vuln-server01 VM creation'
+    bash '$VULNSRV01' '$i'
 
 #    echo 'Starting Vuln-server02 VM creation'
 #    bash '$VULNSRV02' '$i'
