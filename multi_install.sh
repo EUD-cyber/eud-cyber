@@ -2,8 +2,8 @@
 set -e
 
 REPO="./repo.sh"
-GUACVM_IP="./GUACVM/GUACVM_ip.sh"
-GUACVM="./GUACVM/GUACVM_installer.sh"
+GUACVM_IP="./GUACVM/GUACVM_ip_multi.sh"
+GUACVM="./GUACVM/GUACVM_multi_installer.sh"
 OPENVSWITCHPRE="./open-vswitch-multi-pre.sh"
 OPENVSWITCH="./open-vswitch-multi.sh"
 OPENVSWITCHLAST="./open-vswitch-multi-last.sh"
@@ -63,6 +63,7 @@ WIN2025="./WIN2025/WIN2025_installer.sh"
       echo "----- Lab $i ($SPEC) -----"
 
      bash "$OPNSENSECONF" "$i" || exit 1
+     bash "$GUACVM_IP" "$i" || exit 1
     done
     echo
     echo "✅ $LABCOUNT labs prepared ($SPEC spec)"
