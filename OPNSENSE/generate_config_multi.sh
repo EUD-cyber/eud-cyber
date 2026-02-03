@@ -2,6 +2,14 @@
 #!/bin/bash
 set -e
 
+LAB="$1"
+
+if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
+  echo "Usage: $0 <lab-number>"
+  exit 1
+fi
+
+
 mkdir -p $(pwd)/OPNSENSE/iso/conf
 
 WAN_IF="vtnet1"
