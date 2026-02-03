@@ -31,7 +31,7 @@ exec > >(tee -a "$LOGFILE") 2>&1
 echo "===== GUACVM installation started at $(date) ====="
 
 # ===== CONFIG =====
-START_VMID=100
+START_VMID=$((LAB * 100))
 BASE_NAME="guacvm-lab${LAB}"
 IMG_URL="https://cloud-images.ubuntu.com/noble/20251213/noble-server-cloudimg-amd64.img"
 IMG_NAME="noble-server-cloudimg-amd64.img"
