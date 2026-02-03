@@ -1,6 +1,24 @@
 #!/bin/bash
 set -e
 
+LAB="$1"
+STATE_FILE="$(pwd)/GUACVM/STATE/lab${LAB}.env"
+
+if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
+  echo "Usage: $0 <lab-number>"
+  exit 1
+fi
+
+if [[ ! -f "$STATE_FILE" ]]; then
+  echo "❌ Missing Guacamole network config for lab $LAB"
+  echo "   Expected: $STATE_FILE"
+  exit 1
+fi
+
+# Load stored IP/DNS
+source "$STATE_FILE"
+-
+
 LOGFILE="$(pwd)/LOGS/GUACVM.log"
 
 # Create log file and ensure permissions
@@ -14,7 +32,7 @@ echo "===== GUACVM installation started at $(date) ====="
 
 # ===== CONFIG =====
 START_VMID=100
-BASE_NAME="GUACVM"
+BASE_NAME="guacvm-lab${LAB}"
 IMG_URL="https://cloud-images.ubuntu.com/noble/20251213/noble-server-cloudimg-amd64.img"
 IMG_NAME="noble-server-cloudimg-amd64.img"
 IMG_PATH="$(pwd)/$IMG_NAME"
@@ -24,13 +42,11 @@ MEMORY=4096       # in MB
 CORES=4
 DISK_SIZE="32G"    # the number is in GB
 BRIDGE="vmbr0"
-BRIDGE1="oobm"
+BRIDGE1="lab${LAB}_oobm"
 OOBM_IP="ip=172.20.0.1/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
 SRC_USERDATA="$(pwd)/GUACVM/GUAC_userdata.yaml"    
 DST_USERDATA="GUAC_userdata.yaml"            
-IP_ADDR=""
-DNS_SERVER=""
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
 
@@ -104,16 +120,16 @@ qm set $VMID --agent enabled=1
 qm set $VMID --onboot 1
 
 # ===== Cloud-init =====
-qm set $VMID --ipconfig0 $IP_ADDR \
+qm set $VMID --ipconfig0 "$GUAC_IP_ADDR" \
   --ipconfig1 $OOBM_IP \
   --searchdomain cloud.local \
   --ciupgrade 1 \
   --cicustom "user=local:snippets/GUAC_userdata.yaml"
 
-if [[ "$IP_ADDR" != "ip=dhcp" ]]; then
-  qm set $VMID --nameserver $DNS_SERVER
+if [[ "$GUAC_IP_ADDR" != "ip=dhcp" && -n "$GUAC_DNS_SERVER" ]]; then
+  qm set $VMID --nameserver "$GUAC_DNS_SERVER"
 else
-  echo "DHCP enabled no DNS server needed"
+  echo "DHCP enabled or no DNS specified"
 fi
 
 #Creating first snapshot of the VM 
