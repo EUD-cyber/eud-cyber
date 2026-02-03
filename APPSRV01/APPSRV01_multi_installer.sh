@@ -31,9 +31,9 @@ DISK_STORAGE="local-lvm"
 MEMORY=4096       # in MB
 CORES=4
 DISK_SIZE="32G"    # the number is in GB
-BRIDGE="lab${LAB}-lan2"
-BRIDGE1="lab${LAB}-oobm"
-BRIDGE2="lab${LAB}-lan1"
+BRIDGE="lab${LAB}_lan2"
+BRIDGE1="lab${LAB}_oobm"
+BRIDGE2="lab${LAB}_lan1"
 IP_ADDR="ip=192.168.2.25/24"
 DNS_SERVER="192.168.2.1"
 IP_GW="gw=192.168.2.1"
