@@ -21,7 +21,7 @@ echo "===== OPNSENSE installation started at $(date) ====="
 
 ### ===== VARIABLES =====
 START_VMID=$((LAB * 100))
-BASE_NAME="opnsense-lab${LAB}"
+BASE_NAME="lab${LAB}-opnsense"
 RAM=4096
 CORES=4
 DISK_SIZE="30G"
