@@ -78,3 +78,38 @@ WIN2025="./WIN2025/WIN2025_installer.sh"
       bash "$OPNSENSE" "$i" || exit 1
     done
 
+    # -------------------------
+    # Phase 4: Install Guacamole VMs in tmux (per lab)
+    # -------------------------
+    echo
+    echo "===== Installing Guacamole VMs in tmux ====="
+    
+    if ! command -v tmux >/dev/null 2>&1; then
+      echo "❌ tmux not installed. Install with: apt install tmux"
+      exit 1
+    fi
+    
+    for i in $(seq 1 "$LABCOUNT"); do
+      SESSION="lab${i}"
+    
+      if tmux has-session -t "$SESSION" 2>/dev/null; then
+        echo "⚠ tmux session '$SESSION' already exists, skipping"
+        continue
+      fi
+    
+      echo "Starting Guacamole installer for lab $i in tmux session '$SESSION'"
+    
+      tmux new-session -d -s "$SESSION" bash -c "
+        set -e
+        exec > >(tee -a GUACVM_lab${i}.log) 2>&1
+    
+        echo '===== Guacamole install for lab $i started at \$(date) ====='
+        bash '$GUACVM' '$i'
+        echo '===== Guacamole install for lab $i finished at \$(date) ====='
+      "
+    done
+    
+    echo
+    echo "All Guacamole installs started in background tmux sessions."
+    echo "Attach with: tmux attach -t labX (e.g. lab1)"
+
