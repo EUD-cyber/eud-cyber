@@ -40,7 +40,7 @@ IP_GW="gw=192.168.2.1"
 OOBM_IP="ip=172.20.0.25/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
 SRC_USERDATA="$(pwd)/APPSRV01/APPSRV01_userdata.yaml"     # source file
-DST_USERDATA="APPSRV01_userdata.yaml"            # destination filename
+DST_USERDATA="APPSRV01_userdata_lab${LAB}.yaml"            # destination filename
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
 
@@ -119,7 +119,7 @@ qm set $VMID --ipconfig0 $IP_ADDR,$IP_GW \
   --searchdomain cloud.local \
   --nameserver $DNS_SERVER \
   --ciupgrade \
-  --cicustom "user=local:snippets/APPSRV01_userdata.yaml"
+  --cicustom "user=local:snippets/${DST_USERDATA}"
 
 #Creating first snapshot of the VM 
 qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
