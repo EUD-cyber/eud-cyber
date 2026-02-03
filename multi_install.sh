@@ -127,8 +127,8 @@ for i in $(seq 1 "$LABCOUNT"); do
     echo 'Starting Vuln-server02 VM creation'
     bash '$VULNSRV02' '$i'
     
-#    echo 'Starting KALI01 VM creation'
-#    bash '$KALI01' '$i'
+    echo 'Starting KALI01 VM creation'
+    bash '$KALI01' '$i'
 
 #    echo 'Starting Wazuh VM creation'
 #    bash '$WAZUH' '$i'
