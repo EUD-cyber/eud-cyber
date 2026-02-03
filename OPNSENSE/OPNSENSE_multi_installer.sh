@@ -8,7 +8,7 @@ if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-LOGFILE="$(pwd)/LOGS/OPNSENSE.log"
+LOGFILE="$(pwd)/LOGS/OPNSENSE_lab${LAB}.log"
 
 # Create log file and ensure permissions
 touch "$LOGFILE"
