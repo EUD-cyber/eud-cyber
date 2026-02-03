@@ -9,9 +9,10 @@ if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-OUTDIR="$(pwd)/OPNSENSE/iso/conf"
-OUTFILE="${OUTDIR}/lab${LAB}-config.xml"
+OUTDIR="$(pwd)/OPNSENSE/lab${LAB}/iso/conf"
+OUTFILE="${OUTDIR}/config.xml"
 mkdir -p "$OUTDIR"
+
 
 WAN_IF="vtnet1"
 LAN_IF="vtnet0"
