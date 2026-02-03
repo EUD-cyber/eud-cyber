@@ -62,8 +62,7 @@ WIN2025="./WIN2025/WIN2025_installer.sh"
       echo
       echo "----- Lab $i ($SPEC) -----"
 
-      bash "$OPNSENSECONF" || exit 1
-      bash "$GUACVM_IP" || exit 1
+     bash "$OPNSENSECONF" "$i" || exit 1
     done
     echo
     echo "✅ $LABCOUNT labs prepared ($SPEC spec)"
