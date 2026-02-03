@@ -45,7 +45,7 @@ BRIDGE1="lab${LAB}_oobm"
 OOBM_IP="ip=172.20.0.1/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
 SRC_USERDATA="$(pwd)/GUACVM/GUAC_userdata.yaml"    
-DST_USERDATA="GUAC_userdata.yaml"            
+DST_USERDATA="GUAC_userdata_lab${LAB}.yaml"        
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
 
@@ -123,7 +123,8 @@ qm set $VMID --ipconfig0 "$GUAC_IP_ADDR" \
   --ipconfig1 $OOBM_IP \
   --searchdomain cloud.local \
   --ciupgrade 1 \
-  --cicustom "user=local:snippets/GUAC_userdata.yaml"
+  --cicustom "user=local:snippets/${DST_USERDATA}"
+
 
 if [[ "$GUAC_IP_ADDR" != "ip=dhcp" && -n "$GUAC_DNS_SERVER" ]]; then
   qm set $VMID --nameserver "$GUAC_DNS_SERVER"
