@@ -78,8 +78,9 @@ WIN2025="./WIN2025/WIN2025_multi_installer.sh"
       bash "$OPNSENSE" "$i" || exit 1
     done
 
-    # -------------------------
-# Phase 4: Install remaining VMs in tmux (per lab)
+
+# -------------------------
+# Phase 4: Install remaining VMs in tmux (per lab, SERIALIZED)
 # -------------------------
 echo
 echo "===== Installing remaining VMs in tmux ====="
@@ -91,6 +92,12 @@ fi
 
 for i in $(seq 1 "$LABCOUNT"); do
   SESSION="lab${i}"
+  PREV=$((i - 1))
+  WAIT_CMD=""
+
+  if (( i > 1 )); then
+    WAIT_CMD="tmux wait-for lab${PREV}_done"
+  fi
 
   if tmux has-session -t "$SESSION" 2>/dev/null; then
     echo "⚠ tmux session '$SESSION' already exists, skipping"
@@ -105,32 +112,33 @@ for i in $(seq 1 "$LABCOUNT"); do
 
     echo '===== Lab $i background deployment started at \$(date) ====='
 
+    $WAIT_CMD
+
     echo 'Starting Guacamole VM creation'
     bash '$GUACVM' '$i'
 
     echo 'Starting Client01 VM creation'
     bash '$CLIENT01' '$i'
 
-    echo 'Starting Vuln-server01 VM creation'
-    bash '$VULNSRV01' '$i'
+#    echo 'Starting Vuln-server01 VM creation'
+#    bash '$VULNSRV01' '$i'
 
-    echo 'Starting Vuln-server02 VM creation'
-    bash '$VULNSRV02' '$i'
+#    echo 'Starting Vuln-server02 VM creation'
+#    bash '$VULNSRV02' '$i'
 
-    echo 'Starting KALI01 VM creation'
-    bash '$KALI01' '$i'
+#    echo 'Starting KALI01 VM creation'
+#    bash '$KALI01' '$i'
 
-    echo 'Starting Wazuh VM creation'
-    bash '$WAZUH' '$i'
+#    echo 'Starting Wazuh VM creation'
+#    bash '$WAZUH' '$i'
 
-    echo 'Starting APPSRV01 creation'
-    bash '$APPSRV01' '$i'
-
-#    echo 'Starting Windows server 2025 VM creation'
-#    bash '$WIN2025' '$i'
+#    echo 'Starting APPSRV01 creation'
+#    bash '$APPSRV01' '$i'
 
     echo '===== Lab $i background deployment completed at \$(date) ====='
-    echo 'Session kept open for inspection. Press Ctrl+B then D to detach.'
+
+    tmux wait-for -S lab${i}_done
+    echo 'Signaled lab${i}_done'
 
     exec bash
   "
@@ -140,8 +148,4 @@ echo
 echo "All background installs started."
 echo "Attach with: tmux attach -t labX (e.g. lab1)"
 
-    
-    echo
-    echo "All Guacamole installs started in background tmux sessions."
-    echo "Attach with: tmux attach -t labX (e.g. lab1)"
 
