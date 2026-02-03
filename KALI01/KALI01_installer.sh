@@ -1,7 +1,14 @@
 #!/bin/bash
 set -e
 
-LOGFILE="$(pwd)/LOGS/KALI01.log"
+LAB="$1"
+
+if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
+  echo "Usage: $0 <lab-number>"
+  exit 1
+fi
+
+LOGFILE="$(pwd)/LOGS/KALI01_lab${LAB}.log"
 
 # Create log file and ensure permissions
 touch "$LOGFILE"
@@ -13,8 +20,8 @@ exec > >(tee -a "$LOGFILE") 2>&1
 echo "===== KALI01 installation started at $(date) ====="
 
 # ===== CONFIG =====
-START_VMID=100
-BASE_NAME="KALI01"
+START_VMID=$((LAB * 100))
+BASE_NAME="lab${LAB}-KALI01"
 IMG_URL="https://kali.download/cloud-images/kali-2025.4/kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
 IMG_NAME="kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
 IMG_PATH="$(pwd)/KALI01/$IMG_NAME"
@@ -24,8 +31,8 @@ DISK_STORAGE="local-lvm"
 MEMORY=8192      # in MB
 CORES=4
 DISK_SIZE="32G" # the number is in GB
-BRIDGE="lan1"
-BRIDGE1="oobm"
+BRIDGE="lab${LAB}-lan1"
+BRIDGE1="lab${LAB}-oobm"
 IP_ADDR="ip=192.168.1.100/24,gw=192.168.1.1"
 DNS_SERVER="192.168.1.1"
 OOBM_IP="ip=172.20.0.11/24"
