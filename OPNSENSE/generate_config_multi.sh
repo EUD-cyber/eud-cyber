@@ -17,7 +17,7 @@ LAN_IF="vtnet0"
 LAN2_IF="vtnet2"
 OOBM_IF="vtnet3"
 
-HOSTNAME="opnsense"
+HOSTNAME="opnsense-lab${LAB}"
 DOMAIN="local"
 TIMEZONE="Etc/UTC"
 
