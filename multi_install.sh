@@ -7,18 +7,18 @@ GUACVM="./GUACVM/GUACVM_multi_installer.sh"
 OPENVSWITCHPRE="./open-vswitch-multi-pre.sh"
 OPENVSWITCH="./open-vswitch-multi.sh"
 OPENVSWITCHLAST="./open-vswitch-multi-last.sh"
-VULNSRV01="./VULNSRV01/VULNSRV01_installer.sh"
-VULNSRV02="./VULNSRV02/VULNSRV02_installer.sh"
+VULNSRV01="./VULNSRV01/VULNSRV01_multi_installer.sh"
+VULNSRV02="./VULNSRV02/VULNSRV02_multi_installer.sh"
 OPNSENSE="./OPNSENSE/OPNSENSE_multi_installer.sh"
 OPNSENSECONF="./OPNSENSE/generate_config_multi.sh"
-APPSRV01="./APPSRV01/APPSRV01_installer.sh"
+APPSRV01="./APPSRV01/APPSRV01_multi_installer.sh"
 CLIENT01="./CLIENT01/CLIENT01_multi_installer.sh"
 PACKETFENCE="./PACKETFENCE/PACKETFENCE_installer.sh"
 PREREQ="./pre_req.sh"
 KALI01="./KALI01/KALI01_multi_installer.sh"
-WAZUH="./WAZUH/WAZUH_installer.sh"
+WAZUH="./WAZUH/WAZUH_multi_installer.sh"
 WIN11="./WIN11/WIN11_installer.sh"
-WIN2025="./WIN2025/WIN2025_installer.sh"
+WIN2025="./WIN2025/WIN2025_multi_installer.sh"
 
     read -rp "How many labs to prepare (1–16): " LABCOUNT
 
@@ -126,8 +126,8 @@ for i in $(seq 1 "$LABCOUNT"); do
     echo 'Starting APPSRV01 creation'
     bash '$APPSRV01' '$i'
 
-    echo 'Starting Windows server 2025 VM creation'
-    bash '$WIN2025' '$i'
+#    echo 'Starting Windows server 2025 VM creation'
+#    bash '$WIN2025' '$i'
 
     echo '===== Lab $i background deployment completed at \$(date) ====='
     echo 'Session kept open for inspection. Press Ctrl+B then D to detach.'
