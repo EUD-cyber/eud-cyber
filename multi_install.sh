@@ -141,7 +141,7 @@ for i in $(seq 1 "$LABCOUNT"); do
     
     echo 'Signaled lab${i}_done'
 
-    exec bash
+    exit 0
   "
 done
 
