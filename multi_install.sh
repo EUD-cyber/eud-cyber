@@ -130,8 +130,8 @@ for i in $(seq 1 "$LABCOUNT"); do
     echo 'Starting KALI01 VM creation'
     bash '$KALI01' '$i'
 
-#    echo 'Starting Wazuh VM creation'
-#    bash '$WAZUH' '$i'
+    echo 'Starting Wazuh VM creation'
+    bash '$WAZUH' '$i'
 
 #    echo 'Starting APPSRV01 creation'
 #    bash '$APPSRV01' '$i'
