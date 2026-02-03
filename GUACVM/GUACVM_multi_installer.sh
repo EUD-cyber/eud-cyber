@@ -18,8 +18,7 @@ fi
 # Load stored IP/DNS
 source "$STATE_FILE"
 
-
-LOGFILE="$(pwd)/LOGS/GUACVM.log"
+LOGFILE="$(pwd)/LOGS/GUACVM${LAB}.log"
 
 # Create log file and ensure permissions
 touch "$LOGFILE"
