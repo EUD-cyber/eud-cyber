@@ -20,7 +20,7 @@ exec > >(tee -a "$LOGFILE") 2>&1
 echo "===== OPNSENSE installation started at $(date) ====="
 
 ### ===== VARIABLES =====
-START_VMID=100
+START_VMID=$((LAB * 100))
 BASE_NAME="opnsense-lab${LAB}"
 RAM=4096
 CORES=4
