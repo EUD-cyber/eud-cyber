@@ -31,14 +31,14 @@ DISK_STORAGE="local-lvm"
 MEMORY=8192      # in MB
 CORES=4
 DISK_SIZE="32G" # the number is in GB
-BRIDGE="lab${LAB}-lan1"
-BRIDGE1="lab${LAB}-oobm"
+BRIDGE="lab${LAB}_lan1"
+BRIDGE1="lab${LAB}_oobm"
 IP_ADDR="ip=192.168.1.100/24,gw=192.168.1.1"
 DNS_SERVER="192.168.1.1"
 OOBM_IP="ip=172.20.0.11/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
 SRC_USERDATA="$(pwd)/KALI01/KALI01_userdata.yaml"     # source file
-DST_USERDATA="KALI01_userdata.yaml"            # destination filename
+DST_USERDATA="KALI01_userdata_lab${LAB}.yaml"            # destination filename
 # ==================
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
@@ -122,7 +122,7 @@ qm set $VMID --ipconfig0 $IP_ADDR \
   --searchdomain cloud.local \
   --nameserver $DNS_SERVER \
   --ciupgrade 1 \
-  --cicustom "user=local:snippets/KALI01_userdata.yaml"
+  --cicustom "user=local:snippets/${DST_USERDATA}"
 
 #Creating first snapshot of the VM 
 qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
