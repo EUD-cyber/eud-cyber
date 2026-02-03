@@ -67,4 +67,14 @@ WIN2025="./WIN2025/WIN2025_installer.sh"
     done
     echo
     echo "✅ $LABCOUNT labs prepared ($SPEC spec)"
+    # -------------------------
+    # Phase 3: Install OPNsense VMs
+    # -------------------------
+    echo
+    echo "===== Installing OPNsense VMs ====="
+    
+    for i in $(seq 1 "$LABCOUNT"); do
+      echo "Installing OPNsense for lab $i"
+      bash "$OPNSENSE" "$i" || exit 1
+    done
 
