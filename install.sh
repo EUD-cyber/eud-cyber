@@ -4,7 +4,7 @@ set -e
 FULL_INSTALL="./full_install.sh"
 MINI_INSTALL="./mini_install.sh"
 MULTI_INSTALL="./multi_install.sh"
-MULTI_INSTALL_MINI="./multi_install_mini.sh"
+MULTI_INSTALL_MINI="./multi_mini_install.sh"
 
 clear
 echo "===================================="
