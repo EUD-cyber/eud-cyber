@@ -107,8 +107,9 @@ for i in $(seq 1 "$LABCOUNT"); do
   echo "Starting background installs for lab $i in tmux session '$SESSION'"
 
   tmux new-session -d -s "$SESSION" bash -c "
-    set -e
-    exec > >(tee -a lab${i}.log) 2>&1
+  set -e
+  trap 'tmux wait-for -S lab${i}_done' EXIT
+  exec > >(tee -a lab${i}.log) 2>&1
 
     echo '===== Lab $i background deployment started at \$(date) ====='
 
@@ -137,7 +138,7 @@ for i in $(seq 1 "$LABCOUNT"); do
 
     echo '===== Lab $i background deployment completed at \$(date) ====='
 
-    tmux wait-for -S lab${i}_done
+    
     echo 'Signaled lab${i}_done'
 
     exec bash
