@@ -2,7 +2,7 @@
 set -e
 
 LAB="$1"
-STATE_FILE="$(pwd)/GUACVM/STATE/lab${LAB}.env"
+STATE_FILE="$(pwd)/STATE/lab${LAB}.env"
 
 if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
   echo "Usage: $0 <lab-number>"
@@ -17,7 +17,7 @@ fi
 
 # Load stored IP/DNS
 source "$STATE_FILE"
--
+
 
 LOGFILE="$(pwd)/LOGS/GUACVM.log"
 
