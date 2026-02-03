@@ -38,8 +38,8 @@ DNS_SERVER="192.168.1.1"
 IP_GW="gw=192.168.1.1"
 OOBM_IP="ip=172.20.0.15/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
-SRC_USERDATA="$(pwd)/CLIENT01/CLIENT01_userdata_lab${LAB}.yaml"     # source file
-DST_USERDATA="CLIENT01_userdata.yaml"            # destination filename
+SRC_USERDATA="$(pwd)/CLIENT01/CLIENT01_userdata.yaml"     # source file
+DST_USERDATA="CLIENT01_userdata_lab${LAB}.yaml"            # destination filename
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
 
