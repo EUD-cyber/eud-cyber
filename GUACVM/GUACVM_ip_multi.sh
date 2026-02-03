@@ -1,6 +1,10 @@
 GUACVM_FILE="$(pwd)/GUACVM/GUACVM_installer.sh"
 
 LAB="$1"
+if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
+  echo "Usage: $0 <lab-number>"
+  exit 1
+fi
 STATE_DIR="$(pwd)/GUACVM/STATE"
 STATE_FILE="${STATE_DIR}/lab${LAB}.env"
 
@@ -109,3 +113,9 @@ EOF
 
 echo "✔ Stored Guacamole network config for lab $LAB"
 echo "  → $STATE_FILE"
+
+echo
+echo "Summary for lab $LAB:"
+echo "  IP  : $IP_ADDR"
+echo "  DNS : ${DNS_SERVER:-<none>}"
+
