@@ -17,8 +17,8 @@ IMG_URL="https://packages.wazuh.com/4.x/vm/wazuh-4.14.1.ova"
 IMG_NAME="wazuh.ova"
 IMG_PATH="$(pwd)/WAZUH/$IMG_NAME"
 DISK_STORAGE="local-lvm"
-BRIDGE="lab${LAB}-lan2"
-BRIDGE1="lab${LAB}-oobm"
+BRIDGE="lab${LAB}_lan2"
+BRIDGE1="lab${LAB}_oobm"
 CORES=4
 MEMORY=16384
 DISK_SIZE=80G
@@ -29,7 +29,7 @@ IP_GW="gw=192.168.2.1"
 WORKDIR="$(pwd)/WAZUH/"
 SNIPPET_DIR="/var/lib/vz/snippets"
 SRC_USERDATA="$(pwd)/WAZUH/WAZUH_userdata.yaml"     # source file
-DST_USERDATA="WAZUH_userdata.yaml"            # destination filename
+DST_USERDATA="WAZUH_userdata_lab${LAB}.yaml"            # destination filename
 # -----------------------------
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
@@ -109,7 +109,7 @@ qm set $VMID --ipconfig0 $IP_ADDR,$IP_GW \
   --ciupgrade \
 
 echo "➡ Attaching custom cloud-init config..."
-qm set "$VMID" --cicustom "user=local:snippets/WAZUH_userdata.yaml"
+qm set "$VMID" --cicustom "user=local:snippets/${DST_USERDATA}"
 
 #Creating first snapshot of the VM 
 qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
