@@ -3,6 +3,13 @@
 #!/bin/bash
 set -e
 
+LAB="$1"
+
+if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
+  echo "Usage: $0 <lab-number>"
+  exit 1
+fi
+
 LOGFILE="$(pwd)/LOGS/OPNSENSE.log"
 
 # Create log file and ensure permissions
@@ -16,7 +23,7 @@ echo "===== OPNSENSE installation started at $(date) ====="
 
 ### ===== VARIABLES =====
 START_VMID=100
-BASE_NAME="opnsense"
+BASE_NAME="opnsense-lab${LAB}"
 RAM=4096
 CORES=4
 DISK_SIZE="30G"
@@ -27,9 +34,9 @@ ISO_STORAGE="local"
 
 # Bridges
 WAN_BRIDGE="vmbr0"
-LAN_BRIDGE="lan1"
-LAN_BRIDGE1="lan2"
-OOBM="oobm"
+LAN_BRIDGE="lab${LAB}_lan1"
+LAN_BRIDGE1="lab${LAB}_lan2"
+OOBM="lab${LAB}_oobm"
 
 OPN_VERSION="25.7"
 
@@ -40,10 +47,17 @@ IMG_DIR="$(pwd)/OPNSENSE"
 IMG_PATH="${IMG_DIR}/${IMG_BASE}"
 IMG_BZ2_PATH="${IMG_DIR}/${IMG_BZ2}"
 
-ISO_PATH="/var/lib/vz/template/iso/opnsense-config.iso"
+ISO_PATH="/var/lib/vz/template/iso/opnsense-lab${LAB}-config.iso"
 
-CONFIG_ISO="$(pwd)/OPNSENSE/iso"
-CONFIG_SRC="$(pwd)/OPNSENSE/iso/conf/config.xml"
+
+CONFIG_ISO="$(pwd)/OPNSENSE/lab${LAB}/iso"
+CONFIG_SRC="${CONFIG_ISO}/conf/config.xml"
+
+if [[ ! -f "$CONFIG_SRC" ]]; then
+  echo "❌ Config not found for lab $LAB:"
+  echo "   $CONFIG_SRC"
+  exit 1
+fi
 
 ### ===== DOWNLOAD IMG.BZ2 =====
 if [[ ! -f "$IMG_PATH" ]]; then
@@ -57,12 +71,13 @@ if [[ ! -f "$IMG_PATH" ]]; then
   bunzip2 -fk "$IMG_BZ2_PATH"
 fi
 
+
 ## ===== CHECK IF ISO EXITS =====
 if [[ ! -f "$ISO_PATH" ]]; then
 #  echo opnsense-config.iso not found at $ISO_PATH"
-  echo "generating opnsense-config.iso"
-  cd $CONFIG_ISO
-  genisoimage -o $ISO_PATH -J -r -V OPNCONF .
+  echo "Generating config ISO for lab $LAB"
+  cd "$CONFIG_ISO"
+  genisoimage -o "$ISO_PATH" -J -r -V "OPNCONF_LAB${LAB}" .
 fi
 
 
@@ -110,7 +125,7 @@ qm disk resize $VMID scsi0 +$DISK_SIZE
 
 
 # Attach cdrom to vm
-qm set $VMID --ide2 local:iso/opnsense-config.iso,media=cdrom
+qm set $VMID --ide2 local:iso/opnsense-lab${LAB}-config.iso,media=cdrom
 
 #Creating first snapshot of the VM 
 qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
