@@ -42,6 +42,7 @@ the api is listing on port 5000 on guacvm and the tasks.html uses that for pulli
 
 missing \
    remove auth from guacamole its only a lab env.
+   future mode theres gonna be a download all to a local repository and then install from that.
  
   
 Network \
