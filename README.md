@@ -5,7 +5,7 @@ This script is testet with proxmox 9.1 and 9.1.1
 
 just git clone this site and run  run install.sh \
 then 3 options \
-1 full install \
+1 full install, wih options to install singel vm\
 2 mini install requires, 4 cores, 32 gb memory, 500 gb hdd \
 3 install multiple labs full spec on single proxmox \
 4 install multiple labs mini spec on single proxmox
