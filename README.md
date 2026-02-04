@@ -10,7 +10,7 @@ then 3 options \
 3 install multiple labs full spec on single proxmox \
 4 install multiple labs mini spec on single proxmox
 
-Remember when the vm is created and started the cloud-init goes to work so it can be some time before all things work, to check this use proxmox and login to the vm and type "cloud-init status" if it "running" grap a cop of coffee and wait for it to be "done"
+Remember when the vm is created and started the cloud-init goes to work so it can be some time before all things work, to check this use proxmox and login to the vm and type "cloud-init status" if it "running" grap a cup of coffee and wait for it to be "done"
 
 <img width="798" height="468" alt="image" src="https://github.com/user-attachments/assets/775c2eaa-e9af-4ec5-8daf-6e31d3102e4e" />
 
