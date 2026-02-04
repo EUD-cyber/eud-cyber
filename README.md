@@ -7,7 +7,7 @@ just git clone this site and run  run install.sh \
 then 3 options \
 1 full install \
 2 mini install requires, 4 cores, 32 gb memory, 500 gb hdd \
-3 install multiple labs full spec on single proxmox 
+3 install multiple labs full spec on single proxmox \
 4 install multiple labs mini spec on single proxmox
 
 Remember when the vm is created and started the cloud-init goes to work so it can be some time before all things work, to check this use proxmox and login to the vm and type "cloud-init status" if it "running" grap a cop of coffee and wait for it to be "done"
