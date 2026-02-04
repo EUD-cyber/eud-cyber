@@ -6,7 +6,7 @@ PROXOOBM="prox_oobm"
 auto 
 iface $PROXOOBM inet manual
     ovs_type OVSBridge
-    address 172.30.0.1/24
+    address 172.30.0.100/24
 
 echo "Reloading network configuration..."
 ifreload -a
