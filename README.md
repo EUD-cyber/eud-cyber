@@ -12,7 +12,7 @@ then 3 options \
 
 In the multi lab install it ask how many labs you want to install then it runs the input script x times for input on the guacvm and opnsense ip adresse, and create a labx_lanx network for each lab, then it runs all installation in a tmux session that waits for the other to complete.
 
-Remember when the vm is created and started the cloud-init goes to work so it can be some time before all things work, to check this use proxmox and login to the vm and type "cloud-init status" if it "running" grap a cup of coffee and wait for it to be "done"
+Remember when the vm is created and started, the cloud-init goes to work so it can be some time before all things work, to check this use proxmox and login to the vm and type "cloud-init status" if it "running" grap a cup of coffee and wait for it to be "done"
 
 <img width="798" height="468" alt="image" src="https://github.com/user-attachments/assets/775c2eaa-e9af-4ec5-8daf-6e31d3102e4e" />
 
