@@ -70,6 +70,9 @@ runcmd:
   - wget -O /opt/radius/ldap/01-ou.ldif https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/ldap/01-ou.ldif
   - wget -O /opt/radius/ldap/02-users.ldif https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/RADIUS/ldap/02-users.ldif
   - chown -R ubuntu:ubuntu /opt
+  - docker compose -f /opt/suricata/docker-compose.yml pull
+  - docker compose -f /opt/radius/docker-compose.yml pull
+
 
 power_state:
   mode: reboot
