@@ -34,3 +34,5 @@ runcmd:
   - wget -O /opt/juiceshop/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/JUICESHOP/docker-compose.yml
   - wget  -O /opt/dvwa/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/DVWA/docker-compose.yml
   - chown ubuntu:ubuntu -R /opt
+  - docker compose -f /opt/juiceshop/docker-compose.yml pull
+  - docker compose -f /opt/dvwa/docker-compose.yml pull
