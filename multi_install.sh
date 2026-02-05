@@ -136,6 +136,10 @@ for i in $(seq 1 "$LABCOUNT"); do
     echo 'Starting APPSRV01 creation'
     bash '$APPSRV01' '$i'
 
+    echo 'Starting APPSRV01 creation'
+    bash '$WIN2025' '$i'
+
+
     echo '===== Lab $i background deployment completed at \$(date) ====='
 
     
