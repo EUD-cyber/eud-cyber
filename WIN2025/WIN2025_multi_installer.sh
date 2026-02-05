@@ -29,7 +29,8 @@ DISK_STORAGE="local-lvm"
 IMG_URL="https://go.microsoft.com/fwlink/?linkid=2345730&clcid=0x409&culture=en-us&country=us"
 IMG_NAME="en-us_windows_server_2025_x64_dvd.iso"
 
-VIRTIO_URL="https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.285.iso"
+VIRTIO_URL="https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.285-1/virtio-win-0.1.285.iso"
+
 VIRTIO_NAME="virtio-win.iso"
 
 ISO_DIR="/var/lib/vz/template/iso"
