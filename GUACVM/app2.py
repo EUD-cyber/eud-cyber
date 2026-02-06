@@ -18,8 +18,12 @@ def get_lab_id():
         raise RuntimeError("Cannot determine LAB_ID from eth2")
     return m.group(1)
 
-LAB_ID = get_lab_id()
-print(f"[+] LAB_ID = {LAB_ID}")
+try:
+    LAB_ID = get_lab_id()
+except Exception as e:
+    LAB_ID = "unknown"
+    print(f"[!] LAB_ID error: {e}")
+
 
 # =========================
 # SSH CONFIG
@@ -57,15 +61,23 @@ def run_ssh(target, cmd):
     t = TARGETS[target]
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
     ssh.connect(
         hostname=t["host"],
         username=t["user"],
         key_filename=SSH_KEY,
-        timeout=SSH_TIMEOUT
+        timeout=SSH_TIMEOUT,
+        banner_timeout=5,
+        auth_timeout=5
     )
-    stdin, stdout, stderr = ssh.exec_command(cmd)
-    out = stdout.read().decode()
-    err = stderr.read().decode()
+
+    stdin, stdout, stderr = ssh.exec_command(cmd, timeout=5)
+    stdout.channel.settimeout(5)
+    stderr.channel.settimeout(5)
+
+    out = stdout.read().decode(errors="ignore")
+    err = stderr.read().decode(errors="ignore")
+
     ssh.close()
     return out.strip(), err.strip()
 
