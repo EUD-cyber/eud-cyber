@@ -31,6 +31,7 @@ runcmd:
   - systemctl start qemu-guest-agent
   - usermod -aG docker ubuntu
   - mkdir -p /opt/dvwa
+  - mkdir -p /opt/juiceshop
   - wget -O /opt/juiceshop/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/JUICESHOP/docker-compose.yml
   - wget  -O /opt/dvwa/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/DVWA/docker-compose.yml
   - chown ubuntu:ubuntu -R /opt
