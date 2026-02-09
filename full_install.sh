@@ -165,11 +165,11 @@ case "$CHOICE" in
   SESSION="deploy-all"
 
   echo "===== Phase 1: Interactive configuration ====="
-  bash "$OPNSENSECONF" || exit 1
-  bash "$GUACVM_IP" || exit 1
+  bash "$OPNSENSECONF $LAB" || exit 1
+  bash "$GUACVM_IP" $LAB || exit 1
 
   echo "===== Phase 2: Run OPNsense installer (expect, outside tmux) ====="
-  bash "$OPNSENSE" || exit 1
+  bash "$OPNSENSE" $LAB || exit 1
 
   if ! command -v tmux >/dev/null 2>&1; then
     echo "❌ tmux not installed. Install with: apt install tmux"
@@ -195,31 +195,33 @@ case "$CHOICE" in
     bash '$PREREQ'
     
     echo 'Starting Open vSwitch installation and configuration'
-    bash '$OPENVSWITCH'
+    bash $OPENVSWITCHPRE 
+    bash $OPENVSWITCH $LAB
+    bash $OPENVSWITCHLAST 
 
     echo 'Starting Guacamole VM creation'
-    bash '$GUACVM'
+    bash '$GUACVM' $LAB
 
     echo 'Starting Client01 VM creation'
-    bash '$CLIENT01'
+    bash '$CLIENT01' $LAB
 
     echo 'Starting Vuln-server01 VM creation'
-    bash '$VULNSRV01'
+    bash '$VULNSRV01' $LAB
 
     echo 'Starting Vuln-server02 VM creation'
-    bash '$VULNSRV02'
+    bash '$VULNSRV02' $LAB
 
     echo 'Starting KALI01 VM creation'
-    bash '$KALI01'
+    bash '$KALI01' $LAB
 
     echo 'Starting Wazuh VM creation'
-    bash '$WAZUH'
+    bash '$WAZUH' $LAB
 
     echo 'Starting APPSRV01 creation'
-    bash '$APPSRV01'
+    bash '$APPSRV01' $LAB
 
     echo 'Starting Windows server 2025 VM creation'
-    bash '$WIN2025'
+    bash '$WIN2025' $LAB 
 
     echo '===== Deployment completed successfully ====='
   "
