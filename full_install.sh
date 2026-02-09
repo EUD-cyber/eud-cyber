@@ -3,21 +3,35 @@ set -e
 
 LAB="1"
 REPO="./repo.sh"
-GUACVM_IP="./GUACVM/GUACVM_ip.sh"
-GUACVM="./GUACVM/GUACVM_installer.sh"
-OPENVSWITCH="./open-vswitch.sh"
+#GUACVM_IP="./GUACVM/GUACVM_ip.sh"
+GUACVM_IP="./GUACVM/GUACVM_ip_multi.sh"
+#GUACVM="./GUACVM/GUACVM_installer.sh"
+GUACVM="./GUACVM/GUACVM_multi_installer.sh"
+#OPENVSWITCH="./open-vswitch.sh"
+OPENVSWITCHPRE="./open-vswitch-multi-pre.sh"
+OPENVSWITCH="./open-vswitch-multi.sh"
+OPENVSWITCHLAST="./open-vswitch-multi-last.sh"
+#VULNSRV01="./VULNSRV01/VULNSRV01_installer.sh"
 VULNSRV01="./VULNSRV01/VULNSRV01_multi_installer.sh"
-VULNSRV02="./VULNSRV02/VULNSRV02_installer.sh"
-OPNSENSE="./OPNSENSE/OPNSENSE_installer.sh"
-OPNSENSECONF="./OPNSENSE/generate_config.sh"
-APPSRV01="./APPSRV01/APPSRV01_installer.sh"
-CLIENT01="./CLIENT01/CLIENT01_installer.sh"
+#VULNSRV02="./VULNSRV02/VULNSRV02_installer.sh"
+VULNSRV02="./VULNSRV02/VULNSRV02_multi_installer.sh"
+#OPNSENSE="./OPNSENSE/OPNSENSE_installer.sh"
+OPNSENSE="./OPNSENSE/OPNSENSE_multi_installer.sh"
+#OPNSENSECONF="./OPNSENSE/generate_config.sh"
+OPNSENSECONF="./OPNSENSE/generate_config_multi.sh"
+#APPSRV01="./APPSRV01/APPSRV01_installer.sh"
+APPSRV01="./APPSRV01/APPSRV01_multi_installer.sh"
+#CLIENT01="./CLIENT01/CLIENT01_installer.sh"
+CLIENT01="./CLIENT01/CLIENT01_multi_installer.sh"
 PACKETFENCE="./PACKETFENCE/PACKETFENCE_installer.sh"
 PREREQ="./pre_req.sh"
-KALI01="./KALI01/KALI01_installer.sh"
-WAZUH="./WAZUH/WAZUH_installer.sh"
+#KALI01="./KALI01/KALI01_installer.sh"
+KALI01="./KALI01/KALI01_multi_installer.sh"
+#WAZUH="./WAZUH/WAZUH_installer.sh"
+WAZUH="./WAZUH/WAZUH_multi_installer.sh"
 WIN11="./WIN11/WIN11_installer.sh"
-WIN2025="./WIN2025/WIN2025_installer.sh"
+#WIN2025="./WIN2025/WIN2025_installer.sh"
+WIN2025="./WIN2025/WIN2025_multi_installer.sh"
 
 echo "=============================="
 echo " Proxmox Deployment Menu"
@@ -50,17 +64,20 @@ case "$CHOICE" in
     ;;
   2)
     echo "Starting Open vSwitch installation and configuration"
-    bash "$OPENVSWITCH"
+    #bash "$OPENVSWITCH"
+    bash $OPENVSWITCHPRE 
+    bash $OPENVSWITCH $LAB
+    bash $OPENVSWITCHLAST 
     ;;
   3)
     echo "Starting OPNsense VM creation..."
-    bash "$OPNSENSECONF"
-    bash "$OPNSENSE"
+    bash "$OPNSENSECONF" $LAB
+    bash "$OPNSENSE" $LAB
     ;;
   4)
     echo "Starting Guacamole VM creation..."
-    bash "$GUACVM_IP"
-    bash "$GUACVM"
+    bash "$GUACVM_IP" $LAB
+    bash "$GUACVM" $LAB
     ;;
   5)
     echo "Starting Vuln-server01 VM creation..."
@@ -68,31 +85,31 @@ case "$CHOICE" in
     ;;
   6)
     echo "Stating Vuln-server02 VM creation..."
-    bash "$VULNSRV02"
+    bash "$VULNSRV02" $LAB
     ;;
   7)
     echo "Starting KALI01 VM creation... "
-    bash "$KALI01"
+    bash "$KALI01" $LAB
     ;;
   8)
     echo "Starting Wazuh VM creation.... "
-    bash "$WAZUH"
+    bash "$WAZUH" $LAB
     ;;
   9)
     echo "Starting Windows 11 VM creation... "
-    bash "$WIN11"
+    bash "$WIN11" $LAB
     ;;
  10)
     echo "Starting Windows server 2025 VM creation... "
-    bash "$WIN2025"
+    bash "$WIN2025" $LAB
     ;;
   11)
     echo "Starting APPSRV01 VM creation.... "
-    bash "$APPSRV01"
+    bash "$APPSRV01" $LAB
     ;;
   12)
     echo "Staring Client01 VM creation... "
-    bash "$CLIENT01"
+    bash "$CLIENT01" $LAB
     ;;
   89)
     echo "Change proxmox repo to no-enterprise"
@@ -108,38 +125,41 @@ case "$CHOICE" in
     bash "$PREREQ"
 
     echo "IP settings on Guacamole and Opnsense"
-    bash "$OPNSENSECONF"
-    bash "$GUACVM_IP"
+    bash "$OPNSENSECONF" $LAB
+    bash "$GUACVM_IP" $LAB
     
     echo "Starting Open vSwitch installation and configuration"
-    bash "$OPENVSWITCH"
+    #bash "$OPENVSWITCH" $LAB
+    bash $OPENVSWITCHPRE 
+    bash $OPENVSWITCH $LAB
+    bash $OPENVSWITCHLAST
 
     echo "Starting OPNsense VM creation..."
-    bash "$OPNSENSE"
+    bash "$OPNSENSE" $LAB
 
     echo "Starting Guacamole VM creation..."
-    bash "$GUACVM"
+    bash "$GUACVM" $LAB
 
     echo "Staring Client01 VM creation..."
-    bash "$CLIENT01"
+    bash "$CLIENT01" $LAB
 
     echo "Starting Vuln-server01 VM creation..."
-    bash "$VULNSRV01"
+    bash "$VULNSRV01" $LAB
 
     echo "Starting Vuln-server02 VM creation..."
-    bash "$VULNSRV02"
+    bash "$VULNSRV02" $LAB
     
     echo "Starting KALI01 VM creation... "
-    bash "$KALI01"
+    bash "$KALI01" $LAB
 
     echo "Starting Wazuh VM creation... "
-    bash "$WAZUH"
+    bash "$WAZUH" $LAB
 
     echo "Starting APPSRV01 creation... "
-    bash "$APPSRV01"
+    bash "$APPSRV01" $LAB
     
      echo "Starting Windows server 2025 VM creation.... "
-     bash "$WIN2025"
+     bash "$WIN2025" $LAB
      ;;
   95)
   SESSION="deploy-all"
