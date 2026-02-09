@@ -1,11 +1,12 @@
 #!/bin/bash
 set -e
 
+LAB="1"
 REPO="./repo.sh"
 GUACVM_IP="./GUACVM/GUACVM_ip.sh"
 GUACVM="./GUACVM/GUACVM_installer.sh"
 OPENVSWITCH="./open-vswitch.sh"
-VULNSRV01="./VULNSRV01/VULNSRV01_installer.sh"
+VULNSRV01="./VULNSRV01/VULNSRV01_multi_installer.sh"
 VULNSRV02="./VULNSRV02/VULNSRV02_installer.sh"
 OPNSENSE="./OPNSENSE/OPNSENSE_installer.sh"
 OPNSENSECONF="./OPNSENSE/generate_config.sh"
@@ -63,7 +64,7 @@ case "$CHOICE" in
     ;;
   5)
     echo "Starting Vuln-server01 VM creation..."
-    bash "$VULNSRV01"
+    bash "$VULNSRV01" $LAB
     ;;
   6)
     echo "Stating Vuln-server02 VM creation..."
