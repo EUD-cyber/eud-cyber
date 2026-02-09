@@ -165,7 +165,8 @@ case "$CHOICE" in
   SESSION="deploy-all"
 
   echo "===== Phase 1: Interactive configuration ====="
-  bash "$OPNSENSECONF $LAB" || exit 1
+  
+  bash "$OPNSENSECONF" $LAB" || exit 1
   bash "$GUACVM_IP" $LAB || exit 1
 
   echo "===== Phase 2: Run OPNsense installer (expect, outside tmux) ====="
