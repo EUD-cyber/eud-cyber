@@ -164,6 +164,17 @@ case "$CHOICE" in
   95)
   SESSION="deploy-all"
 
+  echo 'Change proxmox repo to no-enterprise'
+  bash '$REPO'
+
+  echo 'Checking packages and snippets...'
+  bash '$PREREQ'
+
+  echo 'Starting Open vSwitch installation and configuration'
+  bash $OPENVSWITCHPRE
+  bash $OPENVSWITCH $LAB
+  bash $OPENVSWITCHLAST
+
   echo "===== Phase 1: Interactive configuration ====="
   bash "$OPNSENSECONF" $LAB || exit 1
   bash "$GUACVM_IP" $LAB || exit 1
@@ -187,17 +198,6 @@ case "$CHOICE" in
   tmux new-session -d -s "$SESSION" bash -c "
     set -e
     exec > >(tee -a deploy.log) 2>&1
-
-    echo 'Change proxmox repo to no-enterprise'
-    bash '$REPO'
-
-    echo 'Checking packages and snippets...'
-    bash '$PREREQ'
-
-    echo 'Starting Open vSwitch installation and configuration'
-    bash $OPENVSWITCHPRE
-    bash $OPENVSWITCH $LAB
-    bash $OPENVSWITCHLAST
 
     echo 'Starting Guacamole VM creation'
     bash '$GUACVM' $LAB
