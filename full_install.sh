@@ -3,34 +3,22 @@ set -e
 
 LAB="1"
 REPO="./repo.sh"
-#GUACVM_IP="./GUACVM/GUACVM_ip.sh"
 GUACVM_IP="./GUACVM/GUACVM_ip_multi.sh"
-#GUACVM="./GUACVM/GUACVM_installer.sh"
 GUACVM="./GUACVM/GUACVM_multi_installer.sh"
-#OPENVSWITCH="./open-vswitch.sh"
 OPENVSWITCHPRE="./open-vswitch-multi-pre.sh"
 OPENVSWITCH="./open-vswitch-multi.sh"
 OPENVSWITCHLAST="./open-vswitch-multi-last.sh"
-#VULNSRV01="./VULNSRV01/VULNSRV01_installer.sh"
 VULNSRV01="./VULNSRV01/VULNSRV01_multi_installer.sh"
-#VULNSRV02="./VULNSRV02/VULNSRV02_installer.sh"
 VULNSRV02="./VULNSRV02/VULNSRV02_multi_installer.sh"
-#OPNSENSE="./OPNSENSE/OPNSENSE_installer.sh"
 OPNSENSE="./OPNSENSE/OPNSENSE_multi_installer.sh"
-#OPNSENSECONF="./OPNSENSE/generate_config.sh"
 OPNSENSECONF="./OPNSENSE/generate_config_multi.sh"
-#APPSRV01="./APPSRV01/APPSRV01_installer.sh"
 APPSRV01="./APPSRV01/APPSRV01_multi_installer.sh"
-#CLIENT01="./CLIENT01/CLIENT01_installer.sh"
 CLIENT01="./CLIENT01/CLIENT01_multi_installer.sh"
 PACKETFENCE="./PACKETFENCE/PACKETFENCE_installer.sh"
 PREREQ="./pre_req.sh"
-#KALI01="./KALI01/KALI01_installer.sh"
 KALI01="./KALI01/KALI01_multi_installer.sh"
-#WAZUH="./WAZUH/WAZUH_installer.sh"
 WAZUH="./WAZUH/WAZUH_multi_installer.sh"
 WIN11="./WIN11/WIN11_installer.sh"
-#WIN2025="./WIN2025/WIN2025_installer.sh"
 WIN2025="./WIN2025/WIN2025_multi_installer.sh"
 
 echo "=============================="
@@ -165,10 +153,10 @@ case "$CHOICE" in
   SESSION="deploy-all"
 
   echo 'Change proxmox repo to no-enterprise'
-  bash '$REPO'
+  bash $REPO
 
   echo 'Checking packages and snippets...'
-  bash '$PREREQ'
+  bash $PREREQ
 
   echo 'Starting Open vSwitch installation and configuration'
   bash $OPENVSWITCHPRE
