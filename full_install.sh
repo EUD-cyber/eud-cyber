@@ -169,7 +169,7 @@ case "$CHOICE" in
   bash "$OPNSENSECONF" $LAB" || exit 1
   bash "$GUACVM_IP" $LAB || exit 1
 
-  echo "===== Phase 2: Run OPNsense installer (expect, outside tmux) ====="
+  echo "===== Phase 2: Run OPNsense installer ====="
   bash "$OPNSENSE" $LAB || exit 1
 
   if ! command -v tmux >/dev/null 2>&1; then
@@ -183,7 +183,7 @@ case "$CHOICE" in
     exit 1
   fi
 
-  echo "===== Phase 3: Starting remaining installs in background (tmux) ====="
+  echo "===== Phase 3: Starting remaining installs in background ====="
 
   tmux new-session -d -s "$SESSION" bash -c "
     set -e
