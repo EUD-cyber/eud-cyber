@@ -65,9 +65,9 @@ case "$CHOICE" in
   2)
     echo "Starting Open vSwitch installation and configuration"
     #bash "$OPENVSWITCH"
-    bash $OPENVSWITCHPRE 
+    bash $OPENVSWITCHPRE
     bash $OPENVSWITCH $LAB
-    bash $OPENVSWITCHLAST 
+    bash $OPENVSWITCHLAST
     ;;
   3)
     echo "Starting OPNsense VM creation..."
@@ -117,20 +117,20 @@ case "$CHOICE" in
     ;;
   90)
     echo "Running ALL steps..."
-    
+
     echo "Change proxmox repo to no-enterprise"
     bash "$REPO"
-    
+
     echo "Checking packages and snippets..."
     bash "$PREREQ"
 
     echo "IP settings on Guacamole and Opnsense"
     bash "$OPNSENSECONF" $LAB
     bash "$GUACVM_IP" $LAB
-    
+
     echo "Starting Open vSwitch installation and configuration"
     #bash "$OPENVSWITCH" $LAB
-    bash $OPENVSWITCHPRE 
+    bash $OPENVSWITCHPRE
     bash $OPENVSWITCH $LAB
     bash $OPENVSWITCHLAST
 
@@ -148,7 +148,7 @@ case "$CHOICE" in
 
     echo "Starting Vuln-server02 VM creation..."
     bash "$VULNSRV02" $LAB
-    
+
     echo "Starting KALI01 VM creation... "
     bash "$KALI01" $LAB
 
@@ -157,7 +157,7 @@ case "$CHOICE" in
 
     echo "Starting APPSRV01 creation... "
     bash "$APPSRV01" $LAB
-    
+
      echo "Starting Windows server 2025 VM creation.... "
      bash "$WIN2025" $LAB
      ;;
@@ -165,11 +165,10 @@ case "$CHOICE" in
   SESSION="deploy-all"
 
   echo "===== Phase 1: Interactive configuration ====="
-  
-  bash "$OPNSENSECONF" $LAB" || exit 1
+  bash "$OPNSENSECONF" $LAB || exit 1
   bash "$GUACVM_IP" $LAB || exit 1
 
-  echo "===== Phase 2: Run OPNsense installer ====="
+  echo "===== Phase 2: Run OPNsense installer (expect, outside tmux) ====="
   bash "$OPNSENSE" $LAB || exit 1
 
   if ! command -v tmux >/dev/null 2>&1; then
@@ -183,7 +182,7 @@ case "$CHOICE" in
     exit 1
   fi
 
-  echo "===== Phase 3: Starting remaining installs in background ====="
+  echo "===== Phase 3: Starting remaining installs in background (tmux) ====="
 
   tmux new-session -d -s "$SESSION" bash -c "
     set -e
@@ -194,11 +193,11 @@ case "$CHOICE" in
 
     echo 'Checking packages and snippets...'
     bash '$PREREQ'
-    
+
     echo 'Starting Open vSwitch installation and configuration'
-    bash $OPENVSWITCHPRE 
+    bash $OPENVSWITCHPRE
     bash $OPENVSWITCH $LAB
-    bash $OPENVSWITCHLAST 
+    bash $OPENVSWITCHLAST
 
     echo 'Starting Guacamole VM creation'
     bash '$GUACVM' $LAB
@@ -222,7 +221,7 @@ case "$CHOICE" in
     bash '$APPSRV01' $LAB
 
     echo 'Starting Windows server 2025 VM creation'
-    bash '$WIN2025' $LAB 
+    bash '$WIN2025' $LAB
 
     echo '===== Deployment completed successfully ====='
   "
