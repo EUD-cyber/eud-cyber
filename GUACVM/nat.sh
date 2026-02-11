@@ -13,7 +13,7 @@ ETH_LAB="eth1"      # 172.20.0.0/24 network
 ETH_LAB2="eth2"     # 172.30.0.0/24 network
 
 GUAC_LAB_IP="172.20.0.1"
-GUAC_LAB2_IP="172.30.0.1"
+GUAC_LAB2_IP=$(ip -4 addr show "$ETH_LAB2" | awk '/inet / {print $2}' | cut -d/ -f1)
 
 # ============================
 # CLEAN OLD RULES (optional but recommended)
