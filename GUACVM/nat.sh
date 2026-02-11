@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 echo ">>> Enable IPv4 forwarding"
 echo "net.ipv4.ip_forward=1" > /etc/sysctl.d/99-lab-ipforward.conf
@@ -9,29 +9,44 @@ sysctl -p /etc/sysctl.d/99-lab-ipforward.conf
 # INTERFACES
 # ============================
 ETH_OUT="eth0"      # outside / WAN
-ETH_LAB="eth1"      # lab LAN interface
+ETH_LAB="eth1"      # 172.20.0.0/24 network
+ETH_LAB2="eth2"     # 172.30.0.0/24 network
+
 GUAC_LAB_IP="172.20.0.1"
+GUAC_LAB2_IP="172.30.0.1"
 
 # ============================
-# PROXMOX
+# CLEAN OLD RULES (optional but recommended)
+# ============================
+iptables -F
+iptables -t nat -F
+
+# Allow established traffic first
+iptables -A FORWARD -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+# ============================
+# PROXMOX (172.30.0.100 via eth2)
 # ============================
 echo ">>> NAT: Proxmox"
 
-PROXMOX_IP="172.20.0.100"
+PROXMOX_IP="172.30.0.100"
 PROXMOX_PORT=8006
 PROXMOX_OUTSIDE=9001   # http://GUAC:9001
 
+# DNAT
 iptables -t nat -A PREROUTING -i $ETH_OUT -p tcp --dport $PROXMOX_OUTSIDE \
   -j DNAT --to-destination $PROXMOX_IP:$PROXMOX_PORT
 
-iptables -t nat -A POSTROUTING -o $ETH_LAB -d $PROXMOX_IP -p tcp --dport $PROXMOX_PORT \
-  -j SNAT --to-source $GUAC_LAB_IP
+# SNAT
+iptables -t nat -A POSTROUTING -o $ETH_LAB2 -d $PROXMOX_IP -p tcp --dport $PROXMOX_PORT \
+  -j SNAT --to-source $GUAC_LAB2_IP
 
-iptables -I FORWARD -i $ETH_OUT -o $ETH_LAB -p tcp --dport $PROXMOX_PORT -j ACCEPT
-iptables -I FORWARD -i $ETH_LAB -o $ETH_OUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+# Forward rule
+iptables -A FORWARD -i $ETH_OUT -o $ETH_LAB2 -p tcp --dport $PROXMOX_PORT -j ACCEPT
+
 
 # ============================
-# WAZUH
+# WAZUH (172.20.0.20 via eth1)
 # ============================
 echo ">>> NAT: Wazuh"
 
@@ -45,11 +60,11 @@ iptables -t nat -A PREROUTING -i $ETH_OUT -p tcp --dport $WAZUH_OUTSIDE \
 iptables -t nat -A POSTROUTING -o $ETH_LAB -d $WAZUH_IP -p tcp --dport $WAZUH_PORT \
   -j SNAT --to-source $GUAC_LAB_IP
 
-iptables -I FORWARD -i $ETH_OUT -o $ETH_LAB -p tcp --dport $WAZUH_PORT -j ACCEPT
-iptables -I FORWARD -i $ETH_LAB -o $ETH_OUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -A FORWARD -i $ETH_OUT -o $ETH_LAB -p tcp --dport $WAZUH_PORT -j ACCEPT
+
 
 # ============================
-# OPNsense
+# OPNsense (172.20.0.2 via eth1)
 # ============================
 echo ">>> NAT: OPNsense"
 
@@ -63,8 +78,8 @@ iptables -t nat -A PREROUTING -i $ETH_OUT -p tcp --dport $OPNSENSE_OUTSIDE \
 iptables -t nat -A POSTROUTING -o $ETH_LAB -d $OPNSENSE_IP -p tcp --dport $OPNSENSE_PORT \
   -j SNAT --to-source $GUAC_LAB_IP
 
-iptables -I FORWARD -i $ETH_OUT -o $ETH_LAB -p tcp --dport $OPNSENSE_PORT -j ACCEPT
-iptables -I FORWARD -i $ETH_LAB -o $ETH_OUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+iptables -A FORWARD -i $ETH_OUT -o $ETH_LAB -p tcp --dport $OPNSENSE_PORT -j ACCEPT
+
 
 # ============================
 # SAVE PERSISTENT
