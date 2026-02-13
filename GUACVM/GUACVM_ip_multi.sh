@@ -26,6 +26,7 @@ validate_ip() {
 }
 
 while true; do
+    echo "GUACVM ip config"
     echo "Select network configuration:"
     echo "1) DHCP"
     echo "2) Static"
