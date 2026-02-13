@@ -132,7 +132,7 @@ runcmd:
   - systemctl enable mirror-eth2.service
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
-    - wget -O /home/kali/Desktop/IPS/testips.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/testips.sh
+  - wget -O /home/kali/Desktop/IPS/testips.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/testips.sh
   - wget -O /home/kali/Desktop/wireshark/rsasnakeoil2.cap https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.cap
   - wget -O /home/kali/Desktop/wireshark/rsasnakeoil2.key https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.key
   - sed -i 's|^Exec=wireshark|Exec=env QT_QPA_PLATFORM=xcb wireshark|' /usr/share/applications/wireshark.desktop
