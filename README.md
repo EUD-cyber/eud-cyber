@@ -43,8 +43,9 @@ the api is listing on port 5000 on guacvm and the tasks.html uses that for pulli
 
 
 missing \
-   remove auth from guacamole its only a lab env.
-   future mode theres gonna be a download all to a local repository and then install from that.
+   remove auth from guacamole its only a lab env.\
+   future mode theres gonna be a download all to a local repository and then install from that.\
+   that snapshot is created before cloud-inits is done so you have to wait for the cloud-init to compplete again, fix so the snapshot is done after cloud-init.
  
   
 Network \
