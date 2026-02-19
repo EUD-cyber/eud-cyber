@@ -10,20 +10,21 @@ users:
     shell: /bin/bash
     lock_passwd: false
     passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
-    ssh_authorized_keys:
-      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
+
   - name: kali2
     sudo: ALL=(ALL) NOPASSWD:ALL
     groups: sudo,wireshark
     shell: /bin/bash
     lock_passwd: false
     passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
+
   - name: kali3
     sudo: ALL=(ALL) NOPASSWD:ALL
     groups: sudo,wireshark
     shell: /bin/bash
     lock_passwd: false
     passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
+
   - name: kali4
     sudo: ALL=(ALL) NOPASSWD:ALL
     groups: sudo,wireshark
@@ -42,32 +43,10 @@ packages:
   - wireshark
   - qemu-guest-agent
 
-write_files:
-
-  # VNC display mapping
-  - path: /etc/tigervnc/vncserver.users
-    permissions: "0644"
-    content: |
-      :1=kali1
-      :2=kali2
-      :3=kali3
-      :4=kali4
-
-  # Disable localhost binding so Guacamole can connect
-  - path: /etc/tigervnc/vncserver-config-defaults
-    permissions: "0644"
-    content: |
-      localhost=no
-      geometry=1280x800
-
 runcmd:
   - set -e
 
-  # Remove any old override from template
-  - rm -rf /etc/systemd/system/tigervncserver@.service.d
-  - systemctl daemon-reload
-
-  # Create correct xstartup for Kali (IMPORTANT PATH)
+  # Create proper xstartup (modern Kali path)
   - for u in kali1 kali2 kali3 kali4; do \
       mkdir -p /home/$u/.config/tigervnc; \
       echo '#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4' > /home/$u/.config/tigervnc/xstartup; \
@@ -75,16 +54,91 @@ runcmd:
       chown -R $u:$u /home/$u/.config; \
     done
 
-  # Set VNC password
+  # Set VNC password for all users
   - for u in kali1 kali2 kali3 kali4; do \
       su - $u -c "printf 'password\npassword\n' | vncpasswd"; \
     done
 
-  # Enable VNC displays (colon required on Kali)
-  - systemctl enable tigervncserver@:1.service
-  - systemctl enable tigervncserver@:2.service
-  - systemctl enable tigervncserver@:3.service
-  - systemctl enable tigervncserver@:4.service
+  # Create systemd service for each user
+  - |
+    cat > /etc/systemd/system/vnc-kali1.service <<EOF
+    [Unit]
+    Description=VNC Server for kali1
+    After=network.target
+
+    [Service]
+    Type=forking
+    User=kali1
+    ExecStart=/usr/bin/vncserver -localhost no :1
+    ExecStop=/usr/bin/vncserver -kill :1
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+
+  - |
+    cat > /etc/systemd/system/vnc-kali2.service <<EOF
+    [Unit]
+    Description=VNC Server for kali2
+    After=network.target
+
+    [Service]
+    Type=forking
+    User=kali2
+    ExecStart=/usr/bin/vncserver -localhost no :2
+    ExecStop=/usr/bin/vncserver -kill :2
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+
+  - |
+    cat > /etc/systemd/system/vnc-kali3.service <<EOF
+    [Unit]
+    Description=VNC Server for kali3
+    After=network.target
+
+    [Service]
+    Type=forking
+    User=kali3
+    ExecStart=/usr/bin/vncserver -localhost no :3
+    ExecStop=/usr/bin/vncserver -kill :3
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+
+  - |
+    cat > /etc/systemd/system/vnc-kali4.service <<EOF
+    [Unit]
+    Description=VNC Server for kali4
+    After=network.target
+
+    [Service]
+    Type=forking
+    User=kali4
+    ExecStart=/usr/bin/vncserver -localhost no :4
+    ExecStop=/usr/bin/vncserver -kill :4
+    Restart=on-failure
+
+    [Install]
+    WantedBy=multi-user.target
+    EOF
+
+  - systemctl daemon-reload
+
+  - systemctl enable vnc-kali1
+  - systemctl enable vnc-kali2
+  - systemctl enable vnc-kali3
+  - systemctl enable vnc-kali4
+
+  - systemctl start vnc-kali1
+  - systemctl start vnc-kali2
+  - systemctl start vnc-kali3
+  - systemctl start vnc-kali4
 
   - systemctl enable ssh
   - systemctl enable qemu-guest-agent
