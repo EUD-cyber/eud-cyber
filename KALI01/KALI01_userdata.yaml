@@ -4,9 +4,36 @@ hostname: kali
 manage_etc_hosts: true
 
 users:
-  - name: kali
+  - name: kali1
     sudo: ALL=(ALL) NOPASSWD:ALL
-    groups: sudo
+    groups: sudo,wireshark
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
+
+  - name: kali2
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: sudo,wireshark
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
+
+  - name: kali3
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: sudo,wireshark
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
+
+  - name: kali4
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: sudo,wireshark
     shell: /bin/bash
     lock_passwd: false
     passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
@@ -15,9 +42,6 @@ users:
 
 ssh_pwauth: false
 disable_root: true
-
-chpasswd:
-  expire: false
 
 packages:
   - kali-desktop-xfce
@@ -34,113 +58,56 @@ packages:
   - qemu-guest-agent
 
 write_files:
-  - path: /home/kali/.vnc/xstartup
-    owner: root:root
+
+  # Default XFCE VNC startup for all users
+  - path: /etc/skel/.vnc/xstartup
     permissions: "0755"
     content: |
       #!/bin/sh
-      unset XAUTHORITY
       unset SESSION_MANAGER
       unset DBUS_SESSION_BUS_ADDRESS
       exec startxfce4 &
 
-  - path: /etc/systemd/system/tigervncserver@:1.service.d/override.conf
+  # Map VNC displays to users
+  - path: /etc/tigervnc/vncserver.users
+    permissions: "0644"
+    content: |
+      :1=kali1
+      :2=kali2
+      :3=kali3
+      :4=kali4
+
+  # Generic VNC systemd override (works for all users)
+  - path: /etc/systemd/system/tigervncserver@.service.d/override.conf
     permissions: "0644"
     content: |
       [Service]
       Type=simple
-      User=kali
-      Environment="HOME=/home/kali"
       ExecStart=
-      ExecStart=/usr/bin/vncserver -fg -localhost=no -geometry 1280x720 :1
+      ExecStart=/usr/bin/vncserver -fg -localhost=no -geometry 1280x800 %i
 
-
-  - path: /etc/profile.d/qt-x11.sh
-    permissions: "0644"
-    content: |
-      export QT_QPA_PLATFORM=xcb
-
-  - path: /usr/local/bin/install-kali-tools.sh
-    permissions: "0755"
-    content: |
-      #!/bin/bash
-      set -e
-      cat > /etc/apt/sources.list <<EOF
-      deb https://http.kali.org/kali kali-rolling main contrib non-free non-free-firmware
-      EOF
-      apt-get update
-      apt-get install -y kali-linux-default nikto seclists gobuster sqlmap
-      touch /var/lib/kali-tools-installed
-
-  - path: /etc/systemd/system/kali-tools-install.service
-    permissions: "0644"
-    content: |
-      [Unit]
-      Description=Install Kali tools after first boot
-      After=network-online.target
-      Wants=network-online.target
-      ConditionPathExists=!/var/lib/kali-tools-installed
-
-      [Service]
-      Type=oneshot
-      ExecStart=/usr/local/bin/install-kali-tools.sh
-
-      [Install]
-      WantedBy=multi-user.target
-
-  - path: /etc/sysctl.d/99-mirror.conf
-    permissions: "0644"
-    content: |
-       net.ipv4.ip_forward=0
-    
-  - path: /etc/systemd/system/mirror-eth2.service
-    permissions: "0644"
-    content: |
-      [Unit]
-      After=network.target
-
-      [Service]
-      Type=oneshot
-      ExecStart=/sbin/ip addr flush dev eth2
-      ExecStart=/sbin/ip link set eth2 up
-      ExecStart=/sbin/ethtool -K eth2 tx off rx off tso off gso off gro off lro off
-
-      [Install]
-      WantedBy=multi-user.target
-    
 runcmd:
-  - set -x
-  - export DEBIAN_FRONTEND=noninteractive
+  - set -e
   - systemctl enable ssh
   - echo "wireshark-common wireshark-common/install-setuid boolean true" | debconf-set-selections
   - dpkg-reconfigure -f noninteractive wireshark-common
-  - usermod -aG wireshark kali
   - setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap || true
-  - mkdir -p /home/kali/.vnc
-  - mkdir -p /home/kali/.config/tigervnc
-  - mkdir -p /home/kali/Desktop/IPS
-  - mkdir -p /home/kali/Desktop/wireshark  
-  - echo ":1=kali" > /etc/tigervnc/vncserver.users
-  - chown -R kali:kali /home/kali/.vnc
-  - chown -R kali:kali /home/kali/.config
-  - chown -R kali:kali /home/kali/Desktop/IPS
-  - chown -R kali:kali /home/kali/Desktop/wireshark
-  - su - kali -c "printf 'password\npassword\n' | vncpasswd"
+
+  # Create VNC dirs
+  - for u in kali1 kali2 kali3 kali4; do mkdir -p /home/$u/.vnc; chown -R $u:$u /home/$u/.vnc; done
+
+  # Set simple VNC password (change for production)
+  - for u in kali1 kali2 kali3 kali4; do su - $u -c "printf 'password\npassword\n' | vncpasswd"; done
+
+  # Enable all VNC sessions
   - systemctl daemon-reload
   - systemctl enable tigervncserver@:1.service
-  - systemctl enable kali-tools-install.service
-  - systemctl enable mirror-eth2.service
+  - systemctl enable tigervncserver@:2.service
+  - systemctl enable tigervncserver@:3.service
+  - systemctl enable tigervncserver@:4.service
+
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
-  - wget -O /home/kali/Desktop/IPS/testips.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/testips.sh
-  - wget -O /home/kali/Desktop/wireshark/rsasnakeoil2.cap https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.cap
-  - wget -O /home/kali/Desktop/wireshark/rsasnakeoil2.key https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.key
-  - sed -i 's|^Exec=wireshark|Exec=env QT_QPA_PLATFORM=xcb wireshark|' /usr/share/applications/wireshark.desktop
-  - chown -R kali:kali /home/kali/
-  - update-desktop-database
 
 power_state:
   mode: reboot
-  message: "Reboot after initial cloud-init setup"
-  timeout: 30
-  condition: true
