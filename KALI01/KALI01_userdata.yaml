@@ -83,8 +83,12 @@ write_files:
     content: |
       [Service]
       Type=simple
+      User=%i
+      PAMName=login
+      Environment=HOME=/home/%i
       ExecStart=
-      ExecStart=/usr/bin/vncserver -fg -localhost=no -geometry 1280x800 %i
+      ExecStart=/usr/bin/vncserver -fg -localhost=no -geometry 1280x800
+
 
 runcmd:
   - set -e
