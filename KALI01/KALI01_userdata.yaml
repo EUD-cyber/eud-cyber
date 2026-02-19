@@ -12,63 +12,39 @@ users:
     passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
     ssh_authorized_keys:
       - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
-
   - name: kali2
     sudo: ALL=(ALL) NOPASSWD:ALL
     groups: sudo,wireshark
     shell: /bin/bash
     lock_passwd: false
     passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
-    ssh_authorized_keys:
-      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
-
   - name: kali3
     sudo: ALL=(ALL) NOPASSWD:ALL
     groups: sudo,wireshark
     shell: /bin/bash
     lock_passwd: false
     passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
-    ssh_authorized_keys:
-      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
-
   - name: kali4
     sudo: ALL=(ALL) NOPASSWD:ALL
     groups: sudo,wireshark
     shell: /bin/bash
     lock_passwd: false
     passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
-    ssh_authorized_keys:
-      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
 
 ssh_pwauth: false
 disable_root: true
 
 packages:
   - kali-desktop-xfce
-  - xorg
-  - dbus-x11
   - openssh-server
   - tigervnc-standalone-server
-  - tigervnc-common
-  - tigervnc-xorg-extension
-  - curl
+  - dbus-x11
   - wireshark
-  - ethtool
-  - iproute2
   - qemu-guest-agent
 
 write_files:
 
-  # Default XFCE VNC startup for all users
-  - path: /etc/skel/.vnc/xstartup
-    permissions: "0755"
-    content: |
-      #!/bin/sh
-      unset SESSION_MANAGER
-      unset DBUS_SESSION_BUS_ADDRESS
-      exec startxfce4 &
-
-  # Map VNC displays to users
+  # VNC display mapping
   - path: /etc/tigervnc/vncserver.users
     permissions: "0644"
     content: |
@@ -77,39 +53,40 @@ write_files:
       :3=kali3
       :4=kali4
 
-  # Generic VNC systemd override (works for all users)
-  - path: /etc/systemd/system/tigervncserver@.service.d/override.conf
+  # Disable localhost binding so Guacamole can connect
+  - path: /etc/tigervnc/vncserver-config-defaults
     permissions: "0644"
     content: |
-      [Service]
-      Type=simple
-      User=%i
-      PAMName=login
-      Environment=HOME=/home/%i
-      ExecStart=
-      ExecStart=/usr/bin/vncserver -fg -localhost=no -geometry 1280x800
-
+      localhost=no
+      geometry=1280x800
 
 runcmd:
   - set -e
-  - systemctl enable ssh
-  - echo "wireshark-common wireshark-common/install-setuid boolean true" | debconf-set-selections
-  - dpkg-reconfigure -f noninteractive wireshark-common
-  - setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap || true
 
-  # Create VNC dirs
-  - for u in kali1 kali2 kali3 kali4; do mkdir -p /home/$u/.vnc; chown -R $u:$u /home/$u/.vnc; done
-
-  # Set simple VNC password (change for production)
-  - for u in kali1 kali2 kali3 kali4; do su - $u -c "printf 'password\npassword\n' | vncpasswd"; done
-
-  # Enable all VNC sessions
+  # Remove any old override from template
+  - rm -rf /etc/systemd/system/tigervncserver@.service.d
   - systemctl daemon-reload
+
+  # Create correct xstartup for Kali (IMPORTANT PATH)
+  - for u in kali1 kali2 kali3 kali4; do \
+      mkdir -p /home/$u/.config/tigervnc; \
+      echo '#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4' > /home/$u/.config/tigervnc/xstartup; \
+      chmod 755 /home/$u/.config/tigervnc/xstartup; \
+      chown -R $u:$u /home/$u/.config; \
+    done
+
+  # Set VNC password
+  - for u in kali1 kali2 kali3 kali4; do \
+      su - $u -c "printf 'password\npassword\n' | vncpasswd"; \
+    done
+
+  # Enable VNC displays (colon required on Kali)
   - systemctl enable tigervncserver@:1.service
   - systemctl enable tigervncserver@:2.service
   - systemctl enable tigervncserver@:3.service
   - systemctl enable tigervncserver@:4.service
 
+  - systemctl enable ssh
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
 
