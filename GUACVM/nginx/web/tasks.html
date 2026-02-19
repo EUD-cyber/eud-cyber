@@ -25,9 +25,22 @@
 
 <script>
   const HOST = window.location.hostname;
-  function link(path="") { return `http://${HOST}${path}`; }
+
+  function link(path="") {
+    return `http://${HOST}${path}`;
+  }
+
   function nat(port, https=false) {
-    return `${https?'https':'http'}://${HOST}:${port}`;
+    return `${https ? 'https' : 'http'}://${HOST}:${port}`;
+  }
+
+  function toggleKaliMenu() {
+    const menu = document.getElementById("kaliMenu");
+    if (menu.style.display === "none" || menu.style.display === "") {
+      menu.style.display = "block";
+    } else {
+      menu.style.display = "none";
+    }
   }
 </script>
 </head>
@@ -48,10 +61,34 @@
 
     <div class="nav-title">Connections</div>
 
-    <a class="conn-button" target="_blank"
-       href="#" onclick="this.href = link('/guacamole/#/client/NgBjAHBvc3RncmVzcWw')">
-       Kali01 VNC
-    </a>
+    <!-- Kali01 VNC Dropdown -->
+  <div class="conn-button" onclick="toggleKaliMenu()" style="cursor:pointer;">
+    Kali01 VNC ▸
+  </div>
+  
+  <div id="kaliMenu" style="display:none; margin-left:15px;">
+
+  <a class="conn-button" target="_blank"
+     href="#" onclick="this.href = link('/guacamole/#/client/CLIENTID_USER1')">
+     User1
+  </a>
+
+  <a class="conn-button" target="_blank"
+     href="#" onclick="this.href = link('/guacamole/#/client/CLIENTID_USER2')">
+     User2
+  </a>
+
+  <a class="conn-button" target="_blank"
+     href="#" onclick="this.href = link('/guacamole/#/client/CLIENTID_USER3')">
+     User3
+  </a>
+
+  <a class="conn-button" target="_blank"
+     href="#" onclick="this.href = link('/guacamole/#/client/CLIENTID_USER4')">
+     User4
+  </a>
+
+</div>
 
     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = link('/guacamole/#/client/MgBjAHBvc3RncmVzcWw')">
