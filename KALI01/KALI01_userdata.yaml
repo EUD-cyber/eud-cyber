@@ -4,6 +4,15 @@ hostname: kali
 manage_etc_hosts: true
 
 users:
+  - name: kali
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    groups: sudo,wireshark
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
+
   - name: kali1
     sudo: ALL=(ALL) NOPASSWD:ALL
     groups: sudo,wireshark
@@ -46,87 +55,38 @@ packages:
 runcmd:
   - set -e
 
-  # Create proper xstartup (modern Kali path)
-  - for u in kali1 kali2 kali3 kali4; do \
+  # Create xstartup for all users
+  - for u in kali kali1 kali2 kali3 kali4; do \
       mkdir -p /home/$u/.config/tigervnc; \
       echo '#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4' > /home/$u/.config/tigervnc/xstartup; \
       chmod 755 /home/$u/.config/tigervnc/xstartup; \
       chown -R $u:$u /home/$u/.config; \
     done
 
-  # Set VNC password for all users
-  - for u in kali1 kali2 kali3 kali4; do \
+  # Set VNC password
+  - for u in kali kali1 kali2 kali3 kali4; do \
       su - $u -c "printf 'password\npassword\n' | vncpasswd"; \
     done
 
-  # Create systemd service for each user
+  # Create VNC systemd services
   - |
-    cat > /etc/systemd/system/vnc-kali1.service <<EOF
+    for i in 1 2 3 4; do
+      cat > /etc/systemd/system/vnc-kali${i}.service <<EOF
     [Unit]
-    Description=VNC Server for kali1
+    Description=VNC Server for kali${i}
     After=network.target
 
     [Service]
     Type=forking
-    User=kali1
-    ExecStart=/usr/bin/vncserver -localhost no :1
-    ExecStop=/usr/bin/vncserver -kill :1
+    User=kali${i}
+    ExecStart=/usr/bin/vncserver -localhost no :${i}
+    ExecStop=/usr/bin/vncserver -kill :${i}
     Restart=on-failure
 
     [Install]
     WantedBy=multi-user.target
     EOF
-
-  - |
-    cat > /etc/systemd/system/vnc-kali2.service <<EOF
-    [Unit]
-    Description=VNC Server for kali2
-    After=network.target
-
-    [Service]
-    Type=forking
-    User=kali2
-    ExecStart=/usr/bin/vncserver -localhost no :2
-    ExecStop=/usr/bin/vncserver -kill :2
-    Restart=on-failure
-
-    [Install]
-    WantedBy=multi-user.target
-    EOF
-
-  - |
-    cat > /etc/systemd/system/vnc-kali3.service <<EOF
-    [Unit]
-    Description=VNC Server for kali3
-    After=network.target
-
-    [Service]
-    Type=forking
-    User=kali3
-    ExecStart=/usr/bin/vncserver -localhost no :3
-    ExecStop=/usr/bin/vncserver -kill :3
-    Restart=on-failure
-
-    [Install]
-    WantedBy=multi-user.target
-    EOF
-
-  - |
-    cat > /etc/systemd/system/vnc-kali4.service <<EOF
-    [Unit]
-    Description=VNC Server for kali4
-    After=network.target
-
-    [Service]
-    Type=forking
-    User=kali4
-    ExecStart=/usr/bin/vncserver -localhost no :4
-    ExecStop=/usr/bin/vncserver -kill :4
-    Restart=on-failure
-
-    [Install]
-    WantedBy=multi-user.target
-    EOF
+    done
 
   - systemctl daemon-reload
 
