@@ -13,33 +13,10 @@ users:
     ssh_authorized_keys:
       - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
 
-  - name: kali1
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    groups: sudo,wireshark
-    shell: /bin/bash
-    lock_passwd: false
-    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
-
-  - name: kali2
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    groups: sudo,wireshark
-    shell: /bin/bash
-    lock_passwd: false
-    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
-
-  - name: kali3
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    groups: sudo,wireshark
-    shell: /bin/bash
-    lock_passwd: false
-    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
-
-  - name: kali4
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    groups: sudo,wireshark
-    shell: /bin/bash
-    lock_passwd: false
-    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
+  - { name: kali1, sudo: ALL=(ALL) NOPASSWD:ALL, groups: sudo,wireshark, shell: /bin/bash, lock_passwd: false, passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0, ssh_authorized_keys: [ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key] }
+  - { name: kali2, sudo: ALL=(ALL) NOPASSWD:ALL, groups: sudo,wireshark, shell: /bin/bash, lock_passwd: false, passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0, ssh_authorized_keys: [ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key] }
+  - { name: kali3, sudo: ALL=(ALL) NOPASSWD:ALL, groups: sudo,wireshark, shell: /bin/bash, lock_passwd: false, passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0, ssh_authorized_keys: [ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key] }
+  - { name: kali4, sudo: ALL=(ALL) NOPASSWD:ALL, groups: sudo,wireshark, shell: /bin/bash, lock_passwd: false, passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0, ssh_authorized_keys: [ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key] }
 
 ssh_pwauth: false
 disable_root: true
@@ -51,58 +28,152 @@ packages:
   - dbus-x11
   - wireshark
   - qemu-guest-agent
+  - curl
+
+write_files:
+
+  #########################################################
+  # Kali tools auto install
+  #########################################################
+
+  - path: /usr/local/bin/install-kali-tools.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -e
+      cat > /etc/apt/sources.list <<EOF
+      deb https://http.kali.org/kali kali-rolling main contrib non-free non-free-firmware
+      EOF
+      apt-get update
+      apt-get install -y kali-linux-default nikto seclists gobuster sqlmap
+      touch /var/lib/kali-tools-installed
+
+  - path: /etc/systemd/system/kali-tools-install.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Install Kali tools after first boot
+      After=network-online.target
+      Wants=network-online.target
+      ConditionPathExists=!/var/lib/kali-tools-installed
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/install-kali-tools.sh
+
+      [Install]
+      WantedBy=multi-user.target
+
+  #########################################################
+  # Mirror eth2
+  #########################################################
+
+  - path: /etc/sysctl.d/99-mirror.conf
+    permissions: "0644"
+    content: |
+      net.ipv4.ip_forward=0
+
+  - path: /etc/systemd/system/mirror-eth2.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      After=network.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/sbin/ip addr flush dev eth2
+      ExecStart=/sbin/ip link set eth2 up
+      ExecStart=/sbin/ethtool -K eth2 tx off rx off tso off gso off gro off lro off
+
+      [Install]
+      WantedBy=multi-user.target
+
+  #########################################################
+  # Multi user VNC setup script
+  #########################################################
+
+  - path: /usr/local/sbin/setup-vnc-multiuser.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -e
+
+      USERS=(kali kali1 kali2 kali3 kali4)
+
+      for u in "${USERS[@]}"; do
+        HOME_DIR=$(getent passwd "$u" | cut -d: -f6)
+
+        mkdir -p "$HOME_DIR/.config/tigervnc"
+        mkdir -p "$HOME_DIR/Desktop/IPS"
+        mkdir -p "$HOME_DIR/Desktop/wireshark"
+
+        cat > "$HOME_DIR/.config/tigervnc/xstartup" <<'EOF'
+      #!/bin/sh
+      unset SESSION_MANAGER
+      unset DBUS_SESSION_BUS_ADDRESS
+      exec dbus-launch --exit-with-session startxfce4
+      EOF
+
+        chmod 0755 "$HOME_DIR/.config/tigervnc/xstartup"
+        chown -R "$u:$u" "$HOME_DIR/.config"
+
+        # VNC password = password
+        su - "$u" -c "printf 'password\npassword\n' | vncpasswd"
+
+        # Download lab files
+        wget -q -O "$HOME_DIR/Desktop/IPS/testips.sh" \
+          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/testips.sh
+
+        wget -q -O "$HOME_DIR/Desktop/wireshark/rsasnakeoil2.cap" \
+          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.cap
+
+        wget -q -O "$HOME_DIR/Desktop/wireshark/rsasnakeoil2.key" \
+          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.key
+
+        chmod +x "$HOME_DIR/Desktop/IPS/testips.sh"
+        chown -R "$u:$u" "$HOME_DIR/Desktop"
+      done
+
+      create_service() {
+        USERNAME=$1
+        DISPLAY=$2
+
+        cat > /etc/systemd/system/vnc-${USERNAME}.service <<EOF
+      [Unit]
+      Description=VNC Server for ${USERNAME}
+      After=network.target
+
+      [Service]
+      Type=forking
+      User=${USERNAME}
+      ExecStart=/usr/bin/vncserver -localhost no :${DISPLAY}
+      ExecStop=/usr/bin/vncserver -kill :${DISPLAY}
+      Restart=on-failure
+
+      [Install]
+      WantedBy=multi-user.target
+      EOF
+      }
+
+      create_service kali 0
+      create_service kali1 1
+      create_service kali2 2
+      create_service kali3 3
+      create_service kali4 4
+
+      systemctl daemon-reload
+      systemctl enable --now vnc-kali.service
+      systemctl enable --now vnc-kali1.service
+      systemctl enable --now vnc-kali2.service
+      systemctl enable --now vnc-kali3.service
+      systemctl enable --now vnc-kali4.service
+      systemctl enable --now kali-tools-install.service
+      systemctl enable --now mirror-eth2.service
+      systemctl enable --now ssh
+      systemctl enable --now qemu-guest-agent
 
 runcmd:
-  - set -e
-
-  # Create xstartup for all users
-  - for u in kali kali1 kali2 kali3 kali4; do \
-      mkdir -p /home/$u/.config/tigervnc; \
-      echo '#!/bin/sh\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexec startxfce4' > /home/$u/.config/tigervnc/xstartup; \
-      chmod 755 /home/$u/.config/tigervnc/xstartup; \
-      chown -R $u:$u /home/$u/.config; \
-    done
-
-  # Set VNC password
-  - for u in kali kali1 kali2 kali3 kali4; do \
-      su - $u -c "printf 'password\npassword\n' | vncpasswd"; \
-    done
-
-  # Create VNC systemd services
-  - |
-    for i in 1 2 3 4; do
-      cat > /etc/systemd/system/vnc-kali${i}.service <<EOF
-    [Unit]
-    Description=VNC Server for kali${i}
-    After=network.target
-
-    [Service]
-    Type=forking
-    User=kali${i}
-    ExecStart=/usr/bin/vncserver -localhost no :${i}
-    ExecStop=/usr/bin/vncserver -kill :${i}
-    Restart=on-failure
-
-    [Install]
-    WantedBy=multi-user.target
-    EOF
-    done
-
-  - systemctl daemon-reload
-
-  - systemctl enable vnc-kali1
-  - systemctl enable vnc-kali2
-  - systemctl enable vnc-kali3
-  - systemctl enable vnc-kali4
-
-  - systemctl start vnc-kali1
-  - systemctl start vnc-kali2
-  - systemctl start vnc-kali3
-  - systemctl start vnc-kali4
-
-  - systemctl enable ssh
-  - systemctl enable qemu-guest-agent
-  - systemctl start qemu-guest-agent
+  - /usr/local/sbin/setup-vnc-multiuser.sh
 
 power_state:
   mode: reboot
