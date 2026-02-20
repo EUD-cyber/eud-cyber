@@ -29,6 +29,7 @@ packages:
   - wireshark
   - qemu-guest-agent
   - curl
+  - ethtool
 
 write_files:
 
