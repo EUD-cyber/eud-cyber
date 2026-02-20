@@ -134,6 +134,22 @@ write_files:
         chown -R "$u:$u" "$HOME_DIR/Desktop"
       done
 
+        # --------------------------------------------------
+        # Fix Wireshark permissions for all users
+        # --------------------------------------------------
+        
+        echo "Configuring Wireshark permissions..."
+        
+        echo "wireshark-common wireshark-common/install-setuid boolean true" | debconf-set-selections
+        dpkg-reconfigure -f noninteractive wireshark-common
+        
+        for u in "${USERS[@]}"; do
+          usermod -aG wireshark "$u"
+        done
+        
+        setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap || true
+        
+        getcap /usr/bin/dumpcap
       create_service() {
         USERNAME=$1
         DISPLAY=$2
