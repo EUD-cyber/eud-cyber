@@ -27,12 +27,17 @@ packages:
   - xrdp
   - dbus-x11
   - sudo
-  - firefox
+  
   - qemu-guest-agent
 
 
 runcmd:
   - export DEBIAN_FRONTEND=noninteractive
+  - apt-get update
+  - apt-get install -y software-properties-common
+  - add-apt-repository ppa:mozillateam/ppa -y
+  - apt-get update
+  - apt-get install -y firefox-esr
   - systemctl enable ssh
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent

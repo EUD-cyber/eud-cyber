@@ -1,17 +1,220 @@
 services:
-        
-  juiceshop:
-    image: bkimminich/juice-shop:latest
-    container_name: juiceshop
-    restart: unless-stopped
+
+  # ==========================================================
+  # 🟢 EASY 1 – SQL Injection Login Bypass
+  # Port: 3000
+  # Focus: Basic SQL Injection & Authentication flaws
+  # Students learn:
+  #   - SQL injection basics (' OR 1=1--)
+  #   - How login queries are abused
+  #   - Why parameterized queries matter
+  # ==========================================================
+  juice_easy_sql:
+    image: bkimminich/juice-shop
+    container_name: juice_easy_sql
     ports:
       - "3000:3000"
+    restart: unless-stopped
     environment:
       - NODE_ENV=production
       - CTFSHOWDIFFICULTY=1
       - CTF_SHOW_HINTS=true
       - SOLUTIONS=false
-    volumes:
-      - juice_data:/juice-shop/data
-volumes:
-  juice_data:
+
+
+  # ==========================================================
+  # 🟢 EASY 2 – DOM XSS
+  # Port: 3001
+  # Focus: Client-side Cross-Site Scripting
+  # Students learn:
+  #   - DOM-based XSS
+  #   - Browser-side vulnerabilities
+  #   - Input reflection & output encoding
+  # ==========================================================
+  juice_easy_xss:
+    image: bkimminich/juice-shop
+    container_name: juice_easy_xss
+    ports:
+      - "3001:3000"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CTFSHOWDIFFICULTY=1
+      - CTF_SHOW_HINTS=true
+      - SOLUTIONS=false
+
+
+  # ==========================================================
+  # 🟢 EASY 3 – IDOR (Access Another Basket)
+  # Port: 3002
+  # Focus: Broken Access Control
+  # Students learn:
+  #   - Insecure Direct Object References
+  #   - Manipulating API IDs
+  #   - Why backend authorization is critical
+  # ==========================================================
+  juice_easy_idor:
+    image: bkimminich/juice-shop
+    container_name: juice_easy_idor
+    ports:
+      - "3002:3000"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CTFSHOWDIFFICULTY=1
+      - CTF_SHOW_HINTS=true
+      - SOLUTIONS=false
+
+
+  # ==========================================================
+  # 🟢 EASY 4 – Information Disclosure
+  # Port: 3003
+  # Focus: Exposed files & misconfiguration
+  # Students learn:
+  #   - Directory traversal basics
+  #   - Finding hidden files
+  #   - Sensitive data exposure risks
+  # ==========================================================
+  juice_easy_info:
+    image: bkimminich/juice-shop
+    container_name: juice_easy_info
+    ports:
+      - "3003:3000"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CTFSHOWDIFFICULTY=1
+      - CTF_SHOW_HINTS=true
+      - SOLUTIONS=false
+
+
+  # ==========================================================
+  # 🟡 MEDIUM 1 – JWT Manipulation
+  # Port: 3010
+  # Focus: Token tampering & privilege escalation
+  # Students learn:
+  #   - JWT structure (header.payload.signature)
+  #   - Role escalation
+  #   - Weak token validation
+  # ==========================================================
+  juice_medium_jwt:
+    image: bkimminich/juice-shop
+    container_name: juice_medium_jwt
+    ports:
+      - "3010:3000"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CTFSHOWDIFFICULTY=1
+      - CTF_SHOW_HINTS=false
+      - SOLUTIONS=false
+
+
+  # ==========================================================
+  # 🟡 MEDIUM 2 – Stored XSS
+  # Port: 3011
+  # Focus: Persistent Cross-Site Scripting
+  # Students learn:
+  #   - Injecting stored payloads
+  #   - Impact on other users
+  #   - Session hijacking concepts
+  # ==========================================================
+  juice_medium_stored_xss:
+    image: bkimminich/juice-shop
+    container_name: juice_medium_stored_xss
+    ports:
+      - "3011:3000"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CTFSHOWDIFFICULTY=1
+      - CTF_SHOW_HINTS=false
+      - SOLUTIONS=false
+
+
+  # ==========================================================
+  # 🟡 MEDIUM 3 – NoSQL Injection
+  # Port: 3012
+  # Focus: Backend query manipulation
+  # Students learn:
+  #   - NoSQL injection differences
+  #   - JSON query abuse
+  #   - API testing techniques
+  # ==========================================================
+  juice_medium_nosql:
+    image: bkimminich/juice-shop
+    container_name: juice_medium_nosql
+    ports:
+      - "3012:3000"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CTFSHOWDIFFICULTY=1
+      - CTF_SHOW_HINTS=false
+      - SOLUTIONS=false
+
+
+  # ==========================================================
+  # 🟡 MEDIUM 4 – Password Reset Abuse
+  # Port: 3013
+  # Focus: Account takeover techniques
+  # Students learn:
+  #   - Security question weaknesses
+  #   - User enumeration
+  #   - Reset flow manipulation
+  # ==========================================================
+  juice_medium_reset:
+    image: bkimminich/juice-shop
+    container_name: juice_medium_reset
+    ports:
+      - "3013:3000"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CTFSHOWDIFFICULTY=1
+      - CTF_SHOW_HINTS=false
+      - SOLUTIONS=false
+
+
+  # ==========================================================
+  # 🔴 HARD 1 – Server-Side Template Injection
+  # Port: 3020
+  # Focus: Template engine abuse & RCE concepts
+  # Students learn:
+  #   - Injection chaining
+  #   - Command execution concepts
+  #   - High-impact exploitation
+  # ==========================================================
+  juice_hard_ssti:
+    image: bkimminich/juice-shop
+    container_name: juice_hard_ssti
+    ports:
+      - "3020:3000"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CTFSHOWDIFFICULTY=0
+      - CTF_SHOW_HINTS=false
+      - SOLUTIONS=false
+
+
+  # ==========================================================
+  # 🔴 HARD 2 – Multi-Step Scoreboard Unlock
+  # Port: 3021
+  # Focus: Chained exploitation & full attack lifecycle
+  # Students learn:
+  #   - Reconnaissance
+  #   - Exploit chaining
+  #   - Advanced lateral thinking
+  # ==========================================================
+  juice_hard_chain:
+    image: bkimminich/juice-shop
+    container_name: juice_hard_chain
+    ports:
+      - "3021:3000"
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - CTFSHOWDIFFICULTY=0
+      - CTF_SHOW_HINTS=false
+      - SOLUTIONS=false

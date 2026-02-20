@@ -131,7 +131,7 @@ runcmd:
   - chmod -R +x ./init
   - wget -O /root/.ssh/shared_admin_ed25519 https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/SSHKEYS/shared_admin_ed25519
   - wget -O /root/.ssh/shared_admin_ed25519.pub https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/SSHKEYS/shared_admin_ed25519.pub
-  - wget -O /opt/guacamole/guacamole.sql.gz https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/guacamole.sql.gz
+  - wget -O /opt/guacamole/guacamole.sql.gz https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/guacamole-new.sql.gz
   - wget -O /opt/guacamole/app.py https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/app2.py
   - wget -O /opt/guacamole/nginx/nginx.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/nginx.conf
   - wget -O /opt/guacamole/nginx/web/index.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/index.html
