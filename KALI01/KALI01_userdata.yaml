@@ -37,16 +37,30 @@ write_files:
   # Kali tools auto install
   #########################################################
 
-  - path: /usr/local/bin/install-kali-tools.sh
+ - path: /usr/local/bin/install-kali-tools.sh
     permissions: "0755"
     content: |
       #!/bin/bash
       set -e
+
+      # Force IPv4 to avoid Kali mirror IPv6 TLS issues
+      echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
+  
       cat > /etc/apt/sources.list <<EOF
       deb https://http.kali.org/kali kali-rolling main contrib non-free non-free-firmware
       EOF
-      apt-get update
-      apt-get install -y kali-linux-default nikto seclists gobuster sqlmap
+  
+      sleep 10
+  
+      apt-get update -o Acquire::Retries=5
+  
+      apt-get install -y --fix-missing \
+        kali-linux-default \
+        nikto \
+        seclists \
+        gobuster \
+        sqlmap
+
       touch /var/lib/kali-tools-installed
 
   - path: /etc/systemd/system/kali-tools-install.service
