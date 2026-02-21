@@ -4,19 +4,61 @@ hostname: kali
 manage_etc_hosts: true
 
 users:
+  - default
   - name: kali
-    sudo: ALL=(ALL) NOPASSWD:ALL
-    groups: sudo,wireshark
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    groups:
+      - sudo
+      - wireshark
     shell: /bin/bash
     lock_passwd: false
-    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
+    passwd: "$6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0"
     ssh_authorized_keys:
       - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
 
-  - { name: kali1, sudo: ALL=(ALL) NOPASSWD:ALL, groups: sudo,wireshark, shell: /bin/bash, lock_passwd: false, passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0, ssh_authorized_keys: [ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key] }
-  - { name: kali2, sudo: ALL=(ALL) NOPASSWD:ALL, groups: sudo,wireshark, shell: /bin/bash, lock_passwd: false, passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0, ssh_authorized_keys: [ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key] }
-  - { name: kali3, sudo: ALL=(ALL) NOPASSWD:ALL, groups: sudo,wireshark, shell: /bin/bash, lock_passwd: false, passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0, ssh_authorized_keys: [ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key] }
-  - { name: kali4, sudo: ALL=(ALL) NOPASSWD:ALL, groups: sudo,wireshark, shell: /bin/bash, lock_passwd: false, passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0, ssh_authorized_keys: [ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key] }
+  - name: kali1
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    groups:
+      - sudo
+      - wireshark
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: "$6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0"
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
+
+  - name: kali2
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    groups:
+      - sudo
+      - wireshark
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: "$6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0"
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
+
+  - name: kali3
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    groups:
+      - sudo
+      - wireshark
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: "$6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0"
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
+
+  - name: kali4
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    groups:
+      - sudo
+      - wireshark
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: "$6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0"
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
 
 ssh_pwauth: false
 disable_root: true
@@ -37,7 +79,7 @@ write_files:
   # Kali tools auto install
   #########################################################
 
- - path: /usr/local/bin/install-kali-tools.sh
+  - path: /usr/local/bin/install-kali-tools.sh
     permissions: "0755"
     content: |
       #!/bin/bash
