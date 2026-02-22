@@ -1,12 +1,16 @@
 #!/bin/bash
 set -e
 
-LINUX_IMG="https://cloud-images.ubuntu.com/noble/20260131/noble-server-cloudimg-amd64.img"
+LINUX_IMG="https://cloud-images.ubuntu.com/noble/20260217/noble-server-cloudimg-amd64.img"
 export LINUX_IMG
 OPNSENSE_IMG=""
+export OPNSENSE_IMG
 WAZUH_IMG=""
+export WAZUH_IMG
 KALI_IMG=""
+export KALI_IMG
 WIN2025_IMG=""
+export WIN2025_IMG
 
 
 FULL_INSTALL="./full_install.sh"
