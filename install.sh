@@ -7,8 +7,8 @@ OPNSENSE_IMG=""
 export OPNSENSE_IMG
 WAZUH_IMG="https://packages.wazuh.com/4.x/vm/wazuh-4.14.1.ova"
 export WAZUH_IMG
-KALI_IMG=""
-export KALI_IMG
+KALI_VERSION="25.7"
+export KALI_VERSION
 WIN2025_IMG=""
 export WIN2025_IMG
 
