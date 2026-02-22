@@ -27,8 +27,8 @@ CORES=4
 DISK_SIZE="30G"
 
 # Proxmox storage
-DISK_STORAGE="local-lvm"
-ISO_STORAGE="local"
+DISK_STORAGE="${LVM:-local-lvm}"
+ISO_STORAGE="${LOCAL:-local}"
 
 # Bridges
 WAN_BRIDGE="vmbr0"
