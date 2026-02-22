@@ -11,7 +11,7 @@ fi
 # -----------------------------
 # CONFIG
 # -----------------------------
-START_VMID=$((LAB * 100))
+START_VMID=$((LAB * 1000))
 BASE_NAME="lab${LAB}-WAZUH"
 IMG_URL="https://packages.wazuh.com/4.x/vm/wazuh-4.14.1.ova"
 IMG_NAME="wazuh.ova"
