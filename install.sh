@@ -38,6 +38,54 @@ try_export LINUX_IMG "$CUSTOM_LINUX_IMG"
 try_export WAZUH_IMG "$CUSTOM_WAZUH_IMG"
 try_export KALI_IMG "$CUSTOM_KALI_IMG"
 
+#!/bin/bash
+
+echo "Detecting available Proxmox storage..."
+
+# Get ISO-capable storage
+mapfile -t ISO_LIST < <(pvesm status --content iso | awk 'NR>1 {print $1}')
+
+# Get VM disk-capable storage
+mapfile -t DISK_LIST < <(pvesm status --content images | awk 'NR>1 {print $1}')
+
+# Safety check
+if [[ ${#ISO_LIST[@]} -eq 0 ]]; then
+    echo "ERROR: No ISO-capable storage found."
+    exit 1
+fi
+
+if [[ ${#DISK_LIST[@]} -eq 0 ]]; then
+    echo "ERROR: No VM disk-capable storage found."
+    exit 1
+fi
+
+# -------- ISO Selection --------
+echo ""
+echo "Available ISO storages:"
+select ISO_STORAGE in "${ISO_LIST[@]}"; do
+    if [[ -n "$ISO_STORAGE" ]]; then
+        break
+    fi
+done
+
+# -------- Disk Selection --------
+echo ""
+echo "Available VM disk storages:"
+select DISK_STORAGE in "${DISK_LIST[@]}"; do
+    if [[ -n "$DISK_STORAGE" ]]; then
+        break
+    fi
+done
+
+# Export as requested
+export LOCAL="$ISO_STORAGE"
+export LVM="$DISK_STORAGE"
+
+echo ""
+echo "ISO storage selected: $LOCAL"
+echo "Disk storage selected: $LVM"
+echo "Variables exported: LOCAL and LVM"
+
 FULL_INSTALL="./full_install.sh"
 MINI_INSTALL="./mini_install.sh"
 MULTI_INSTALL="./multi_install.sh"
