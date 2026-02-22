@@ -5,7 +5,7 @@ LINUX_IMG="https://cloud-images.ubuntu.com/noble/20260217/noble-server-cloudimg-
 export LINUX_IMG
 OPNSENSE_IMG=""
 export OPNSENSE_IMG
-WAZUH_IMG=""
+WAZUH_IMG="https://packages.wazuh.com/4.x/vm/wazuh-4.14.1.ova"
 export WAZUH_IMG
 KALI_IMG=""
 export KALI_IMG
