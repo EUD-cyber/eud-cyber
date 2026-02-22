@@ -22,8 +22,8 @@ echo "===== KALI01 installation started at $(date) ====="
 # ===== CONFIG =====
 START_VMID=$((LAB * 1000))
 BASE_NAME="lab${LAB}-KALI01"
-IMG_URL="https://kali.download/cloud-images/kali-2025.4/kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
-IMG_NAME="kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
+IMG_URL="{$KALI_IMG:-https://kali.download/cloud-images/kali-2025.4/kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz}"
+IMG_NAME="kali-linux-cloud-genericcloud-amd64.tar.xz"
 IMG_PATH="$(pwd)/KALI01/$IMG_NAME"
 DISK="disk.raw"
 ISO_STORAGE="local"
