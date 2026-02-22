@@ -11,12 +11,13 @@ fi
 # -----------------------------
 # CONFIG
 # -----------------------------
-START_VMID=$((LAB * 100))
+START_VMID=$((LAB * 1000))
 BASE_NAME="lab${LAB}-WAZUH"
-IMG_URL="https://packages.wazuh.com/4.x/vm/wazuh-4.14.1.ova"
+IMG_URL="${WAZUH_IMG:-https://packages.wazuh.com/4.x/vm/wazuh-4.14.1.ova}"
 IMG_NAME="wazuh.ova"
 IMG_PATH="$(pwd)/WAZUH/$IMG_NAME"
-DISK_STORAGE="local-lvm"
+STORAGE="${LOCAL:-local}"
+DISK_STORAGE="${LVM:-local-lvm}"
 BRIDGE1="lab${LAB}_lan2"
 BRIDGE2="lab${LAB}_oobm"
 CORES=4
@@ -94,7 +95,7 @@ qm create "$VMID" \
 
 qm importdisk "$VMID" "$VMDK_FILE" "$DISK_STORAGE" --format raw
 
-qm set "$VMID" --scsi0 "local-lvm:vm-$VMID-disk-0"
+qm set "$VMID" --scsi0 "$DISK_STORAGE:vm-$VMID-disk-0"
 qm disk resize $VMID scsi0 +$DISK_SIZE
 echo "➡ Adding cloud-init drive..."
 qm set "$VMID" --ide2 "$DISK_STORAGE":cloudinit

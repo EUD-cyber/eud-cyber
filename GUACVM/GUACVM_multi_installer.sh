@@ -30,14 +30,13 @@ exec > >(tee -a "$LOGFILE") 2>&1
 echo "===== GUACVM installation started at $(date) ====="
 
 # ===== CONFIG =====
-START_VMID=$((LAB * 100))
+START_VMID=$((LAB * 1000))
 BASE_NAME="lab${LAB}-guacvm"
-#IMG_URL="https://cloud-images.ubuntu.com/noble/20251213/noble-server-cloudimg-amd64.img"
-IMG_URL="https://cloud-images.ubuntu.com/noble/20260217/noble-server-cloudimg-amd64.img"
+IMG_URL="${LINUX_IMG:-https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
 IMG_NAME="noble-server-cloudimg-amd64.img"
 IMG_PATH="$(pwd)/$IMG_NAME"
-ISO_STORAGE="local"
-DISK_STORAGE="local-lvm"
+ISO_STORAGE="${LOCAL:-local}"
+DISK_STORAGE="${LVM:-local-lvm}"
 MEMORY=4096       # in MB
 CORES=4
 DISK_SIZE="32G"    # the number is in GB
@@ -128,7 +127,7 @@ qm set $VMID --ipconfig0 "$GUAC_IP_ADDR" \
   --ipconfig2 $PROX_OOBM_IP \
   --searchdomain cloud.local \
   --ciupgrade 1 \
-  --cicustom "user=local:snippets/${DST_USERDATA}"
+  --cicustom "user=$ISO_STORAGE:snippets/${DST_USERDATA}"
 
 
 if [[ "$GUAC_IP_ADDR" != "ip=dhcp" && -n "$GUAC_DNS_SERVER" ]]; then

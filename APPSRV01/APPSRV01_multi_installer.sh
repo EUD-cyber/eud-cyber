@@ -21,14 +21,13 @@ exec > >(tee -a "$LOGFILE") 2>&1
 echo "===== APPSRV01 installation started at $(date) ====="
 
 # ===== CONFIG =====
-START_VMID=$((LAB * 100))
+START_VMID=$((LAB * 1000))
 BASE_NAME="lab${LAB}-APPSRV01"
-#IMG_URL="https://cloud-images.ubuntu.com/noble/20251213/noble-server-cloudimg-amd64.img"
-IMG_URL="https://cloud-images.ubuntu.com/noble/20260217/noble-server-cloudimg-amd64.img"
+IMG_URL="${LINUX_IMG:-https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
 IMG_NAME="noble-server-cloudimg-amd64.img"
 IMG_PATH="$(pwd)/$IMG_NAME"
-ISO_STORAGE="local"
-DISK_STORAGE="local-lvm"
+ISO_STORAGE="${LOCAL:-local}"
+DISK_STORAGE="${LVM:-local-lvm}"
 MEMORY=4096       # in MB
 CORES=4
 DISK_SIZE="32G"    # the number is in GB
@@ -120,7 +119,7 @@ qm set $VMID --ipconfig0 $IP_ADDR,$IP_GW \
   --searchdomain cloud.local \
   --nameserver $DNS_SERVER \
   --ciupgrade \
-  --cicustom "user=local:snippets/${DST_USERDATA}"
+  --cicustom "user=$ISO_STORAGE:snippets/${DST_USERDATA}"
 
 #Creating first snapshot of the VM 
 qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"

@@ -20,14 +20,14 @@ exec > >(tee -a "$LOGFILE") 2>&1
 echo "===== KALI01 installation started at $(date) ====="
 
 # ===== CONFIG =====
-START_VMID=$((LAB * 100))
+START_VMID=$((LAB * 1000))
 BASE_NAME="lab${LAB}-KALI01"
-IMG_URL="https://kali.download/cloud-images/kali-2025.4/kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
-IMG_NAME="kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
+IMG_URL="${KALI_IMG:-https://kali.download/cloud-images/kali-2025.4/kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz}"
+IMG_NAME="kali-linux-cloud-genericcloud-amd64.tar.xz"
 IMG_PATH="$(pwd)/KALI01/$IMG_NAME"
 DISK="disk.raw"
-ISO_STORAGE="local"
-DISK_STORAGE="local-lvm"
+ISO_STORAGE="${LOCAL:-local}"
+DISK_STORAGE="${LVM:-local-lvm}"
 MEMORY=8192      # in MB
 CORES=4
 DISK_SIZE="32G" # the number is in GB
@@ -122,7 +122,7 @@ qm set $VMID --ipconfig0 $IP_ADDR \
   --searchdomain cloud.local \
   --nameserver $DNS_SERVER \
   --ciupgrade 1 \
-  --cicustom "user=local:snippets/${DST_USERDATA}"
+  --cicustom "user=$ISO_STORAGE:snippets/${DST_USERDATA}"
 
 #Creating first snapshot of the VM 
 qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"

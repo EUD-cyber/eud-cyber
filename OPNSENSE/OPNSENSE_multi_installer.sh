@@ -20,15 +20,15 @@ exec > >(tee -a "$LOGFILE") 2>&1
 echo "===== OPNSENSE installation started at $(date) ====="
 
 ### ===== VARIABLES =====
-START_VMID=$((LAB * 100))
+START_VMID=$((LAB * 1000))
 BASE_NAME="lab${LAB}-opnsense"
 RAM=4096
 CORES=4
 DISK_SIZE="30G"
 
 # Proxmox storage
-DISK_STORAGE="local-lvm"
-ISO_STORAGE="local"
+DISK_STORAGE="${LVM:-local-lvm}"
+ISO_STORAGE="${LOCAL:-local}"
 
 # Bridges
 WAN_BRIDGE="vmbr0"
@@ -36,7 +36,7 @@ LAN_BRIDGE="lab${LAB}_lan1"
 LAN_BRIDGE1="lab${LAB}_lan2"
 OOBM="lab${LAB}_oobm"
 
-OPN_VERSION="25.7"
+OPN_VERSION="${OPNSENSE_VERSION:-25.7}"
 
 IMG_BASE="OPNsense-${OPN_VERSION}-nano-amd64.img"
 IMG_BZ2="${IMG_BASE}.bz2"

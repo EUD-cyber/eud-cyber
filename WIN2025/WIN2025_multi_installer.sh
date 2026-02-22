@@ -22,10 +22,10 @@ exec > >(tee -a "$LOGFILE") 2>&1
 echo "===== WIN2025 installation started at $(date) ====="
 
 
-START_VMID=$((LAB * 100))
+START_VMID=$((LAB * 1000))
 BASE_NAME="lab${LAB}-WIN2025"
-ISO_STORAGE="local"
-DISK_STORAGE="local-lvm"
+ISO_STORAGE="${LOCAL:-local}"
+DISK_STORAGE="${LVM:-local-lvm}"
 IMG_URL="https://go.microsoft.com/fwlink/?linkid=2345730&clcid=0x409&culture=en-us&country=us"
 IMG_NAME="en-us_windows_server_2025_x64_dvd_b7ec10f3.iso"
 IMG_PATH="$(pwd)/IMAGES/$IMG_NAME"
