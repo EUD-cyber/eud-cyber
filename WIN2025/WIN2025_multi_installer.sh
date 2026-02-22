@@ -22,7 +22,7 @@ exec > >(tee -a "$LOGFILE") 2>&1
 echo "===== WIN2025 installation started at $(date) ====="
 
 
-START_VMID=$((LAB * 100))
+START_VMID=$((LAB * 1000))
 BASE_NAME="lab${LAB}-WIN2025"
 ISO_STORAGE="local"
 DISK_STORAGE="local-lvm"
