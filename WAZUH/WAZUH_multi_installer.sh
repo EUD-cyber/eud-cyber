@@ -98,7 +98,7 @@ qm importdisk "$VMID" "$VMDK_FILE" "$DISK_STORAGE" --format raw
 qm set "$VMID" --scsi0 "$DISK_STORAGE:vm-$VMID-disk-0"
 qm disk resize $VMID scsi0 +$DISK_SIZE
 echo "➡ Adding cloud-init drive..."
-qm set "$VMID" --ide2 "$STORAGE":cloudinit
+qm set "$VMID" --ide2 "$DISK_STORAGE":cloudinit
 
 echo "➡ Setting boot options..."
 qm set "$VMID" --boot c --bootdisk scsi0
