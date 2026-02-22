@@ -22,8 +22,7 @@ echo "===== VULNSRV01 installation started at $(date) ====="
 # ===== CONFIG =====
 START_VMID=$((LAB * 100))
 BASE_NAME="lab${LAB}-VULN-SRV01"
-#IMG_URL="https://cloud-images.ubuntu.com/noble/20251213/noble-server-cloudimg-amd64.img"
-IMG_URL="https://cloud-images.ubuntu.com/noble/20260217/noble-server-cloudimg-amd64.img"
+IMG_URL="${LINUX_IMG:-https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
 IMG_NAME="noble-server-cloudimg-amd64.img"
 IMG_PATH="$(pwd)/$IMG_NAME"
 ISO_STORAGE="local"
