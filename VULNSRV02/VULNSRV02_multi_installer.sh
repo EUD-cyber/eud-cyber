@@ -20,7 +20,7 @@ exec > >(tee -a "$LOGFILE") 2>&1
 echo "===== VULNSRV02 installation started at $(date) ====="
 
 # ===== CONFIG =====
-START_VMID=$((LAB * 100))
+START_VMID=$((LAB * 1000))
 BASE_NAME="lab${LAB}-VULN-SRV02"
 IMG_URL="${LINUX_IMG:-https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
 IMG_NAME="noble-server-cloudimg-amd64.img"
