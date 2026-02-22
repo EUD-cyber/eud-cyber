@@ -1,6 +1,13 @@
 #!/bin/bash
 set -e
 
+LINUX_IMG=""
+OPNSENSE_IMG=""
+WAZUH_IMG=""
+KALI_IMG=""
+WIN2025_IMG=""
+
+
 FULL_INSTALL="./full_install.sh"
 MINI_INSTALL="./mini_install.sh"
 MULTI_INSTALL="./multi_install.sh"
