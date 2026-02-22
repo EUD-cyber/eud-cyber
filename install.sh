@@ -7,7 +7,7 @@ OPNSENSE_VERSION="26.1.2"
 export OPNSENSE_VERSION
 WAZUH_IMG="https://packages.wazuh.com/4.x/vm/wazuh-4.14.1.ova"
 export WAZUH_IMG
-KALI_IMG=""
+KALI_IMG="https://kali.download/cloud-images/kali-2025.4/kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
 export KALI_IMG
 WIN2025_IMG=""
 export WIN2025_IMG
