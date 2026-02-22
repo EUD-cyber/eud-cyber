@@ -27,6 +27,7 @@ packages:
   - xrdp
   - dbus-x11
   - sudo
+  - qemu-agent
   
   - qemu-guest-agent
 
