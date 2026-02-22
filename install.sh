@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-LINUX_IMG="https://cloud-images.ubuntu.com/noble/20260217/noble-server-cloudimg-amd64.img"
+LINUX_IMG="https://cloud-images.ubuntu.com/noble/20260214/noble-server-cloudimg-amd64.img"
 export LINUX_IMG
 OPNSENSE_IMG=""
 WAZUH_IMG=""
