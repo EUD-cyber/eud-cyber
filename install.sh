@@ -3,7 +3,7 @@ set -e
 
 LINUX_IMG="https://cloud-images.ubuntu.com/noble/20260217/noble-server-cloudimg-amd64.img"
 export LINUX_IMG
-OPNSENSE_VERSION="25.7"
+OPNSENSE_VERSION="26.1.2"
 export OPNSENSE_VERSION
 WAZUH_IMG="https://packages.wazuh.com/4.x/vm/wazuh-4.14.1.ova"
 export WAZUH_IMG
