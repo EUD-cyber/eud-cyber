@@ -4,7 +4,7 @@ This github if created for the cyber education on danish technical colleges to c
 This script is testet with proxmox 9.1 and 9.1.1
 
 just git clone this site and run  run install.sh \
-then 3 options \
+then 4 options \
 1 full install, wih options to install singel vm\
 2 mini install requires, 4 cores, 32 gb memory, 500 gb hdd \
 3 install multiple labs full spec on single proxmox \
@@ -45,7 +45,6 @@ the api is listing on port 5000 on guacvm and the tasks.html uses that for pulli
 missing \
    remove auth from guacamole its only a lab env.\
    future mode theres gonna be a download all to a local repository and then install from that.\
-   that snapshot is created before cloud-inits is done so you have to wait for the cloud-init to compplete again, fix so the snapshot is done after cloud-init.
  
   
 Network \
