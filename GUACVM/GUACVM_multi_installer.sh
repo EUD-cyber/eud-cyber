@@ -127,7 +127,7 @@ qm set $VMID --ipconfig0 "$GUAC_IP_ADDR" \
   --ipconfig2 $PROX_OOBM_IP \
   --searchdomain cloud.local \
   --ciupgrade 1 \
-  --cicustom "user=local:snippets/${DST_USERDATA}"
+  --cicustom "user=$ISO_STORAGE:snippets/${DST_USERDATA}"
 
 
 if [[ "$GUAC_IP_ADDR" != "ip=dhcp" && -n "$GUAC_DNS_SERVER" ]]; then
