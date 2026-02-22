@@ -122,7 +122,7 @@ qm set $VMID --ipconfig0 $IP_ADDR \
   --searchdomain cloud.local \
   --nameserver $DNS_SERVER \
   --ciupgrade 1 \
-  --cicustom "user=$ISO_STORAG:snippets/${DST_USERDATA}"
+  --cicustom "user=$ISO_STORAGE:snippets/${DST_USERDATA}"
 
 #Creating first snapshot of the VM 
 qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
