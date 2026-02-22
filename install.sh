@@ -43,7 +43,7 @@ MINI_INSTALL="./mini_install.sh"
 MULTI_INSTALL="./multi_install.sh"
 MULTI_INSTALL_MINI="./multi_mini_install.sh"
 
-clear
+
 echo "===================================="
 echo "        Proxmox Deployment"
 echo "===================================="
