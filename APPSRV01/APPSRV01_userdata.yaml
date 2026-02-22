@@ -74,8 +74,8 @@ runcmd:
   - docker compose -f /opt/radius/docker-compose.yml pull
 
 
-#power_state:
-#  mode: reboot
-#  message: "Reboot after initial cloud-init setup"
-#  timeout: 30
-#  condition: true
+power_state:
+  mode: reboot
+  message: "Reboot after initial cloud-init setup"
+  timeout: 30
+  condition: true
