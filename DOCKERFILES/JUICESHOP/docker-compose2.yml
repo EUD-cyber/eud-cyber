@@ -1,79 +1,14 @@
 services:
-
-  sql_login:
-    image: bkimminich/juice-shop
-    container_name: juice_sql_login
+  juiceshop:
+    image: bkimminich/juice-shop:latest
+    container_name: juiceshop
+    restart: unless-stopped
     ports:
-      - "3101:3000"
+      - "3000:3000"
     environment:
-      - NODE_ENV=ctf
-    restart: unless-stopped
-
-  sql_union:
-    image: bkimminich/juice-shop
-    container_name: juice_sql_union
-    ports:
-      - "3102:3000"
-    environment:
-      - NODE_ENV=ctf
-    restart: unless-stopped
-
-  xss_reflected:
-    image: bkimminich/juice-shop
-    container_name: juice_xss_reflected
-    ports:
-      - "3103:3000"
-    environment:
-      - NODE_ENV=ctf
-    restart: unless-stopped
-
-  xss_stored:
-    image: bkimminich/juice-shop
-    container_name: juice_xss_stored
-    ports:
-      - "3104:3000"
-    environment:
-      - NODE_ENV=ctf
-    restart: unless-stopped
-
-  broken_access:
-    image: bkimminich/juice-shop
-    container_name: juice_access
-    ports:
-      - "3105:3000"
-    restart: unless-stopped
-
-  idor_lab:
-    image: bkimminich/juice-shop
-    container_name: juice_idor
-    ports:
-      - "3106:3000"
-    restart: unless-stopped
-
-  reset_poison:
-    image: bkimminich/juice-shop
-    container_name: juice_reset
-    ports:
-      - "3107:3000"
-    restart: unless-stopped
-
-  lfi_lab:
-    image: bkimminich/juice-shop
-    container_name: juice_lfi
-    ports:
-      - "3108:3000"
-    restart: unless-stopped
-
-  jwt_lab:
-    image: bkimminich/juice-shop
-    container_name: juice_jwt
-    ports:
-      - "3109:3000"
-    restart: unless-stopped
-
-  cmd_injection:
-    image: bkimminich/juice-shop
-    container_name: juice_cmd
-    ports:
-      - "3110:3000"
-    restart: unless-stopped
+      - NODE_ENV=unsafe
+      - SOLUTIONS=false
+    volumes:
+      - juice_data:/juice-shop/data
+volumes:
+  juice_data:

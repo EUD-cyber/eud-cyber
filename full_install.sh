@@ -140,15 +140,15 @@ case "$CHOICE" in
     echo "Starting KALI01 VM creation... "
     bash "$KALI01" $LAB
 
-    echo "Starting Wazuh VM creation... "
-    bash "$WAZUH" $LAB
-
     echo "Starting APPSRV01 creation... "
     bash "$APPSRV01" $LAB
 
-     echo "Starting Windows server 2025 VM creation.... "
-     bash "$WIN2025" $LAB
-     ;;
+    echo "Starting Windows server 2025 VM creation.... "
+    bash "$WIN2025" $LAB
+
+    echo "Starting Wazuh VM creation... "
+    bash "$WAZUH" $LAB
+    ;;
   95)
   SESSION="deploy-all"
 
@@ -202,14 +202,14 @@ case "$CHOICE" in
     echo 'Starting KALI01 VM creation'
     bash '$KALI01' $LAB
 
-    echo 'Starting Wazuh VM creation'
-    bash '$WAZUH' $LAB
-
     echo 'Starting APPSRV01 creation'
     bash '$APPSRV01' $LAB
 
     echo 'Starting Windows server 2025 VM creation'
     bash '$WIN2025' $LAB
+
+    echo 'Starting Wazuh VM creation'
+    bash '$WAZUH' $LAB
 
     echo '===== Deployment completed successfully ====='
   "

@@ -27,7 +27,6 @@ packages:
   - xrdp
   - dbus-x11
   - sudo
-  
   - qemu-guest-agent
 
 
@@ -46,8 +45,8 @@ runcmd:
   - systemctl enable xrdp
   - systemctl restart xrdp
 
-#power_state:
-#  mode: reboot
-#  message: "Reboot after cloud-init setup"
-#  timeout: 30
-#  condition: true
+power_state:
+  mode: poweroff
+  message: "Cloud-init finished - powering off"
+  timeout: 30
+  condition: True

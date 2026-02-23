@@ -75,7 +75,7 @@ runcmd:
 
 
 power_state:
-  mode: reboot
-  message: "Reboot after initial cloud-init setup"
+  mode: poweroff
+  message: "Cloud-init finished - powering off"
   timeout: 30
-  condition: true
+  condition: True

@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+IFS=$'\n\t'
 
 LAB="$1"
 STATE_FILE="$(pwd)/GUACVM/STATE/lab${LAB}.env"
@@ -113,7 +114,7 @@ qm disk resize $VMID scsi0 +$DISK_SIZE
 qm set $VMID \
   --ide2 $DISK_STORAGE:cloudinit \
   --boot c \
-  --bootdisk scsi0 \
+  --bootdisk scsi0 
 
 # ===== Enable QEMU Guest Agent =====
 qm set $VMID --agent enabled=1
@@ -136,11 +137,31 @@ else
   echo "DHCP enabled or no DNS specified"
 fi
 
-#Creating first snapshot of the VM 
-qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
-
 # ===== Start VM =====
 echo "Starting VM $VMID ($VM_NAME)..."
 qm start $VMID
 
 echo "VM $VMID ($VM_NAME) started successfully!"
+
+echo "Waiting for VM to power off..."
+
+while true; do
+  STATUS=$(qm status "$VMID" | awk '{print $2}')
+
+  if [[ "$STATUS" == "stopped" ]]; then
+    echo "VM is powered off."
+    break
+  fi
+
+  sleep 5
+done
+
+echo "Creating snapshot..."
+qm snapshot "$VMID" First_snapshot --description "Clean baseline snapshot for lab reset"
+
+echo "Snapshot created successfully."
+
+echo "Starting VM again..."
+qm start "$VMID"
+
+echo "VM started."
