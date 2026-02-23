@@ -113,7 +113,7 @@ qm disk resize $VMID scsi0 +$DISK_SIZE
 qm set $VMID \
   --ide2 $DISK_STORAGE:cloudinit \
   --boot c \
-  --bootdisk scsi0 \
+  --bootdisk scsi0 
 
 # ===== Enable QEMU Guest Agent =====
 qm set $VMID --agent enabled=1
