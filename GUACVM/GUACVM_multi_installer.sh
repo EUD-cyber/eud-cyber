@@ -1,5 +1,6 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+IFS=$'\n\t'
 
 LAB="$1"
 STATE_FILE="$(pwd)/GUACVM/STATE/lab${LAB}.env"
