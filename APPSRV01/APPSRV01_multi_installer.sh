@@ -127,41 +127,25 @@ qm start $VMID
 
 echo "VM $VMID ($VM_NAME) started successfully!"
 
-#Creating first snapshot of the VM 
-echo "Waiting for QEMU guest agent..."
-
-until qm agent "$VMID" ping &>/dev/null; do
-  sleep 5
-done
-
-echo "Guest agent detected."
-echo "Waiting for cloud-init to finish..."
+echo "Waiting for VM to power off..."
 
 while true; do
-  if qm agent "$VMID" ping &>/dev/null; then
-    OUTPUT=$(qm guest exec "$VMID" -- cloud-init status 2>/dev/null || true)
+  STATUS=$(qm status "$VMID" | awk '{print $2}')
 
-    STATUS=$(echo "$OUTPUT" | grep -o 'status: .*' | awk '{print $2}')
-
-    if [[ -n "$STATUS" ]]; then
-      echo "Cloud-init status: $STATUS"
-    else
-      echo "Cloud-init status: unavailable"
-    fi
-
-    if [[ "$STATUS" == "done" ]]; then
-      echo "cloud-init finished."
-      break
-    fi
-  else
-    echo "Agent temporarily unavailable..."
+  if [[ "$STATUS" == "stopped" ]]; then
+    echo "VM is powered off."
+    break
   fi
 
   sleep 5
 done
-sleep 5
 
 echo "Creating snapshot..."
 qm snapshot "$VMID" First_snapshot --description "Clean baseline snapshot for lab reset"
 
 echo "Snapshot created successfully."
+
+echo "Starting VM again..."
+qm start "$VMID"
+
+echo "VM started."
