@@ -37,4 +37,8 @@ runcmd:
   - docker compose -f /opt/juiceshop/docker-compose.yml pull
   - docker compose -f /opt/dvwa/docker-compose.yml pull
 
-
+power_state:
+  mode: poweroff
+  message: "Cloud-init finished - powering off"
+  timeout: 30
+  condition: True
