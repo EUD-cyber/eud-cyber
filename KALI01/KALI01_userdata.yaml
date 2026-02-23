@@ -249,4 +249,7 @@ runcmd:
   - /usr/local/sbin/setup-vnc-multiuser.sh
 
 power_state:
-  mode: reboot
+  mode: poweroff
+  message: "Cloud-init finished - powering off"
+  timeout: 30
+  condition: True
