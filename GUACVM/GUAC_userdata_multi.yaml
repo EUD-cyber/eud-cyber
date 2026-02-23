@@ -141,6 +141,7 @@ runcmd:
   - wget -O /opt/guacamole/nginx/web/topology.png https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/topology.png
   - wget -O /opt/guacamole/nat.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nat.sh
   - chmod +x /opt/guacamole/nat.sh
+  - netfilter-persistent save
   - docker run --rm 'guacamole/guacamole:1.6.0' /opt/guacamole/bin/initdb.sh --postgresql > ./init/initdb.sql
   - gunzip -c /opt/guacamole/guacamole.sql.gz > ./init/02-restore.sql
   - mkdir ./record >/dev/null 2>&1
