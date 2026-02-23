@@ -32,7 +32,6 @@ write_files:
         networks:
           guacnetwork_compose:
             driver: bridge        
-        # services
         services:
           # guacd
           guacd:
@@ -87,6 +86,7 @@ write_files:
             container_name: guac-nginx
             ports:
             - "80:80"
+            restart: always        
             volumes:
             - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
             - ./nginx/web:/var/www/html:ro
