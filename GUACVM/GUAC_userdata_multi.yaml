@@ -152,3 +152,9 @@ runcmd:
   - systemctl enable lab-api
   - systemctl start lab-api
   - docker compose -f /opt/guacamole/docker-compose.yml up -d
+
+power_state:
+  mode: poweroff
+  message: "Cloud-init finished - powering off"
+  timeout: 30
+  condition: True
