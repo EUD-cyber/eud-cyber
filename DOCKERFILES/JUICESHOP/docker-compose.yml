@@ -1,28 +1,20 @@
 services:
-  juiceshop_3000:
+  juice-shop:
     image: bkimminich/juice-shop:latest
-    container_name: juiceshop_3000
-    restart: unless-stopped
-    ports:
-      - "3000:3000"
     environment:
-      NODE_ENV: "unsafe"
-      SOLUTIONS: "false"
-    volumes:
-      - juice_data_3000:/juice-shop/data
-
-  juiceshop_3001:
-    image: bkimminich/juice-shop:latest
-    container_name: juiceshop_3001
+      - NODE_ENV=unsafe
     restart: unless-stopped
-    ports:
-      - "3001:3000"
-    environment:
-      NODE_ENV: "unsafe"
-      SOLUTIONS: "false"
     volumes:
-      - juice_data_3001:/juice-shop/data
+      - data:/juice-shop/data
 
+  juice-proxy:
+    image: nginx:alpine
+    ports:
+      - “3010:80"
+    volumes:
+      - ./default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./logs:/var/log/nginx
+    depends_on:
+      - juice-shop
 volumes:
-  juice_data_3000:
-  juice_data_3001:
+  data:
