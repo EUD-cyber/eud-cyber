@@ -163,6 +163,8 @@ write_files:
         mkdir -p "$HOME_DIR/.config/tigervnc"
         mkdir -p "$HOME_DIR/Desktop/IPS"
         mkdir -p "$HOME_DIR/Desktop/wireshark"
+        mkdir -p "$HOME_DIR/Desktop/PASSWORD"
+        
 
         cat > "$HOME_DIR/.config/tigervnc/xstartup" <<'EOF'
       #!/bin/sh
@@ -184,9 +186,30 @@ write_files:
         wget -q -O "$HOME_DIR/Desktop/wireshark/rsasnakeoil2.cap" \
           https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.cap
 
-        wget -q -O "$HOME_DIR/Desktop/wireshark/rsasnakeoil2.key" \
-          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.key
+        wget -q -O "$HOME_DIR/Desktop/PASSWORD/John-readme.txt" \
+          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/John-readme.txt
 
+         wget -q -O "$HOME_DIR/Desktop/PASSWORD/easy.zip" \
+          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/easy.zip
+
+         wget -q -O "$HOME_DIR/Desktop/PASSWORD/hard.zip" \
+          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/hard.zip
+
+         wget -q -O "$HOME_DIR/Desktop/PASSWORD/hardAES.zip" \
+          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/hardAES.zip
+
+        wget -q -O "$HOME_DIR/Desktop/PASSWORD/medium.zip" \
+          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/medium.zip
+
+        wget -q -O "$HOME_DIR/Desktop/PASSWORD/mediumAES.zip" \
+          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/mediumAES.zip
+
+        wget -q -O "$HOME_DIR/Desktop/PASSWORD/simple.zip" \
+          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/simple.zip
+
+         wget -q -O "$HOME_DIR/Desktop/PASSWORD/simpleAES.zip" \
+          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/simpleAES.zip
+          
         chmod +x "$HOME_DIR/Desktop/IPS/testips.sh"
         chown -R "$u:$u" "$HOME_DIR/Desktop"
       done
