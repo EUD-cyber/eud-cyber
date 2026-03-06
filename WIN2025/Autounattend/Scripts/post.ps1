@@ -75,6 +75,6 @@ Install-ADDSForest `
     -DomainName $DomainName `
     -DomainNetbiosName "LAB" `
     -SafeModeAdministratorPassword $SafeModePassword `
-    -InstallDns `
+    -InstallDNS `
     -Force `
     -NoRebootOnCompletion:$false
