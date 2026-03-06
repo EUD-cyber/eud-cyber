@@ -71,6 +71,31 @@ $SafeModePassword = ConvertTo-SecureString "P@ssw0rd123!" -AsPlainText -Force
 
 Write-Host "Promoting server to Domain Controller..."
 
+# =========================
+# Register phase 2 for after DC reboot
+# =========================
+Write-Host "Registering post-reboot task..."
+
+$phase2Script = "C:\Windows\Setup\Scripts\post-phase2.ps1"
+
+$action = New-ScheduledTaskAction `
+    -Execute "powershell.exe" `
+    -Argument "-ExecutionPolicy Bypass -NoProfile -File `"$phase2Script`""
+
+$trigger = New-ScheduledTaskTrigger -AtStartup
+
+$principal = New-ScheduledTaskPrincipal `
+    -UserId "SYSTEM" `
+    -LogonType ServiceAccount `
+    -RunLevel Highest
+
+Register-ScheduledTask `
+    -TaskName "PostDCFinish" `
+    -Action $action `
+    -Trigger $trigger `
+    -Principal $principal `
+    -Force
+
 Install-ADDSForest `
     -DomainName $DomainName `
     -DomainNetbiosName "LAB" `
