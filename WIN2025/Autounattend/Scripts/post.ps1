@@ -77,4 +77,5 @@ Install-ADDSForest `
     -SafeModeAdministratorPassword $SafeModePassword `
     -InstallDNS `
     -Force `
+    -Confirm:$false `
     -NoRebootOnCompletion:$false
