@@ -1,12 +1,18 @@
 Write-Host "Starting post configuration..."
 
+$ErrorActionPreference = "Continue"
+
 # =========================
 # Wait for NICs
 # =========================
 Write-Host "Waiting for network adapters..."
 
-for ($i=0; $i -lt 30; $i++) {
-    $adapters = Get-NetAdapter -ErrorAction SilentlyContinue | Sort-Object ifIndex
+$adapters = $null
+for ($i = 0; $i -lt 30; $i++) {
+    $adapters = Get-NetAdapter -ErrorAction SilentlyContinue |
+        Where-Object { $_.Status -ne "Disabled" } |
+        Sort-Object ifIndex
+
     if ($adapters.Count -ge 2) { break }
     Start-Sleep -Seconds 2
 }
@@ -22,87 +28,60 @@ $nic2 = $adapters[1].Name
 Write-Host "Detected NIC1: $nic1"
 Write-Host "Detected NIC2: $nic2"
 
+# =========================
 # Rename NICs
+# =========================
 Write-Host "Renaming NICs..."
-Rename-NetAdapter -Name $nic1 -NewName "LAN" -PassThru -ErrorAction SilentlyContinue
-Rename-NetAdapter -Name $nic2 -NewName "OOB" -PassThru -ErrorAction SilentlyContinue
+if ($nic1 -ne "LAN") {
+    Rename-NetAdapter -Name $nic1 -NewName "LAN" -PassThru -ErrorAction SilentlyContinue | Out-Null
+}
+if ($nic2 -ne "OOB") {
+    Rename-NetAdapter -Name $nic2 -NewName "OOB" -PassThru -ErrorAction SilentlyContinue | Out-Null
+}
 
 $nic1 = "LAN"
 $nic2 = "OOB"
 
+Start-Sleep -Seconds 5
+
+# =========================
 # Disable IPv6
+# =========================
 Write-Host "Disabling IPv6..."
 Disable-NetAdapterBinding -Name $nic1 -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue
 Disable-NetAdapterBinding -Name $nic2 -ComponentID ms_tcpip6 -ErrorAction SilentlyContinue
 
-# LAN IP
+# =========================
+# Configure LAN
+# =========================
 Write-Host "Configuring NIC1 (LAN)..."
 Set-NetIPInterface -InterfaceAlias $nic1 -Dhcp Disabled -ErrorAction SilentlyContinue
 Get-NetIPAddress -InterfaceAlias $nic1 -AddressFamily IPv4 -ErrorAction SilentlyContinue | Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
-New-NetIPAddress -InterfaceAlias $nic1 -IPAddress "192.168.2.22" -PrefixLength 24 -DefaultGateway "192.168.2.1" -AddressFamily IPv4
-Set-DnsClientServerAddress -InterfaceAlias $nic1 -ServerAddresses "192.168.2.1"
+Get-NetRoute -InterfaceAlias $nic1 -AddressFamily IPv4 -ErrorAction SilentlyContinue | Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
+New-NetIPAddress -InterfaceAlias $nic1 -IPAddress "192.168.2.22" -PrefixLength 24 -DefaultGateway "192.168.2.1" -AddressFamily IPv4 -ErrorAction Stop
+Set-DnsClientServerAddress -InterfaceAlias $nic1 -ServerAddresses "192.168.2.1" -ErrorAction SilentlyContinue
 
-# OOB IP
+# =========================
+# Configure OOB
+# =========================
 Write-Host "Configuring NIC2 (OOB)..."
 Set-NetIPInterface -InterfaceAlias $nic2 -Dhcp Disabled -ErrorAction SilentlyContinue
 Get-NetIPAddress -InterfaceAlias $nic2 -AddressFamily IPv4 -ErrorAction SilentlyContinue | Remove-NetIPAddress -Confirm:$false -ErrorAction SilentlyContinue
-New-NetIPAddress -InterfaceAlias $nic2 -IPAddress "172.20.0.22" -PrefixLength 24 -AddressFamily IPv4
-Set-DnsClientServerAddress -InterfaceAlias $nic2 -ResetServerAddresses
+Get-NetRoute -InterfaceAlias $nic2 -AddressFamily IPv4 -ErrorAction SilentlyContinue | Remove-NetRoute -Confirm:$false -ErrorAction SilentlyContinue
+New-NetIPAddress -InterfaceAlias $nic2 -IPAddress "172.20.0.22" -PrefixLength 24 -AddressFamily IPv4 -ErrorAction Stop
+Set-DnsClientServerAddress -InterfaceAlias $nic2 -ResetServerAddresses -ErrorAction SilentlyContinue
 
-# Rename host
-$targetName = "WIN2025"
-if ((hostname) -ne $targetName) {
-    Write-Host "Renaming computer to $targetName..."
-    Rename-Computer -NewName $targetName -Force
-}
-
+# =========================
 # Enable RDP
+# =========================
 Write-Host "Enabling RDP..."
 Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name fDenyTSConnections -Value 0
-Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
 
 # =========================
-# Wait before AD DS install
+# Register phase 2 task
 # =========================
-Write-Host "Waiting 120 seconds before installing AD DS role..."
-Start-Sleep -Seconds 120
-
-# =========================
-# Install AD DS role with retry
-# =========================
-Write-Host "Installing AD DS role..."
-$adds = $null
-
-for ($try = 1; $try -le 3; $try++) {
-    Write-Host "AD DS install attempt $try..."
-    $adds = Install-WindowsFeature AD-Domain-Services -IncludeManagementTools -ErrorAction SilentlyContinue
-
-    if ($adds.Success) {
-        Write-Host "AD DS role installed successfully."
-        break
-    }
-
-    Write-Host "AD DS install failed on attempt $try. ExitCode: $($adds.ExitCode)"
-    Start-Sleep -Seconds 60
-}
-
-if (-not $adds -or -not $adds.Success) {
-    Write-Host "ERROR: AD DS role installation failed after retries."
-    if ($adds) {
-        $adds | Format-List * | Out-String | Write-Host
-    }
-    exit 1
-}
-
-Import-Module ADDSDeployment
-
-$DomainName = "lab.local"
-$SafeModePassword = ConvertTo-SecureString "P@ssw0rd123!" -AsPlainText -Force
-
-# =========================
-# Register phase 2 for after DC reboot
-# =========================
-Write-Host "Registering post-reboot task..."
+Write-Host "Registering phase 2 startup task..."
 
 $phase2Script = "C:\Windows\Setup\Scripts\post-phase2.ps1"
 
@@ -123,19 +102,28 @@ $principal = New-ScheduledTaskPrincipal `
     -RunLevel Highest
 
 Register-ScheduledTask `
-    -TaskName "PostDCFinish" `
+    -TaskName "PostDCPhase2" `
     -Action $action `
     -Trigger $trigger `
     -Principal $principal `
-    -Force
+    -Force | Out-Null
 
-Write-Host "Promoting server to Domain Controller..."
+# =========================
+# Rename host if needed
+# =========================
+$targetName = "WIN2025"
+$renameNeeded = ((hostname) -ne $targetName)
 
-Install-ADDSForest `
-    -DomainName $DomainName `
-    -DomainNetbiosName "LAB" `
-    -SafeModeAdministratorPassword $SafeModePassword `
-    -InstallDNS `
-    -Force `
-    -Confirm:$false `
-    -NoRebootOnCompletion:$false
+if ($renameNeeded) {
+    Write-Host "Renaming computer to $targetName..."
+    Rename-Computer -NewName $targetName -Force
+
+    Write-Host "Computer rename pending. Rebooting now..."
+    Restart-Computer -Force
+    exit 0
+}
+
+# If no rename needed, go straight to phase 2
+Write-Host "No rename reboot needed. Starting phase 2 directly..."
+powershell.exe -ExecutionPolicy Bypass -NoProfile -File "C:\Windows\Setup\Scripts\post-phase2.ps1"
+exit $LASTEXITCODE
