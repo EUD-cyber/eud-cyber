@@ -119,7 +119,7 @@ if ($renameNeeded) {
     Rename-Computer -NewName $targetName -Force
 
     Write-Host "Computer rename pending. Rebooting now..."
-    Restart-Computer -Force
+    shutdown.exe /r /t 0 /f
     exit 0
 }
 
