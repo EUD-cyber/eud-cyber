@@ -235,7 +235,27 @@ qm set $VMID --boot order="scsi0;ide1" \
    --tablet 0
 qm enroll-efi-keys $VMID
 
-#Creating first snapshot of the VM 
-qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
-
 qm start $VMID
+
+echo "Waiting for VM to power off..."
+
+while true; do
+  STATUS=$(qm status "$VMID" | awk '{print $2}')
+
+  if [[ "$STATUS" == "stopped" ]]; then
+    echo "VM is powered off."
+    break
+  fi
+
+  sleep 5
+done
+
+echo "Creating snapshot..."
+qm snapshot "$VMID" First_snapshot --description "Clean baseline snapshot for lab reset"
+
+echo "Snapshot created successfully."
+
+echo "Starting VM again..."
+qm start "$VMID"
+
+echo "VM started."
