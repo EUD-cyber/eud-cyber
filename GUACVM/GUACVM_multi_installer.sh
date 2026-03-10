@@ -41,7 +41,7 @@ DISK_STORAGE="${LVM:-local-lvm}"
 MEMORY=4096       # in MB
 CORES=4
 DISK_SIZE="32G"    # the number is in GB
-BRIDGE="vmbr0"
+BRIDGE="${BRIDGE:-vmbr0}"
 BRIDGE1="lab${LAB}_oobm"
 BRIDGE2="prox_oobm"
 OOBM_IP="ip=172.20.0.1/24"
