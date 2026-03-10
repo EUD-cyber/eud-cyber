@@ -120,14 +120,14 @@ write_files:
     content: |
       [Unit]
       Description=Guacamole Lab NAT
-      After=network-online.target docker.service
+      After=network-online.target
       Wants=network-online.target
-  
+      
       [Service]
       Type=oneshot
       ExecStart=/opt/guacamole/nat.sh
       RemainAfterExit=true
-  
+      
       [Install]
       WantedBy=multi-user.target
 
