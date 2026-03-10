@@ -1,5 +1,6 @@
 services:
-  juice-shop: image: bkimminich/juice-shop:latest
+  juice-shop: 
+    image: bkimminich/juice-shop:latest
     container_name: juiceshop
     restart: unless-stopped
     environment:
