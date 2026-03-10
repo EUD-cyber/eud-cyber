@@ -133,7 +133,7 @@ write_files:
 
 runcmd:
   - apt-get update
-  - apt-get install -y docker-compose-v2 netfilter-persistent iptables-persistent python3-flask python3-paramiko python3 python3-pip
+  - apt-get install -y docker-compose-v2 netfilter-persistent python3-flask python3-paramiko python3 python3-pip
   - pip3 install flask paramiko
   - systemctl enable docker
   - systemctl start docker
