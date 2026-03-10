@@ -163,7 +163,6 @@ runcmd:
   - chmod -R 777 ./record
   - chmod -R 600 /root/.ssh/shared_admin_ed25519
   - chmod -R 600 /root/.ssh/shared_admin_ed25519.pub
- # - /opt/guacamole/nat.sh
   - netfilter-persistent save
   - systemctl daemon-reload
   - systemctl enable lab-api
