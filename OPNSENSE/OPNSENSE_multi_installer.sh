@@ -32,7 +32,7 @@ DISK_STORAGE="${LVM:-local-lvm}"
 ISO_STORAGE="${LOCAL:-local}"
 
 # Bridges
-WAN_BRIDGE="vmbr0"
+WAN_BRIDGE="${BRIDGE:-vmbr0}"
 LAN_BRIDGE="lab${LAB}_lan1"
 LAN_BRIDGE1="lab${LAB}_lan2"
 OOBM="lab${LAB}_oobm"
