@@ -99,26 +99,34 @@ BRIDGE_LIST=()
 # Linux bridges
 if command -v ip >/dev/null 2>&1; then
     while IFS= read -r br; do
-        [[ -n "$br" ]] && BRIDGE_LIST+=("$br")
+        [[ -z "$br" ]] && continue
+
+        # Skip unwanted bridges
+        if [[ "$br" == lab* || "$br" == prox* ]]; then
+            continue
+        fi
+
+        BRIDGE_LIST+=("$br")
     done < <(ip -o link show type bridge | awk -F': ' '{print $2}' | cut -d'@' -f1)
 fi
 
 # OVS bridges
 if command -v ovs-vsctl >/dev/null 2>&1; then
     while IFS= read -r br; do
-        [[ -n "$br" ]] && BRIDGE_LIST+=("$br")
+        [[ -z "$br" ]] && continue
+
+        # Skip unwanted bridges
+        if [[ "$br" == lab* || "$br" == prox* ]]; then
+            continue
+        fi
+
+        BRIDGE_LIST+=("$br")
     done < <(ovs-vsctl list-br)
 fi
 
 # Remove duplicates
 if [[ ${#BRIDGE_LIST[@]} -gt 0 ]]; then
     mapfile -t BRIDGE_LIST < <(printf "%s\n" "${BRIDGE_LIST[@]}" | sort -u)
-fi
-
-# Safety check
-if [[ ${#BRIDGE_LIST[@]} -eq 0 ]]; then
-    echo "ERROR: No Linux bridge or OVS bridge found."
-    exit 1
 fi
 
 # -------- Bridge Selection --------
