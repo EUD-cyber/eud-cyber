@@ -187,6 +187,7 @@ cat > "$OUTFILE" <<EOF
     <nohttpreferercheck>1</nohttpreferercheck>
     <ssl-certref>default</ssl-certref>
     <ssl-ciphers>AES128-GCM-SHA256:ECDHE-RSA-AES128-SHA256</ssl-ciphers>
+    <nodnsrebindcheck>1</nodnsrebindcheck>
     <port>443</port>
    </webgui>
   </system>
