@@ -62,28 +62,28 @@ write_files:
           # guacamole
           guacamole:
             container_name: guacamole_compose
-              group_add:
-                - "1000"
-              depends_on:
-                - guacd
-                - postgres
-              environment:
-                GUACD_HOSTNAME: guacd
-                POSTGRESQL_DATABASE: guacamole_db
-                POSTGRESQL_HOSTNAME: postgres
-                POSTGRESQL_PASSWORD: 'Password1!'
-                POSTGRESQL_USERNAME: guacamole_user
-                HTTP_AUTH_ENABLED: "true"
-                HTTP_AUTH_HEADER: "GUAC_AUTH"
-                RECORDING_SEARCH_PATH: /record
-              image: guacamole/guacamole:1.6.0
-              networks:
-                - guacnetwork_compose
-              volumes:
-                - ./record:/record:rw
-              ports:
-                - 8080:8080/tcp
-              restart: always
+            group_add:
+              - "1000"
+            depends_on:
+              - guacd
+              - postgres
+            environment:
+              GUACD_HOSTNAME: guacd
+              POSTGRESQL_DATABASE: guacamole_db
+              POSTGRESQL_HOSTNAME: postgres
+              POSTGRESQL_PASSWORD: 'Password1!'
+              POSTGRESQL_USERNAME: guacamole_user
+              HTTP_AUTH_ENABLED: "true"
+              HTTP_AUTH_HEADER: "GUAC_AUTH"
+              RECORDING_SEARCH_PATH: /record
+            image: guacamole/guacamole:1.6.0
+            networks:
+              - guacnetwork_compose
+            volumes:
+              - ./record:/record:rw
+            ports:
+              - 8080:8080/tcp
+            restart: always
           #nginx
           nginx:
             image: nginx:alpine
