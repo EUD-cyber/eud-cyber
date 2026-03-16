@@ -8,10 +8,11 @@ users:
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
     lock_passwd: false
-    passwd: $6$rounds=4096$ubuntu$kT1c6dVdE1VZEBtcHTTX3e8DqRL3OjaxAg/P6MqxsVXni4eWh05rq6ArlTc95xJ3Adxpv8uKXu95syEHCqB6C0
+    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
     ssh_authorized_keys:
       - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
-   
+
+ssh_pwauth: true
 chpasswd:
   expire: false
 
