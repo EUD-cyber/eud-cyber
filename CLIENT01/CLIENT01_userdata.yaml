@@ -9,8 +9,26 @@ users:
     shell: /bin/bash
     lock_passwd: false
     passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
-    ssh_authorized_keys:
-      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
+
+  - name: user1
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
+
+  - name: user2
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxhz45ql6LpmM0
+
+  - name: user3
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
+
+  - name: user4
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
 
 ssh_pwauth: true
 disable_root: true
@@ -29,7 +47,6 @@ packages:
   - sudo
   - qemu-guest-agent
 
-
 runcmd:
   - export DEBIAN_FRONTEND=noninteractive
   - apt-get update
@@ -37,11 +54,22 @@ runcmd:
   - add-apt-repository ppa:mozillateam/ppa -y
   - apt-get update
   - apt-get install -y firefox-esr
+
+  # Enable services
   - systemctl enable ssh
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
-  - echo "startxfce4" > /home/ubuntu/.xsession
-  - chown ubuntu:ubuntu /home/ubuntu/.xsession
+
+  # XRDP setup (IMPORTANT for multiple users)
+  - adduser xrdp ssl-cert
+
+  # XFCE session for ALL users
+  - echo "startxfce4" > /etc/skel/.xsession
+
+  # Apply to existing users
+  - for u in ubuntu user1 user2 user3 user4; do cp /etc/skel/.xsession /home/$u/.xsession; chown $u:$u /home/$u/.xsession; done
+
+  # XRDP
   - systemctl enable xrdp
   - systemctl restart xrdp
 
