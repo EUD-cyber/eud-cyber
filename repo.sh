@@ -13,58 +13,79 @@ DEBIAN_CODENAME="trixie"
 
 echo "Detected Proxmox VE 9 (Debian $DEBIAN_CODENAME)"
 
-ENTERPRISE_FILE="/etc/apt/sources.list.d/pve-enterprise.sources"
+PVE_ENTERPRISE_FILE="/etc/apt/sources.list.d/pve-enterprise.sources"
+CEPH_ENTERPRISE_FILE="/etc/apt/sources.list.d/ceph.sources"
+NO_SUB_FILE="/etc/apt/sources.list.d/pve-no-subscription.list"
 
-# Function: check if enterprise repo is enabled
-is_enterprise_enabled() {
-    [ -f "$ENTERPRISE_FILE" ] && grep -q "Enabled: 1" "$ENTERPRISE_FILE"
+is_pve_enterprise_enabled() {
+    [ -f "$PVE_ENTERPRISE_FILE" ] && grep -qi '^URIs: .*enterprise\.proxmox\.com' "$PVE_ENTERPRISE_FILE"
 }
 
-# =========================
-# CHECK ENTERPRISE STATUS
-# =========================
-if is_enterprise_enabled; then
-    echo "[INFO] Enterprise repository is ENABLED."
+is_ceph_enterprise_enabled() {
+    [ -f "$CEPH_ENTERPRISE_FILE" ] && grep -qi '^URIs: .*enterprise\.proxmox\.com' "$CEPH_ENTERPRISE_FILE"
+}
 
+disable_pve_enterprise() {
+    if [ -f "$PVE_ENTERPRISE_FILE" ]; then
+        mv "$PVE_ENTERPRISE_FILE" "${PVE_ENTERPRISE_FILE}.disabled"
+        echo "[OK] Disabled PVE enterprise repo"
+    fi
+}
+
+disable_ceph_enterprise() {
+    if [ -f "$CEPH_ENTERPRISE_FILE" ]; then
+        mv "$CEPH_ENTERPRISE_FILE" "${CEPH_ENTERPRISE_FILE}.disabled"
+        echo "[OK] Disabled Ceph enterprise repo"
+    fi
+}
+
+ensure_no_subscription_repo() {
+    echo "deb http://download.proxmox.com/debian/pve $DEBIAN_CODENAME pve-no-subscription" > "$NO_SUB_FILE"
+    echo "[OK] Added no-subscription repo"
+}
+
+disable_subscription_popup() {
+    POPUP_JS="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
+    if [ -f "$POPUP_JS" ]; then
+        echo "[INFO] Disabling subscription popup..."
+        sed -i.bak 's/data.status !== "Active"/false/' "$POPUP_JS" || true
+        systemctl restart pveproxy
+        echo "[OK] Subscription popup patched"
+    else
+        echo "[WARN] Popup JS file not found"
+    fi
+}
+
+if is_pve_enterprise_enabled; then
+    echo "[INFO] Proxmox enterprise repo is ENABLED."
     read -r -p "Do you want to disable enterprise and use no-subscription repo? (y/N): " choice
 
     case "$choice" in
         y|Y|yes|YES)
+            disable_pve_enterprise
 
-            echo "[ACTION] Disabling enterprise repository..."
-            sed -i 's/Enabled: 1/Enabled: 0/' "$ENTERPRISE_FILE"
-
-            echo "[ACTION] Disabling Ceph enterprise repository..."
-            sed -i 's/Enabled: 1/Enabled: 0/' /etc/apt/sources.list.d/ceph.sources 2>/dev/null || true
-
-            echo "[ACTION] Adding no-subscription repository..."
-            cat <<EOF > /etc/apt/sources.list.d/pve-no-subscription.list
-deb http://download.proxmox.com/debian/pve $DEBIAN_CODENAME pve-no-subscription
-EOF
-
-            # Disable subscription popup
-            POPUP_JS="/usr/share/javascript/proxmox-widget-toolkit/proxmoxlib.js"
-            if [ -f "$POPUP_JS" ]; then
-                echo "[ACTION] Disabling subscription popup..."
-                sed -i.bak 's/data.status !== "Active"/false/' "$POPUP_JS"
-                systemctl restart pveproxy
+            if is_ceph_enterprise_enabled; then
+                disable_ceph_enterprise
+            else
+                echo "[INFO] Ceph enterprise repo not enabled or not present"
             fi
 
-            echo "[ACTION] Updating package lists..."
+            ensure_no_subscription_repo
+            disable_subscription_popup
+
+            echo "[INFO] Updating package lists..."
             apt clean
             apt update
 
             echo "=== Done ==="
-            echo "Enterprise disabled, no-subscription enabled."
+            echo "Enterprise repos disabled, no-subscription enabled."
             ;;
-
         *)
-            echo "[INFO] Keeping enterprise repository."
+            echo "[INFO] Keeping enterprise repo enabled."
             echo "[INFO] Skipping Proxmox repo changes."
             ;;
     esac
-
 else
-    echo "[INFO] Enterprise repository already DISABLED or not present."
+    echo "[INFO] Proxmox enterprise repo already disabled or not present."
     echo "[INFO] Skipping Proxmox repo setup."
 fi
