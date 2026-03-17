@@ -16,9 +16,6 @@ ssh_pwauth: true
 chpasswd:
   expire: false
 
-package_update: true
-package_upgrade: true
-
 packages:
   - curl
 
