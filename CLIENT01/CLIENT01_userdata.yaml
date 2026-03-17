@@ -69,7 +69,7 @@ runcmd:
   - echo "startxfce4" > /etc/skel/.xsession
 
   # Apply to existing users
-  - for u in ubuntu user1 user2 user3 user4; do cp /etc/skel/.xsession /home/$u/.xsession; chown $u:$u /home/$u/.xsession; done
+  - for u in ubuntu ubuntu1 ubuntu2 ubuntu3 ubuntu4; do cp /etc/skel/.xsession /home/$u/.xsession; chown $u:$u /home/$u/.xsession; done
 
   # XRDP
   - systemctl enable xrdp
