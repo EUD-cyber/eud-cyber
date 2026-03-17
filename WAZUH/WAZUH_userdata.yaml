@@ -29,13 +29,15 @@ write_files:
     permissions: '0755'
     content: |
       #!/bin/bash
-      set -e
+      set -euo pipefail
 
       exec > >(tee -a /root/wazuh-install.log) 2>&1
 
+      WAZUH_PASS='Password1?'
+      TOKEN_FILE='/root/wazuh-api.token'
+
       echo "=== Installing Wazuh ==="
 
-      # wait for apt/cloud-init to finish
       sleep 60
 
       while fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
@@ -46,34 +48,67 @@ write_files:
       done
 
       cd /root
-      rm -f wazuh-install.sh
+      rm -f /root/wazuh-install.sh
       curl -sO https://packages.wazuh.com/4.13/wazuh-install.sh
-      chmod +x wazuh-install.sh
+      chmod +x /root/wazuh-install.sh
 
       bash /root/wazuh-install.sh -a --ignore-check
-      bash /usr/share/wazuh-indexer/plugins/opensearch-security/tools/wazuh-passwords-tool.sh -u admin -p Password1?
+
+      echo "=== Setting dashboard/indexer admin password ==="
+      bash /usr/share/wazuh-indexer/plugins/opensearch-security/tools/wazuh-passwords-tool.sh \
+        -u admin -p "${WAZUH_PASS}"
+
+      echo "=== Reading current wazuh-wui password from dashboard config ==="
+      WUI_PASS="$(awk -F': ' '/^\s*password:/ {print $2; exit}' /usr/share/wazuh-dashboard/data/wazuh/config/wazuh.yml)"
+
+      if [ -z "${WUI_PASS}" ]; then
+        echo "ERROR: Could not read wazuh-wui password from dashboard config"
+        exit 1
+      fi
+
+      echo "=== Setting Wazuh API admin password ==="
+      bash /usr/share/wazuh-indexer/plugins/opensearch-security/tools/wazuh-passwords-tool.sh \
+        --api -u wazuh -p "${WAZUH_PASS}" \
+        --admin-user wazuh-wui --admin-password "${WUI_PASS}"
+
+      echo "=== Restarting services ==="
+      systemctl restart wazuh-indexer wazuh-manager wazuh-dashboard
 
       echo "=== Waiting for API ==="
-      sleep 120
+      for i in $(seq 1 60); do
+        if curl -sk https://localhost:55000/ >/dev/null 2>&1; then
+          break
+        fi
+        sleep 5
+      done
 
-      cat >/tmp/wazuh-user.json <<'EOF'
-      {
-        "username": "wazuh",
-        "password": "Password1!",
-        "roles": ["administrator"]
-      }
-      EOF
+      echo "=== Requesting API token ==="
+      TOKEN="$(curl -sSk -u "wazuh:${WAZUH_PASS}" \
+        -X POST "https://localhost:55000/security/user/authenticate?raw=true")"
 
-      echo "=== Creating wazuh user ==="
-      curl -k -u admin:Password1! \
-        -X POST "https://localhost:55000/security/users" \
-        -H "Content-Type: application/json" \
-        -d @/tmp/wazuh-user.json || true
+      if [ -z "${TOKEN}" ]; then
+        echo "ERROR: API token is empty"
+        exit 1
+      fi
+
+      echo "${TOKEN}" > "${TOKEN_FILE}"
+      chmod 600 "${TOKEN_FILE}"
+
+      echo "=== Testing API token ==="
+      curl -sSk \
+        -H "Authorization: Bearer ${TOKEN}" \
+        "https://localhost:55000/manager/status" >/root/wazuh-manager-status.json
 
       echo "=== Done ==="
+      echo "Dashboard user: admin"
+      echo "Dashboard password: ${WAZUH_PASS}"
+      echo "API user: wazuh"
+      echo "API password: ${WAZUH_PASS}"
+      echo "API token saved to: ${TOKEN_FILE}"
 
 runcmd:
   - bash /root/install-wazuh.sh
+
 power_state:
   mode: poweroff
   message: "Cloud-init finished - powering off"
