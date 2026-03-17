@@ -4,7 +4,7 @@ hostname: wazuh
 manage_etc_hosts: true
 
 users:
-  - name: ubuntu
+  - name: wazuh
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
     lock_passwd: false
