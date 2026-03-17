@@ -16,24 +16,46 @@ ssh_pwauth: true
 chpasswd:
   expire: false
 
+package_update: true
+package_upgrade: true
+
 packages:
   - curl
+  - ca-certificates
+  - gnupg
 
-runcmd:
-  - |
-    nohup bash -c '
+write_files:
+  - path: /root/install-wazuh.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -e
+
+      exec > >(tee -a /root/wazuh-install.log) 2>&1
+
       echo "=== Installing Wazuh ==="
 
-      curl -sO https://packages.wazuh.com/4.13/wazuh-install.sh
+      # wait for apt/cloud-init to finish
+      sleep 60
 
-      bash wazuh-install.sh -a -p "Password1!" --ignore-check
+      while fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
+            fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
+            fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
+        echo "Waiting for apt locks..."
+        sleep 5
+      done
+
+      cd /root
+      rm -f wazuh-install.sh
+      curl -sO https://packages.wazuh.com/4.13/wazuh-install.sh
+      chmod +x wazuh-install.sh
+
+      bash /root/wazuh-install.sh -a -p 'Password1!' --ignore-check
 
       echo "=== Waiting for API ==="
       sleep 120
 
-      echo "=== Creating wazuh user ==="
-
-      cat <<EOF > /tmp/wazuh-user.json
+      cat >/tmp/wazuh-user.json <<'EOF'
       {
         "username": "wazuh",
         "password": "Password1!",
@@ -41,14 +63,16 @@ runcmd:
       }
       EOF
 
+      echo "=== Creating wazuh user ==="
       curl -k -u admin:Password1! \
         -X POST "https://localhost:55000/security/users" \
         -H "Content-Type: application/json" \
-        -d @/tmp/wazuh-user.json
+        -d @/tmp/wazuh-user.json || true
 
       echo "=== Done ==="
-      ' > /root/wazuh-install.log 2>&1 &
-  
+
+runcmd:
+  - bash /root/install-wazuh.sh
 power_state:
   mode: poweroff
   message: "Cloud-init finished - powering off"
