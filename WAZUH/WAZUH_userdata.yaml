@@ -27,27 +27,32 @@ runcmd:
     nohup bash -c '
       echo "=== Installing Wazuh ==="
 
-      curl -sO https://packages.wazuh.com/4.14/wazuh-install.sh
+      curl -sO https://packages.wazuh.com/4.7/wazuh-install.sh
 
-      # Install single-node with password
-      bash wazuh-install.sh -a -p "Password1!" --ignore-check -n $(hostname -I | awk "{print \$1}")
+      bash wazuh-install.sh -a \
+        -p "Password1!" \
+        -n $(hostname -I | awk "{print \$1}")
 
-      echo "=== Creating custom user (wazuh) ==="
+      echo "=== Waiting for API ==="
+      sleep 120
 
-      # Wait for services
-      sleep 60
+      echo "=== Creating wazuh user ==="
 
-      # Create new user via API
-      curl -k -u admin:Password1! -X POST "https://localhost:55000/security/users" \
+      cat <<EOF > /tmp/wazuh-user.json
+      {
+        "username": "wazuh",
+        "password": "Password1!",
+        "roles": ["administrator"]
+      }
+      EOF
+
+      curl -k -u admin:Password1! \
+        -X POST "https://localhost:55000/security/users" \
         -H "Content-Type: application/json" \
-        -d '{
-          "username":"wazuh",
-          "password":"Password1!",
-          "roles":["administrator"]
-        }'
+        -d @/tmp/wazuh-user.json
 
       echo "=== Done ==="
-    ' > /root/wazuh-install.log 2>&1 &
+      ' > /root/wazuh-install.log 2>&1 &
   
 power_state:
   mode: poweroff
