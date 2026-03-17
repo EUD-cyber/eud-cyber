@@ -27,11 +27,9 @@ runcmd:
     nohup bash -c '
       echo "=== Installing Wazuh ==="
 
-      curl -sO https://packages.wazuh.com/4.7/wazuh-install.sh
+      curl -sO https://packages.wazuh.com/4.13/wazuh-install.sh
 
-      bash wazuh-install.sh -a \
-        -p "Password1!" \
-        -n $(hostname -I | awk "{print \$1}")
+      bash wazuh-install.sh -a -p "Password1!" --ignore-check
 
       echo "=== Waiting for API ==="
       sleep 120
