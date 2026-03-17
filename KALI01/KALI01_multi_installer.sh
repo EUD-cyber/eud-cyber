@@ -29,8 +29,9 @@ IMG_PATH="$(pwd)/KALI01/$IMG_NAME"
 DISK="disk.raw"
 ISO_STORAGE="${LOCAL:-local}"
 DISK_STORAGE="${LVM:-local-lvm}"
-MEMORY=8192      # in MB
+MEMORY=16384     # in MB
 CORES=4
+SOCKETS=2
 DISK_SIZE="32G" # the number is in GB
 BRIDGE="lab${LAB}_lan1"
 BRIDGE1="lab${LAB}_oobm"
@@ -90,6 +91,7 @@ qm create $VMID \
   --name "$VM_NAME" \
   --memory $MEMORY \
   --cores $CORES \
+  --sockets $SOCKETS \
   --cpu host \
   --net0 virtio,bridge=$BRIDGE \
   --net1 virtio,bridge=$BRIDGE1 \

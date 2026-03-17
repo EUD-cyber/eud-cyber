@@ -42,6 +42,14 @@
       menu.style.display = "none";
     }
   }
+ function toggleClientMenu() {
+    const menu = document.getElementById("clientMenu");
+    if (menu.style.display === "none" || menu.style.display === "") {
+      menu.style.display = "block";
+    } else {
+      menu.style.display = "none";
+    }
+  }
 </script>
 
 </head>
@@ -97,10 +105,33 @@
        Kali01 SSH
     </a>
 
-    <a class="conn-button" target="_blank"
-       href="#" onclick="this.href = link('/guacamole/#/client/MTAAYwBwb3N0Z3Jlc3Fs')">
-       Client01 RDP
-    </a>
+ <div class="conn-button" onclick="toggleClientMenu()" style="cursor:pointer;">
+    Client01 RDP ▸
+  </div>
+
+  <div id="clientMenu" style="display:none; margin-left:15px;">
+
+  <a class="conn-button" target="_blank"
+     href="#" onclick="this.href = link('/guacamole/#/client/MTAAYwBwb3N0Z3Jlc3Fs')">
+     User1
+  </a>
+
+  <a class="conn-button" target="_blank"
+     href="#" onclick="this.href = link('/guacamole/#/client/MTYAYwBwb3N0Z3Jlc3Fs')">
+     User2
+  </a>
+
+  <a class="conn-button" target="_blank"
+     href="#" onclick="this.href = link('/guacamole/#/client/MTcAYwBwb3N0Z3Jlc3Fs')">
+     User3
+  </a>
+
+  <a class="conn-button" target="_blank"
+     href="#" onclick="this.href = link('/guacamole/#/client/MTgAYwBwb3N0Z3Jlc3Fs')">
+     User4
+  </a>
+
+</div>
 
     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = link('/guacamole/#/client/OQBjAHBvc3RncmVzcWw')">
