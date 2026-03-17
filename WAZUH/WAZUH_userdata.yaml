@@ -50,7 +50,7 @@ write_files:
       curl -sO https://packages.wazuh.com/4.13/wazuh-install.sh
       chmod +x wazuh-install.sh
 
-      bash /root/wazuh-install.sh -a -p 'Password1!' --ignore-check
+      bash /root/wazuh-install.sh -a --ignore-check
 
       echo "=== Waiting for API ==="
       sleep 120
