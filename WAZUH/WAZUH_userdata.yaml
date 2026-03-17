@@ -51,6 +51,7 @@ write_files:
       chmod +x wazuh-install.sh
 
       bash /root/wazuh-install.sh -a --ignore-check
+      bash /usr/share/wazuh-indexer/plugins/opensearch-security/tools/wazuh-passwords-tool.sh -u admin -p Password1?
 
       echo "=== Waiting for API ==="
       sleep 120
