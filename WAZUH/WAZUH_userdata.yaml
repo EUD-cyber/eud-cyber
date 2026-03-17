@@ -16,16 +16,38 @@ ssh_pwauth: true
 chpasswd:
   expire: false
 
+package_update: true
+package_upgrade: true
+
 packages:
-  - ca-certificates
   - curl
-  - gnupg
-  - lsb-release
-  - docker.io
-  - qemu-guest-agent
-  
+
 runcmd:
-  - apt-get update
+  - |
+    nohup bash -c '
+      echo "=== Installing Wazuh ==="
+
+      curl -sO https://packages.wazuh.com/4.14/wazuh-install.sh
+
+      # Install single-node with password
+      bash wazuh-install.sh -a -p "Password1!" --ignore-check -n $(hostname -I | awk "{print \$1}")
+
+      echo "=== Creating custom user (wazuh) ==="
+
+      # Wait for services
+      sleep 60
+
+      # Create new user via API
+      curl -k -u admin:Password1! -X POST "https://localhost:55000/security/users" \
+        -H "Content-Type: application/json" \
+        -d '{
+          "username":"wazuh",
+          "password":"Password1!",
+          "roles":["administrator"]
+        }'
+
+      echo "=== Done ==="
+    ' > /root/wazuh-install.log 2>&1 &
   
 power_state:
   mode: poweroff
