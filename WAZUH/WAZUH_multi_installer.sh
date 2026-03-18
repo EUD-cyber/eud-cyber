@@ -9,30 +9,38 @@ if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-# -----------------------------
-# CONFIG
-# -----------------------------
+LOGFILE="$(pwd)/LOGS/WAZUH_lab${LAB}.log"
+
+# Create log file and ensure permissions
+touch "$LOGFILE"
+chmod 600 "$LOGFILE"
+
+# Redirect all output (stdout + stderr) to log AND console
+exec > >(tee -a "$LOGFILE") 2>&1
+
+echo "===== WAZUH installation started at $(date) ====="
+
+# ===== CONFIG =====
 START_VMID=$((LAB * 1000))
 BASE_NAME="lab${LAB}-WAZUH"
-IMG_URL="${WAZUH_IMG:-https://packages.wazuh.com/4.x/vm/wazuh-4.14.1.ova}"
-IMG_NAME="wazuh.ova"
-IMG_PATH="$(pwd)/WAZUH/$IMG_NAME"
-STORAGE="${LOCAL:-local}"
+IMG_URL="${LINUX_IMG:-https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
+IMG_NAME="noble-server-cloudimg-amd64.img"
+IMG_PATH="$(pwd)/$IMG_NAME"
+ISO_STORAGE="${LOCAL:-local}"
 DISK_STORAGE="${LVM:-local-lvm}"
-BRIDGE1="lab${LAB}_lan2"
-BRIDGE2="lab${LAB}_oobm"
+MEMORY=16384       # in MB
 CORES=4
-MEMORY=16384
-DISK_SIZE=80G
+SOCKETS=2
+DISK_SIZE="80G"    # the number is in GB
+BRIDGE="lab${LAB}_lan2"
+BRIDGE1="lab${LAB}_oobm"
 IP_ADDR="ip=192.168.2.20/24"
 DNS_SERVER="192.168.2.1"
-OOBM_IP="ip=172.20.0.20/24"
 IP_GW="gw=192.168.2.1"
-WORKDIR="$(pwd)/WAZUH/"
+OOBM_IP="ip=172.20.0.20/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
 SRC_USERDATA="$(pwd)/WAZUH/WAZUH_userdata.yaml"     # source file
 DST_USERDATA="WAZUH_userdata_lab${LAB}.yaml"            # destination filename
-# -----------------------------
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
 
@@ -68,53 +76,76 @@ echo "VM name to use: $VM_NAME"
 # ===== Download IMG if missing =====
 if [ ! -f "$IMG_PATH" ]; then
     echo "Downloading $IMG_NAME IMG..."
-    wget -q --show-progress -O "$IMG_PATH" "$IMG_URL"
+    wget --show-progress -O "$IMG_PATH" "$IMG_URL"
 else
     echo "IMG already exists: $IMG_PATH"
 fi
 
-echo "➡ Extracting OVA..."
-tar -xf "$IMG_PATH" -C $WORKDIR
-
-VMDK_FILE=$(ls "$WORKDIR"*.vmdk | head -n 1)
-
-if [[ ! -f "$VMDK_FILE" ]]; then
-  echo "❌ vmdk not found — aborting"
-  exit 1
-fi
-
-echo "➡ Updating VM settings..."
-qm create "$VMID" \
+# ===== Create VM =====
+echo "Creating VM $VMID..."
+qm create $VMID \
   --name "$VM_NAME" \
-  --cores "$CORES" \
-  --memory "$MEMORY" \
+  --memory $MEMORY \
+  --cores $CORES \
+  --sockets $SOCKETS \
   --cpu host \
-  --machine q35 \
+  --net0 virtio,bridge=$BRIDGE \
+  --net1 virtio,bridge=$BRIDGE1 \
+  --ostype l26
+
+# ===== Add LVM disk =====
+qm importdisk $VMID $IMG_NAME $DISK_STORAGE
+qm set $VMID \
   --scsihw virtio-scsi-pci \
-  --net0 virtio,bridge="$BRIDGE1" \
-  --net1 virtio,bridge="$BRIDGE2"
+  --scsi0 ${DISK_STORAGE}:"vm-$VMID-disk-0"
 
-qm importdisk "$VMID" "$VMDK_FILE" "$DISK_STORAGE" --format raw
-
-qm set "$VMID" --scsi0 "$DISK_STORAGE:vm-$VMID-disk-0"
 qm disk resize $VMID scsi0 +$DISK_SIZE
-echo "➡ Adding cloud-init drive..."
-qm set "$VMID" --ide2 "$DISK_STORAGE":cloudinit
 
-echo "➡ Setting boot options..."
-qm set "$VMID" --boot c --bootdisk scsi0
+# ===== Boot order and console =====
+qm set $VMID \
+  --ide2 $DISK_STORAGE:cloudinit \
+  --boot c \
+  --bootdisk scsi0 \
 
+# ===== Enable QEMU Guest Agent =====
+qm set $VMID --agent enabled=1
+
+# ===== Set autostart =====
+qm set $VMID --onboot 1
+
+# ===== Cloud-init =====
 qm set $VMID --ipconfig0 $IP_ADDR,$IP_GW \
   --ipconfig1 $OOBM_IP \
   --searchdomain cloud.local \
   --nameserver $DNS_SERVER \
   --ciupgrade \
+  --cicustom "user=$ISO_STORAGE:snippets/${DST_USERDATA}"
 
-echo "➡ Attaching custom cloud-init config..."
-qm set "$VMID" --cicustom "user=local:snippets/${DST_USERDATA}"
+# ===== Start VM =====
+echo "Starting VM $VMID ($VM_NAME)..."
+qm start $VMID
 
-#Creating first snapshot of the VM 
-qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
+echo "VM $VMID ($VM_NAME) started successfully!"
 
-echo "➡ Done — starting VM..."
+echo "Waiting for VM to power off..."
+
+while true; do
+  STATUS=$(qm status "$VMID" | awk '{print $2}')
+
+  if [[ "$STATUS" == "stopped" ]]; then
+    echo "VM is powered off."
+    break
+  fi
+
+  sleep 5
+done
+
+echo "Creating snapshot..."
+qm snapshot "$VMID" First_snapshot --description "Clean baseline snapshot for lab reset"
+
+echo "Snapshot created successfully."
+
+echo "Starting VM again..."
 qm start "$VMID"
+
+echo "VM started."
