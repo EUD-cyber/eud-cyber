@@ -1,7 +1,15 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+IFS=$'\n\t'
 
-LOGFILE="$(pwd)/LOGS/KALI01.log"
+LAB="$1"
+
+if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
+  echo "Usage: $0 <lab-number>"
+  exit 1
+fi
+
+LOGFILE="$(pwd)/LOGS/KALI01_lab${LAB}.log"
 
 # Create log file and ensure permissions
 touch "$LOGFILE"
@@ -13,25 +21,26 @@ exec > >(tee -a "$LOGFILE") 2>&1
 echo "===== KALI01 installation started at $(date) ====="
 
 # ===== CONFIG =====
-START_VMID=100
-BASE_NAME="KALI01"
-IMG_URL="https://kali.download/cloud-images/kali-2025.4/kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
-IMG_NAME="kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
+START_VMID=$((LAB * 1000))
+BASE_NAME="lab${LAB}-KALI01"
+IMG_URL="${KALI_IMG:-https://kali.download/cloud-images/kali-2025.4/kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz}"
+IMG_NAME="kali-linux-cloud-genericcloud-amd64.tar.xz"
 IMG_PATH="$(pwd)/KALI01/$IMG_NAME"
 DISK="disk.raw"
-ISO_STORAGE="local"
-DISK_STORAGE="local-lvm"
-MEMORY=8192      # in MB
+ISO_STORAGE="${LOCAL:-local}"
+DISK_STORAGE="${LVM:-local-lvm}"
+MEMORY=16384     # in MB
 CORES=4
+SOCKETS=2
 DISK_SIZE="32G" # the number is in GB
-BRIDGE="lan1"
-BRIDGE1="oobm"
+BRIDGE="lab${LAB}_lan1"
+BRIDGE1="lab${LAB}_oobm"
 IP_ADDR="ip=192.168.1.100/24,gw=192.168.1.1"
 DNS_SERVER="192.168.1.1"
 OOBM_IP="ip=172.20.0.11/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
 SRC_USERDATA="$(pwd)/KALI01/KALI01_userdata.yaml"     # source file
-DST_USERDATA="KALI01_userdata.yaml"            # destination filename
+DST_USERDATA="KALI01_userdata_lab${LAB}.yaml"            # destination filename
 # ==================
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
@@ -82,6 +91,7 @@ qm create $VMID \
   --name "$VM_NAME" \
   --memory $MEMORY \
   --cores $CORES \
+  --sockets $SOCKETS \
   --cpu host \
   --net0 virtio,bridge=$BRIDGE \
   --net1 virtio,bridge=$BRIDGE1 \
@@ -115,13 +125,33 @@ qm set $VMID --ipconfig0 $IP_ADDR \
   --searchdomain cloud.local \
   --nameserver $DNS_SERVER \
   --ciupgrade 1 \
-  --cicustom "user=local:snippets/KALI01_userdata.yaml"
-
-#Creating first snapshot of the VM
-qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
+  --cicustom "user=$ISO_STORAGE:snippets/${DST_USERDATA}"
 
 # ===== Start VM =====
 echo "Starting VM $VMID ($VM_NAME)..."
 qm start $VMID
 
 echo "VM $VMID ($VM_NAME) started successfully!"
+
+echo "Waiting for VM to power off..."
+
+while true; do
+  STATUS=$(qm status "$VMID" | awk '{print $2}')
+
+  if [[ "$STATUS" == "stopped" ]]; then
+    echo "VM is powered off."
+    break
+  fi
+
+  sleep 5
+done
+
+echo "Creating snapshot..."
+qm snapshot "$VMID" First_snapshot --description "Clean baseline snapshot for lab reset"
+
+echo "Snapshot created successfully."
+
+echo "Starting VM again..."
+qm start "$VMID"
+
+echo "VM started."
