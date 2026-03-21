@@ -16,6 +16,7 @@ CLIENT01="./CLIENT01/CLIENT01_multi_installer.sh"
 PACKETFENCE="./PACKETFENCE/PACKETFENCE_installer.sh"
 PREREQ="./pre_req.sh"
 KALI01="./KALI01/KALI01_multi_installer.sh"
+KALI02="./KALI02/KALI02_multi_installer.sh"
 WAZUH="./WAZUH/WAZUH_multi_installer.sh"
 WIN11="./WIN11/WIN11_installer.sh"
 WIN2025="./WIN2025/WIN2025_multi_installer.sh"
@@ -129,6 +130,9 @@ for i in $(seq 1 "$LABCOUNT"); do
     
     echo 'Starting KALI01 VM creation'
     bash '$KALI01' '$i'
+
+    echo 'Starting KALI02 VM creation'
+    bash '$KALI02' '$i'
 
     echo 'Starting APPSRV01 creation'
     bash '$APPSRV01' '$i'
