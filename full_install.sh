@@ -17,6 +17,7 @@ CLIENT01="./CLIENT01/CLIENT01_multi_installer.sh"
 PACKETFENCE="./PACKETFENCE/PACKETFENCE_installer.sh"
 PREREQ="./pre_req.sh"
 KALI01="./KALI01/KALI01_multi_installer.sh"
+KALI02="./KALI02/KALI02_multi_installer.sh"
 WAZUH="./WAZUH/WAZUH_multi_installer.sh"
 WIN11="./WIN11/WIN11_installer.sh"
 WIN2025="./WIN2025/WIN2025_multi_installer.sh"
@@ -36,6 +37,7 @@ echo "9) Create Windows 11 VM"
 echo "10) Create Windows server 2025 VM"
 echo "11) Create APPSRV01 VM"
 echo "12) Create Client01 VM"
+echo "13) Create KALI02 VM"
 echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
 echo "95) Run ALL in background"
@@ -99,6 +101,10 @@ case "$CHOICE" in
     echo "Staring Client01 VM creation... "
     bash "$CLIENT01" $LAB
     ;;
+  13)
+    echo "Starting KALI01 VM creation... "
+    bash "$KALI02" $LAB
+    ;;
   89)
     echo "Change proxmox repo to no-enterprise"
     bash "$REPO"
@@ -139,6 +145,9 @@ case "$CHOICE" in
 
     echo "Starting KALI01 VM creation... "
     bash "$KALI01" $LAB
+
+    echo "Starting KALI02 VM creation... "
+    bash "$KALI02" $LAB
 
     echo "Starting APPSRV01 creation... "
     bash "$APPSRV01" $LAB
@@ -201,6 +210,9 @@ case "$CHOICE" in
 
     echo 'Starting KALI01 VM creation'
     bash '$KALI01' $LAB
+
+    echo 'Starting KALI02 VM creation'
+    bash '$KALI02' $LAB
 
     echo 'Starting APPSRV01 creation'
     bash '$APPSRV01' $LAB
