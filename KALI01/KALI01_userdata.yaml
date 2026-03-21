@@ -1,6 +1,6 @@
 #cloud-config
 
-hostname: kali
+hostname: kali01
 manage_etc_hosts: true
 
 users:
