@@ -9,7 +9,7 @@ if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-LOGFILE="$(pwd)/LOGS/KALI01_lab${LAB}.log"
+LOGFILE="$(pwd)/LOGS/KALI02_lab${LAB}.log"
 
 # Create log file and ensure permissions
 touch "$LOGFILE"
@@ -22,10 +22,10 @@ echo "===== KALI01 installation started at $(date) ====="
 
 # ===== CONFIG =====
 START_VMID=$((LAB * 1000))
-BASE_NAME="lab${LAB}-KALI01"
+BASE_NAME="lab${LAB}-KALI02"
 IMG_URL="${KALI_IMG:-https://kali.download/cloud-images/kali-2025.4/kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz}"
 IMG_NAME="kali-linux-cloud-genericcloud-amd64.tar.xz"
-IMG_PATH="$(pwd)/KALI01/$IMG_NAME"
+IMG_PATH="$(pwd)/KALI02/$IMG_NAME"
 DISK="disk.raw"
 ISO_STORAGE="${LOCAL:-local}"
 DISK_STORAGE="${LVM:-local-lvm}"
@@ -35,12 +35,12 @@ SOCKETS=2
 DISK_SIZE="32G" # the number is in GB
 BRIDGE="lab${LAB}_lan1"
 BRIDGE1="lab${LAB}_oobm"
-IP_ADDR="ip=192.168.1.100/24,gw=192.168.1.1"
+IP_ADDR="ip=192.168.1.150/24,gw=192.168.1.1"
 DNS_SERVER="192.168.1.1"
-OOBM_IP="ip=172.20.0.11/24"
+OOBM_IP="ip=172.20.0.150/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
-SRC_USERDATA="$(pwd)/KALI01/KALI01_userdata.yaml"     # source file
-DST_USERDATA="KALI01_userdata_lab${LAB}.yaml"            # destination filename
+SRC_USERDATA="$(pwd)/KALI01/KALI02_userdata.yaml"     # source file
+DST_USERDATA="KALI02_userdata_lab${LAB}.yaml"            # destination filename
 # ==================
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
