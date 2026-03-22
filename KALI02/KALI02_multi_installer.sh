@@ -39,7 +39,7 @@ IP_ADDR="ip=192.168.1.150/24,gw=192.168.1.1"
 DNS_SERVER="192.168.1.1"
 OOBM_IP="ip=172.20.0.150/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
-SRC_USERDATA="$(pwd)/KALI01/KALI02_userdata.yaml"     # source file
+SRC_USERDATA="$(pwd)/KALI02/KALI02_userdata.yaml"     # source file
 DST_USERDATA="KALI02_userdata_lab${LAB}.yaml"            # destination filename
 # ==================
 
