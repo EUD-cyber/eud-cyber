@@ -4,19 +4,18 @@ hostname: tpot01
 manage_etc_hosts: true
 
 users:
-  - default
   - name: ubuntu
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
     lock_passwd: false
-    passwd: "$6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0"
+    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
 
 ssh_pwauth: true
-disable_root: true
-
-package_update: true
-package_upgrade: true
-
+chpasswd:
+  expire: false
+  
 packages:
   - git
   - curl
@@ -24,7 +23,6 @@ packages:
   - sudo
 
 write_files:
-
   - path: /usr/local/bin/install-tpot.sh
     permissions: "0755"
     content: |
