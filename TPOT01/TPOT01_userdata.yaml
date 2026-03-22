@@ -1,0 +1,73 @@
+#cloud-config
+
+hostname: tpot01
+manage_etc_hosts: true
+
+users:
+  - default
+  - name: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: "$6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0"
+
+ssh_pwauth: true
+disable_root: true
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - git
+  - curl
+  - wget
+  - sudo
+
+write_files:
+
+  - path: /usr/local/bin/install-tpot.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      set -e
+
+      echo "=== Installing T-Pot ==="
+
+      # Ensure fresh environment
+      apt-get update
+
+      # Install required deps (T-Pot will install most itself)
+      apt-get install -y docker.io docker-compose
+
+      systemctl enable docker
+      systemctl start docker
+
+      # Clone T-Pot
+      cd /opt
+      if [ ! -d "tpotce" ]; then
+        git clone https://github.com/telekom-security/tpotce
+      fi
+
+      cd /opt/tpotce
+
+      # Make installer executable
+      chmod +x install.sh
+
+      echo "=== Starting T-Pot installer ==="
+
+      # Auto-confirm install (non-interactive)
+      export TPOT_TYPE=STANDARD
+
+      # Run installer
+      ./install.sh --type=standard --conf=auto
+
+      echo "=== T-Pot install finished ==="
+
+runcmd:
+  - /usr/local/bin/install-tpot.sh
+
+power_state:
+  mode: reboot
+  message: "Rebooting after T-Pot install"
+  timeout: 30
+  condition: True
