@@ -32,12 +32,12 @@ echo "4) Create Guacamole VM"
 echo "5) Create Vuln-server01 VM"
 echo "6) Create Vuln-server02 VM"
 echo "7) Create KALI01 VM"
-echo "8) Create WAZUH VM"
+echo "8) Create KALI02 VM"
 echo "9) Create Windows 11 VM"
 echo "10) Create Windows server 2025 VM"
 echo "11) Create APPSRV01 VM"
 echo "12) Create Client01 VM"
-echo "13) Create KALI02 VM"
+echo "13) Create WAZUH VM"
 echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
 echo "95) Run ALL in background"
@@ -82,8 +82,8 @@ case "$CHOICE" in
     bash "$KALI01" $LAB
     ;;
   8)
-    echo "Starting Wazuh VM creation.... "
-    bash "$WAZUH" $LAB
+    echo "Starting KALI02 VM creation.... "
+    bash "$KALI02" $LAB 
     ;;
   9)
     echo "Starting Windows 11 VM creation... "
@@ -102,8 +102,8 @@ case "$CHOICE" in
     bash "$CLIENT01" $LAB
     ;;
   13)
-    echo "Starting KALI01 VM creation... "
-    bash "$KALI02" $LAB
+    echo "Starting WAZUH VM creation... "
+    bash "$WAZUH" $LAB
     ;;
   89)
     echo "Change proxmox repo to no-enterprise"
