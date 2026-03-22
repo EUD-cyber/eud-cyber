@@ -20,73 +20,85 @@ packages:
   - git
   - curl
   - wget
+  - expect
+  - apache2-utils
 
 write_files:
   - path: /usr/local/bin/install-tpot.sh
     permissions: "0755"
     content: |
-      #!/bin/bash
-      set -euo pipefail
-
-      LOGFILE="/var/log/tpot-install.log"
-      SUCCESSFILE="/var/log/tpot-installed.success"
-      FAILFILE="/var/log/tpot-installed.failed"
-      TPOT_USER="ubuntu"
-      TPOT_HOME="/home/${TPOT_USER}"
-      TPOT_DIR="${TPOT_HOME}/tpotce"
-
-      exec > >(tee -a "$LOGFILE") 2>&1
-
-      echo "=================================="
-      echo "T-Pot cloud-init installer started"
-      date
-      echo "=================================="
-
-      trap 'RC=$?; echo "[!] Install failed with exit code $RC"; date; touch "$FAILFILE"; exit $RC' ERR
-
-      echo "[*] Waiting for network..."
-      sleep 20
-
-      echo "[*] Ensuring home ownership..."
-      chown -R "${TPOT_USER}:${TPOT_USER}" "$TPOT_HOME"
-
-      echo "[*] Cloning T-Pot as ${TPOT_USER}..."
-      sudo -u "${TPOT_USER}" -H bash -lc "
-        set -e
-        cd ~
-        if [ ! -d tpotce ]; then
-          git clone https://github.com/telekom-security/tpotce
-        fi
-        cd tpotce
-        chmod +x install.sh
-      "
-
-      echo "[*] Starting T-Pot installer as user: ${TPOT_USER}"
-      echo "[*] Log file: ${LOGFILE}"
-
-      sudo -u "${TPOT_USER}" -H bash -lc "
-        set -e
-        cd '${TPOT_DIR}'
-          script -q -c \"printf 'y\n' | ./install.sh\" /var/log/tpot-session.log
-      "
-
-      echo "[*] Installer finished."
-      touch "$SUCCESSFILE"
-
-      echo "[*] Quick status info..."
-      id "${TPOT_USER}" || true
-      systemctl status tpot --no-pager || true
-      docker ps -a || true
-      ss -tulpn || true
-
-      echo "=================================="
-      echo "T-Pot install completed"
-      date
-      echo "=================================="
-
-      echo "[*] Shutting down in 20 seconds..."
-      sleep 20
-      shutdown -h now
+        #!/bin/bash
+        set -euo pipefail
+        
+        LOGFILE="/var/log/tpot-install.log"
+        SESSIONLOG="/var/log/tpot-session.log"
+        SUCCESSFILE="/var/log/tpot-installed.success"
+        FAILFILE="/var/log/tpot-installed.failed"
+        TPOT_USER="ubuntu"
+        TPOT_HOME="/home/${TPOT_USER}"
+        TPOT_DIR="${TPOT_HOME}/tpotce"
+        
+        WEB_USERNAME="adminlab"
+        WEB_PASSWORD="ChangeThisNow123!"
+        
+        exec > >(tee -a "$LOGFILE") 2>&1
+        
+        trap 'RC=$?; echo "[!] Install failed with exit code $RC"; date; touch "$FAILFILE"; exit $RC' ERR
+        
+        echo "[*] Waiting for network..."
+        sleep 20
+        
+        echo "[*] Installing required packages..."
+        apt-get update
+        apt-get install -y git curl wget expect apache2-utils
+        
+        echo "[*] Cloning T-Pot as ${TPOT_USER}..."
+        sudo -u "${TPOT_USER}" -H bash -lc '
+          set -e
+          cd ~
+          if [ ! -d tpotce ]; then
+            git clone https://github.com/telekom-security/tpotce
+          fi
+          cd tpotce
+          chmod +x install.sh
+        '
+        
+        echo "[*] Preseeding WEB_USER in .env ..."
+        WEB_USER_B64="$(htpasswd -n -b "$WEB_USERNAME" "$WEB_PASSWORD" | base64 -w0)"
+        
+        sudo -u "${TPOT_USER}" -H bash -lc "
+          set -e
+          cd '${TPOT_DIR}'
+          sed -i 's|^WEB_USER=.*|WEB_USER=${WEB_USER_B64}|' .env
+        "
+        
+        cat > /tmp/tpot-install.expect <<'EOF'
+        #!/usr/bin/expect -f
+        set timeout -1
+        log_user 1
+        log_file -a /var/log/tpot-session.log
+        
+        spawn sudo -u ubuntu -H bash -lc "cd ~/tpotce && ./install.sh"
+        
+        expect {
+          -re {.*Do you want to continue.*} { send "y\r"; exp_continue }
+          -re {.*\\\[hive\\/sensor\\\].*} { send "hive\r"; exp_continue }
+          -re {.*install type.*} { send "hive\r"; exp_continue }
+          eof
+        }
+        EOF
+        
+        chmod +x /tmp/tpot-install.expect
+        
+        echo "[*] Running T-Pot installer with expect..."
+        /tmp/tpot-install.expect
+        
+        echo "[*] Marking success..."
+        touch "$SUCCESSFILE"
+        
+        echo "[*] Shutting down in 20 seconds..."
+        sleep 20
+        shutdown -h now
 
 runcmd:
   - /usr/local/bin/install-tpot.sh
