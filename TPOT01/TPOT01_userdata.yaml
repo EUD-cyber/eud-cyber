@@ -67,7 +67,7 @@ write_files:
       sudo -u "${TPOT_USER}" -H bash -lc "
         set -e
         cd '${TPOT_DIR}'
-        ./install.sh
+          script -q -c \"printf 'y\n' | ./install.sh\" /var/log/tpot-session.log
       "
 
       echo "[*] Installer finished."
