@@ -20,52 +20,84 @@ packages:
   - git
   - curl
   - wget
-  - sudo
 
 write_files:
+
   - path: /usr/local/bin/install-tpot.sh
     permissions: "0755"
     content: |
       #!/bin/bash
+
+      LOGFILE="/var/log/tpot-install.log"
+      exec > >(tee -a $LOGFILE) 2>&1
+
+      echo "==============================="
+      echo "T-Pot Installation Started"
+      date
+      echo "==============================="
+
       set -e
 
-      echo "=== Installing T-Pot ==="
+      # =========================
+      # Wait for network
+      # =========================
+      echo "[*] Waiting for network..."
+      sleep 15
 
-      # Ensure fresh environment
+      # =========================
+      # Update system
+      # =========================
+      echo "[*] Updating system..."
       apt-get update
-
-      # Install required deps (T-Pot will install most itself)
       apt-get install -y docker.io docker-compose
 
       systemctl enable docker
       systemctl start docker
 
+      # =========================
       # Clone T-Pot
+      # =========================
+      echo "[*] Cloning T-Pot..."
       cd /opt
+
       if [ ! -d "tpotce" ]; then
         git clone https://github.com/telekom-security/tpotce
       fi
 
       cd /opt/tpotce
-
-      # Make installer executable
       chmod +x install.sh
 
-      echo "=== Starting T-Pot installer ==="
+      echo "[*] Starting T-Pot installer..."
 
-      # Auto-confirm install (non-interactive)
-      export TPOT_TYPE=STANDARD
+      # =========================
+      # RUN INSTALL (INTERACTIVE WARNING)
+      # =========================
+      ./install.sh <<EOF
+      y
+      y
+      EOF
 
-      # Run installer
-      ./install.sh --type=standard --conf=auto
+      echo "==============================="
+      echo "T-Pot Installation Completed"
+      date
+      echo "==============================="
 
-      echo "=== T-Pot install finished ==="
+      # =========================
+      # Verify install
+      # =========================
+      echo "[*] Checking Docker containers..."
+      docker ps -a || true
+
+      echo "[*] Checking T-Pot service..."
+      systemctl status tpot || true
+
+      echo "[*] Writing success marker..."
+      touch /var/log/tpot-installed.success
+
+      echo "[*] System will shutdown in 15 seconds..."
+      sleep 15
+
+      shutdown -h now
 
 runcmd:
   - /usr/local/bin/install-tpot.sh
-
-power_state:
-  mode: reboot
-  message: "Rebooting after T-Pot install"
-  timeout: 30
-  condition: True
