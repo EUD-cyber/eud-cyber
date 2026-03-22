@@ -22,81 +22,70 @@ packages:
   - wget
 
 write_files:
-
   - path: /usr/local/bin/install-tpot.sh
     permissions: "0755"
     content: |
       #!/bin/bash
+      set -euo pipefail
 
       LOGFILE="/var/log/tpot-install.log"
-      exec > >(tee -a $LOGFILE) 2>&1
+      SUCCESSFILE="/var/log/tpot-installed.success"
+      FAILFILE="/var/log/tpot-installed.failed"
+      TPOT_USER="ubuntu"
+      TPOT_HOME="/home/${TPOT_USER}"
+      TPOT_DIR="${TPOT_HOME}/tpotce"
 
-      echo "==============================="
-      echo "T-Pot Installation Started"
+      exec > >(tee -a "$LOGFILE") 2>&1
+
+      echo "=================================="
+      echo "T-Pot cloud-init installer started"
       date
-      echo "==============================="
+      echo "=================================="
 
-      set -e
+      trap 'RC=$?; echo "[!] Install failed with exit code $RC"; date; touch "$FAILFILE"; exit $RC' ERR
 
-      # =========================
-      # Wait for network
-      # =========================
       echo "[*] Waiting for network..."
-      sleep 15
+      sleep 20
 
-      # =========================
-      # Update system
-      # =========================
-      echo "[*] Updating system..."
-      apt-get update
-      apt-get install -y docker.io docker-compose
+      echo "[*] Ensuring home ownership..."
+      chown -R "${TPOT_USER}:${TPOT_USER}" "$TPOT_HOME"
 
-      systemctl enable docker
-      systemctl start docker
+      echo "[*] Cloning T-Pot as ${TPOT_USER}..."
+      sudo -u "${TPOT_USER}" -H bash -lc "
+        set -e
+        cd ~
+        if [ ! -d tpotce ]; then
+          git clone https://github.com/telekom-security/tpotce
+        fi
+        cd tpotce
+        chmod +x install.sh
+      "
 
-      # =========================
-      # Clone T-Pot
-      # =========================
-      echo "[*] Cloning T-Pot..."
-      cd /opt
+      echo "[*] Starting T-Pot installer as user: ${TPOT_USER}"
+      echo "[*] Log file: ${LOGFILE}"
 
-      if [ ! -d "tpotce" ]; then
-        git clone https://github.com/telekom-security/tpotce
-      fi
+      sudo -u "${TPOT_USER}" -H bash -lc "
+        set -e
+        cd '${TPOT_DIR}'
+        ./install.sh
+      "
 
-      cd /opt/tpotce
-      chmod +x install.sh
+      echo "[*] Installer finished."
+      touch "$SUCCESSFILE"
 
-      echo "[*] Starting T-Pot installer..."
-
-      # =========================
-      # RUN INSTALL (INTERACTIVE WARNING)
-      # =========================
-      ./install.sh <<EOF
-      y
-      y
-      EOF
-
-      echo "==============================="
-      echo "T-Pot Installation Completed"
-      date
-      echo "==============================="
-
-      # =========================
-      # Verify install
-      # =========================
-      echo "[*] Checking Docker containers..."
+      echo "[*] Quick status info..."
+      id "${TPOT_USER}" || true
+      systemctl status tpot --no-pager || true
       docker ps -a || true
+      ss -tulpn || true
 
-      echo "[*] Checking T-Pot service..."
-      systemctl status tpot || true
+      echo "=================================="
+      echo "T-Pot install completed"
+      date
+      echo "=================================="
 
-      echo "[*] Writing success marker..."
-      touch /var/log/tpot-installed.success
-
-      echo "[*] System will shutdown in 15 seconds..."
-      sleep 15
-
+      echo "[*] Shutting down in 20 seconds..."
+      sleep 20
       shutdown -h now
 
 runcmd:
