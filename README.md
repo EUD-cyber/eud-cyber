@@ -32,8 +32,8 @@ ubuntu \
 user: ubuntu pass: Password1! 
 
 wazuh \
-user: wazuh-user pass: wazuh \
-webuser: admin webpass: admin
+user: ubuntu pass: Password1! \
+webuser: admin webpass: Password1?
 
 win2025 \
 user: administrator pass: Password1! 
@@ -65,6 +65,9 @@ Network \
   kali01 \
     lan1  192.168.1.100/24 \
     oobm  172.20.0.11/24  \
+  kali02 \
+    lan1  192.168.1.150/24 \
+    oobm  172.20.0.100/24 \
   client01 \
     lan1 192.168.1.120/24 \
     oobm 172.20.0.15 \
