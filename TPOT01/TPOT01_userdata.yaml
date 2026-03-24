@@ -67,7 +67,7 @@ write_files:
         set -euxo pipefail
         cd /opt/tpotce/
 
-        ./install.sh -t ${TPOT_TYPE} -u ${TPOT_USER} -p ${TPOT_PASS}
+        echo "y" | ./install.sh -t ${TPOT_TYPE} -u ${TPOT_USER} -p ${TPOT_PASS}
       "
 
       RC=$?
