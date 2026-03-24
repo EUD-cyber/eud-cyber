@@ -42,6 +42,14 @@
       menu.style.display = "none";
     }
   }
+   function toggleKaliMenu2() {
+    const menu = document.getElementById("kaliMenu2");
+    if (menu.style.display === "none" || menu.style.display === "") {
+      menu.style.display = "block";
+    } else {
+      menu.style.display = "none";
+    }
+  }
   function toggleClientMenu() {
     const menu = document.getElementById("clientMenu");
     if (menu.style.display === "none" || menu.style.display === "") {
@@ -102,11 +110,11 @@
        Kali01 SSH
     </a>
 
-      <div class="conn-button" onclick="toggleKaliMenu()" style="cursor:pointer;">
+      <div class="conn-button" onclick="toggleKaliMenu2()" style="cursor:pointer;">
     Kali02 VNC ▸
   </div>
 
-  <div id="kaliMenu" style="display:none; margin-left:15px;">
+  <div id="kaliMenu2" style="display:none; margin-left:15px;">
 
   <a class="conn-button" target="_blank"
      href="#" onclick="this.href = link('/guacamole/#/client/MTkAYwBwb3N0Z3Jlc3Fs')">
