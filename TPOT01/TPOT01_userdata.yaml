@@ -23,19 +23,26 @@ packages:
   - ca-certificates
 
 write_files:
-  - path: /usr/local/bin/tpot-auto-install.sh
+  - path: /usr/local/bin/tpot-install.sh
     permissions: '0755'
     owner: root:root
     content: |
       #!/bin/bash
       set -euxo pipefail
 
-      LOG="/var/log/tpot-auto-install.log"
-      STATUS="/var/log/tpot-auto-install-status.log"
+      # =========================
+      # VARIABLES (EDIT THESE)
+      # =========================
+      TPOT_TYPE="h"              # h = hive
+      TPOT_USER="admin"
+      TPOT_PASS="Password1!"
+
+      LOG="/var/log/tpot-install.log"
+      STATUS="/var/log/tpot-install-status.log"
 
       exec > >(tee -a "$LOG") 2>&1
 
-      echo "===== TPOT AUTO INSTALL START $(date -Iseconds) ====="
+      echo "===== TPOT INSTALL START $(date -Iseconds) ====="
       echo "starting" > "$STATUS"
 
       export DEBIAN_FRONTEND=noninteractive
@@ -45,28 +52,23 @@ write_files:
 
       cd /opt
 
+      # Clean previous install if exists
       if [ -d /opt/tpotce ]; then
         rm -rf /opt/tpotce
       fi
 
       git clone https://github.com/telekom-security/tpotce /opt/tpotce
 
-      cd /opt/tpotce/iso/installer
-
-      cp tpot.conf.dist tpot.conf
-
-      # Optional preset changes can go here if needed later.
-      # Example:
-      # sed -i 's/^myCONF=.*/myCONF=value/' tpot.conf
-
       chown -R ubuntu:ubuntu /opt/tpotce
 
-      echo "running installer as ubuntu" | tee -a "$STATUS"
-      sudo -u ubuntu bash -lc '
+      echo "Running installer as ubuntu" | tee -a "$STATUS"
+
+      sudo -u ubuntu bash -lc "
         set -euxo pipefail
         cd /opt/tpotce/iso/installer
-        ./install.sh --type=auto --conf=tpot.conf
-      '
+
+        ./install.sh -t ${TPOT_TYPE} -u ${TPOT_USER} -p ${TPOT_PASS}
+      "
 
       RC=$?
       echo "installer exit code: $RC" | tee -a "$STATUS"
@@ -77,12 +79,12 @@ write_files:
         echo "failed" > "$STATUS"
       fi
 
-      echo "===== TPOT AUTO INSTALL END $(date -Iseconds) ====="
+      echo "===== TPOT INSTALL END $(date -Iseconds) ====="
 
       sync
       shutdown -h now
 
 runcmd:
-  - [ bash, -lc, "/usr/local/bin/tpot-auto-install.sh" ]
+  - [ bash, -lc, "/usr/local/bin/tpot-install.sh" ]
 
-final_message: "cloud-init finished. Check /var/log/tpot-auto-install.log and /var/log/tpot-auto-install-status.log"
+final_message: "T-Pot install complete. Check logs in /var/log/"
