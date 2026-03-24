@@ -20,85 +20,69 @@ packages:
   - git
   - curl
   - wget
-  - expect
-  - apache2-utils
+  - ca-certificates
 
 write_files:
-  - path: /usr/local/bin/install-tpot.sh
-    permissions: "0755"
+  - path: /usr/local/bin/tpot-auto-install.sh
+    permissions: '0755'
+    owner: root:root
     content: |
-        #!/bin/bash
-        set -euo pipefail
-        
-        LOGFILE="/var/log/tpot-install.log"
-        SESSIONLOG="/var/log/tpot-session.log"
-        SUCCESSFILE="/var/log/tpot-installed.success"
-        FAILFILE="/var/log/tpot-installed.failed"
-        TPOT_USER="ubuntu"
-        TPOT_HOME="/home/${TPOT_USER}"
-        TPOT_DIR="${TPOT_HOME}/tpotce"
-        
-        WEB_USERNAME="adminlab"
-        WEB_PASSWORD="ChangeThisNow123!"
-        
-        exec > >(tee -a "$LOGFILE") 2>&1
-        
-        trap 'RC=$?; echo "[!] Install failed with exit code $RC"; date; touch "$FAILFILE"; exit $RC' ERR
-        
-        echo "[*] Waiting for network..."
-        sleep 20
-        
-        echo "[*] Installing required packages..."
-        apt-get update
-        apt-get install -y git curl wget expect apache2-utils
-        
-        echo "[*] Cloning T-Pot as ${TPOT_USER}..."
-        sudo -u "${TPOT_USER}" -H bash -lc '
-          set -e
-          cd ~
-          if [ ! -d tpotce ]; then
-            git clone https://github.com/telekom-security/tpotce
-          fi
-          cd tpotce
-          chmod +x install.sh
-        '
-        
-        echo "[*] Preseeding WEB_USER in .env ..."
-        WEB_USER_B64="$(htpasswd -n -b "$WEB_USERNAME" "$WEB_PASSWORD" | base64 -w0)"
-        
-        sudo -u "${TPOT_USER}" -H bash -lc "
-          set -e
-          cd '${TPOT_DIR}'
-          sed -i 's|^WEB_USER=.*|WEB_USER=${WEB_USER_B64}|' .env
-        "
-        
-        cat > /tmp/tpot-install.expect <<'EOF'
-        #!/usr/bin/expect -f
-        set timeout -1
-        log_user 1
-        log_file -a /var/log/tpot-session.log
-        
-        spawn sudo -u ubuntu -H bash -lc "cd ~/tpotce && ./install.sh"
-        
-        expect {
-          -re {.*Do you want to continue.*} { send "y\r"; exp_continue }
-          -re {.*\\\[hive\\/sensor\\\].*} { send "hive\r"; exp_continue }
-          -re {.*install type.*} { send "hive\r"; exp_continue }
-          eof
-        }
-        EOF
-        
-        chmod +x /tmp/tpot-install.expect
-        
-        echo "[*] Running T-Pot installer with expect..."
-        /tmp/tpot-install.expect
-        
-        echo "[*] Marking success..."
-        touch "$SUCCESSFILE"
-        
-        echo "[*] Shutting down in 20 seconds..."
-        sleep 20
-        shutdown -h now
+      #!/bin/bash
+      set -euxo pipefail
+
+      LOG="/var/log/tpot-auto-install.log"
+      STATUS="/var/log/tpot-auto-install-status.log"
+
+      exec > >(tee -a "$LOG") 2>&1
+
+      echo "===== TPOT AUTO INSTALL START $(date -Iseconds) ====="
+      echo "starting" > "$STATUS"
+
+      export DEBIAN_FRONTEND=noninteractive
+
+      apt-get update
+      apt-get install -y git curl wget ca-certificates
+
+      cd /opt
+
+      if [ -d /opt/tpotce ]; then
+        rm -rf /opt/tpotce
+      fi
+
+      git clone https://github.com/telekom-security/tpotce /opt/tpotce
+
+      cd /opt/tpotce/iso/installer
+
+      cp tpot.conf.dist tpot.conf
+
+      # Optional preset changes can go here if needed later.
+      # Example:
+      # sed -i 's/^myCONF=.*/myCONF=value/' tpot.conf
+
+      chown -R ubuntu:ubuntu /opt/tpotce
+
+      echo "running installer as ubuntu" | tee -a "$STATUS"
+      sudo -u ubuntu bash -lc '
+        set -euxo pipefail
+        cd /opt/tpotce/iso/installer
+        ./install.sh --type=auto --conf=tpot.conf
+      '
+
+      RC=$?
+      echo "installer exit code: $RC" | tee -a "$STATUS"
+
+      if [ "$RC" -eq 0 ]; then
+        echo "success" > "$STATUS"
+      else
+        echo "failed" > "$STATUS"
+      fi
+
+      echo "===== TPOT AUTO INSTALL END $(date -Iseconds) ====="
+
+      sync
+      shutdown -h now
 
 runcmd:
-  - /usr/local/bin/install-tpot.sh
+  - [ bash, -lc, "/usr/local/bin/tpot-auto-install.sh" ]
+
+final_message: "cloud-init finished. Check /var/log/tpot-auto-install.log and /var/log/tpot-auto-install-status.log"
