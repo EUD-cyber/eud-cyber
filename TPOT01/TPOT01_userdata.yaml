@@ -65,7 +65,7 @@ write_files:
 
       sudo -u ubuntu bash -lc "
         set -euxo pipefail
-        cd /opt/tpotce/iso/installer
+        cd /opt/tpotce/
 
         ./install.sh -t ${TPOT_TYPE} -u ${TPOT_USER} -p ${TPOT_PASS}
       "
