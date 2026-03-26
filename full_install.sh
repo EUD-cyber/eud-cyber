@@ -19,6 +19,7 @@ PREREQ="./pre_req.sh"
 KALI01="./KALI01/KALI01_multi_installer.sh"
 KALI02="./KALI02/KALI02_multi_installer.sh"
 WAZUH="./WAZUH/WAZUH_multi_installer.sh"
+TPOT="./TPOT01/TPOT01_multi_installer.sh"
 WIN11="./WIN11/WIN11_installer.sh"
 WIN2025="./WIN2025/WIN2025_multi_installer.sh"
 
@@ -38,6 +39,7 @@ echo "10) Create Windows server 2025 VM"
 echo "11) Create APPSRV01 VM"
 echo "12) Create Client01 VM"
 echo "13) Create WAZUH VM"
+echo "14) Create TPOT01 VM"
 echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
 echo "95) Run ALL in background"
@@ -104,6 +106,10 @@ case "$CHOICE" in
   13)
     echo "Starting WAZUH VM creation... "
     bash "$WAZUH" $LAB
+    ;;
+  14)
+    echo "Starting WAZUH VM creation... "
+    bash "$TPOT" $LAB
     ;;
   89)
     echo "Change proxmox repo to no-enterprise"
