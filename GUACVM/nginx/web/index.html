@@ -41,7 +41,8 @@
     } else {
       menu.style.display = "none";
     }
-  function toggleKaliMenu2() {
+  }
+   function toggleKaliMenu2() {
     const menu = document.getElementById("kaliMenu2");
     if (menu.style.display === "none" || menu.style.display === "") {
       menu.style.display = "block";
@@ -49,7 +50,7 @@
       menu.style.display = "none";
     }
   }
- function toggleClientMenu() {
+  function toggleClientMenu() {
     const menu = document.getElementById("clientMenu");
     if (menu.style.display === "none" || menu.style.display === "") {
       menu.style.display = "block";
@@ -58,7 +59,6 @@
     }
   }
 </script>
-
 </head>
 
 <body>
@@ -78,7 +78,8 @@
     <div class="nav-title">Connections</div>
 
     <!-- Guacamole connections -->
-   <div class="conn-button" onclick="toggleKaliMenu()" style="cursor:pointer;">
+     <!-- Kali01 VNC Dropdown -->
+  <div class="conn-button" onclick="toggleKaliMenu()" style="cursor:pointer;">
     Kali01 VNC ▸
   </div>
 
@@ -106,13 +107,12 @@
 
 </div>
 
-
     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = link('/guacamole/#/client/MgBjAHBvc3RncmVzcWw')">
        Kali01 SSH
     </a>
 
-      <div class="conn-button" onclick="toggleKaliMenu2()" style="cursor:pointer;">
+     <div class="conn-button" onclick="toggleKaliMenu2()" style="cursor:pointer;">
     Kali02 VNC ▸
   </div>
 
@@ -145,8 +145,7 @@
        href="#" onclick="this.href = link('/guacamole/#/client/MgBjAHBvc3RncmVzcWw')">
        Kali02 SSH
     </a>
-
- <div class="conn-button" onclick="toggleClientMenu()" style="cursor:pointer;">
+     <div class="conn-button" onclick="toggleClientMenu()" style="cursor:pointer;">
     Client01 RDP ▸
   </div>
 
@@ -183,7 +182,7 @@
        href="#" onclick="this.href = link('/guacamole/#/client/MTIAYwBwb3N0Z3Jlc3Fs')">
        VULNSRV01 SSH
     </a>
-
+        
     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = link('/guacamole/#/client/NQBjAHBvc3RncmVzcWw')">
        VULNSRV02 SSH
@@ -193,17 +192,17 @@
        href="#" onclick="this.href = link('/guacamole/#/client/MQBjAHBvc3RncmVzcWw')">
        APPSRV01 SSH
     </a>
-
+    
     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = nat(9002, true)">
        Wazuh GUI
     </a>
-
+    
     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = link('/guacamole/#/client/NABjAHBvc3RncmVzcWw')">
        Wazuh SSH
     </a>
-
+    
     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = nat(9003, true)">
        OPNsense GUI
@@ -213,21 +212,22 @@
        href="#" onclick="this.href = link('/guacamole/#/client/OABjAHBvc3RncmVzcWw')">
        OPNsense SSH
     </a>
-
+    
     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = link('/guacamole/#/client/NwBjAHBvc3RncmVzcWw')">
        WIN2025 RDP
     </a>
-
+    
     <a class="conn-button" target="_blank"
      href="#" onclick="this.href = nat(9001, true)">
      Proxmox GUI
     </a>
 
-    <a class="conn-button" target="_blank"
+     <a class="conn-button" target="_blank"
        href="#" onclick="this.href = link('/guacamole/#/')">
        Guacamole
     </a>
+  
 
   </div>
 <div class="content">
