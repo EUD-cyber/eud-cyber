@@ -4,7 +4,7 @@ set -e
 # =========================================================
 # CONFIG
 # =========================================================
-DATASET_URL="https://raw.githubusercontent.com/YOUR-USER/YOUR-REPO/main/wazuh_soc_dataset_3months.zip"
+DATASET_URL=""https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WAZUH_LOGS/wazuh_soc_dataset_3months.zip"
 WORKDIR="/opt/wazuh-dataset"
 ZIPFILE="/opt/wazuh_soc_dataset_3months.zip"
 WAZUH_CONF="/var/ossec/etc/ossec.conf"
