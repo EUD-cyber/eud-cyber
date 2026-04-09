@@ -104,4 +104,27 @@ iptables -t nat -C POSTROUTING -o $ETH_LAB -d $OPNSENSE_IP -p tcp --dport $OPNSE
 iptables -C FORWARD -i $ETH_OUT -o $ETH_LAB -p tcp --dport $OPNSENSE_PORT -j ACCEPT 2>/dev/null \
   || iptables -A FORWARD -i $ETH_OUT -o $ETH_LAB -p tcp --dport $OPNSENSE_PORT -j ACCEPT
 
+# ============================
+# TPOT (172.20.0.2 via 9004)
+# ============================
+
+TPOT_IP="172.20.0.210"
+TPOT_PORT=64297
+TPOT_OUTSIDE=9004
+
+echo ">>> NAT: TPOT"
+
+iptables -t nat -C PREROUTING -i $ETH_OUT -p tcp --dport $TPOT_OUTSIDE \
+  -j DNAT --to-destination $TPOT_IP:$TPOT_PORT 2>/dev/null \
+  || iptables -t nat -A PREROUTING -i $ETH_OUT -p tcp --dport $TPOT_OUTSIDE \
+  -j DNAT --to-destination $TPOT_IP:$TPOT_PORT
+
+iptables -t nat -C POSTROUTING -o $ETH_LAB -d $TPOT_IP -p tcp --dport $TPOT_PORT \
+  -j SNAT --to-source $GUAC_LAB_IP 2>/dev/null \
+  || iptables -t nat -A POSTROUTING -o $ETH_LAB -d $TPOT_IP -p tcp --dport $TPOT_PORT \
+  -j SNAT --to-source $GUAC_LAB_IP
+
+iptables -C FORWARD -i $ETH_OUT -o $ETH_LAB -p tcp --dport $TPOT_PORT -j ACCEPT 2>/dev/null \
+  || iptables -A FORWARD -i $ETH_OUT -o $ETH_LAB -p tcp --dport $TPOT_PORT -j ACCEPT
+
 echo ">>> NAT configuration complete."
