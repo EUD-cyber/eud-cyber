@@ -33,7 +33,7 @@ CORES=4
 DISK_SIZE="60G"    # the number is in GB
 BRIDGE="lab${LAB}_lan1"
 BRIDGE1="lab${LAB}_oobm"
-IP_ADDR="ip=192.168.1.220/24"
+IP_ADDR="ip=192.168.1.210/24"
 DNS_SERVER="192.168.1.1"
 IP_GW="gw=192.168.1.1"
 OOBM_IP="ip=172.20.0.210/24"
