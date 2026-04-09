@@ -12,6 +12,7 @@ apt update -y
 apt install -y curl unzip gnupg apt-transport-https
 
 echo "=== Installing Wazuh repository ==="
+mkdir -p /usr/share/keyrings
 curl -fsSL https://packages.wazuh.com/key/GPG-KEY-WAZUH | gpg --dearmor -o /usr/share/keyrings/wazuh.gpg
 echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" > /etc/apt/sources.list.d/wazuh.list
 
@@ -27,13 +28,10 @@ curl -L "$DATASET_URL" -o "$WORKDIR/dataset.zip"
 echo "=== Extracting dataset ==="
 unzip -o "$WORKDIR/dataset.zip" -d "$WORKDIR"
 
-echo "=== Setting permissions ==="
-chmod -R 755 "$WORKDIR" "$REPLAYDIR"
-
 echo "=== Backing up current agent config ==="
 cp /var/ossec/etc/ossec.conf "/var/ossec/etc/ossec.conf.bak.$(date +%F-%H%M%S)"
 
-echo "=== Writing valid Wazuh agent config ==="
+echo "=== Writing Wazuh agent config ==="
 cat > /var/ossec/etc/ossec.conf <<EOF
 <ossec_config>
   <client>
@@ -93,24 +91,18 @@ cat > /var/ossec/etc/ossec.conf <<EOF
 EOF
 
 echo "=== Validating Wazuh config ==="
-if ! /var/ossec/bin/wazuh-agentd -t; then
-  echo "Wazuh config validation failed."
-  exit 1
-fi
+/var/ossec/bin/wazuh-agentd -t
 
-echo "=== Preparing empty replay files ==="
+echo "=== Preparing replay files ==="
 : > "${REPLAYDIR}/auth.log"
 : > "${REPLAYDIR}/apache_access.log"
 : > "${REPLAYDIR}/syslog.log"
 : > "${REPLAYDIR}/suricata_eve.json"
 
-chown -R root:root "$REPLAYDIR"
-chmod 644 "${REPLAYDIR}/auth.log" \
-          "${REPLAYDIR}/apache_access.log" \
-          "${REPLAYDIR}/syslog.log" \
-          "${REPLAYDIR}/suricata_eve.json"
+chmod 755 "$REPLAYDIR"
+chmod 644 "${REPLAYDIR}/auth.log" "${REPLAYDIR}/apache_access.log" "${REPLAYDIR}/syslog.log" "${REPLAYDIR}/suricata_eve.json"
 
-echo "=== Enabling and starting agent ==="
+echo "=== Starting Wazuh agent ==="
 systemctl daemon-reload
 systemctl enable wazuh-agent
 systemctl restart wazuh-agent
@@ -119,8 +111,7 @@ echo "=== Waiting for agent startup ==="
 sleep 10
 systemctl --no-pager --full status wazuh-agent || true
 
-echo "=== Replaying logs into fresh files ==="
-
+echo "=== Replaying auth.log ==="
 if [ -f "${WORKDIR}/auth.log" ]; then
   while IFS= read -r line; do
     echo "$line" >> "${REPLAYDIR}/auth.log"
@@ -128,6 +119,7 @@ if [ -f "${WORKDIR}/auth.log" ]; then
   done < "${WORKDIR}/auth.log"
 fi
 
+echo "=== Replaying apache_access.log ==="
 if [ -f "${WORKDIR}/apache_access.log" ]; then
   while IFS= read -r line; do
     echo "$line" >> "${REPLAYDIR}/apache_access.log"
@@ -135,6 +127,7 @@ if [ -f "${WORKDIR}/apache_access.log" ]; then
   done < "${WORKDIR}/apache_access.log"
 fi
 
+echo "=== Replaying syslog.log ==="
 if [ -f "${WORKDIR}/syslog.log" ]; then
   while IFS= read -r line; do
     echo "$line" >> "${REPLAYDIR}/syslog.log"
@@ -142,6 +135,7 @@ if [ -f "${WORKDIR}/syslog.log" ]; then
   done < "${WORKDIR}/syslog.log"
 fi
 
+echo "=== Replaying suricata_eve.json ==="
 if [ -f "${WORKDIR}/suricata_eve.json" ]; then
   while IFS= read -r line; do
     echo "$line" >> "${REPLAYDIR}/suricata_eve.json"
@@ -150,6 +144,5 @@ if [ -f "${WORKDIR}/suricata_eve.json" ]; then
 fi
 
 echo "=== DONE ==="
-echo "Check Wazuh dashboard and filter by agent name: ${AGENT_NAME}"
-echo "Local agent log:"
-echo "tail -f /var/ossec/logs/ossec.log"
+echo "Check: tail -f /var/ossec/logs/ossec.log"
+echo "In Wazuh dashboard, filter for this host: ${AGENT_NAME}"
