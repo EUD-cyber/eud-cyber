@@ -1,94 +1,151 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 WAZUH_MANAGER="192.168.2.20"
+AGENT_NAME="vuln-srv1"
 DATASET_URL="https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WAZUH_LOGS/wazuh_soc_dataset_3months.zip"
 WORKDIR="/opt/wazuh-dataset"
+REPLAYDIR="/opt/wazuh-replay"
 
-echo "=== Installing Wazuh Agent ==="
-curl -s https://packages.wazuh.com/key/GPG-KEY-WAZUH | apt-key add -
-echo "deb https://packages.wazuh.com/4.x/apt/ stable main" > /etc/apt/sources.list.d/wazuh.list
+echo "=== Installing prerequisites ==="
 apt update -y
-apt install wazuh-agent -y
+apt install -y curl unzip gnupg apt-transport-https
 
-echo "=== Configuring agent ==="
-sed -i "s/<address>.*<\/address>/<address>${WAZUH_MANAGER}<\/address>/" /var/ossec/etc/ossec.conf
+echo "=== Installing Wazuh repository ==="
+curl -fsSL https://packages.wazuh.com/key/GPG-KEY-WAZUH | gpg --dearmor -o /usr/share/keyrings/wazuh.gpg
+echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" > /etc/apt/sources.list.d/wazuh.list
 
-echo "=== Setting agent name ==="
-sed -i "s/<agent_name>.*<\/agent_name>/<agent_name>vuln-srv1<\/agent_name>/" /var/ossec/etc/ossec.conf || true
+apt update -y
+apt install -y wazuh-agent
 
-echo "=== Creating dataset directory ==="
-mkdir -p $WORKDIR
+echo "=== Creating directories ==="
+mkdir -p "$WORKDIR" "$REPLAYDIR"
 
 echo "=== Downloading dataset ==="
-curl -L "$DATASET_URL" -o $WORKDIR/dataset.zip
+curl -L "$DATASET_URL" -o "$WORKDIR/dataset.zip"
 
 echo "=== Extracting dataset ==="
-apt install unzip -y
-unzip -o $WORKDIR/dataset.zip -d $WORKDIR
+unzip -o "$WORKDIR/dataset.zip" -d "$WORKDIR"
 
 echo "=== Setting permissions ==="
-chmod -R o+r $WORKDIR
-chmod o+x $WORKDIR
+chmod -R 755 "$WORKDIR" "$REPLAYDIR"
 
-echo "=== Adding log monitoring config ==="
-cat <<EOF >> /var/ossec/etc/ossec.conf
+echo "=== Backing up current agent config ==="
+cp /var/ossec/etc/ossec.conf /var/ossec/etc/ossec.conf.bak.$(date +%F-%H%M%S)
 
-<localfile>
-  <log_format>syslog</log_format>
-  <location>$WORKDIR/auth.log</location>
-</localfile>
+echo "=== Writing valid Wazuh agent config ==="
+cat > /var/ossec/etc/ossec.conf <<EOF
+<ossec_config>
+  <client>
+    <server>
+      <address>${WAZUH_MANAGER}</address>
+      <port>1514</port>
+      <protocol>tcp</protocol>
+    </server>
+    <config-profile>ubuntu, ubuntu24, ubuntu24.04</config-profile>
+    <notify_time>20</notify_time>
+    <time-reconnect>60</time-reconnect>
+    <auto_restart>yes</auto_restart>
+    <crypto_method>aes</crypto_method>
+  </client>
 
-<localfile>
-  <log_format>apache</log_format>
-  <location>$WORKDIR/apache_access.log</location>
-</localfile>
+  <client_buffer>
+    <disabled>no</disabled>
+    <queue_size>5000</queue_size>
+    <events_per_second>500</events_per_second>
+  </client_buffer>
 
-<localfile>
-  <log_format>syslog</log_format>
-  <location>$WORKDIR/syslog.log</location>
-</localfile>
+  <localfile>
+    <log_format>journald</log_format>
+    <location>journald</location>
+  </localfile>
 
-<localfile>
-  <log_format>json</log_format>
-  <location>$WORKDIR/suricata_eve.json</location>
-</localfile>
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/ossec/logs/active-responses.log</location>
+  </localfile>
 
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>/var/log/dpkg.log</location>
+  </localfile>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>${REPLAYDIR}/auth.log</location>
+  </localfile>
+
+  <localfile>
+    <log_format>apache</log_format>
+    <location>${REPLAYDIR}/apache_access.log</location>
+  </localfile>
+
+  <localfile>
+    <log_format>syslog</log_format>
+    <location>${REPLAYDIR}/syslog.log</location>
+  </localfile>
+
+  <localfile>
+    <log_format>json</log_format>
+    <location>${REPLAYDIR}/suricata_eve.json</location>
+  </localfile>
+</ossec_config>
 EOF
 
+echo "=== Validating Wazuh config ==="
+if ! /var/ossec/bin/wazuh-agentd -t; then
+  echo "Wazuh config validation failed."
+  exit 1
+fi
+
+echo "=== Preparing empty replay files ==="
+: > "${REPLAYDIR}/auth.log"
+: > "${REPLAYDIR}/apache_access.log"
+: > "${REPLAYDIR}/syslog.log"
+: > "${REPLAYDIR}/suricata_eve.json"
+chown -R root:root "$REPLAYDIR"
+chmod 644 "${REPLAYDIR}"/*
+
 echo "=== Enabling and starting agent ==="
-systemctl daemon-reexec
+systemctl daemon-reload
 systemctl enable wazuh-agent
 systemctl restart wazuh-agent
 
-echo "=== Waiting for agent to connect ==="
+echo "=== Waiting for agent startup ==="
 sleep 10
+systemctl --no-pager --full status wazuh-agent || true
 
-echo "=== Replaying logs ==="
+echo "=== Replaying logs into fresh files ==="
 
-# Auth logs
-if [ -f "$WORKDIR/auth.log" ]; then
-  while read -r line; do
-    echo "$line" >> $WORKDIR/auth.log
+if [ -f "${WORKDIR}/auth.log" ]; then
+  while IFS= read -r line; do
+    echo "$line" >> "${REPLAYDIR}/auth.log"
     sleep 0.01
-  done < $WORKDIR/auth.log
+  done < "${WORKDIR}/auth.log"
 fi
 
-# Apache logs
-if [ -f "$WORKDIR/apache_access.log" ]; then
-  while read -r line; do
-    echo "$line" >> $WORKDIR/apache_access.log
+if [ -f "${WORKDIR}/apache_access.log" ]; then
+  while IFS= read -r line; do
+    echo "$line" >> "${REPLAYDIR}/apache_access.log"
     sleep 0.005
-  done < $WORKDIR/apache_access.log
+  done < "${WORKDIR}/apache_access.log"
 fi
 
-# Syslog logs
-if [ -f "$WORKDIR/syslog.log" ]; then
-  while read -r line; do
-    echo "$line" >> $WORKDIR/syslog.log
+if [ -f "${WORKDIR}/syslog.log" ]; then
+  while IFS= read -r line; do
+    echo "$line" >> "${REPLAYDIR}/syslog.log"
     sleep 0.005
-  done < $WORKDIR/syslog.log
+  done < "${WORKDIR}/syslog.log"
+fi
+
+if [ -f "${WORKDIR}/suricata_eve.json" ]; then
+  while IFS= read -r line; do
+    echo "$line" >> "${REPLAYDIR}/suricata_eve.json"
+    sleep 0.005
+  done < "${WORKDIR}/suricata_eve.json"
 fi
 
 echo "=== DONE ==="
-echo "Check Wazuh dashboard → Security Events → filter by agent.name:vuln-srv1"
+echo "Check Wazuh dashboard and filter by agent name: ${AGENT_NAME}"
+echo "Local agent log:"
+echo "  tail -f /var/ossec/logs/ossec.log"
