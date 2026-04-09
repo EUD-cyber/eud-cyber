@@ -14,7 +14,8 @@ In the multi lab install it ask how many labs you want to install then it runs t
 
 Remember when the vm is created and started, the cloud-init goes to work so it can be some time before all things work, to check this use proxmox and login to the vm and type "cloud-init status" if it "running" grap a cup of coffee and wait for it to be "done"
 
-<img width="798" height="468" alt="image" src="https://github.com/user-attachments/assets/775c2eaa-e9af-4ec5-8daf-6e31d3102e4e" />
+<img width="1015" height="572" alt="image" src="https://github.com/user-attachments/assets/dec875ed-7622-49f4-a340-60275a5bd6e7" />
+
 
 When the GUACVM is up and running and the cloud-init is done, just http://ip_address (the ip adresse you gave it on the installation) \
 Then theres a guacamole/nat connection to all vm's on either ssh, gui, vnc or rdp, for there you can start labs on the vm's (docker compose) 
