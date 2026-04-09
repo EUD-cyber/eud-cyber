@@ -2,7 +2,7 @@
 set -euo pipefail
 
 WAZUH_MANAGER="192.168.2.20"
-AGENT_NAME="vuln-srv1"
+AGENT_NAME="vulnsrv01"
 DATASET_URL="https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WAZUH_LOGS/wazuh_soc_dataset_3months.zip"
 WORKDIR="/opt/wazuh-dataset"
 REPLAYDIR="/opt/wazuh-replay"
@@ -31,7 +31,7 @@ echo "=== Setting permissions ==="
 chmod -R 755 "$WORKDIR" "$REPLAYDIR"
 
 echo "=== Backing up current agent config ==="
-cp /var/ossec/etc/ossec.conf /var/ossec/etc/ossec.conf.bak.$(date +%F-%H%M%S)
+cp /var/ossec/etc/ossec.conf "/var/ossec/etc/ossec.conf.bak.$(date +%F-%H%M%S)"
 
 echo "=== Writing valid Wazuh agent config ==="
 cat > /var/ossec/etc/ossec.conf <<EOF
@@ -103,8 +103,12 @@ echo "=== Preparing empty replay files ==="
 : > "${REPLAYDIR}/apache_access.log"
 : > "${REPLAYDIR}/syslog.log"
 : > "${REPLAYDIR}/suricata_eve.json"
+
 chown -R root:root "$REPLAYDIR"
-chmod 644 "${REPLAYDIR}"/*
+chmod 644 "${REPLAYDIR}/auth.log" \
+          "${REPLAYDIR}/apache_access.log" \
+          "${REPLAYDIR}/syslog.log" \
+          "${REPLAYDIR}/suricata_eve.json"
 
 echo "=== Enabling and starting agent ==="
 systemctl daemon-reload
@@ -148,4 +152,4 @@ fi
 echo "=== DONE ==="
 echo "Check Wazuh dashboard and filter by agent name: ${AGENT_NAME}"
 echo "Local agent log:"
-echo "  tail -f /var/ossec/logs/ossec.log"
+echo "tail -f /var/ossec/logs/ossec.log"
