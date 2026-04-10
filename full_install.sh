@@ -161,6 +161,9 @@ case "$CHOICE" in
     echo "Starting Wazuh VM creation... "
     bash "$WAZUH" $LAB
 
+    echo "Starting WAZUH VM creation... "
+    bash "$TPOT" $LAB
+
     echo "Starting Windows server 2025 VM creation.... "
     bash "$WIN2025" $LAB
     ;;
@@ -225,6 +228,9 @@ case "$CHOICE" in
 
     echo 'Starting Wazuh VM creation'
     bash '$WAZUH' $LAB
+
+    echo "Starting WAZUH VM creation... "
+    bash "$TPOT" $LAB
 
     echo 'Starting Windows server 2025 VM creation'
     bash '$WIN2025' $LAB
