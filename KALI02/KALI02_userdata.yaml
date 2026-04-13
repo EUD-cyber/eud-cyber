@@ -166,7 +166,8 @@ write_files:
         mkdir -p "$HOME_DIR/Desktop/IPS"
         mkdir -p "$HOME_DIR/Desktop/wireshark"
         mkdir -p "$HOME_DIR/Desktop/PASSWORD"
-        
+        mkdir -p "$HOME_DIR/Desktop/TPOT"
+       
 
         cat > "$HOME_DIR/.config/tigervnc/xstartup" <<'EOF'
       #!/bin/sh
