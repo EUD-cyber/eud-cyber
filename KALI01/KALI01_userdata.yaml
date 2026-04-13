@@ -214,8 +214,12 @@ write_files:
 
          wget -q -O "$HOME_DIR/Desktop/PASSWORD/simpleAES.zip" \
           https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/simpleAES.zip
+
+         wget -q -O "$HOME_DIR/Desktop/TPOT/tpot-script.sh" \
+          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/tpot-script.sh
           
         chmod +x "$HOME_DIR/Desktop/IPS/testips.sh"
+        chmod +x "$HOME_DIR/Desktop/TPOT/tpot-script.sh"
         chown -R "$u:$u" "$HOME_DIR/Desktop"
       done
 
