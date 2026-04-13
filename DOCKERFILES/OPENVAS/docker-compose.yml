@@ -1,46 +1,45 @@
+version: "3.9"
+
 services:
   redis:
-    image: redis:7
+    image: registry.community.greenbone.net/community/redis-server:stable
     restart: unless-stopped
 
-  pg-gvm:
-    image: postgres:15
+  postgres:
+    image: registry.community.greenbone.net/community/pg-gvm:stable
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: gvmd
-      POSTGRES_USER: gvmd
-      POSTGRES_PASSWORD: gvmd
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - pg_data:/var/lib/postgresql
 
   gvmd:
-    image: greenbone/gvmd:stable
+    image: registry.community.greenbone.net/community/gvmd:stable
     restart: unless-stopped
     depends_on:
-      - pg-gvm
+      - postgres
       - redis
-    environment:
-      GVMD_POSTGRESQL_DBNAME: gvmd
-      GVMD_POSTGRESQL_USERNAME: gvmd
-      GVMD_POSTGRESQL_PASSWORD: gvmd
-      GVMD_POSTGRESQL_HOST: pg-gvm
 
   gsa:
-    image: greenbone/gsa:stable
+    image: registry.community.greenbone.net/community/gsa:stable
     restart: unless-stopped
     depends_on:
       - gvmd
+
+  gsad:
+    image: registry.community.greenbone.net/community/gsad:stable
+    restart: unless-stopped
+    depends_on:
+      - gsa
     ports:
-      - "9392:80"
+      - "9392:9392"
 
   ospd-openvas:
-    image: greenbone/ospd-openvas:stable
+    image: registry.community.greenbone.net/community/ospd-openvas:stable
     restart: unless-stopped
     depends_on:
       - redis
 
   openvas:
-    image: greenbone/openvas-scanner:stable
+    image: registry.community.greenbone.net/community/openvas-scanner:stable
     restart: unless-stopped
     depends_on:
       - ospd-openvas
