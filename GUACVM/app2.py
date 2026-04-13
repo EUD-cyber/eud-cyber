@@ -46,9 +46,11 @@ VM_MAP = {
     "vuln-srv01": "vuln-srv01",
     "vuln-srv02": "vuln-srv02",
     "appsrv01": "appsrv",
-    "kali01": "kali",
+    "kali01": "kali01",
+    "kali02": "kali02",
     "client01": "client",
     "wazuh": "wazuh",
+    "tpot": "tpot",
     "win2025": "win2025"
 }
 
