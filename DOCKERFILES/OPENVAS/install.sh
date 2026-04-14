@@ -19,39 +19,16 @@ echo "[*] Installerer GVM/OpenVAS..."
 apt-get install -y gvm
 
 echo "[*] Kører gvm-setup..."
-gvm-setup
+gvm-setup || true
 
-echo "[*] Finder gsad service-fil..."
-GSAD_UNIT=""
-for candidate in \
-  /usr/lib/systemd/system/gsad.service \
-  /lib/systemd/system/gsad.service
-do
-  if [[ -f "$candidate" ]]; then
-    GSAD_UNIT="$candidate"
-    break
-  fi
-done
+echo "[*] Opretter systemd override for gsad..."
+mkdir -p /etc/systemd/system/gsad.service.d
 
-if [[ -z "$GSAD_UNIT" ]]; then
-  echo "[!] Kunne ikke finde gsad.service"
-  exit 1
-fi
-
-echo "[*] Opdaterer gsad til at lytte på 0.0.0.0:9392 i $GSAD_UNIT ..."
-cp "$GSAD_UNIT" "${GSAD_UNIT}.bak.$(date +%s)"
-
-if grep -q -- '--listen=127.0.0.1' "$GSAD_UNIT"; then
-  sed -i 's/--listen=127\.0\.0\.1/--listen=0.0.0.0/g' "$GSAD_UNIT"
-elif grep -q -- '--listen 127.0.0.1' "$GSAD_UNIT"; then
-  sed -i 's/--listen 127\.0\.0\.1/--listen 0.0.0.0/g' "$GSAD_UNIT"
-fi
-
-if grep -q -- '--port=443' "$GSAD_UNIT"; then
-  sed -i 's/--port=443/--port=9392/g' "$GSAD_UNIT"
-elif grep -q -- '--port 443' "$GSAD_UNIT"; then
-  sed -i 's/--port 443/--port 9392/g' "$GSAD_UNIT"
-fi
+cat > /etc/systemd/system/gsad.service.d/override.conf <<'EOF'
+[Service]
+ExecStart=
+ExecStart=/usr/sbin/gsad --foreground --listen=0.0.0.0 --port=9392
+EOF
 
 echo "[*] Reload systemd..."
 systemctl daemon-reload
@@ -60,6 +37,9 @@ echo "[*] Enabler og starter services..."
 systemctl enable --now ospd-openvas.service || true
 systemctl enable --now gvmd.service || true
 systemctl enable --now gsad.service || true
+
+echo "[*] Genstarter gsad med remote bind..."
+systemctl restart gsad || true
 
 echo "[*] Starter hele GVM stakken..."
 gvm-start || true
