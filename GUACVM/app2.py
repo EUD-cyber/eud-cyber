@@ -50,7 +50,7 @@ VM_MAP = {
     "kali02": "kali02",
     "client01": "client",
     "wazuh": "wazuh",
-    "tpot": "tpot",
+    "tpot01": "tpot01",
     "win2025": "win2025"
 }
 
