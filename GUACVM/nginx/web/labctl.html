@@ -330,7 +330,7 @@
 </div>
 
 <script>
-const VMS = ["opnsense","vuln-srv01","vuln-srv02","appsrv01","kali01","client01","wazuh","win2025"];
+const VMS = ["opnsense","vuln-srv01","vuln-srv02","appsrv01","kali01","kali02","client01","wazuh","tpot01","win2025"];
 
 function vmAction(vm, action) {
   fetch(`/api/vm/${vm}/${action}`, { method: "POST" })
