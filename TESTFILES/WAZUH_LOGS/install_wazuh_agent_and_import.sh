@@ -1,37 +1,74 @@
-#!/bin/bash
-set -euo pipefail
+#!/usr/bin/env bash
+set -Eeuo pipefail
 
+# ===== Variables =====
 WAZUH_MANAGER="192.168.2.20"
-AGENT_NAME="vulnsrv01"
+WAZUH_REGISTRATION_SERVER="192.168.2.20"
+WAZUH_AGENT_NAME="vulnsrv01"
+WAZUH_AGENT_GROUP="default"
+# Set only if your manager requires enrollment password:
+WAZUH_REGISTRATION_PASSWORD=""
+
 DATASET_URL="https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WAZUH_LOGS/wazuh_soc_dataset_3months.zip"
 WORKDIR="/opt/wazuh-dataset"
 REPLAYDIR="/opt/wazuh-replay"
+LOGFILE="/var/log/wazuh-agent-install.log"
+
+exec > >(tee -a "$LOGFILE") 2>&1
+
+echo "=== Starting Wazuh agent install ==="
+
+if [[ $EUID -ne 0 ]]; then
+  echo "[!] Run as root"
+  exit 1
+fi
+
+export DEBIAN_FRONTEND=noninteractive
 
 echo "=== Installing prerequisites ==="
-apt update -y
-apt install -y curl unzip gnupg apt-transport-https
+apt-get update -y
+apt-get install -y curl unzip gnupg apt-transport-https ca-certificates
 
-echo "=== Installing Wazuh repository ==="
-mkdir -p /usr/share/keyrings
+echo "=== Adding Wazuh repository ==="
+install -d -m 0755 /usr/share/keyrings
 curl -fsSL https://packages.wazuh.com/key/GPG-KEY-WAZUH | gpg --dearmor -o /usr/share/keyrings/wazuh.gpg
-echo "deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main" > /etc/apt/sources.list.d/wazuh.list
+chmod 0644 /usr/share/keyrings/wazuh.gpg
 
-apt update -y
-apt install -y wazuh-agent
+cat > /etc/apt/sources.list.d/wazuh.list <<'EOF'
+deb [signed-by=/usr/share/keyrings/wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main
+EOF
 
-echo "=== Creating directories ==="
-mkdir -p "$WORKDIR" "$REPLAYDIR"
+apt-get update -y
 
-echo "=== Downloading dataset ==="
-curl -L "$DATASET_URL" -o "$WORKDIR/dataset.zip"
+echo "=== Testing connectivity to manager ==="
+for port in 1514 1515; do
+  if timeout 3 bash -c "</dev/tcp/${WAZUH_MANAGER}/${port}" 2>/dev/null; then
+    echo "[+] Port ${port} reachable on ${WAZUH_MANAGER}"
+  else
+    echo "[!] Port ${port} NOT reachable on ${WAZUH_MANAGER}"
+  fi
+done
 
-echo "=== Extracting dataset ==="
-unzip -o "$WORKDIR/dataset.zip" -d "$WORKDIR"
+echo "=== Installing Wazuh agent with enrollment variables ==="
+if [[ -n "${WAZUH_REGISTRATION_PASSWORD}" ]]; then
+  WAZUH_MANAGER="${WAZUH_MANAGER}" \
+  WAZUH_REGISTRATION_SERVER="${WAZUH_REGISTRATION_SERVER}" \
+  WAZUH_AGENT_NAME="${WAZUH_AGENT_NAME}" \
+  WAZUH_AGENT_GROUP="${WAZUH_AGENT_GROUP}" \
+  WAZUH_REGISTRATION_PASSWORD="${WAZUH_REGISTRATION_PASSWORD}" \
+  apt-get install -y wazuh-agent
+else
+  WAZUH_MANAGER="${WAZUH_MANAGER}" \
+  WAZUH_REGISTRATION_SERVER="${WAZUH_REGISTRATION_SERVER}" \
+  WAZUH_AGENT_NAME="${WAZUH_AGENT_NAME}" \
+  WAZUH_AGENT_GROUP="${WAZUH_AGENT_GROUP}" \
+  apt-get install -y wazuh-agent
+fi
 
-echo "=== Backing up current agent config ==="
+echo "=== Backing up agent config ==="
 cp /var/ossec/etc/ossec.conf "/var/ossec/etc/ossec.conf.bak.$(date +%F-%H%M%S)"
 
-echo "=== Writing Wazuh agent config ==="
+echo "=== Writing agent config ==="
 cat > /var/ossec/etc/ossec.conf <<EOF
 <ossec_config>
   <client>
@@ -90,8 +127,17 @@ cat > /var/ossec/etc/ossec.conf <<EOF
 </ossec_config>
 EOF
 
-echo "=== Validating Wazuh config ==="
+echo "=== Validating config ==="
 /var/ossec/bin/wazuh-agentd -t
+
+echo "=== Preparing replay directories ==="
+mkdir -p "$WORKDIR" "$REPLAYDIR"
+
+echo "=== Downloading dataset ==="
+curl -L "$DATASET_URL" -o "$WORKDIR/dataset.zip"
+
+echo "=== Extracting dataset ==="
+unzip -o "$WORKDIR/dataset.zip" -d "$WORKDIR"
 
 echo "=== Preparing replay files ==="
 : > "${REPLAYDIR}/auth.log"
@@ -102,17 +148,25 @@ echo "=== Preparing replay files ==="
 chmod 755 "$REPLAYDIR"
 chmod 644 "${REPLAYDIR}/auth.log" "${REPLAYDIR}/apache_access.log" "${REPLAYDIR}/syslog.log" "${REPLAYDIR}/suricata_eve.json"
 
-echo "=== Starting Wazuh agent ==="
+echo "=== Enabling and starting agent ==="
 systemctl daemon-reload
 systemctl enable wazuh-agent
 systemctl restart wazuh-agent
 
-echo "=== Waiting for agent startup ==="
-sleep 10
+echo "=== Waiting for enrollment/connection ==="
+sleep 20
+
+echo "=== Agent status ==="
 systemctl --no-pager --full status wazuh-agent || true
 
+echo "=== client.keys ==="
+cat /var/ossec/etc/client.keys || true
+
+echo "=== Recent ossec.log ==="
+tail -n 50 /var/ossec/logs/ossec.log || true
+
 echo "=== Replaying auth.log ==="
-if [ -f "${WORKDIR}/auth.log" ]; then
+if [[ -f "${WORKDIR}/auth.log" ]]; then
   while IFS= read -r line; do
     echo "$line" >> "${REPLAYDIR}/auth.log"
     sleep 0.01
@@ -120,7 +174,7 @@ if [ -f "${WORKDIR}/auth.log" ]; then
 fi
 
 echo "=== Replaying apache_access.log ==="
-if [ -f "${WORKDIR}/apache_access.log" ]; then
+if [[ -f "${WORKDIR}/apache_access.log" ]]; then
   while IFS= read -r line; do
     echo "$line" >> "${REPLAYDIR}/apache_access.log"
     sleep 0.005
@@ -128,7 +182,7 @@ if [ -f "${WORKDIR}/apache_access.log" ]; then
 fi
 
 echo "=== Replaying syslog.log ==="
-if [ -f "${WORKDIR}/syslog.log" ]; then
+if [[ -f "${WORKDIR}/syslog.log" ]]; then
   while IFS= read -r line; do
     echo "$line" >> "${REPLAYDIR}/syslog.log"
     sleep 0.005
@@ -136,7 +190,7 @@ if [ -f "${WORKDIR}/syslog.log" ]; then
 fi
 
 echo "=== Replaying suricata_eve.json ==="
-if [ -f "${WORKDIR}/suricata_eve.json" ]; then
+if [[ -f "${WORKDIR}/suricata_eve.json" ]]; then
   while IFS= read -r line; do
     echo "$line" >> "${REPLAYDIR}/suricata_eve.json"
     sleep 0.005
@@ -144,5 +198,6 @@ if [ -f "${WORKDIR}/suricata_eve.json" ]; then
 fi
 
 echo "=== DONE ==="
-echo "Check: tail -f /var/ossec/logs/ossec.log"
-echo "In Wazuh dashboard, filter for this host: ${AGENT_NAME}"
+echo "Agent name: ${WAZUH_AGENT_NAME}"
+echo "Manager: ${WAZUH_MANAGER}"
+echo "Check logs with: tail -f /var/ossec/logs/ossec.log"
