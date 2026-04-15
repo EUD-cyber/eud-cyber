@@ -279,6 +279,9 @@ write_files:
 
 runcmd:
   - /usr/local/sbin/setup-vnc-multiuser.sh
+  - mkdir /opt/openvas
+  - wget -O /opt/openvas/install.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/OPENVAS/install.sh
+  - chmod +x /opt/openvas/install.sh
 
 power_state:
   mode: poweroff
