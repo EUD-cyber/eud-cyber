@@ -5,49 +5,46 @@ LOG="/var/log/install-gvm.log"
 exec > >(tee -a "$LOG") 2>&1
 
 if [[ "${EUID}" -ne 0 ]]; then
-  echo "[!] Kør scriptet som root eller med sudo."
+  echo "[!] Kør som root eller med sudo"
   exit 1
 fi
 
 export DEBIAN_FRONTEND=noninteractive
 
-echo "[*] Opdaterer pakker..."
-apt-get update -o Acquire::Retries=5
-apt-get upgrade -y
+echo "[*] Opdaterer system..."
+apt update
+apt full-upgrade -y
 
-echo "[*] Installerer GVM/OpenVAS..."
-apt-get install -y gvm
+echo "[*] Installerer GVM..."
+apt install -y gvm
 
-echo "[*] Kører gvm-setup..."
-gvm-setup || true
+echo "[*] Kører gvm-setup (kan tage lang tid)..."
+gvm-setup
 
-echo "[*] Opretter systemd override for gsad..."
+echo "[*] Opretter systemd override for ekstern adgang..."
 mkdir -p /etc/systemd/system/gsad.service.d
 
 cat > /etc/systemd/system/gsad.service.d/override.conf <<'EOF'
 [Service]
 ExecStart=
-ExecStart=/usr/sbin/gsad --foreground --listen 0.0.0.0 --port 9392
+ExecStart=/usr/sbin/gsad --foreground --listen=0.0.0.0 --port=9392
 EOF
 
 echo "[*] Reload systemd..."
 systemctl daemon-reload
 
-echo "[*] Enabler services..."
-systemctl enable ospd-openvas.service || true
-systemctl enable gvmd.service || true
-systemctl enable gsad.service || true
+echo "[*] Starter services..."
+systemctl enable --now ospd-openvas.service || true
+systemctl enable --now gvmd.service || true
+systemctl enable --now gsad.service || true
 
-echo "[*] Restarter services i korrekt rækkefølge..."
-systemctl restart ospd-openvas.service || true
-systemctl restart gvmd.service || true
-systemctl restart gsad.service || true
+echo "[*] Genstarter gsad..."
+systemctl restart gsad
 
-echo "[*] Verificerer aktiv ExecStart..."
-systemctl cat gsad
-systemctl status gsad --no-pager || true
+echo "[*] Starter hele GVM stack..."
+gvm-start || true
 
-echo "[*] Verificerer installation..."
+echo "[*] Verificerer setup..."
 gvm-check-setup || true
 
 echo "[*] Åbner firewall hvis UFW er aktiv..."
@@ -59,7 +56,8 @@ echo "[*] Lytter gsad på:"
 ss -tulpen | grep 9392 || true
 
 IP_ADDR="$(hostname -I | awk '{print $1}')"
+
 echo
-echo "[+] Færdig."
+echo "[+] Færdig!"
 echo "[+] Web UI: https://${IP_ADDR}:9392"
-echo "[+] Logfil: $LOG"
+echo "[+] Log: $LOG"
