@@ -52,6 +52,15 @@ write_files:
       chmod +x /root/wazuh-install.sh
       bash /root/wazuh-install.sh -a --ignore-check
 
+      # insert log all 
+      sed -i 's|<logall>.*</logall>|<logall>yes</logall>|' /var/ossec/etc/ossec.conf
+      sed -i 's|<logall_json>.*</logall_json>|<logall_json>yes</logall_json>|' /var/ossec/etc/ossec.conf
+      systemctl restart wazuh-manager
+
+      # And dashboard-indeks:
+      sed -i 's/archives:\n      enabled: false/archives:\n      enabled: true/' /etc/filebeat/filebeat.yml
+      systemctl restart filebeat
+
       echo "=== Setting indexer/dashboard admin password ==="
       /usr/share/wazuh-indexer/plugins/opensearch-security/tools/wazuh-passwords-tool.sh \
         -u admin -p "${PASS}"
