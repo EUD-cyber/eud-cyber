@@ -27,22 +27,25 @@ mkdir -p /etc/systemd/system/gsad.service.d
 cat > /etc/systemd/system/gsad.service.d/override.conf <<'EOF'
 [Service]
 ExecStart=
-ExecStart=/usr/sbin/gsad --foreground --listen=0.0.0.0 --port=9392
+ExecStart=/usr/sbin/gsad --foreground --listen 0.0.0.0 --port 9392
 EOF
 
 echo "[*] Reload systemd..."
 systemctl daemon-reload
 
-echo "[*] Enabler og starter services..."
-systemctl enable --now ospd-openvas.service || true
-systemctl enable --now gvmd.service || true
-systemctl enable --now gsad.service || true
+echo "[*] Enabler services..."
+systemctl enable ospd-openvas.service || true
+systemctl enable gvmd.service || true
+systemctl enable gsad.service || true
 
-echo "[*] Genstarter gsad med remote bind..."
-systemctl restart gsad || true
+echo "[*] Restarter services i korrekt rækkefølge..."
+systemctl restart ospd-openvas.service || true
+systemctl restart gvmd.service || true
+systemctl restart gsad.service || true
 
-echo "[*] Starter hele GVM stakken..."
-gvm-start || true
+echo "[*] Verificerer aktiv ExecStart..."
+systemctl cat gsad
+systemctl status gsad --no-pager || true
 
 echo "[*] Verificerer installation..."
 gvm-check-setup || true
@@ -60,4 +63,3 @@ echo
 echo "[+] Færdig."
 echo "[+] Web UI: https://${IP_ADDR}:9392"
 echo "[+] Logfil: $LOG"
-echo "[+] Hvis feed parsing stadig kører, kan første login/scan være forsinket."
