@@ -21,6 +21,9 @@ apt install -y gvm
 echo "[*] Kører gvm-setup (kan tage lang tid)..."
 gvm-setup
 
+echo "setting admin password"
+sudo runuser -u _gvm -- gvmd --user=admin --new-password='Password1!'
+
 echo "[*] Opretter systemd override for ekstern adgang..."
 mkdir -p /etc/systemd/system/gsad.service.d
 
