@@ -6,7 +6,7 @@ WAZUH_MANAGER="192.168.2.20"
 WAZUH_AGENT_NAME="vulnsrv01"
 
 # 👉 CHANGE THIS when new version comes
-WAZUH_AGENT_DEB="wazuh-agent_4.14.4-1_amd64.deb"
+WAZUH_AGENT_DEB="wazuh-agent_4.13.1-1_amd64.deb"
 WAZUH_AGENT_URL="https://packages.wazuh.com/4.x/apt/pool/main/w/wazuh-agent/${WAZUH_AGENT_DEB}"
 
 DATASET_URL="https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WAZUH_LOGS/wazuh_soc_dataset_3months.zip"
