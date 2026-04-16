@@ -15,6 +15,7 @@ APPSRV01="./APPSRV01/APPSRV01_multi_installer.sh"
 CLIENT01="./CLIENT01/CLIENT01_multi_installer.sh"
 PACKETFENCE="./PACKETFENCE/PACKETFENCE_installer.sh"
 PREREQ="./pre_req.sh"
+TPOT="./TPOT01/TPOT01_multi_installer.sh"
 KALI01="./KALI01/KALI01_multi_installer.sh"
 KALI02="./KALI02/KALI02_multi_installer.sh"
 WAZUH="./WAZUH/WAZUH_multi_installer.sh"
@@ -139,6 +140,9 @@ for i in $(seq 1 "$LABCOUNT"); do
 
     echo 'Starting Wazuh VM creation'
     bash '$WAZUH' '$i'
+
+    echo 'Starting Wazuh VM creation'
+    bash '$TPOT' '$i'
 
     echo 'Starting APPSRV01 creation'
     bash '$WIN2025' '$i'
