@@ -24,6 +24,7 @@ packages:
   - ca-certificates
   - gnupg
   - tar
+  - python3
 
 write_files:
   - path: /root/install-wazuh.sh
@@ -52,14 +53,50 @@ write_files:
       chmod +x /root/wazuh-install.sh
       bash /root/wazuh-install.sh -a --ignore-check
 
-      # insert log all 
-      sed -i 's|<logall>.*</logall>|<logall>yes</logall>|' /var/ossec/etc/ossec.conf
-      sed -i 's|<logall_json>.*</logall_json>|<logall_json>yes</logall_json>|' /var/ossec/etc/ossec.conf
+      echo "=== Enabling archive logging in Wazuh manager ==="
+      if grep -q '<logall>' /var/ossec/etc/ossec.conf; then
+        sed -i 's|<logall>.*</logall>|<logall>yes</logall>|' /var/ossec/etc/ossec.conf
+      else
+        sed -i '/<global>/a \  <logall>yes</logall>' /var/ossec/etc/ossec.conf
+      fi
+
+      if grep -q '<logall_json>' /var/ossec/etc/ossec.conf; then
+        sed -i 's|<logall_json>.*</logall_json>|<logall_json>yes</logall_json>|' /var/ossec/etc/ossec.conf
+      else
+        sed -i '/<global>/a \  <logall_json>yes</logall_json>' /var/ossec/etc/ossec.conf
+      fi
+
       systemctl restart wazuh-manager
 
-      # And dashboard-indeks:
-      sed -i 's/archives:\n      enabled: false/archives:\n      enabled: true/' /etc/filebeat/filebeat.yml
-      systemctl restart filebeat
+      echo "=== Enabling archives in Filebeat ==="
+      python3 - <<'PY'
+      from pathlib import Path
+      path = Path("/etc/filebeat/filebeat.yml")
+      text = path.read_text()
+
+      old = """filebeat.modules:
+        - module: wazuh
+          alerts:
+            enabled: true
+          archives:
+            enabled: false
+      """
+
+      new = """filebeat.modules:
+        - module: wazuh
+          alerts:
+            enabled: true
+          archives:
+            enabled: true
+      """
+
+      if old in text:
+          text = text.replace(old, new)
+      else:
+          text = text.replace("archives:\n      enabled: false", "archives:\n      enabled: true")
+
+      path.write_text(text)
+      PY
 
       echo "=== Setting indexer/dashboard admin password ==="
       /usr/share/wazuh-indexer/plugins/opensearch-security/tools/wazuh-passwords-tool.sh \
@@ -84,8 +121,13 @@ write_files:
         --api -u wazuh-wui -p "${PASS}" \
         --admin-user wazuh --admin-password "${PASS}"
 
-      echo "=== Restarting services ==="
-      systemctl restart wazuh-indexer wazuh-manager wazuh-dashboard
+      echo "=== Restarting services in correct order ==="
+      systemctl restart wazuh-indexer
+      sleep 20
+      systemctl restart filebeat
+      sleep 10
+      systemctl restart wazuh-manager
+      systemctl restart wazuh-dashboard
 
       echo "=== Waiting for API ==="
       for i in $(seq 1 60); do
