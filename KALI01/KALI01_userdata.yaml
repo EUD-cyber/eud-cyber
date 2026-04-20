@@ -103,8 +103,6 @@ write_files:
         seclists \
         gobuster \
         sshpass \
-        apache2 \
-        vsftpd \
         sqlmap \
         zaproxy
 
