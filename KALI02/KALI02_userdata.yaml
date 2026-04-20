@@ -102,6 +102,7 @@ write_files:
         nikto \
         seclists \
         gobuster \
+        sshpass \
         sqlmap \
         zaproxy
 
