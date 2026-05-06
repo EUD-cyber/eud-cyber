@@ -37,6 +37,7 @@ runcmd:
   - wget -O /opt/juiceshop/default.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/JUICESHOP/default.conf
   - wget -O /opt/dvwa/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/DVWA/docker-compose.yml
   - wget -O /opt/juiceshop-waf/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/JUICESHOP-WAF/docker-compose.yml
+  - wget -O /opt/juiceshop-waf/default.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/JUICESHOP-WAF/default.conf
   - wget -O /opt/install.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WAZUH_LOGS/install_wazuh_agent_and_import.sh
   - chown -R ubuntu:ubuntu /opt
   - chmod +x /opt/install.sh
