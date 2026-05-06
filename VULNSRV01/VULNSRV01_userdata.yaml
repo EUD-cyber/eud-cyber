@@ -32,9 +32,11 @@ runcmd:
   - usermod -aG docker ubuntu
   - mkdir -p /opt/juiceshop
   - mkdir -p /opt/dvwa
+  - mkdir -p /opt/juiceshop-waf
   - wget -O /opt/juiceshop/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/JUICESHOP/docker-compose.yml
   - wget -O /opt/juiceshop/default.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/JUICESHOP/default.conf
   - wget -O /opt/dvwa/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/DVWA/docker-compose.yml
+  - wget -O /opt/juiceshop-waf/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/JUICESHOP-WAF/docker-compose.yml
   - wget -O /opt/install.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WAZUH_LOGS/install_wazuh_agent_and_import.sh
   - chown -R ubuntu:ubuntu /opt
   - chmod +x /opt/install.sh
