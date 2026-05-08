@@ -169,7 +169,7 @@ write_files:
         mkdir -p "$HOME_DIR/Desktop/PASSWORD"
         mkdir -p "$HOME_DIR/Desktop/TPOT"
 
-        cat > "$HOME_DIR/.config/tigervnc/xstartup" <<'EOF'
+      cat > "$HOME_DIR/.config/tigervnc/xstartup" <<EOF
       #!/bin/sh
       unset SESSION_MANAGER
       unset DBUS_SESSION_BUS_ADDRESS
@@ -247,7 +247,7 @@ write_files:
         USERNAME=$1
         DISPLAY=$2
 
-        cat > /etc/systemd/system/vnc-${USERNAME}.service <<EOF
+      cat > /etc/systemd/system/vnc-${USERNAME}.service <<EOF
       [Unit]
       Description=VNC Server for ${USERNAME}
       After=network.target
