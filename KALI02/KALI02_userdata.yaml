@@ -194,7 +194,7 @@ write_files:
           https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.key
 
        wget -q -O "$HOME_DIR/Desktop/wireshark/owasp_top5_traffic.pcap" \
-          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/owasp_top5_lab_traffic.pcap
+          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/owasp_top5_lab_traffic.pcap
 
         wget -q -O "$HOME_DIR/Desktop/PASSWORD/John-readme.txt" \
           https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/John-readme.txt
