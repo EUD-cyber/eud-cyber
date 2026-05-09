@@ -232,8 +232,8 @@ case "$CHOICE" in
     echo 'Starting WAZUH VM creation...'
     bash "$TPOT" $LAB
 
-    echo 'Starting Windows server 2025 VM creation'
-    bash '$WIN2025' $LAB
+#    echo 'Starting Windows server 2025 VM creation'
+#    bash '$WIN2025' $LAB
 
     echo '===== Deployment completed successfully ====='
   "
