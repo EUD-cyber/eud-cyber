@@ -31,7 +31,7 @@ DISK_STORAGE="${LVM:-local-lvm}"
 MEMORY=16384       # in MB
 CORES=4
 SOCKETS=2
-DISK_SIZE="40G"    # the number is in GB
+DISK_SIZE="60G"    # the number is in GB
 BRIDGE="lab${LAB}_lan2"
 BRIDGE1="lab${LAB}_oobm"
 IP_ADDR="ip=192.168.2.20/24"
