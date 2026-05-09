@@ -5,10 +5,10 @@ manage_etc_hosts: true
 
 users:
   - name: wazuh
-    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
     lock_passwd: false
-    passwd: "$6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0"
+    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
     ssh_authorized_keys:
       - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
 
@@ -25,11 +25,10 @@ packages:
   - gnupg
   - tar
   - python3
-  - psmisc
 
 write_files:
   - path: /root/install-wazuh.sh
-    permissions: "0755"
+    permissions: '0755'
     content: |
       #!/bin/bash
       set -euo pipefail
@@ -37,36 +36,6 @@ write_files:
 
       PASS='Password1?'
       TOKEN_FILE='/root/wazuh-api.token'
-
-      wait_for_indexer() {
-        echo "Waiting for Wazuh indexer..."
-        for i in $(seq 1 90); do
-          if curl -sk https://127.0.0.1:9200 >/dev/null; then
-            echo "Indexer ready"
-            return 0
-          fi
-          sleep 10
-        done
-        echo "ERROR: Indexer not ready"
-        systemctl status wazuh-indexer --no-pager || true
-        journalctl -u wazuh-indexer -n 100 --no-pager || true
-        exit 1
-      }
-
-      wait_for_manager() {
-        echo "Waiting for Wazuh manager..."
-        for i in $(seq 1 60); do
-          if systemctl is-active --quiet wazuh-manager; then
-            echo "Manager active"
-            return 0
-          fi
-          sleep 5
-        done
-        echo "ERROR: Manager not active"
-        systemctl status wazuh-manager --no-pager || true
-        journalctl -u wazuh-manager -n 100 --no-pager || true
-        exit 1
-      }
 
       echo "=== Waiting for apt/cloud-init ==="
       sleep 60
@@ -97,10 +66,11 @@ write_files:
         sed -i '/<global>/a \  <logall_json>yes</logall_json>' /var/ossec/etc/ossec.conf
       fi
 
+      systemctl restart wazuh-manager
+
       echo "=== Enabling archives in Filebeat ==="
       python3 - <<'PY'
       from pathlib import Path
-
       path = Path("/etc/filebeat/filebeat.yml")
       text = path.read_text()
 
@@ -151,32 +121,12 @@ write_files:
         --api -u wazuh-wui -p "${PASS}" \
         --admin-user wazuh --admin-password "${PASS}"
 
-      echo "=== Adding dashboard startup dependency override ==="
-      mkdir -p /etc/systemd/system/wazuh-dashboard.service.d
-
-      cat > /etc/systemd/system/wazuh-dashboard.service.d/override.conf <<'EOF'
-      [Unit]
-      After=wazuh-indexer.service wazuh-manager.service
-      Requires=wazuh-indexer.service wazuh-manager.service
-
-      [Service]
-      Restart=on-failure
-      RestartSec=20
-      ExecStartPre=/bin/bash -c 'for i in {1..90}; do curl -sk https://127.0.0.1:9200 >/dev/null && exit 0; sleep 10; done; exit 1'
-      EOF
-
-      systemctl daemon-reload
-
       echo "=== Restarting services in correct order ==="
-      systemctl enable wazuh-indexer wazuh-manager wazuh-dashboard filebeat
-
       systemctl restart wazuh-indexer
-      wait_for_indexer
-
-      systemctl restart wazuh-manager
-      wait_for_manager
-
+      sleep 20
       systemctl restart filebeat
+      sleep 10
+      systemctl restart wazuh-manager
       systemctl restart wazuh-dashboard
 
       echo "=== Waiting for API ==="
@@ -213,3 +163,9 @@ write_files:
 
 runcmd:
   - bash /root/install-wazuh.sh
+
+power_state:
+  mode: poweroff
+  message: "Cloud-init finished - powering off"
+  timeout: 30
+  condition: True
