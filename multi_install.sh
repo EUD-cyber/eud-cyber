@@ -144,8 +144,8 @@ for i in $(seq 1 "$LABCOUNT"); do
     echo 'Starting Wazuh VM creation'
     bash '$TPOT' '$i'
 
-    echo 'Starting APPSRV01 creation'
-    bash '$WIN2025' '$i'
+#    echo 'Starting APPSRV01 creation'
+#    bash '$WIN2025' '$i'
     echo '===== Lab $i background deployment completed at \$(date) ====='
 
     
