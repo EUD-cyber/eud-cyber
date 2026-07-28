@@ -153,6 +153,7 @@ FULL_INSTALL="./full_install.sh"
 MINI_INSTALL="./mini_install.sh"
 MULTI_INSTALL="./multi_install.sh"
 MULTI_INSTALL_MINI="./multi_mini_install.sh"
+NEW_FULL_INSTALL="./new_full_install.sh"
 
 clear
 echo "===================================="
@@ -162,6 +163,7 @@ echo "1) Standalone Proxmox (Full Lab)"
 echo "2) Standalone Proxmox (Mini Lab low spec)"
 echo "3) Multilabs full spec on same proxmox"
 echo "4) Multilabs mini spec on same proxmox"
+echo "5) New test install"
 echo "0) Exit"
 echo "===================================="
 read -rp "Select deployment type: " choice
@@ -185,6 +187,11 @@ case "$choice" in
   4)
     echo "▶ Multilabs mini spec on same proxmox"
     bash "$MULTI_INSTALL_MINI"
+    ;;
+    
+  5)
+    echo "▶ New test install"
+    bash "$NEW_FULL_INSTALL"
     ;;
 
   0)
