@@ -134,7 +134,7 @@ case "$CHOICE" in
 
     echo "IP settings on Guacamole and Opnsense"
     bash "$OPNSENSECONF" $LAB
-    bash "$GUACVM_IP" $LAB
+    bash "$GUACVM_IP02" $LAB
 
     echo "Starting Open vSwitch installation and configuration"
     #bash "$OPENVSWITCH" $LAB
@@ -146,7 +146,7 @@ case "$CHOICE" in
     bash "$OPNSENSE" $LAB
 
     echo "Starting Guacamole VM creation..."
-    bash "$GUACVM" $LAB
+    bash "$GUACVM02" $LAB
 
     echo "Staring Client01 VM creation..."
     bash "$CLIENT01" $LAB
@@ -169,8 +169,8 @@ case "$CHOICE" in
     echo "Starting Wazuh VM creation... "
     bash "$WAZUH" $LAB
 
-    echo "Starting WAZUH VM creation... "
-    bash "$TPOT" $LAB
+#    echo "Starting WAZUH VM creation... "
+#    bash "$TPOT" $LAB
 
    # echo "Starting Windows server 2025 VM creation.... "
    # bash "$WIN2025" $LAB
@@ -191,7 +191,7 @@ case "$CHOICE" in
 
   echo "===== Phase 1: Interactive configuration ====="
   bash "$OPNSENSECONF" $LAB || exit 1
-  bash "$GUACVM_IP" $LAB || exit 1
+  bash "$GUACVM02_IP" $LAB || exit 1
 
   echo "===== Phase 2: Run OPNsense installer (expect, outside tmux) ====="
   bash "$OPNSENSE" $LAB || exit 1
@@ -214,7 +214,7 @@ case "$CHOICE" in
     exec > >(tee -a deploy.log) 2>&1
 
     echo 'Starting Guacamole VM creation'
-    bash '$GUACVM' $LAB
+    bash '$GUACVM02' $LAB
 
     echo 'Starting Client01 VM creation'
     bash '$CLIENT01' $LAB
@@ -237,8 +237,8 @@ case "$CHOICE" in
     echo 'Starting Wazuh VM creation'
     bash '$WAZUH' $LAB
 
-    echo 'Starting WAZUH VM creation...'
-    bash "$TPOT" $LAB
+#    echo 'Starting WAZUH VM creation...'
+#    bash "$TPOT" $LAB
 
 #    echo 'Starting Windows server 2025 VM creation'
 #    bash '$WIN2025' $LAB
