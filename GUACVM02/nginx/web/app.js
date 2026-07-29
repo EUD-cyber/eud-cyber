@@ -7,7 +7,6 @@
   const searchInput = document.getElementById("searchInput");
   const categoryFilters = document.getElementById("categoryFilters");
   const allCount = document.getElementById("allCount");
-  const onlineCount = document.getElementById("onlineCount");
   const resultText = document.getElementById("resultText");
   const emptyState = document.getElementById("emptyState");
   const dialog = document.getElementById("connectionDialog");
@@ -28,7 +27,6 @@
 
   function renderFilters() {
     allCount.textContent = sessions.length;
-    onlineCount.textContent = sessions.length;
     categories().forEach(category => {
       const button = document.createElement("button");
       button.className = "filter";
