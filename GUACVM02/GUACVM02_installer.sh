@@ -3,7 +3,7 @@ set -euo pipefail
 IFS=$'\n\t'
 
 LAB="$1"
-STATE_FILE="$(pwd)/GUACVM/STATE/lab${LAB}.env"
+STATE_FILE="$(pwd)/GUACVM02/STATE/lab${LAB}.env"
 
 if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
   echo "Usage: $0 <lab-number>"

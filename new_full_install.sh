@@ -4,7 +4,7 @@ set -e
 LAB="1"
 REPO="./repo.sh"
 GUACVM_IP="./GUACVM/GUACVM_ip_multi.sh"
-GUACVM02_IP="./GUACVM/GUACVM02_ip.sh"
+GUACVM02_IP="./GUACVM02/GUACVM02_ip.sh"
 GUACVM="./GUACVM/GUACVM_multi_installer.sh"
 GUACVM02="./GUACVM02/GUACVM02_installer.sh"
 OPENVSWITCHPRE="./open-vswitch-multi-pre.sh"
