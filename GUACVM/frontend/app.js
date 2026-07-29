@@ -1,1 +1,0 @@
-const c=document.getElementById('cards');PROJECT_LAB_SESSIONS.forEach(s=>{let d=document.createElement('div');d.className='card';d.innerHTML=`<h2>${s.name}</h2><p>${s.address}</p>`;s.connections.forEach(x=>{let a=document.createElement('a');a.className='btn';a.textContent=x.label;a.href=x.url;if(x.newTab)a.target='_blank';d.appendChild(a)});c.appendChild(d);});

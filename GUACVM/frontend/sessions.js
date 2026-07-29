@@ -1,1 +1,0 @@
-window.PROJECT_LAB_SESSIONS=[{name:'FortiManager',address:'10.134.71.15',connections:[{label:'HTTPS',url:'https://10.134.71.15:3001',newTab:true},{label:'SSH',url:'/guacamole/',newTab:true}]},{name:'FortiAnalyzer',address:'10.134.71.16',connections:[{label:'HTTPS',url:'https://10.134.71.15:3002',newTab:true},{label:'SSH',url:'/guacamole/',newTab:true}]}];
