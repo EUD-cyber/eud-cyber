@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07101f">
+  <title>Cyberlab</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand-mark">C</span>
+      <span>Cyberlab</span>
+    </a>
+    <nav class="tabs" aria-label="Hovedmenu">
+      <a class="active" href="/">Connections</a>
+      <a href="/pages/labs.html">Labs</a>
+      <a href="/pages/documentation.html">Documentation</a>
+      <a href="/pages/tools.html">Tools</a>
+      <a href="/pages/settings.html">Settings</a>
+    </nav>
+    <div class="health"><span></span> System operational</div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <section class="side-card">
+        <p class="side-title">System status</p>
+        <div class="status-row"><span class="dot online"></span><span>Online</span><strong id="onlineCount">0</strong></div>
+        <div class="status-row"><span class="dot warning"></span><span>Busy</span><strong>0</strong></div>
+        <div class="status-row"><span class="dot offline"></span><span>Offline</span><strong>0</strong></div>
+      </section>
+
+      <section class="side-card">
+        <p class="side-title">Categories</p>
+        <div id="categoryFilters" class="filters">
+          <button class="filter active" data-category="Alle">
+            <span>All systems</span><strong id="allCount">0</strong>
+          </button>
+        </div>
+      </section>
+    </aside>
+
+    <main class="main">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">CYBERLAB V2</p>
+          <h1>Connections</h1>
+          <p>Vælg et system, og åbn HTTPS, SSH, RDP eller VNC.</p>
+        </div>
+        <div class="hero-actions">
+          <label class="search">
+            <span>⌕</span>
+            <input id="searchInput" type="search" placeholder="Søg efter systemer, IP eller protokol">
+          </label>
+        </div>
+      </section>
+
+      <section class="toolbar">
+        <p id="resultText"></p>
+        <div class="view-toggle" aria-hidden="true"><button class="active">▦</button><button>☰</button></div>
+      </section>
+
+      <section id="sessionGrid" class="grid"></section>
+      <p id="emptyState" class="empty" hidden>Ingen systemer matcher søgningen.</p>
+    </main>
+  </div>
+
+  <template id="sessionTemplate">
+    <article class="system-card">
+      <button class="card-button" type="button">
+        <div class="card-top">
+          <span class="system-icon"></span>
+          <span class="status-pill"><i></i>Online</span>
+        </div>
+        <h2></h2>
+        <p class="system-description"></p>
+        <code class="system-address"></code>
+        <div class="protocols"></div>
+        <span class="open-label">Open connection <b>→</b></span>
+      </button>
+    </article>
+  </template>
+
+  <dialog id="connectionDialog">
+    <button class="dialog-close" type="button" onclick="this.closest('dialog').close()">×</button>
+    <div id="dialogContent"></div>
+  </dialog>
+
+  <script src="/sessions.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
