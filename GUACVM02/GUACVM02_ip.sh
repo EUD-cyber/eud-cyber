@@ -1,11 +1,11 @@
-GUACVM_FILE="$(pwd)/GUACVM/GUACVM_installer.sh"
+GUACVM_FILE="$(pwd)/GUACVM02/GUACVM02_installer.sh"
 
 LAB="$1"
 if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
   echo "Usage: $0 <lab-number>"
   exit 1
 fi
-STATE_DIR="$(pwd)/GUACVM/STATE"
+STATE_DIR="$(pwd)/GUACVM02/STATE"
 STATE_FILE="${STATE_DIR}/lab${LAB}.env"
 
 mkdir -p "$STATE_DIR"
