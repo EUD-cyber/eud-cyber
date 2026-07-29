@@ -4,7 +4,9 @@ set -e
 LAB="1"
 REPO="./repo.sh"
 GUACVM_IP="./GUACVM/GUACVM_ip_multi.sh"
+GUACVM02_IP="./GUACVM/GUACVM02_ip.sh"
 GUACVM="./GUACVM/GUACVM_multi_installer.sh"
+GUACVM02="./GUACVM02/GUACVM02_installer.sh"
 OPENVSWITCHPRE="./open-vswitch-multi-pre.sh"
 OPENVSWITCH="./open-vswitch-multi.sh"
 OPENVSWITCHLAST="./open-vswitch-multi-last.sh"
@@ -40,6 +42,7 @@ echo "11) Create APPSRV01 VM"
 echo "12) Create Client01 VM"
 echo "13) Create WAZUH VM"
 echo "14) Create TPOT01 VM"
+echo "15) Create Guacamole VM"
 echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
 echo "95) Run ALL in background"
@@ -110,6 +113,11 @@ case "$CHOICE" in
   14)
     echo "Starting WAZUH VM creation... "
     bash "$TPOT" $LAB
+    ;;
+  15)
+    echo "Starting Guacamole VM creation..."
+    bash "$GUACVM02_IP" $LAB
+    bash "$GUACVM02" $LAB
     ;;
   89)
     echo "Change proxmox repo to no-enterprise"
