@@ -45,31 +45,31 @@ window.CYBERLAB_SESSIONS = [
 
   },
   {
-    name: "Vuln-srv01",
+    name: "Vulnsrv01",
     description: "Ubuntu server",
     address: "192.168.1.20",
     category: "Linux",
-    icon: "VULN-SRV01",
+    icon: "VULNSRV01",
     connections: [
       { type: "SSH", label: "Vuln-srv01 SSH", url: "/guacamole/#/client/MTIAYwBwb3N0Z3Jlc3Fs", newTab: true }
     ]
   },
  {
-    name: "Vuln-srv02",
+    name: "Vulnsrv02",
     description: "Ubuntu server",
     address: "192.168.1.21",
     category: "Linux",
-    icon: "VULN-SRV02",
+    icon: "VULNSRV02",
     connections: [
       { type: "SSH", label: "Vuln-srv02 SSH", url: "/guacamole/#/client/NQBjAHBvc3RncmVzcWw", newTab: true }
     ]
   },
 {
-    name: "App-srv01",
+    name: "Appsrv01",
     description: "Ubuntu server",
     address: "192.168.1.25",
     category: "Linux",
-    icon: "APP-SRV01",
+    icon: "APPSRV01",
     connections: [
       { type: "SSH", label: "App-srv01 SSH", url: "/guacamole/#/client/MQBjAHBvc3RncmVzcWw", newTab: true }
     ]
@@ -82,32 +82,32 @@ window.CYBERLAB_SESSIONS = [
     category: "Linux",
     icon: "WAZUH",
     connections: [
-      { type: "HTTPS", label: "Wazuh GUI", url: "https://10.134.71.15:3004", newTab: true },
+      { type: "HTTPS", label: "Wazuh GUI", port: 3001, newTab: true },
       { type: "SSH", label: "Wazuh SSH", url: "/guacamole/#/client/NABjAHBvc3RncmVzcWw", newTab: true }
     ]
   },
 
-
   {
-    name: "Kali Linux",
-    description: "Security testing workstation",
-    address: "192.168.30.10",
-    category: "Linux",
-    icon: "KALI",
+    name: "Opnsense",
+    description: "Opnsense Firewall",
+    address: "192.168.1.1",
+    category: "Firewall",
+    icon: "OPNSENSE",
     connections: [
-      { type: "SSH", label: "Åbn SSH", url: "/guacamole/", newTab: true },
-      { type: "VNC", label: "Åbn Desktop", url: "/guacamole/", newTab: true }
+      { type: "HTTPS", label: "Opnsense GUI", port: 3002, newTab: true },
+      { type: "SSH", label: "Opnsense SSH", url: "/guacamole/#/client/OABjAHBvc3RncmVzcWw", newTab: true }
     ]
   },
+
+
   {
-    name: "Proxmox",
-    description: "Virtualization platform",
-    address: "192.168.40.10",
-    category: "Infrastructure",
-    icon: "PVE",
+    name: "Guacamole",
+    description: "Guacamole session server gui",
+    address: "172.20.0.1",
+    category: "Linux",
+    icon: "GUAC",
     connections: [
-      { type: "HTTPS", label: "Åbn Proxmox", url: "https://10.134.71.15:3004", newTab: true },
-      { type: "SSH", label: "Åbn Proxmox SSH", url: "/guacamole/", newTab: true }
+      { type: "HTTPS", label: "Guacamole GUI", url: "/guacamole", newTab: true },
     ]
   }
 ];
