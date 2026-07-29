@@ -47,8 +47,8 @@ BRIDGE2="prox_oobm"
 OOBM_IP="ip=172.20.0.1/24"
 PROX_OOBM_IP="ip=172.30.0.${LAB}/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
-SRC_USERDATA="$(pwd)/GUACVM02/GUAC_userdata_yaml"    
-DST_USERDATA="GUAC02_userdata_lab${LAB}.yaml"        
+SRC_USERDATA="$(pwd)/GUACVM02/GUACVM02_userdata.yaml"    
+DST_USERDATA="GUACVM02_userdata_lab${LAB}.yaml"        
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
 
