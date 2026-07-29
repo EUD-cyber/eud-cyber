@@ -201,24 +201,24 @@ runcmd:
   - chmod 700 /opt/guacamole/backups
 
   # Frontend
-  - wget -O /opt/guacamole/nginx/web/index.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM-V2/nginx/web/index.html
-  - wget -O /opt/guacamole/nginx/web/style.css https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM-V2/nginx/web/style.css
-  - wget -O /opt/guacamole/nginx/web/app.js https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM-V2/nginx/web/app.js
-  - wget -O /opt/guacamole/nginx/web/sessions.js https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM-V2/nginx/web/sessions.js
+  - wget -O /opt/guacamole/nginx/web/index.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/index.html
+  - wget -O /opt/guacamole/nginx/web/style.css https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/style.css
+  - wget -O /opt/guacamole/nginx/web/app.js https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/app.js
+  - wget -O /opt/guacamole/nginx/web/sessions.js https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/sessions.js
 
   # Pages
-  - wget -O /opt/guacamole/nginx/web/pages/labs.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM-V2/nginx/web/pages/labs.html
-  - wget -O /opt/guacamole/nginx/web/pages/documentation.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM-V2/nginx/web/pages/documentation.html
-  - wget -O /opt/guacamole/nginx/web/pages/tools.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM-V2/nginx/web/pages/tools.html
-  - wget -O /opt/guacamole/nginx/web/pages/settings.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM-V2/nginx/web/pages/settings.html
+  - wget -O /opt/guacamole/nginx/web/pages/labs.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/pages/labs.html
+  - wget -O /opt/guacamole/nginx/web/pages/documentation.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/pages/documentation.html
+  - wget -O /opt/guacamole/nginx/web/pages/tools.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/pages/tools.html
+  - wget -O /opt/guacamole/nginx/web/pages/settings.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/pages/settings.html
 
   # Scripts
-  - wget -O /opt/guacamole/scripts/backup-guacamole-db.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM-V2/scripts/backup-guacamole-db.sh
-  - wget -O /opt/guacamole/scripts/restore-guacamole-db.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM-V2/scripts/restore-guacamole-db.sh
-  - wget -O /opt/guacamole/nat.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM-V2/nat.sh
+  - wget -O /opt/guacamole/scripts/backup-guacamole-db.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/scripts/backup-guacamole-db.sh
+  - wget -O /opt/guacamole/scripts/restore-guacamole-db.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/scripts/restore-guacamole-db.sh
+  - wget -O /opt/guacamole/nat.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nat.sh
 
   # Optional DB backup
-  - wget -O /opt/guacamole/backups/guacamole-db.sql.gz https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM-V2/backups/guacamole-db.sql.gz || rm -f /opt/guacamole/backups/guacamole-db.sql.gz
+  - wget -O /opt/guacamole/backups/guacamole-db.sql.gz https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/backups/guacamole-db.sql.gz || rm -f /opt/guacamole/backups/guacamole-db.sql.gz
 
   - chmod +x /opt/guacamole/scripts/*.sh
   - chmod +x /opt/guacamole/nat.sh
