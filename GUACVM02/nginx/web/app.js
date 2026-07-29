@@ -74,25 +74,48 @@
     emptyState.hidden = visible.length !== 0;
   }
 
-  function openDialog(session) {
-    const buttons = (session.connections || []).map(connection => {
-      const target = connection.newTab ? ' target="_blank" rel="noopener noreferrer"' : "";
-      const note = connection.note ? `<small>${esc(connection.note)}</small>` : "";
-      return `<a class="connection-option" href="${esc(connection.url)}"${target}>
-        <span class="${protocolClass(connection.type)}">${esc(connection.type)}</span>
-        <span class="connection-label"><strong>${esc(connection.label)}</strong>${note}</span>
-        <span class="option-arrow">→</span>
-      </a>`;
-    }).join("");
+function openDialog(session) {
+  const buttons = (session.connections || []).map(connection => {
+    let url = connection.url;
 
-    dialogContent.innerHTML = `<div class="dialog-heading">
-      <span class="system-icon large">${esc(session.icon || session.name.slice(0,3).toUpperCase())}</span>
-      <div><p class="eyebrow">${esc(session.category || "System")}</p>
-      <h2>${esc(session.name)}</h2><p>${esc(session.description || "")}</p>
-      <code>${esc(session.address || "")}</code></div></div>
-      <div class="connection-list">${buttons || "<p>Ingen forbindelser oprettet.</p>"}</div>`;
-    dialog.showModal();
-  }
+    if (!url && connection.port) {
+      const protocol = connection.type === "HTTPS" ? "https:" : window.location.protocol;
+      url = `${protocol}//${window.location.hostname}:${connection.port}`;
+    }
+
+    const target = connection.newTab
+      ? ' target="_blank" rel="noopener noreferrer"'
+      : "";
+
+    const note = connection.note
+      ? `<small>${esc(connection.note)}</small>`
+      : "";
+
+    return `<a class="connection-option" href="${esc(url)}"${target}>
+      <span class="${protocolClass(connection.type)}">${esc(connection.type)}</span>
+      <span class="connection-label">
+        <strong>${esc(connection.label)}</strong>
+        ${note}
+      </span>
+      <span class="option-arrow">→</span>
+    </a>`;
+  }).join("");
+
+  dialogContent.innerHTML = `<div class="dialog-heading">
+    <span class="system-icon large">${esc(session.icon || session.name.slice(0,3).toUpperCase())}</span>
+    <div>
+      <p class="eyebrow">${esc(session.category || "System")}</p>
+      <h2>${esc(session.name)}</h2>
+      <p>${esc(session.description || "")}</p>
+      <code>${esc(session.address || "")}</code>
+    </div>
+  </div>
+  <div class="connection-list">
+    ${buttons || "<p>Ingen forbindelser oprettet.</p>"}
+  </div>`;
+
+  dialog.showModal();
+}
 
   document.addEventListener("click", event => {
     const filter = event.target.closest(".filter");
