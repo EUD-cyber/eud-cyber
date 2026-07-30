@@ -242,6 +242,7 @@ runcmd:
 
   - docker compose -f /opt/guacamole/docker-compose.yml up -d
 
+
   - |
     if [ -s /opt/guacamole/backups/guacamole-db.sql.gz ]; then
       /opt/guacamole/scripts/restore-guacamole-db.sh
@@ -251,6 +252,8 @@ runcmd:
   - systemctl enable guac-nat
   - systemctl start guac-nat
   - netfilter-persistent save
+  - printf '%s' 'Password1234!' > /opt/guacamole/portainer-admin-password
+  - chmod 600 /opt/guacamole/portainer-admin-password
 
   - docker compose -f /opt/guacamole/docker-compose.yml ps
 

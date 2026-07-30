@@ -1,6 +1,108 @@
 <!doctype html>
-<html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Labs · Cyberlab</title><link rel="stylesheet" href="/style.css"></head>
-<body><header class="topbar"><a class="brand" href="/"><span class="brand-mark">C</span><span>Cyberlab</span></a>
-<nav class="tabs"><a href="/">Connections</a><a class="active" href="/pages/labs.html">Labs</a><a  href="/pages/documentation.html">Documentation</a><a  href="/pages/tools.html">Tools</a><a  href="/pages/settings.html">Settings</a></nav></header>
-<main class="page-shell"><section class="page-card"><p class="eyebrow">CYBERLAB V2</p><h1>Labs</h1><p>Plads til fremtidige labbeskrivelser. Ingen lab control eller API er inkluderet i denne version.</p></section></main></body></html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="theme-color" content="#07101f">
+
+    <title>Labs · Cyberlab</title>
+
+    <link rel="stylesheet" href="/style.css?v=2">
+</head>
+
+<body>
+
+<header class="topbar">
+
+    <a class="brand" href="/">
+        <span class="brand-mark">C</span>
+        <span>Cyberlab</span>
+    </a>
+
+    <nav class="tabs">
+        <a href="/">Connections</a>
+        <a class="active" href="/pages/labs.html">Labs</a>
+        <a href="/pages/documentation.html">Documentation</a>
+        <a href="/pages/topology.html">Topology</a>
+        <a href="/pages/settings.html">Settings</a>
+    </nav>
+
+</header>
+
+<div class="layout">
+
+    <aside class="sidebar">
+
+        <section class="side-card">
+            <p class="side-title">
+                Lab Services
+            </p>
+
+            <div class="filters">
+
+                <button class="filter active">
+                    <span>Docker Management</span>
+                    <strong>1</strong>
+                </button>
+
+                <button class="filter">
+                    <span>Portainer</span>
+                    <strong>Online</strong>
+                </button>
+
+            </div>
+
+        </section>
+
+    </aside>
+
+    <main class="main">
+
+        <section class="hero">
+
+            <div>
+                <p class="eyebrow">CYBERLAB V2</p>
+
+                <h1>Labs</h1>
+
+                <p>
+                    Manage Docker containers, Docker Compose stacks and
+                    remote lab servers using Portainer.
+                </p>
+            </div>
+
+            <div>
+
+                <a
+                    class="portainer-open-button"
+                    href="/portainer/"
+                    target="_blank"
+                    rel="noopener noreferrer">
+
+                    Open Portainer
+
+                </a>
+
+            </div>
+
+        </section>
+
+        <section class="portainer-frame-wrapper">
+
+            <iframe
+                class="portainer-frame"
+                src="/portainer/"
+                title="Portainer"
+                loading="eager"
+                allow="clipboard-read; clipboard-write">
+            </iframe>
+
+        </section>
+
+    </main>
+
+</div>
+
+</body>
+</html>
