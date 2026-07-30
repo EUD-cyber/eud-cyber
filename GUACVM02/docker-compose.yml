@@ -74,9 +74,11 @@ services:
       - guacnetwork_compose
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/web:/var/www/html:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
 
   portainer:
     image: portainer/portainer-ce:lts

@@ -31,8 +31,111 @@ packages:
   - iptables
   - iptables-persistent
   - netfilter-persistent
+  - openssl
 
 write_files:
+  - path: /opt/guacamole/scripts/generate-https-certificate.sh
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env bash
+      set -Eeuo pipefail
+
+      INTERFACE="eth0"
+      CERT_DIR="/opt/guacamole/nginx/certs"
+      CERT_FILE="${CERT_DIR}/cyberlab.crt"
+      KEY_FILE="${CERT_DIR}/cyberlab.key"
+      CONFIG_FILE="${CERT_DIR}/openssl.cnf"
+
+      log() {
+        printf '[+] %s\n' "$*"
+      }
+
+      die() {
+        printf '[ERROR] %s\n' "$*" >&2
+        exit 1
+      }
+
+      # Vent på at eth0 får en IPv4-adresse
+      SERVER_IP=""
+
+      for attempt in $(seq 1 60); do
+        SERVER_IP="$(
+          ip -4 -o addr show dev "$INTERFACE" scope global 2>/dev/null |
+          awk '{print $4}' |
+          cut -d/ -f1 |
+          head -n1
+        )"
+
+        if [[ -n "$SERVER_IP" ]]; then
+          break
+        fi
+
+        log "Waiting for an IPv4 address on ${INTERFACE}..."
+        sleep 2
+      done
+
+      [[ -n "$SERVER_IP" ]] ||
+        die "No IPv4 address found on ${INTERFACE}."
+
+      SERVER_HOSTNAME="$(hostname -s)"
+      SERVER_FQDN="$(hostname -f 2>/dev/null || hostname -s)"
+
+      mkdir -p "$CERT_DIR"
+
+      log "Generating HTTPS certificate"
+      log "Interface: ${INTERFACE}"
+      log "IP address: ${SERVER_IP}"
+      log "Hostname: ${SERVER_HOSTNAME}"
+      log "FQDN: ${SERVER_FQDN}"
+
+      cat > "$CONFIG_FILE" <<EOF
+      [req]
+      prompt = no
+      default_bits = 4096
+      default_md = sha256
+      distinguished_name = dn
+      x509_extensions = extensions
+
+      [dn]
+      C = DK
+      O = Cyberlab
+      OU = Training Lab
+      CN = ${SERVER_HOSTNAME}
+
+      [extensions]
+      subjectAltName = @alt_names
+      keyUsage = critical,digitalSignature,keyEncipherment
+      extendedKeyUsage = serverAuth
+      basicConstraints = critical,CA:FALSE
+
+      [alt_names]
+      DNS.1 = ${SERVER_HOSTNAME}
+      DNS.2 = ${SERVER_FQDN}
+      IP.1 = ${SERVER_IP}
+      EOF
+
+      openssl req \
+        -x509 \
+        -nodes \
+        -days 3650 \
+        -newkey rsa:4096 \
+        -keyout "$KEY_FILE" \
+        -out "$CERT_FILE" \
+        -config "$CONFIG_FILE"
+
+      chmod 600 "$KEY_FILE"
+      chmod 644 "$CERT_FILE"
+      chmod 600 "$CONFIG_FILE"
+
+      log "Certificate generated successfully."
+
+      openssl x509 \
+        -in "$CERT_FILE" \
+        -noout \
+        -subject \
+        -ext subjectAltName
+
   - path: /opt/guacamole/docker-compose.yml
     owner: root:root
     permissions: '0644'
@@ -254,6 +357,10 @@ runcmd:
   - netfilter-persistent save
   - printf '%s' 'Password1234!' > /opt/guacamole/portainer-admin-password
   - chmod 600 /opt/guacamole/portainer-admin-password
+
+  - mkdir -p /opt/guacamole/nginx/certs
+  - chmod +x /opt/guacamole/scripts/generate-https-certificate.sh
+  - /opt/guacamole/scripts/generate-https-certificate.sh
 
   - docker compose -f /opt/guacamole/docker-compose.yml ps
 
