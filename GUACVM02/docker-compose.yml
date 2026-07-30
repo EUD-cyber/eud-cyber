@@ -76,6 +76,28 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx/web:/var/www/html:ro
 
+  portainer:
+    image: portainer/portainer-ce:lts
+    container_name: cyberlab-portainer
+    restart: always
+
+    command:
+      - --no-csp
+      - --base-url
+      - /portainer
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+
+    networks:
+      - guacnetwork_compose
+
+    expose:
+      - "9443"
+
 volumes:
   postgres_data:
     name: cyberlab-postgres-data
+  portainer_data:
+    name: cyberlab-portainer-data
