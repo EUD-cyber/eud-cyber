@@ -124,31 +124,8 @@ write_files:
       [Install]
       WantedBy=multi-user.target
 
-  #########################################################
-  # Mirror eth2
-  #########################################################
-
-  - path: /etc/sysctl.d/99-mirror.conf
-    permissions: "0644"
-    content: |
-      net.ipv4.ip_forward=0
-
-  - path: /etc/systemd/system/mirror-eth2.service
-    permissions: "0644"
-    content: |
-      [Unit]
-      After=network.target
-
-      [Service]
-      Type=oneshot
-      ExecStart=/sbin/ip addr flush dev eth2
-      ExecStart=/sbin/ip link set eth2 up
-      ExecStart=/sbin/ethtool -K eth2 tx off rx off tso off gso off gro off lro off
-
-      [Install]
-      WantedBy=multi-user.target
-
-  #########################################################
+  
+    #########################################################
   # Multi user VNC setup script
   #########################################################
 
@@ -164,19 +141,47 @@ write_files:
         HOME_DIR=$(getent passwd "$u" | cut -d: -f6)
 
         mkdir -p "$HOME_DIR/.config/tigervnc"
+        mkdir -p "$HOME_DIR/.config/autostart"
+
         mkdir -p "$HOME_DIR/Desktop/IPS"
         mkdir -p "$HOME_DIR/Desktop/wireshark"
         mkdir -p "$HOME_DIR/Desktop/PASSWORD"
-        mkdir -p "$HOME_DIR/Desktop/TPOT"
+        
 
-      cat > "$HOME_DIR/.config/tigervnc/xstartup" <<EOF
+      cat > "$HOME_DIR/.config/tigervnc/xstartup" <<'EOF'
       #!/bin/sh
+
       unset SESSION_MANAGER
       unset DBUS_SESSION_BUS_ADDRESS
+
+      # Wait until XFCE and the VNC display are ready, then disable locking
+      (
+        sleep 5
+
+        xset s off 2>/dev/null || true
+        xset s noblank 2>/dev/null || true
+        xset -dpms 2>/dev/null || true
+
+        pkill xfce4-screensaver 2>/dev/null || true
+        pkill light-locker 2>/dev/null || true
+      ) &
+
       exec dbus-launch --exit-with-session startxfce4
       EOF
 
+      cat > "$HOME_DIR/.config/autostart/disable-vnc-lock.desktop" <<'EOF'
+      [Desktop Entry]
+      Type=Application
+      Name=Disable VNC screen locking
+      Comment=Disable screensaver and lock screen in Cyberlab VNC sessions
+      Exec=sh -c 'sleep 5; pkill xfce4-screensaver 2>/dev/null || true; pkill light-locker 2>/dev/null || true; xset s off 2>/dev/null || true; xset s noblank 2>/dev/null || true; xset -dpms 2>/dev/null || true'
+      Hidden=false
+      NoDisplay=true
+      X-GNOME-Autostart-enabled=true
+      EOF
+      
         chmod 0755 "$HOME_DIR/.config/tigervnc/xstartup"
+        chmod 0644 "$HOME_DIR/.config/autostart/disable-vnc-lock.desktop"
         chown -R "$u:$u" "$HOME_DIR/.config"
 
         # VNC password = password
@@ -219,11 +224,7 @@ write_files:
          wget -q -O "$HOME_DIR/Desktop/PASSWORD/simpleAES.zip" \
           https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/simpleAES.zip
 
-         wget -q -O "$HOME_DIR/Desktop/TPOT/tpot-script.sh" \
-          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/tpot-script.sh
-          
         chmod +x "$HOME_DIR/Desktop/IPS/testips.sh"
-        chmod +x "$HOME_DIR/Desktop/TPOT/tpot-script.sh"
         chown -R "$u:$u" "$HOME_DIR/Desktop"
       done
 
@@ -277,16 +278,12 @@ write_files:
       systemctl enable --now vnc-kali3.service
       systemctl enable --now vnc-kali4.service
       systemctl enable --now kali-tools-install.service
-      systemctl enable --now mirror-eth2.service
       systemctl enable --now ssh
       systemctl enable --now qemu-guest-agent
 
 runcmd:
   - /usr/local/sbin/setup-vnc-multiuser.sh
-  - mkdir /opt/openvas
-  - wget -O /opt/openvas/install.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/DOCKERFILES/OPENVAS/install.sh
-  - chmod +x /opt/openvas/install.sh
-
+  
 power_state:
   mode: poweroff
   message: "Cloud-init finished - powering off"
