@@ -251,6 +251,8 @@ runcmd:
   - systemctl enable guac-nat
   - systemctl start guac-nat
   - netfilter-persistent save
+  - printf '%s' 'Password1234!' > /opt/guacamole/portainer-admin-password
+  - chmod 600 /opt/guacamole/portainer-admin-password
 
   - docker compose -f /opt/guacamole/docker-compose.yml ps
 
