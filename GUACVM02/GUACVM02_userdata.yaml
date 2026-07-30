@@ -242,6 +242,7 @@ runcmd:
 
   - docker compose -f /opt/guacamole/docker-compose.yml up -d
 
+
   - |
     if [ -s /opt/guacamole/backups/guacamole-db.sql.gz ]; then
       /opt/guacamole/scripts/restore-guacamole-db.sh
