@@ -60,6 +60,123 @@
         <div class="doc-info">
           This documentation is stored as one page and switches sections
           without reloading the browser.
+
+<section id="overview" class="doc-page active">
+  <p class="eyebrow">CYBERLAB V2</p>
+  <h1>Documentation</h1>
+
+  <p>
+    Welcome to the Cyberlab documentation.
+    Select a topic from the menu on the left.
+  </p>
+
+  <div class="doc-info">
+    This documentation is stored as one page and switches sections
+    without reloading the browser.
+  </div>
+
+<h2>Login information</h2>
+
+<p>
+  Cyberlab uses standard credentials for the training environment.
+  Use the credentials below when logging in to the different systems.
+</p>
+
+<div class="doc-table-wrapper">
+  <table class="doc-table">
+    <thead>
+      <tr>
+        <th>System</th>
+        <th>Username</th>
+        <th>Password</th>
+        <th>Access</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      <tr>
+        <td>All Linux servers</td>
+        <td><code>ubuntu</code></td>
+        <td><code>Password1!</code></td>
+        <td>SSH, console or Guacamole</td>
+      </tr>
+
+      <tr>
+        <td>OPNsense GUI</td>
+        <td><code>root</code></td>
+        <td><code>opnsense</code></td>
+        <td>HTTPS web interface</td>
+      </tr>
+
+      <tr>
+        <td>Wazuh GUI</td>
+        <td><code>admin</code></td>
+        <td><code>Password1?</code></td>
+        <td>HTTPS web interface</td>
+      </tr>
+
+      <tr>
+        <td>Guacamole</td>
+        <td><code>guacadmin</code></td>
+        <td>Automatic login</td>
+        <td>
+          Nginx automatically authenticates the user through the
+          <code>X-Remote-User</code> header.
+        </td>
+      </tr>
+
+      <tr>
+        <td>Cyberlab frontend</td>
+        <td>Not required</td>
+        <td>Not required</td>
+        <td>Direct browser access</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="doc-warning">
+  These are shared training credentials and must only be used inside the
+  isolated Cyberlab environment. Do not reuse these passwords on production
+  systems or expose the lab directly to the internet.
+</div>
+  <h2>Automatic Guacamole login</h2>
+
+  <p>
+    The automatic Guacamole login is configured in the Nginx configuration:
+  </p>
+
+  <pre><code>/opt/guacamole/nginx/nginx.conf</code></pre>
+
+  <p>
+    The following line sends the Guacamole username:
+  </p>
+
+  <pre><code>proxy_set_header X-Remote-User "guacadmin";</code></pre>
+
+  <p>
+    Guacamole is configured to read this header in
+    <code>docker-compose.yml</code>:
+  </p>
+
+  <pre><code>HTTP_AUTH_ENABLED: "true"
+HTTP_AUTH_HEADER: "X-Remote-User"</code></pre>
+
+  <div class="doc-warning">
+    This automatic login is intended only for an isolated training lab.
+    Anyone who can access the Cyberlab frontend can access the Guacamole
+    connections assigned to the <code>guacadmin</code> account.
+  </div>
+
+  <h2>Opening Guacamole directly</h2>
+
+  <pre><code>http://&lt;Cyberlab-IP-or-DNS&gt;/guacamole/</code></pre>
+
+  <p>
+    When Guacamole is opened through the Cyberlab Nginx server, the user
+    should be logged in automatically without entering a username or password.
+  </p>
+</section>
         </div>
       </section>
 
