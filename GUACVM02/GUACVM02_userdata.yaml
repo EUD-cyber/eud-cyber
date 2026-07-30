@@ -296,7 +296,7 @@ runcmd:
   - wget -O /opt/guacamole/nginx/web/app.js https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/app.js
   - wget -O /opt/guacamole/nginx/web/sessions.js https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/sessions.js
   - wget -O /opt/guacamole/nginx/web/documentation.js https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/documentation.js
-  - wget -O /opt/guacamole/nginx/nginx.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/portainer/GUACVM02/nginx/nginx.conf
+  - wget -O /opt/guacamole/nginx/nginx.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/nginx.conf
   # Pages
   - wget -O /opt/guacamole/nginx/web/pages/labs.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/pages/labs.html
   - wget -O /opt/guacamole/nginx/web/pages/documentation.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/pages/documentation.html
