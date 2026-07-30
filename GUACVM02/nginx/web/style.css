@@ -506,6 +506,7 @@ dialog::backdrop {
 }
 
 .docs-link {
+  display: block;
   width: 100%;
   padding: 11px 13px;
   border: 1px solid transparent;
@@ -513,6 +514,7 @@ dialog::backdrop {
   background: transparent;
   color: #aebbd0;
   text-align: left;
+  text-decoration: none;
   cursor: pointer;
 }
 
@@ -694,9 +696,15 @@ dialog::backdrop {
     min-height: calc(100vh - 110px);
   }
 }
+
+/* =========================
+   Labs / Portainer
+   ========================= */
+
 .portainer-page {
-  padding: 28px;
+  min-width: 0;
   min-height: calc(100vh - 72px);
+  padding: 24px;
 }
 
 .portainer-header {
@@ -704,7 +712,7 @@ dialog::backdrop {
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .portainer-header h1 {
@@ -719,25 +727,36 @@ dialog::backdrop {
 
 .portainer-open-button {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
+  min-height: 42px;
   padding: 10px 16px;
   border: 1px solid #4389ca;
   border-radius: 9px;
   background: linear-gradient(135deg, #1d65cc, #2b85ef);
+  box-shadow: 0 8px 22px #006eff33;
   color: #fff;
   font-weight: 700;
   text-decoration: none;
+  transition: transform 0.18s ease, filter 0.18s ease;
 }
 
 .portainer-open-button:hover {
+  transform: translateY(-1px);
   filter: brightness(1.1);
 }
 
+.portainer-open-button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 3px;
+}
+
 .portainer-frame-wrapper {
+  width: 100%;
+  height: calc(100vh - 190px);
+  min-height: 700px;
   overflow: hidden;
-  height: calc(100vh - 185px);
-  min-height: 650px;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: #07101f;
@@ -745,24 +764,55 @@ dialog::backdrop {
 }
 
 .portainer-frame {
+  display: block;
   width: 100%;
   height: 100%;
   border: 0;
   background: #07101f;
 }
 
-@media (max-width: 700px) {
+.portainer-page.full-width {
+  width: 100%;
+  padding: 20px 24px 28px;
+}
+
+@media (max-width: 900px) {
   .portainer-page {
-    padding: 18px;
+    min-height: calc(100vh - 72px);
+    padding: 20px 18px;
   }
 
+  .portainer-frame-wrapper {
+    height: calc(100vh - 185px);
+    min-height: 650px;
+  }
+}
+
+@media (max-width: 700px) {
   .portainer-header {
     align-items: stretch;
     flex-direction: column;
   }
 
+  .portainer-open-button {
+    width: 100%;
+  }
+
   .portainer-frame-wrapper {
-    height: calc(100vh - 240px);
-    min-height: 550px;
+    height: calc(100vh - 245px);
+    min-height: 560px;
+  }
+}
+
+@media (max-width: 620px) {
+  .portainer-page {
+    min-height: calc(100vh - 110px);
+    padding: 16px 12px;
+  }
+
+  .portainer-frame-wrapper {
+    height: calc(100vh - 280px);
+    min-height: 520px;
+    border-radius: 10px;
   }
 }
