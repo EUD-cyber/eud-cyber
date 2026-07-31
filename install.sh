@@ -4,7 +4,7 @@ set -e
 # =========================
 # OVERRIDE URLS
 # =========================
-CUSTOM_LINUX_IMG="https://cloud-images.ubuntu.com/noble/20260217/noble-server-cloudimg-amd64.img"
+CUSTOM_LINUX_IMG="https://cloud-images.ubuntu.com/noble/20260725/noble-server-cloudimg-amd64.img"
 CUSTOM_WAZUH_IMG="https://packages.wazuh.com/4.x/vm/wazuh-4.14.1.ova"
 CUSTOM_KALI_IMG="https://kali.download/cloud-images/kali-2025.4/kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
 
