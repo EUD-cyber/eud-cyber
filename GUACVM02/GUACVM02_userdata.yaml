@@ -250,46 +250,46 @@ write_files:
             - ./portainer-admin-password:/run/secrets/portainer_admin_password:ro
 
         topology-api:
-            container_name: cyberlab-topology-api
-            image: python:3.12-alpine
-            restart: always
+          container_name: cyberlab-topology-api
+          image: python:3.12-alpine
+          restart: always
 
-            working_dir: /app
+          working_dir: /app
 
-            command:
-              - sh
-              - -c
-              - |
-                pip install --no-cache-dir -r requirements.txt &&
-                exec gunicorn \
-                  --bind 0.0.0.0:5000 \
-                  --workers 2 \
-                  --threads 4 \
-                  --timeout 60 \
-                  app:app
+          command:
+            - sh
+            - -c
+            - |
+              pip install --no-cache-dir -r requirements.txt &&
+              exec gunicorn \
+                --bind 0.0.0.0:5000 \
+                --workers 2 \
+                --threads 4 \
+                --timeout 60 \
+                app:app
 
-            networks:
-              - guacnetwork_compose
+          networks:
+            - guacnetwork_compose
 
-            volumes:
-              - ./topology-api:/app:ro
-              - ./data:/data
+          volumes:
+            - ./topology-api:/app:ro
+            - ./data:/data
 
-            expose:
-              - "5000"
+          expose:
+            - "5000"
 
-            healthcheck:
-              test:
-                - CMD
-                - wget
-                - -q
-                - -O
-                - /dev/null
-                - http://127.0.0.1:5000/api/topology/status
-              interval: 10s
-              timeout: 5s
-              retries: 10
-              start_period: 40s
+          healthcheck:
+            test:
+              - CMD
+              - wget
+              - -q
+              - -O
+              - /dev/null
+              - http://127.0.0.1:5000/api/topology/status
+            interval: 10s
+            timeout: 5s
+            retries: 10
+            start_period: 40s
 
       volumes:
         guacamole_postgres_data:
@@ -324,18 +324,22 @@ runcmd:
   - systemctl start docker
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
-
+  
   - mkdir -p /opt/guacamole/init
   - mkdir -p /opt/guacamole/drive
   - mkdir -p /opt/guacamole/record
   - mkdir -p /opt/guacamole/backups
   - mkdir -p /opt/guacamole/scripts
   - mkdir -p /opt/guacamole/nginx/web/pages
+  - mkdir -p /opt/guacamole/nginx/certs
   - mkdir -p /opt/guacamole/topology-api
+  - mkdir -p /opt/guacamole/data
 
   - chmod 777 /opt/guacamole/drive
   - chmod 777 /opt/guacamole/record
   - chmod 700 /opt/guacamole/backups
+  - chmod 755 /opt/guacamole/topology-api
+  - chmod 755 /opt/guacamole/data
 
   # Frontend
   - wget -O /opt/guacamole/nginx/web/index.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/index.html
@@ -366,8 +370,19 @@ runcmd:
   - chmod +x /opt/guacamole/scripts/*.sh
   - chmod +x /opt/guacamole/nat.sh
 
+  # Generate HTTPS certificate
+  - mkdir -p /opt/guacamole/nginx/certs
+  - chmod +x /opt/guacamole/scripts/generate-https-certificate.sh
+  - /opt/guacamole/scripts/generate-https-certificate.sh
+
+  # Set Portainer admin password
+  - printf '%s' 'Password1234!' > /opt/guacamole/portainer-admin-password
+  - chmod 600 /opt/guacamole/portainer-admin-password
+
+
   # Generate Guacamole PostgreSQL schema
   - docker run --rm guacamole/guacamole:1.6.0 /opt/guacamole/bin/initdb.sh --postgresql > /opt/guacamole/init/01-initdb.sql
+
 
   # Start DB and guacd first
   - docker compose -f /opt/guacamole/docker-compose.yml up -d postgres guacd
@@ -381,14 +396,6 @@ runcmd:
       fi
       sleep 2
     done
-
-  - printf '%s' 'Password1234!' > /opt/guacamole/portainer-admin-password
-  - chmod 600 /opt/guacamole/portainer-admin-password
-
-
-  - mkdir -p /opt/guacamole/nginx/certs
-  - chmod +x /opt/guacamole/scripts/generate-https-certificate.sh
-  - /opt/guacamole/scripts/generate-https-certificate.sh
 
   - docker compose -f /opt/guacamole/docker-compose.yml up -d
 
