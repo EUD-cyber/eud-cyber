@@ -4,9 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#07101f">
+
   <title>Documentation · Cyberlab</title>
-  <link rel="stylesheet" href="/style.css">
+
+  <link rel="stylesheet" href="/style.css?v=22">
 </head>
+
 <body>
   <header class="topbar">
     <a class="brand" href="/">
@@ -28,26 +31,31 @@
       <p class="docs-sidebar-title">Documentation</p>
 
       <nav class="docs-nav" aria-label="Documentation sections">
-        <button class="docs-link active" data-page="overview">
+        <button class="docs-link active" type="button" data-page="overview">
           Overview
         </button>
 
-        <button class="docs-link" data-page="nat">
+        <button class="docs-link" type="button" data-page="nat">
           NAT
         </button>
 
-        <button class="docs-link" data-page="guacamole">
+        <button class="docs-link" type="button" data-page="guacamole">
           Guacamole
         </button>
 
-        <button class="docs-link" data-page="frontend">
+        <button class="docs-link" type="button" data-page="frontend">
           Frontend
+        </button>
+
+        <button class="docs-link" type="button" data-page="topology">
+          Topology
         </button>
       </nav>
     </aside>
 
     <main class="docs-content">
 
+      <!-- Overview -->
       <section id="overview" class="doc-page active">
         <p class="eyebrow">CYBERLAB V2</p>
         <h1>Documentation</h1>
@@ -57,132 +65,114 @@
           Select a topic from the menu on the left.
         </p>
 
-   
-<section id="overview" class="doc-page active">
-  <p class="eyebrow">CYBERLAB V2</p>
-  <h1>Documentation</h1>
+        <h2>Login information</h2>
 
-  <p>
-    Welcome to the Cyberlab documentation.
-    Select a topic from the menu on the left.
-  </p>
+        <p>
+          Cyberlab uses standard credentials for the training environment.
+          Use the credentials below when logging in to the different systems.
+        </p>
 
- 
-<h2>Login information</h2>
+        <div class="doc-table-wrapper">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>System</th>
+                <th>Username</th>
+                <th>Password</th>
+                <th>Access</th>
+              </tr>
+            </thead>
 
-<p>
-  Cyberlab uses standard credentials for the training environment.
-  Use the credentials below when logging in to the different systems.
-</p>
+            <tbody>
+              <tr>
+                <td>All Linux servers</td>
+                <td><code>ubuntu</code></td>
+                <td><code>Password1!</code></td>
+                <td>SSH, console or Guacamole</td>
+              </tr>
 
-<div class="doc-table-wrapper">
-  <table class="doc-table">
-    <thead>
-      <tr>
-        <th>System</th>
-        <th>Username</th>
-        <th>Password</th>
-        <th>Access</th>
-      </tr>
-    </thead>
+              <tr>
+                <td>OPNsense GUI</td>
+                <td><code>root</code></td>
+                <td><code>opnsense</code></td>
+                <td>HTTPS web interface</td>
+              </tr>
 
-    <tbody>
-      <tr>
-        <td>All Linux servers</td>
-        <td><code>ubuntu</code></td>
-        <td><code>Password1!</code></td>
-        <td>SSH, console or Guacamole</td>
-      </tr>
+              <tr>
+                <td>Wazuh GUI</td>
+                <td><code>admin</code></td>
+                <td><code>Password1?</code></td>
+                <td>HTTPS web interface</td>
+              </tr>
 
-      <tr>
-        <td>OPNsense GUI</td>
-        <td><code>root</code></td>
-        <td><code>opnsense</code></td>
-        <td>HTTPS web interface</td>
-      </tr>
+              <tr>
+                <td>Portainer</td>
+                <td><code>admin</code></td>
+                <td><code>Password1234!</code></td>
+                <td>
+                  Docker management through the Labs page or
+                  <code>/portainer/</code>
+                </td>
+              </tr>
 
-      <tr>
-        <td>Wazuh GUI</td>
-        <td><code>admin</code></td>
-        <td><code>Password1?</code></td>
-        <td>HTTPS web interface</td>
-      </tr>
+              <tr>
+                <td>Guacamole</td>
+                <td><code>guacadmin</code></td>
+                <td>Automatic login</td>
+                <td>
+                  Nginx authenticates the user through the
+                  <code>X-Remote-User</code> header.
+                </td>
+              </tr>
 
-      <tr>
-        <td>Portainer</td>
-        <td><code>admin</code></td>
-        <td><code>Password1234!</code></td>
-        <td>
-          Docker management through the Labs page or
-          <code>/portainer/</code>
-        </td>
-      </tr>
+              <tr>
+                <td>Cyberlab frontend</td>
+                <td>Not required</td>
+                <td>Not required</td>
+                <td>Direct browser access</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-      <tr>
-        <td>Guacamole</td>
-        <td><code>guacadmin</code></td>
-        <td>Automatic login</td>
-        <td>
-          Nginx automatically authenticates the user through the
-          <code>X-Remote-User</code> header.
-        </td>
-      </tr>
+        <div class="doc-warning">
+          These are shared training credentials and must only be used inside
+          the isolated Cyberlab environment. Do not reuse these passwords on
+          production systems or expose the lab directly to the internet.
+        </div>
 
-      <tr>
-        <td>Cyberlab frontend</td>
-        <td>Not required</td>
-        <td>Not required</td>
-        <td>Direct browser access</td>
-      </tr>
-    </tbody>
-  </table>
-</div>
+        <h2>Automatic Guacamole login</h2>
 
-<div class="doc-warning">
-  These are shared training credentials and must only be used inside the
-  isolated Cyberlab environment. Do not reuse these passwords on production
-  systems or expose the lab directly to the internet.
-</div>
-  <h2>Automatic Guacamole login</h2>
+        <p>
+          The automatic Guacamole login is configured in:
+        </p>
 
-  <p>
-    The automatic Guacamole login is configured in the Nginx configuration:
-  </p>
+        <pre><code>/opt/guacamole/nginx/nginx.conf</code></pre>
 
-  <pre><code>/opt/guacamole/nginx/nginx.conf</code></pre>
+        <p>The following line sends the Guacamole username:</p>
 
-  <p>
-    The following line sends the Guacamole username:
-  </p>
+        <pre><code>proxy_set_header X-Remote-User "guacadmin";</code></pre>
 
-  <pre><code>proxy_set_header X-Remote-User "guacadmin";</code></pre>
+        <p>
+          Guacamole reads this header through the following Docker Compose
+          settings:
+        </p>
 
-  <p>
-    Guacamole is configured to read this header in
-    <code>docker-compose.yml</code>:
-  </p>
-
-  <pre><code>HTTP_AUTH_ENABLED: "true"
+        <pre><code>HTTP_AUTH_ENABLED: "true"
 HTTP_AUTH_HEADER: "X-Remote-User"</code></pre>
 
-  <div class="doc-warning">
-    This automatic login is intended only for an isolated training lab.
-    Anyone who can access the Cyberlab frontend can access the Guacamole
-    connections assigned to the <code>guacadmin</code> account.
-  </div>
-
-  <h2>Opening Guacamole directly</h2>
-
-  <pre><code>http://&lt;Cyberlab-IP-or-DNS&gt;/guacamole/</code></pre>
-
-  <p>
-    When Guacamole is opened through the Cyberlab Nginx server, the user
-    should be logged in automatically without entering a username or password.
-  </p>
-</section>
+        <div class="doc-warning">
+          Automatic login is intended only for an isolated training lab.
+          Anyone who can access the frontend can access the Guacamole
+          connections assigned to <code>guacadmin</code>.
         </div>
+
+        <h2>Open Guacamole directly</h2>
+
+        <pre><code>https://&lt;Cyberlab-IP-or-DNS&gt;/guacamole/</code></pre>
       </section>
 
+      <!-- NAT -->
       <section id="nat" class="doc-page">
         <p class="eyebrow">NETWORKING</p>
         <h1>NAT Configuration</h1>
@@ -194,9 +184,7 @@ HTTP_AUTH_HEADER: "X-Remote-User"</code></pre>
 
         <h2>Adding a new NAT entry</h2>
 
-        <p>Open the following file:</p>
-
-        <pre><code>/opt/guacamole/nat.sh</code></pre>
+        <pre><code>sudo nano /opt/guacamole/nat.sh</code></pre>
 
         <p>Locate the <strong>NAT_RULES</strong> array:</p>
 
@@ -205,8 +193,6 @@ HTTP_AUTH_HEADER: "X-Remote-User"</code></pre>
   "3002 192.168.10.3 443 FAZ"
   "3003 192.168.10.4 443 FGT"
 )</code></pre>
-
-        <p>Each entry consists of four values:</p>
 
         <div class="doc-table-wrapper">
           <table class="doc-table">
@@ -220,7 +206,7 @@ HTTP_AUTH_HEADER: "X-Remote-User"</code></pre>
 
             <tbody>
               <tr>
-                <td>External Port</td>
+                <td>External port</td>
                 <td>Port exposed on the Cyberlab server</td>
                 <td>3001</td>
               </tr>
@@ -232,7 +218,7 @@ HTTP_AUTH_HEADER: "X-Remote-User"</code></pre>
               </tr>
 
               <tr>
-                <td>Destination Port</td>
+                <td>Destination port</td>
                 <td>Service port on the internal system</td>
                 <td>443</td>
               </tr>
@@ -248,36 +234,26 @@ HTTP_AUTH_HEADER: "X-Remote-User"</code></pre>
 
         <h2>Example</h2>
 
-        <p>
-          To publish a Wazuh web interface running on
-          <code>192.168.10.20:443</code>:
-        </p>
-
         <pre><code>"3007 192.168.10.20 443 WAZUH"</code></pre>
 
-        <p>The service will then be available at:</p>
+        <p>The service becomes available at:</p>
 
         <pre><code>https://&lt;Cyberlab-IP-or-DNS&gt;:3007</code></pre>
 
-        <h2>Apply the configuration</h2>
+        <h2>Apply configuration</h2>
 
         <pre><code>sudo /opt/guacamole/nat.sh apply</code></pre>
 
-        <h2>View current rules</h2>
+        <h2>View status</h2>
 
         <pre><code>sudo /opt/guacamole/nat.sh status</code></pre>
 
-        <h2>Remove Cyberlab NAT rules</h2>
+        <h2>Remove rules</h2>
 
         <pre><code>sudo /opt/guacamole/nat.sh remove</code></pre>
-
-        <div class="doc-warning">
-          After changing NAT_RULES, run the apply command again.
-          The script removes the old Cyberlab chains and recreates them
-          using the current configuration.
-        </div>
       </section>
 
+      <!-- Guacamole -->
       <section id="guacamole" class="doc-page">
         <p class="eyebrow">REMOTE ACCESS</p>
         <h1>Guacamole</h1>
@@ -288,7 +264,7 @@ HTTP_AUTH_HEADER: "X-Remote-User"</code></pre>
 
         <h2>Open Guacamole</h2>
 
-        <pre><code>http://&lt;Cyberlab-IP-or-DNS&gt;/guacamole/</code></pre>
+        <pre><code>https://&lt;Cyberlab-IP-or-DNS&gt;/guacamole/</code></pre>
 
         <h2>Docker status</h2>
 
@@ -297,9 +273,11 @@ docker compose ps</code></pre>
 
         <h2>View logs</h2>
 
-        <pre><code>docker compose logs --tail=100 guacamole</code></pre>
+        <pre><code>cd /opt/guacamole
+docker compose logs --tail=100 guacamole</code></pre>
       </section>
 
+      <!-- Frontend -->
       <section id="frontend" class="doc-page">
         <p class="eyebrow">WEB PORTAL</p>
         <h1>Frontend</h1>
@@ -333,13 +311,53 @@ docker compose ps</code></pre>
 
         <p>
           When a connection uses <code>port</code>, the frontend uses the
-          same IP address or DNS name that the user used to open Cyberlab.
+          same IP address or DNS name that was used to open Cyberlab.
         </p>
+      </section>
+
+      <!-- Topology -->
+      <section id="topology" class="doc-page">
+        <p class="eyebrow">NETWORK DOCUMENTATION</p>
+        <h1>Topology</h1>
+
+        <p>
+          The Topology page is used to document devices and connections in
+          the Cyberlab environment.
+        </p>
+
+        <h2>Open the Topology page</h2>
+
+        <pre><code>https://&lt;Cyberlab-IP-or-DNS&gt;/pages/topology.html</code></pre>
+
+        <h2>Workflow</h2>
+
+        <ol class="doc-steps">
+          <li>Scan the lab network from Kali.</li>
+          <li>Add discovered systems to the topology.</li>
+          <li>Enter the system name, IP address and network.</li>
+          <li>Connect the devices.</li>
+          <li>Press <strong>Save topology</strong>.</li>
+        </ol>
+
+        <h2>Server storage</h2>
+
+        <p>The topology is saved on GuacVM as:</p>
+
+        <pre><code>/opt/guacamole/data/topology.json</code></pre>
+
+        <p>
+          The saved topology is loaded automatically when the page is opened
+          from another computer.
+        </p>
+
+        <div class="doc-warning">
+          Reset topology deletes the shared topology for all users.
+        </div>
       </section>
 
     </main>
   </div>
 
-  <script src="/documentation.js"></script>
+  <script src="/documentation.js?v=22"></script>
 </body>
 </html>
