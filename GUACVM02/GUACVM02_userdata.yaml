@@ -211,8 +211,12 @@ write_files:
           image: nginx:alpine
           restart: always
           depends_on:
-            - guacamole
-            - portainer
+            guacamole:
+              condition: service_started
+            portainer:
+              condition: service_started
+            topology-api:
+              condition: service_healthy
           networks:
             - guacnetwork_compose
           ports:
@@ -244,6 +248,48 @@ write_files:
             - /var/run/docker.sock:/var/run/docker.sock
             - portainer_data:/data
             - ./portainer-admin-password:/run/secrets/portainer_admin_password:ro
+
+        topology-api:
+            container_name: cyberlab-topology-api
+            image: python:3.12-alpine
+            restart: always
+
+            working_dir: /app
+
+            command:
+              - sh
+              - -c
+              - |
+                pip install --no-cache-dir -r requirements.txt &&
+                exec gunicorn \
+                  --bind 0.0.0.0:5000 \
+                  --workers 2 \
+                  --threads 4 \
+                  --timeout 60 \
+                  app:app
+
+            networks:
+              - guacnetwork_compose
+
+            volumes:
+              - ./topology-api:/app:ro
+              - ./data:/data
+
+            expose:
+              - "5000"
+
+            healthcheck:
+              test:
+                - CMD
+                - wget
+                - -q
+                - -O
+                - /dev/null
+                - http://127.0.0.1:5000/api/topology/status
+              interval: 10s
+              timeout: 5s
+              retries: 10
+              start_period: 40s
 
       volumes:
         guacamole_postgres_data:
@@ -285,6 +331,7 @@ runcmd:
   - mkdir -p /opt/guacamole/backups
   - mkdir -p /opt/guacamole/scripts
   - mkdir -p /opt/guacamole/nginx/web/pages
+  - mkdir -p /opt/guacamole/topology-api
 
   - chmod 777 /opt/guacamole/drive
   - chmod 777 /opt/guacamole/record
@@ -300,13 +347,18 @@ runcmd:
   # Pages
   - wget -O /opt/guacamole/nginx/web/pages/labs.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/pages/labs.html
   - wget -O /opt/guacamole/nginx/web/pages/documentation.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/pages/documentation.html
-  - wget -O /opt/guacamole/nginx/web/pages/tools.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/pages/tools.html
+  - wget -O /opt/guacamole/nginx/web/pages/topology.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/pages/topology.html
   - wget -O /opt/guacamole/nginx/web/pages/settings.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/pages/settings.html
 
   # Scripts
   - wget -O /opt/guacamole/scripts/backup-guacamole-db.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/scripts/backup-guacamole-db.sh
   - wget -O /opt/guacamole/scripts/restore-guacamole-db.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/scripts/restore-guacamole-db.sh
   - wget -O /opt/guacamole/nat.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nat.sh
+
+  # API
+  - wget -O /opt/guacamole/topology-api/app.py https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/topology-api/app.py
+  - wget -O /opt/guacamole/topology-api/requirements.txt https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/topology-api/requirements.txt
+  
 
   # Optional DB backup
   - wget -O /opt/guacamole/backups/guacamole-db.sql.gz https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/backups/guacamole-db.sql.gz || rm -f /opt/guacamole/backups/guacamole-db.sql.gz

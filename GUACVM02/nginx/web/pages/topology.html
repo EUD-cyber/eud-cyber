@@ -1,6 +1,1827 @@
 <!doctype html>
-<html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tools · Cyberlab</title><link rel="stylesheet" href="/style.css"></head>
-<body><header class="topbar"><a class="brand" href="/"><span class="brand-mark">C</span><span>Cyberlab</span></a>
-<nav class="tabs"><a href="/">Connections</a><a  href="/pages/labs.html">Labs</a><a  href="/pages/documentation.html">Documentation</a><a class="active" href="/pages/topology.html">Tools</a><a  href="/pages/settings.html">Settings</a></nav></header>
-<main class="page-shell"><section class="page-card"><p class="eyebrow">CYBERLAB V2</p><h1>Tools</h1><p>Plads til links til værktøjer og eksterne tjenester.</p></section></main></body></html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07101f">
+
+  <title>Topology · Cyberlab</title>
+
+  <link rel="stylesheet" href="/style.css?v=31">
+
+  <style>
+    :root {
+      --topology-library-width: 220px;
+      --topology-properties-width: 300px;
+    }
+
+    body {
+      overflow: hidden;
+    }
+
+    .topology-shell {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      height: calc(100vh - 72px);
+      min-height: 0;
+    }
+
+    .topology-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(9, 20, 38, .96);
+    }
+
+    .topology-heading h1 {
+      margin: 0;
+      font-size: 26px;
+    }
+
+    .topology-heading p:last-child {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .topology-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 9px;
+      flex-wrap: wrap;
+    }
+
+    .topology-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-height: 39px;
+      padding: 8px 13px;
+      border: 1px solid #2b4262;
+      border-radius: 9px;
+      background: #101f35;
+      color: #dce8f7;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .topology-button:hover:not(:disabled) {
+      border-color: #4389ca;
+      background: #142944;
+    }
+
+    .topology-button:disabled {
+      cursor: not-allowed;
+      opacity: .45;
+    }
+
+    .topology-button.primary {
+      border-color: #428dde;
+      background: linear-gradient(135deg, #1d65cc, #2b85ef);
+      color: #fff;
+      font-weight: 750;
+    }
+
+    .topology-button.danger {
+      border-color: #713948;
+      color: #ff9aaa;
+    }
+
+    .topology-button.active {
+      border-color: #35d89b;
+      background: #123f38;
+      color: #96efd0;
+    }
+
+    .save-status {
+      min-width: 210px;
+      padding: 8px 12px;
+      border: 1px solid #214a45;
+      border-radius: 9px;
+      background: #0c2625;
+      color: #84e6bf;
+      font-size: 12px;
+    }
+
+    .save-status strong,
+    .save-status span {
+      display: block;
+    }
+
+    .save-status strong {
+      color: #d1ffed;
+    }
+
+    .save-status.unsaved {
+      border-color: #695228;
+      background: #2d2514;
+      color: #ffd88a;
+    }
+
+    .save-status.error {
+      border-color: #713948;
+      background: #321822;
+      color: #ff9aaa;
+    }
+
+    .topology-workspace {
+      display: grid;
+      grid-template-columns:
+        var(--topology-library-width)
+        minmax(480px, 1fr)
+        var(--topology-properties-width);
+      min-height: 0;
+    }
+
+    .device-library,
+    .properties-panel {
+      overflow-y: auto;
+      background: #091426;
+    }
+
+    .device-library {
+      padding: 18px 14px;
+      border-right: 1px solid var(--line);
+    }
+
+    .properties-panel {
+      padding: 19px 16px;
+      border-left: 1px solid var(--line);
+    }
+
+    .panel-heading {
+      margin: 0 0 5px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .panel-description {
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .device-types {
+      display: grid;
+      gap: 8px;
+    }
+
+    .device-type {
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr);
+      align-items: center;
+      gap: 9px;
+      width: 100%;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: #101d30;
+      color: #d7e2ef;
+      cursor: grab;
+      text-align: left;
+    }
+
+    .device-type:hover {
+      border-color: #397bb8;
+      background: #132842;
+    }
+
+    .device-type:active {
+      cursor: grabbing;
+    }
+
+    .device-type-icon {
+      display: grid;
+      place-items: center;
+      width: 35px;
+      height: 35px;
+      border-radius: 8px;
+      background: #182d47;
+      font-size: 16px;
+      font-weight: 900;
+    }
+
+    .canvas-wrapper {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+      background:
+        linear-gradient(#11203555 1px, transparent 1px),
+        linear-gradient(90deg, #11203555 1px, transparent 1px),
+        radial-gradient(circle at 70% 0, #10294a 0, transparent 38%),
+        #07101f;
+      background-size: 24px 24px, 24px 24px, auto, auto;
+    }
+
+    .topology-canvas {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .connections-layer {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      pointer-events: none;
+    }
+
+    .connection-line {
+      stroke: #8299b5;
+      stroke-width: 2;
+      opacity: .9;
+      pointer-events: stroke;
+      cursor: pointer;
+    }
+
+    .connection-line:hover,
+    .connection-line.selected {
+      stroke: var(--blue);
+      stroke-width: 4;
+    }
+
+    .canvas-tools {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      z-index: 20;
+      display: flex;
+      gap: 7px;
+    }
+
+    .topology-node {
+      position: absolute;
+      z-index: 5;
+      width: 155px;
+      min-height: 92px;
+      padding: 11px;
+      border: 1px solid #334968;
+      border-radius: 11px;
+      background: linear-gradient(155deg, #111f34, #0c1829);
+      box-shadow: 0 12px 28px #0005;
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
+    }
+
+    .topology-node:active {
+      cursor: grabbing;
+    }
+
+    .topology-node * {
+      pointer-events: none;
+    }
+
+    .topology-node:hover {
+      border-color: #4788c5;
+    }
+
+    .topology-node.selected {
+      border-color: var(--blue);
+      box-shadow:
+        0 12px 28px #0006,
+        0 0 0 2px #3a98ec55;
+    }
+
+    .topology-node.connection-source {
+      border-color: #35d89b;
+      box-shadow:
+        0 12px 28px #0006,
+        0 0 0 2px #35d89b55;
+    }
+
+    .node-header {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+
+    .node-icon {
+      display: grid;
+      flex: 0 0 auto;
+      place-items: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: #18314f;
+      font-size: 14px;
+      font-weight: 900;
+    }
+
+    .node-title {
+      overflow: hidden;
+      min-width: 0;
+    }
+
+    .node-title strong,
+    .node-title span {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .node-title strong {
+      font-size: 14px;
+    }
+
+    .node-title span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .node-ip {
+      display: block;
+      overflow: hidden;
+      margin-top: 9px;
+      color: #c1d0e1;
+      font: 11px ui-monospace, Consolas, monospace;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .node-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 8px;
+      color: #8295ae;
+      font-size: 10px;
+    }
+
+    .node-network {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .node-status {
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .node-status::before {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #68778d;
+      content: "";
+    }
+
+    .node-status.active::before {
+      background: var(--green);
+      box-shadow: 0 0 8px #27d79a99;
+    }
+
+    .node-status.unknown::before {
+      background: var(--orange);
+    }
+
+    .node-status.offline::before {
+      background: var(--red);
+    }
+
+    .property-group {
+      margin-bottom: 15px;
+    }
+
+    .property-group label {
+      display: block;
+      margin-bottom: 5px;
+      color: #b5c4d8;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .property-group input,
+    .property-group select,
+    .property-group textarea {
+      width: 100%;
+      padding: 10px 11px;
+      border: 1px solid #2b3e5b;
+      border-radius: 8px;
+      outline: none;
+      background: #0c182a;
+      color: #fff;
+      font: inherit;
+    }
+
+    .property-group textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    .property-group input:focus,
+    .property-group select:focus,
+    .property-group textarea:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 2px #48a8ff22;
+    }
+
+    .property-actions {
+      display: grid;
+      gap: 9px;
+      margin-top: 20px;
+    }
+
+    .no-selection {
+      padding: 30px 5px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .no-selection span {
+      display: block;
+      margin-bottom: 10px;
+      font-size: 38px;
+    }
+
+    .topology-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 11px 21px;
+      border-top: 1px solid var(--line);
+      background: #091426;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .topology-stats {
+      display: flex;
+      gap: 22px;
+    }
+
+    .topology-stats strong {
+      margin-left: 5px;
+      color: #fff;
+    }
+
+    .hidden-file-input {
+      display: none;
+    }
+
+    @media (max-width: 1050px) {
+      :root {
+        --topology-library-width: 180px;
+        --topology-properties-width: 250px;
+      }
+    }
+
+    @media (max-width: 800px) {
+      body {
+        overflow: auto;
+      }
+
+      .topology-shell {
+        height: auto;
+      }
+
+      .topology-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .topology-actions {
+        justify-content: flex-start;
+      }
+
+      .topology-workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .device-library,
+      .properties-panel {
+        border: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .device-types {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .canvas-wrapper {
+        min-height: 650px;
+      }
+
+      .topology-footer {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand-mark">C</span>
+      <span>Cyberlab</span>
+    </a>
+
+    <nav class="tabs" aria-label="Main navigation">
+      <a href="/">Connections</a>
+      <a href="/pages/labs.html">Labs</a>
+      <a href="/pages/documentation.html">Documentation</a>
+      <a class="active" href="/pages/topology.html">Topology</a>
+      <a href="/pages/settings.html">Settings</a>
+    </nav>
+  </header>
+
+  <main class="topology-shell">
+    <section class="topology-toolbar">
+      <div class="topology-heading">
+        <p class="eyebrow">CYBERLAB V2</p>
+        <h1>Topology</h1>
+        <p>
+          Scan the network from Kali, add the discovered systems and save
+          the completed topology on the Cyberlab server.
+        </p>
+      </div>
+
+      <div class="topology-actions">
+        <div id="saveStatus" class="save-status">
+          <strong>Server storage</strong>
+          <span id="saveStatusText">Loading topology...</span>
+        </div>
+
+        <button
+          id="saveButton"
+          class="topology-button primary"
+          type="button">
+          Save topology
+        </button>
+
+        <button
+          id="importButton"
+          class="topology-button"
+          type="button">
+          Import
+        </button>
+
+        <button
+          id="exportButton"
+          class="topology-button"
+          type="button">
+          Export
+        </button>
+
+        <button
+          id="resetButton"
+          class="topology-button danger"
+          type="button">
+          Reset topology
+        </button>
+      </div>
+    </section>
+
+    <section class="topology-workspace">
+      <aside class="device-library">
+        <h2 class="panel-heading">Devices</h2>
+
+        <p class="panel-description">
+          Click a device type or drag it onto the canvas.
+        </p>
+
+        <div id="deviceTypes" class="device-types"></div>
+      </aside>
+
+      <section id="canvasWrapper" class="canvas-wrapper">
+        <div class="canvas-tools">
+          <button
+            id="selectTool"
+            class="topology-button active"
+            type="button">
+            Select
+          </button>
+
+          <button
+            id="connectTool"
+            class="topology-button"
+            type="button">
+            Connect
+          </button>
+
+          <button
+            id="deleteConnectionButton"
+            class="topology-button danger"
+            type="button"
+            disabled>
+            Delete link
+          </button>
+        </div>
+
+        <div id="topologyCanvas" class="topology-canvas">
+          <svg
+            id="connectionsLayer"
+            class="connections-layer"
+            aria-label="Device connections">
+          </svg>
+
+          
+        </div>
+      </section>
+
+      <aside class="properties-panel">
+        <h2 class="panel-heading">Properties</h2>
+
+        <p class="panel-description">
+          Select a device to edit its information.
+        </p>
+
+        <div id="noSelection" class="no-selection">
+          <span>⬚</span>
+          No device selected.
+        </div>
+
+        <form id="deviceProperties" hidden>
+          <div class="property-group">
+            <label for="propertyType">Device type</label>
+            <select id="propertyType"></select>
+          </div>
+
+          <div class="property-group">
+            <label for="propertyName">Name</label>
+            <input
+              id="propertyName"
+              type="text"
+              maxlength="60"
+              placeholder="Example: VulnSrv1">
+          </div>
+
+          <div class="property-group">
+            <label for="propertyIp">IP address</label>
+            <input
+              id="propertyIp"
+              type="text"
+              maxlength="50"
+              placeholder="Example: 192.168.1.20">
+          </div>
+
+          <div class="property-group">
+            <label for="propertyNetwork">Network</label>
+            <input
+              id="propertyNetwork"
+              type="text"
+              maxlength="80"
+              placeholder="Example: LAN1">
+          </div>
+
+          <div class="property-group">
+            <label for="propertyStatus">Status</label>
+            <select id="propertyStatus">
+              <option value="active">Active</option>
+              <option value="unknown">Unknown</option>
+              <option value="offline">Offline</option>
+            </select>
+          </div>
+
+          <div class="property-group">
+            <label for="propertyNotes">Description</label>
+            <textarea
+              id="propertyNotes"
+              maxlength="500"
+              placeholder="Example: Runs DVWA and Juice Shop in Docker."></textarea>
+          </div>
+
+          <div class="property-actions">
+            <button
+              id="deleteDeviceButton"
+              class="topology-button danger"
+              type="button">
+              Delete device
+            </button>
+          </div>
+        </form>
+      </aside>
+    </section>
+
+    <footer class="topology-footer">
+      <div class="topology-stats">
+        <span>
+          Devices:
+          <strong id="deviceCount">0</strong>
+        </span>
+
+        <span>
+          Connections:
+          <strong id="connectionCount">0</strong>
+        </span>
+      </div>
+
+      <div>
+        The topology is stored on the Cyberlab server and shared between
+        all computers opening this installation.
+      </div>
+    </footer>
+  </main>
+
+  <input
+    id="importFile"
+    class="hidden-file-input"
+    type="file"
+    accept=".json,application/json">
+
+  <script>
+    (() => {
+      "use strict";
+
+      const API_URL = "/api/topology";
+      const NODE_WIDTH = 155;
+      const NODE_HEIGHT = 92;
+      const CANVAS_TOP_MARGIN = 55;
+
+      const DEVICE_TYPES = {
+        firewall: { label: "Firewall", icon: "FW" },
+        router: { label: "Router", icon: "RT" },
+        switch: { label: "Switch", icon: "SW" },
+        linux: { label: "Linux", icon: "LX" },
+        windows: { label: "Windows", icon: "WIN" },
+        server: { label: "Server", icon: "SRV" },
+        docker: { label: "Docker host", icon: "DKR" },
+        cloud: { label: "Cloud / Internet", icon: "NET" },
+        network: { label: "Network", icon: "LAN" },
+        unknown: { label: "Unknown", icon: "?" }
+      };
+
+      const canvas = document.getElementById("topologyCanvas");
+      const canvasWrapper = document.getElementById("canvasWrapper");
+      const connectionsLayer =
+        document.getElementById("connectionsLayer");
+
+      const deviceTypesElement =
+        document.getElementById("deviceTypes");
+
+      const noSelection = document.getElementById("noSelection");
+      const propertiesForm =
+        document.getElementById("deviceProperties");
+
+      const propertyType =
+        document.getElementById("propertyType");
+
+      const propertyName =
+        document.getElementById("propertyName");
+
+      const propertyIp =
+        document.getElementById("propertyIp");
+
+      const propertyNetwork =
+        document.getElementById("propertyNetwork");
+
+      const propertyStatus =
+        document.getElementById("propertyStatus");
+
+      const propertyNotes =
+        document.getElementById("propertyNotes");
+
+      const saveStatus =
+        document.getElementById("saveStatus");
+
+      const saveStatusText =
+        document.getElementById("saveStatusText");
+
+      const saveButton =
+        document.getElementById("saveButton");
+
+      const selectTool =
+        document.getElementById("selectTool");
+
+      const connectTool =
+        document.getElementById("connectTool");
+
+      const deleteConnectionButton =
+        document.getElementById("deleteConnectionButton");
+
+      const importFile =
+        document.getElementById("importFile");
+
+      let topology = emptyTopology();
+
+      let selectedDeviceId = null;
+      let selectedConnectionId = null;
+      let connectionSourceId = null;
+      let currentTool = "select";
+
+      let dragState = null;
+      let suppressNextClick = false;
+
+      function emptyTopology() {
+        return {
+          version: 1,
+          devices: [],
+          connections: []
+        };
+      }
+
+      function createId(prefix) {
+        if (window.crypto?.randomUUID) {
+          return `${prefix}-${crypto.randomUUID()}`;
+        }
+
+        return `${prefix}-${Date.now()}-${
+          Math.random().toString(16).slice(2)
+        }`;
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function clamp(value, minimum, maximum) {
+        return Math.min(
+          Math.max(value, minimum),
+          maximum
+        );
+      }
+
+      function getDevice(deviceId) {
+        return topology.devices.find(
+          device => device.id === deviceId
+        );
+      }
+
+      function setStatus(message, state = "normal") {
+        saveStatusText.textContent = message;
+
+        saveStatus.classList.toggle(
+          "unsaved",
+          state === "unsaved"
+        );
+
+        saveStatus.classList.toggle(
+          "error",
+          state === "error"
+        );
+      }
+
+      function markUnsaved() {
+        setStatus("Unsaved changes", "unsaved");
+      }
+
+      function validateLoadedTopology(value) {
+        return (
+          value &&
+          typeof value === "object" &&
+          Array.isArray(value.devices) &&
+          Array.isArray(value.connections)
+        );
+      }
+
+      async function loadTopology() {
+        setStatus("Loading topology from server...");
+        saveButton.disabled = true;
+
+        try {
+          const response = await fetch(API_URL, {
+            method: "GET",
+            cache: "no-store",
+            headers: {
+              "Accept": "application/json"
+            }
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          const loadedTopology = await response.json();
+
+          if (!validateLoadedTopology(loadedTopology)) {
+            throw new Error(
+              "The server returned invalid topology data."
+            );
+          }
+
+          topology = {
+            version: loadedTopology.version || 1,
+            devices: loadedTopology.devices,
+            connections: loadedTopology.connections
+          };
+
+          topology.devices.forEach(device => {
+            device.x = Number(device.x) || 20;
+            device.y = Number(device.y) || CANVAS_TOP_MARGIN;
+          });
+
+          selectedDeviceId = null;
+          selectedConnectionId = null;
+          connectionSourceId = null;
+
+          if (topology.devices.length === 0) {
+            setStatus("No saved topology — empty canvas");
+          }
+          else {
+            setStatus("Saved topology loaded from server");
+          }
+
+          render();
+        }
+        catch (error) {
+          console.error("Could not load topology:", error);
+
+          topology = emptyTopology();
+
+          setStatus(
+            "Could not contact topology server",
+            "error"
+          );
+
+          render();
+        }
+        finally {
+          saveButton.disabled = false;
+        }
+      }
+
+      async function saveTopology() {
+        saveButton.disabled = true;
+        setStatus("Saving topology...");
+
+        try {
+          const response = await fetch(API_URL, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Accept": "application/json"
+            },
+            body: JSON.stringify(topology)
+          });
+
+          const result =
+            await response.json().catch(() => ({}));
+
+          if (!response.ok) {
+            throw new Error(
+              result.error || `HTTP ${response.status}`
+            );
+          }
+
+          setStatus(
+            `Saved on server at ${
+              new Date().toLocaleTimeString("da-DK")
+            }`
+          );
+        }
+        catch (error) {
+          console.error("Could not save topology:", error);
+
+          setStatus("Save failed", "error");
+
+          alert(
+            `The topology could not be saved:\n${error.message}`
+          );
+        }
+        finally {
+          saveButton.disabled = false;
+        }
+      }
+
+      async function resetTopology() {
+        const approved = confirm(
+          "Delete the topology saved on the server?\n\n" +
+          "This will make the topology empty for all users."
+        );
+
+        if (!approved) {
+          return;
+        }
+
+        setStatus("Resetting topology...");
+
+        try {
+          const response = await fetch(API_URL, {
+            method: "DELETE",
+            headers: {
+              "Accept": "application/json"
+            }
+          });
+
+          const result =
+            await response.json().catch(() => ({}));
+
+          if (!response.ok) {
+            throw new Error(
+              result.error || `HTTP ${response.status}`
+            );
+          }
+
+          topology = emptyTopology();
+          selectedDeviceId = null;
+          selectedConnectionId = null;
+          connectionSourceId = null;
+          dragState = null;
+
+          setStatus("No saved topology — empty canvas");
+          render();
+        }
+        catch (error) {
+          console.error("Could not reset topology:", error);
+
+          setStatus("Reset failed", "error");
+
+          alert(
+            `The topology could not be reset:\n${error.message}`
+          );
+        }
+      }
+
+      function renderDeviceLibrary() {
+        deviceTypesElement.replaceChildren();
+        propertyType.replaceChildren();
+
+        Object.entries(DEVICE_TYPES).forEach(
+          ([type, definition]) => {
+            const button = document.createElement("button");
+
+            button.className = "device-type";
+            button.type = "button";
+            button.draggable = true;
+            button.dataset.type = type;
+
+            button.innerHTML = `
+              <span class="device-type-icon">
+                ${escapeHtml(definition.icon)}
+              </span>
+
+              <span>
+                ${escapeHtml(definition.label)}
+              </span>
+            `;
+
+            button.addEventListener("click", () => {
+              addDevice(type);
+            });
+
+            button.addEventListener("dragstart", event => {
+              event.dataTransfer.setData(
+                "text/device-type",
+                type
+              );
+
+              event.dataTransfer.effectAllowed = "copy";
+            });
+
+            deviceTypesElement.appendChild(button);
+
+            const option = document.createElement("option");
+
+            option.value = type;
+            option.textContent = definition.label;
+
+            propertyType.appendChild(option);
+          }
+        );
+      }
+
+      function addDevice(type, x = null, y = null) {
+        const definition =
+          DEVICE_TYPES[type] || DEVICE_TYPES.unknown;
+
+        const rect = canvas.getBoundingClientRect();
+
+        const count =
+          topology.devices.filter(
+            device => device.type === type
+          ).length + 1;
+
+        const device = {
+          id: createId("device"),
+          type,
+          name: `${definition.label} ${count}`,
+          ip: "",
+          network: "",
+          status: "unknown",
+          notes: "",
+          x: x ?? Math.max(20, rect.width / 2 - 78),
+          y: y ?? Math.max(
+            CANVAS_TOP_MARGIN,
+            rect.height / 2 - 46
+          )
+        };
+
+        topology.devices.push(device);
+
+        selectedDeviceId = device.id;
+        selectedConnectionId = null;
+
+        markUnsaved();
+        render();
+      }
+
+      function deleteDevice(deviceId) {
+        topology.devices = topology.devices.filter(
+          device => device.id !== deviceId
+        );
+
+        topology.connections = topology.connections.filter(
+          connection =>
+            connection.from !== deviceId &&
+            connection.to !== deviceId
+        );
+
+        selectedDeviceId = null;
+        selectedConnectionId = null;
+        connectionSourceId = null;
+
+        markUnsaved();
+        render();
+      }
+
+      function createConnection(firstId, secondId) {
+        if (
+          !firstId ||
+          !secondId ||
+          firstId === secondId
+        ) {
+          return;
+        }
+
+        const alreadyExists = topology.connections.some(
+          connection =>
+            (
+              connection.from === firstId &&
+              connection.to === secondId
+            ) ||
+            (
+              connection.from === secondId &&
+              connection.to === firstId
+            )
+        );
+
+        if (alreadyExists) {
+          return;
+        }
+
+        topology.connections.push({
+          id: createId("connection"),
+          from: firstId,
+          to: secondId
+        });
+
+        markUnsaved();
+      }
+
+      function setTool(tool) {
+        currentTool = tool;
+        connectionSourceId = null;
+
+        selectTool.classList.toggle(
+          "active",
+          tool === "select"
+        );
+
+        connectTool.classList.toggle(
+          "active",
+          tool === "connect"
+        );
+
+        renderDevices();
+      }
+
+      function handleConnectionClick(deviceId) {
+        if (!connectionSourceId) {
+          connectionSourceId = deviceId;
+          selectedDeviceId = deviceId;
+          selectedConnectionId = null;
+
+          render();
+          return;
+        }
+
+        createConnection(
+          connectionSourceId,
+          deviceId
+        );
+
+        connectionSourceId = null;
+        selectedDeviceId = deviceId;
+
+        render();
+      }
+
+      function handleNodePointerDown(event, deviceId) {
+        if (
+          currentTool !== "select" ||
+          event.button !== 0
+        ) {
+          return;
+        }
+
+        const device = getDevice(deviceId);
+
+        if (!device) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        selectedDeviceId = deviceId;
+        selectedConnectionId = null;
+
+        dragState = {
+          pointerId: event.pointerId,
+          deviceId,
+          startPointerX: event.clientX,
+          startPointerY: event.clientY,
+          startDeviceX: Number(device.x) || 0,
+          startDeviceY: Number(device.y) || CANVAS_TOP_MARGIN,
+          moved: false,
+          element: event.currentTarget
+        };
+
+        event.currentTarget.setPointerCapture(
+          event.pointerId
+        );
+
+        renderProperties();
+      }
+
+      function handlePointerMove(event) {
+        if (
+          !dragState ||
+          dragState.pointerId !== event.pointerId
+        ) {
+          return;
+        }
+
+        const device = getDevice(dragState.deviceId);
+
+        if (!device) {
+          return;
+        }
+
+        event.preventDefault();
+
+        const deltaX =
+          event.clientX - dragState.startPointerX;
+
+        const deltaY =
+          event.clientY - dragState.startPointerY;
+
+        if (
+          Math.abs(deltaX) > 3 ||
+          Math.abs(deltaY) > 3
+        ) {
+          dragState.moved = true;
+        }
+
+        const nodeWidth =
+          dragState.element?.offsetWidth || NODE_WIDTH;
+
+        const nodeHeight =
+          dragState.element?.offsetHeight || NODE_HEIGHT;
+
+        device.x = clamp(
+          dragState.startDeviceX + deltaX,
+          0,
+          Math.max(
+            0,
+            canvas.clientWidth - nodeWidth
+          )
+        );
+
+        device.y = clamp(
+          dragState.startDeviceY + deltaY,
+          CANVAS_TOP_MARGIN,
+          Math.max(
+            CANVAS_TOP_MARGIN,
+            canvas.clientHeight - nodeHeight
+          )
+        );
+
+        if (dragState.element) {
+          dragState.element.style.left =
+            `${device.x}px`;
+
+          dragState.element.style.top =
+            `${device.y}px`;
+        }
+
+        renderConnections();
+      }
+
+      function handlePointerUp(event) {
+        if (
+          !dragState ||
+          dragState.pointerId !== event.pointerId
+        ) {
+          return;
+        }
+
+        if (
+          dragState.element?.hasPointerCapture(
+            event.pointerId
+          )
+        ) {
+          dragState.element.releasePointerCapture(
+            event.pointerId
+          );
+        }
+
+        if (dragState.moved) {
+          suppressNextClick = true;
+          markUnsaved();
+        }
+
+        dragState = null;
+      }
+
+      function renderDevices() {
+        canvas
+          .querySelectorAll(".topology-node")
+          .forEach(node => node.remove());
+
+        topology.devices.forEach(device => {
+          const definition =
+            DEVICE_TYPES[device.type] ||
+            DEVICE_TYPES.unknown;
+
+          const node = document.createElement("article");
+
+          node.className = "topology-node";
+          node.dataset.deviceId = device.id;
+          node.style.left = `${device.x}px`;
+          node.style.top = `${device.y}px`;
+
+          node.classList.toggle(
+            "selected",
+            device.id === selectedDeviceId
+          );
+
+          node.classList.toggle(
+            "connection-source",
+            device.id === connectionSourceId
+          );
+
+          const statusText = {
+            active: "Active",
+            unknown: "Unknown",
+            offline: "Offline"
+          }[device.status] || "Unknown";
+
+          node.innerHTML = `
+            <div class="node-header">
+              <span class="node-icon">
+                ${escapeHtml(definition.icon)}
+              </span>
+
+              <div class="node-title">
+                <strong>
+                  ${escapeHtml(device.name)}
+                </strong>
+
+                <span>
+                  ${escapeHtml(definition.label)}
+                </span>
+              </div>
+            </div>
+
+            <code class="node-ip">
+              ${escapeHtml(device.ip || "IP not entered")}
+            </code>
+
+            <div class="node-footer">
+              <span class="node-network">
+                ${escapeHtml(device.network || "No network")}
+              </span>
+
+              <span class="node-status ${device.status}">
+                ${escapeHtml(statusText)}
+              </span>
+            </div>
+          `;
+
+          node.addEventListener(
+            "pointerdown",
+            event => {
+              handleNodePointerDown(
+                event,
+                device.id
+              );
+            }
+          );
+
+          node.addEventListener("click", event => {
+            event.stopPropagation();
+
+            if (suppressNextClick) {
+              suppressNextClick = false;
+              return;
+            }
+
+            if (currentTool === "connect") {
+              handleConnectionClick(device.id);
+              return;
+            }
+
+            selectedDeviceId = device.id;
+            selectedConnectionId = null;
+
+            render();
+          });
+
+          canvas.appendChild(node);
+        });
+      }
+
+      function renderConnections() {
+        connectionsLayer.replaceChildren();
+
+        topology.connections.forEach(connection => {
+          const first = getDevice(connection.from);
+          const second = getDevice(connection.to);
+
+          if (!first || !second) {
+            return;
+          }
+
+          const line = document.createElementNS(
+            "http://www.w3.org/2000/svg",
+            "line"
+          );
+
+          line.setAttribute(
+            "x1",
+            first.x + NODE_WIDTH / 2
+          );
+
+          line.setAttribute(
+            "y1",
+            first.y + NODE_HEIGHT / 2
+          );
+
+          line.setAttribute(
+            "x2",
+            second.x + NODE_WIDTH / 2
+          );
+
+          line.setAttribute(
+            "y2",
+            second.y + NODE_HEIGHT / 2
+          );
+
+          line.setAttribute(
+            "class",
+            `connection-line${
+              selectedConnectionId === connection.id
+                ? " selected"
+                : ""
+            }`
+          );
+
+          line.addEventListener("click", event => {
+            event.stopPropagation();
+
+            selectedConnectionId = connection.id;
+            selectedDeviceId = null;
+            connectionSourceId = null;
+
+            render();
+          });
+
+          connectionsLayer.appendChild(line);
+        });
+
+        deleteConnectionButton.disabled =
+          !selectedConnectionId;
+      }
+
+      function renderProperties() {
+        const device = getDevice(selectedDeviceId);
+
+        if (!device) {
+          noSelection.hidden = false;
+          propertiesForm.hidden = true;
+          return;
+        }
+
+        noSelection.hidden = true;
+        propertiesForm.hidden = false;
+
+        propertyType.value = device.type;
+        propertyName.value = device.name;
+        propertyIp.value = device.ip;
+        propertyNetwork.value = device.network;
+        propertyStatus.value = device.status;
+        propertyNotes.value = device.notes;
+      }
+
+      function updateSelectedDevice() {
+        const device = getDevice(selectedDeviceId);
+
+        if (!device) {
+          return;
+        }
+
+        device.type = propertyType.value;
+
+        device.name =
+          propertyName.value.trim() ||
+          DEVICE_TYPES[device.type].label;
+
+        device.ip = propertyIp.value.trim();
+        device.network = propertyNetwork.value.trim();
+        device.status = propertyStatus.value;
+        device.notes = propertyNotes.value.trim();
+
+        markUnsaved();
+        renderDevices();
+        renderConnections();
+      }
+
+      function renderStatistics() {
+        document.getElementById("deviceCount").textContent =
+          topology.devices.length;
+
+        document.getElementById(
+          "connectionCount"
+        ).textContent = topology.connections.length;
+      }
+
+      function render() {
+        renderDevices();
+        renderConnections();
+        renderProperties();
+        renderStatistics();
+
+      }
+
+      function exportTopology() {
+        const file = new Blob(
+          [JSON.stringify(topology, null, 2)],
+          {
+            type: "application/json"
+          }
+        );
+
+        const url = URL.createObjectURL(file);
+        const anchor = document.createElement("a");
+
+        anchor.href = url;
+        anchor.download =
+          `cyberlab-topology-${
+            new Date().toISOString().slice(0, 10)
+          }.json`;
+
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+
+        URL.revokeObjectURL(url);
+      }
+
+      async function importTopology(file) {
+        try {
+          const text = await file.text();
+          const importedTopology = JSON.parse(text);
+
+          if (!validateLoadedTopology(importedTopology)) {
+            throw new Error("Invalid topology file.");
+          }
+
+          topology = {
+            version: importedTopology.version || 1,
+            devices: importedTopology.devices,
+            connections: importedTopology.connections
+          };
+
+          topology.devices.forEach(device => {
+            device.x = Number(device.x) || 20;
+            device.y =
+              Number(device.y) || CANVAS_TOP_MARGIN;
+          });
+
+          selectedDeviceId = null;
+          selectedConnectionId = null;
+          connectionSourceId = null;
+
+          setStatus(
+            "Imported topology — press Save topology",
+            "unsaved"
+          );
+
+          render();
+        }
+        catch (error) {
+          console.error("Could not import topology:", error);
+
+          alert(
+            `The topology could not be imported:\n${error.message}`
+          );
+        }
+      }
+
+      canvas.addEventListener("click", event => {
+        if (suppressNextClick) {
+          suppressNextClick = false;
+          return;
+        }
+
+        if (
+          event.target !== canvas &&
+          event.target !== connectionsLayer
+        ) {
+          return;
+        }
+
+        selectedDeviceId = null;
+        selectedConnectionId = null;
+        connectionSourceId = null;
+
+        render();
+      });
+
+      canvasWrapper.addEventListener(
+        "dragover",
+        event => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
+        }
+      );
+
+      canvasWrapper.addEventListener(
+        "drop",
+        event => {
+          event.preventDefault();
+
+          const type =
+            event.dataTransfer.getData(
+              "text/device-type"
+            );
+
+          if (!DEVICE_TYPES[type]) {
+            return;
+          }
+
+          const rect = canvas.getBoundingClientRect();
+
+          addDevice(
+            type,
+            clamp(
+              event.clientX -
+                rect.left -
+                NODE_WIDTH / 2,
+              0,
+              Math.max(
+                0,
+                rect.width - NODE_WIDTH
+              )
+            ),
+            clamp(
+              event.clientY -
+                rect.top -
+                NODE_HEIGHT / 2,
+              CANVAS_TOP_MARGIN,
+              Math.max(
+                CANVAS_TOP_MARGIN,
+                rect.height - NODE_HEIGHT
+              )
+            )
+          );
+        }
+      );
+
+      document.addEventListener(
+        "pointermove",
+        handlePointerMove,
+        {
+          passive: false
+        }
+      );
+
+      document.addEventListener(
+        "pointerup",
+        handlePointerUp
+      );
+
+      document.addEventListener(
+        "pointercancel",
+        handlePointerUp
+      );
+
+      window.addEventListener(
+        "resize",
+        renderConnections
+      );
+
+      [
+        propertyType,
+        propertyName,
+        propertyIp,
+        propertyNetwork,
+        propertyStatus,
+        propertyNotes
+      ].forEach(field => {
+        field.addEventListener(
+          "input",
+          updateSelectedDevice
+        );
+
+        field.addEventListener(
+          "change",
+          updateSelectedDevice
+        );
+      });
+
+      document
+        .getElementById("deleteDeviceButton")
+        .addEventListener("click", () => {
+          if (!selectedDeviceId) {
+            return;
+          }
+
+          if (confirm("Delete the selected device?")) {
+            deleteDevice(selectedDeviceId);
+          }
+        });
+
+      deleteConnectionButton.addEventListener(
+        "click",
+        () => {
+          if (!selectedConnectionId) {
+            return;
+          }
+
+          topology.connections =
+            topology.connections.filter(
+              connection =>
+                connection.id !== selectedConnectionId
+            );
+
+          selectedConnectionId = null;
+
+          markUnsaved();
+          render();
+        }
+      );
+
+      selectTool.addEventListener("click", () => {
+        setTool("select");
+      });
+
+      connectTool.addEventListener("click", () => {
+        setTool("connect");
+      });
+
+      saveButton.addEventListener(
+        "click",
+        saveTopology
+      );
+
+      document
+        .getElementById("resetButton")
+        .addEventListener(
+          "click",
+          resetTopology
+        );
+
+      document
+        .getElementById("exportButton")
+        .addEventListener(
+          "click",
+          exportTopology
+        );
+
+      document
+        .getElementById("importButton")
+        .addEventListener("click", () => {
+          importFile.click();
+        });
+
+      importFile.addEventListener("change", () => {
+        const [file] = importFile.files;
+
+        if (file) {
+          importTopology(file);
+        }
+
+        importFile.value = "";
+      });
+
+      renderDeviceLibrary();
+      loadTopology();
+    })();
+  </script>
+</body>
+</html>
