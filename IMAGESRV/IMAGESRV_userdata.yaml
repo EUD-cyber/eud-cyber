@@ -240,6 +240,8 @@ write_files:
         -O "$TEMP_FILE" \
         "$CONFIG_URL"
 
+      sed -i 's/\r$//' "$TEMP_FILE"
+
       [[ -s "$TEMP_FILE" ]] ||
         die "Downloaded config.env is empty."
 
