@@ -3,31 +3,43 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 ###############################################################################
-# Cyberlab Image Server installer
+# Cyberlab standalone Image Server installer
 #
-# Creates a standalone Ubuntu Image Server VM with one network interface:
+# Creates an Ubuntu CyberRepo VM with one network interface:
 #
 #   net0 -> vmbr0
 #
 # Usage:
-#   ./IMAGESRV/install.sh <lab-number>
+#   ./IMAGESRV/install.sh <instance-number>
 #
 # Example:
-#   ./IMAGESRV/install.sh 1
+#   ./IMAGESRV/install.sh 99
 ###############################################################################
 
-LAB="${1:-}"
+INSTANCE="${1:-}"
 
-if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
-  echo "Usage: $0 <lab-number>"
-  echo "Example: $0 1"
+if [[ -z "$INSTANCE" ]] || ! [[ "$INSTANCE" =~ ^[0-9]+$ ]]; then
+  echo "Usage: $0 <instance-number>"
+  echo "Example: $0 99"
   exit 1
 fi
 
-PROJECT_DIR="$(pwd)"
-STATE_FILE="${PROJECT_DIR}/IMAGESRV/STATE/lab${LAB}.env"
+###############################################################################
+# Paths
+###############################################################################
+
+SCRIPT_DIR="$(
+  cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &&
+  pwd
+)"
+
+PROJECT_DIR="$(
+  cd -- "${SCRIPT_DIR}/.." &&
+  pwd
+)"
+
 LOG_DIR="${PROJECT_DIR}/LOGS"
-LOGFILE="${LOG_DIR}/IMAGESRV${LAB}.log"
+LOGFILE="${LOG_DIR}/IMAGESRV${INSTANCE}.log"
 
 ###############################################################################
 # Helper functions
@@ -55,9 +67,11 @@ bridge_exists() {
 }
 
 storage_exists() {
+  local storage="$1"
+
   pvesm status 2>/dev/null |
     awk 'NR > 1 {print $1}' |
-    grep -Fxq "$1"
+    grep -Fxq "$storage"
 }
 
 is_valid_ipv4() {
@@ -92,9 +106,9 @@ is_valid_cidr() {
 
 wait_for_vm_shutdown() {
   local vmid="$1"
-  local timeout_seconds="${2:-3600}"
+  local timeout_seconds="${2:-7200}"
   local waited=0
-  local status
+  local status=""
 
   log "Waiting for VM ${vmid} to power off after cloud-init..."
 
@@ -121,12 +135,19 @@ wait_for_vm_shutdown() {
 }
 
 cleanup_failed_vm() {
-  local vmid="${1:-}"
+  local exit_code=$?
+  local vmid="${VMID:-}"
+
+  if [[ "$exit_code" -eq 0 ]]; then
+    return
+  fi
 
   if [[ -n "$vmid" ]] && qm status "$vmid" >/dev/null 2>&1; then
     warning "Installation failed after VM ${vmid} was created."
-    warning "The VM has not been removed automatically."
-    warning "Remove it manually with:"
+    warning "The VM was not deleted automatically."
+    warning "Inspect it before removing it."
+    warning
+    warning "Suggested cleanup:"
     warning "qm stop ${vmid} --skiplock 1 || true"
     warning "qm destroy ${vmid} --purge 1"
   fi
@@ -140,7 +161,7 @@ cleanup_failed_vm() {
   die "Run this script as root on the Proxmox host."
 
 command_exists qm ||
-  die "The qm command is missing. Run this on a Proxmox host."
+  die "The qm command is missing. Run this script on Proxmox."
 
 command_exists pvesm ||
   die "The pvesm command is missing."
@@ -148,23 +169,19 @@ command_exists pvesm ||
 command_exists wget ||
   die "wget is required."
 
-[[ -f "$STATE_FILE" ]] ||
-  die "Missing Image Server state file: ${STATE_FILE}"
-
-# Load variables such as LOCAL, LVM, BRIDGE and LINUX_IMG.
-# shellcheck disable=SC1090
-source "$STATE_FILE"
+command_exists ip ||
+  die "The ip command is required."
 
 mkdir -p "$LOG_DIR"
 touch "$LOGFILE"
-chmod 600 "$LOGFILE"
+chmod 0600 "$LOGFILE"
 
 exec > >(tee -a "$LOGFILE") 2>&1
 
 echo
 echo "================================================================="
 echo " Cyberlab standalone Image Server installation"
-echo " Lab number: ${LAB}"
+echo " Instance: ${INSTANCE}"
 echo " Started: $(date)"
 echo "================================================================="
 echo
@@ -173,8 +190,8 @@ echo
 # Configuration
 ###############################################################################
 
-START_VMID=$((LAB * 1000))
-BASE_NAME="lab${LAB}-imagesrv"
+START_VMID=$((INSTANCE * 1000))
+BASE_NAME="imagesrv-${INSTANCE}"
 
 IMG_URL="${LINUX_IMG:-https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
 IMG_NAME="noble-server-cloudimg-amd64.img"
@@ -182,26 +199,21 @@ IMG_PATH="${PROJECT_DIR}/${IMG_NAME}"
 
 ISO_STORAGE="${LOCAL:-local}"
 DISK_STORAGE="${LVM:-local-lvm}"
-
-MEMORY=4096
-CORES=2
-
-# Final disk size.
-# The Ubuntu cloud image is expanded to this exact size.
-DISK_SIZE="100G"
-
-# The Image Server only has one NIC.
 EXTERNAL_BRIDGE="${BRIDGE:-vmbr0}"
+
+MEMORY="${MEMORY:-4096}"
+CORES="${CORES:-2}"
+DISK_SIZE="${DISK_SIZE:-100G}"
 
 SNIPPET_DIR="/var/lib/vz/snippets"
 
 SRC_USERDATA="${PROJECT_DIR}/IMAGESRV/IMAGESRV_userdata.yaml"
-DST_USERDATA="IMAGESRV_userdata_lab${LAB}.yaml"
+DST_USERDATA="IMAGESRV_userdata_${INSTANCE}.yaml"
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
 
 VMID=""
 
-trap 'cleanup_failed_vm "$VMID"' ERR
+trap cleanup_failed_vm ERR
 
 ###############################################################################
 # Validate configuration
@@ -218,8 +230,8 @@ storage_exists "$ISO_STORAGE" ||
 storage_exists "$DISK_STORAGE" ||
   die "Proxmox disk storage does not exist: ${DISK_STORAGE}"
 
-[[ -f "$SRC_USERDATA" ]] ||
-  die "Cloud-init file does not exist: ${SRC_USERDATA}"
+[[ -s "$SRC_USERDATA" ]] ||
+  die "Cloud-init file is missing or empty: ${SRC_USERDATA}"
 
 mkdir -p "$SNIPPET_DIR"
 
@@ -232,12 +244,12 @@ echo "================================================================="
 echo " Image Server network configuration"
 echo "================================================================="
 echo
-echo "The VM will only have one network interface:"
+echo "The VM will have one network interface:"
 echo
 echo "  net0 -> ${EXTERNAL_BRIDGE}"
 echo
-echo "The IP address must be reachable from all Proxmox servers"
-echo "that need to download images from the repository."
+echo "The address must be reachable from the Proxmox servers"
+echo "that will download VM images and Docker images."
 echo
 
 read -r -p "Use DHCP on net0? [y/N]: " USE_DHCP
@@ -250,7 +262,7 @@ if [[ "$USE_DHCP" =~ ^[Yy]$ ]]; then
 
   while true; do
     read -r -p \
-      "Optional DNS server (leave empty to use DHCP): " \
+      "Optional DNS server, leave empty to use DHCP: " \
       IMAGE_SERVER_DNS
 
     if [[ -z "$IMAGE_SERVER_DNS" ]] ||
@@ -271,7 +283,7 @@ else
     fi
 
     echo "Invalid value."
-    echo "Enter an IPv4 address with CIDR, for example:"
+    echo "Use an IPv4 address with CIDR, for example:"
     echo "10.134.71.170/24"
   done
 
@@ -287,7 +299,7 @@ else
     echo "Invalid IPv4 gateway."
   done
 
-  DEFAULT_DNS="${GUAC_DNS_SERVER:-1.1.1.1}"
+  DEFAULT_DNS="${DNS_SERVER:-1.1.1.1}"
 
   while true; do
     read -r -p \
@@ -307,7 +319,7 @@ else
 fi
 
 ###############################################################################
-# Show summary
+# Installation summary
 ###############################################################################
 
 echo
@@ -315,7 +327,7 @@ echo "================================================================="
 echo " Installation summary"
 echo "================================================================="
 echo
-echo "Lab number:          ${LAB}"
+echo "Instance number:      ${INSTANCE}"
 echo "Base VM name:        ${BASE_NAME}"
 echo "Starting VMID:       ${START_VMID}"
 echo
@@ -331,6 +343,7 @@ echo "CPU cores:           ${CORES}"
 echo "Disk size:           ${DISK_SIZE}"
 echo "Ubuntu image:        ${IMG_URL}"
 echo "Cloud-init file:     ${SRC_USERDATA}"
+echo "Log file:            ${LOGFILE}"
 echo
 
 read -r -p "Continue with this configuration? [Y/n]: " CONFIRM
@@ -355,7 +368,7 @@ install \
 log "Cloud-init snippet installed: ${DST_PATH}"
 
 ###############################################################################
-# Find next free VMID
+# Find free VMID
 ###############################################################################
 
 VMID="$START_VMID"
@@ -390,6 +403,7 @@ log "VM name: ${VM_NAME}"
 if [[ ! -s "$IMG_PATH" ]]; then
   log "Downloading Ubuntu cloud image..."
   log "Source: ${IMG_URL}"
+  log "Destination: ${IMG_PATH}"
 
   TEMP_IMG="${IMG_PATH}.part"
 
@@ -403,17 +417,17 @@ if [[ ! -s "$IMG_PATH" ]]; then
     "$IMG_URL"
 
   [[ -s "$TEMP_IMG" ]] ||
-    die "Downloaded image is empty."
+    die "Downloaded Ubuntu image is empty."
 
   mv "$TEMP_IMG" "$IMG_PATH"
 
-  log "Image downloaded: ${IMG_PATH}"
+  log "Image downloaded successfully."
 else
   log "Using existing image: ${IMG_PATH}"
 fi
 
 ###############################################################################
-# Create VM with one network interface
+# Create VM
 ###############################################################################
 
 log "Creating VM ${VMID}..."
@@ -430,7 +444,7 @@ qm create "$VMID" \
   --onboot 1
 
 ###############################################################################
-# Import and attach disk
+# Import disk
 ###############################################################################
 
 log "Importing Ubuntu disk to ${DISK_STORAGE}..."
@@ -447,12 +461,16 @@ IMPORTED_VOLUME="$(
 )"
 
 [[ -n "$IMPORTED_VOLUME" ]] ||
-  die "Could not determine imported disk volume."
+  die "Could not determine the imported disk volume."
 
 log "Imported disk volume: ${IMPORTED_VOLUME}"
 
 qm set "$VMID" \
   --scsi0 "$IMPORTED_VOLUME"
+
+###############################################################################
+# Resize disk
+###############################################################################
 
 log "Resizing disk to ${DISK_SIZE}..."
 
@@ -479,7 +497,7 @@ qm set "$VMID" \
 # Apply cloud-init configuration
 ###############################################################################
 
-log "Applying cloud-init network configuration..."
+log "Applying cloud-init configuration..."
 
 qm set "$VMID" \
   --ipconfig0 "$IMAGE_SERVER_IPCONFIG" \
@@ -491,7 +509,7 @@ if [[ -n "$IMAGE_SERVER_DNS" ]]; then
   qm set "$VMID" \
     --nameserver "$IMAGE_SERVER_DNS"
 else
-  log "DNS will be provided through DHCP."
+  log "DNS will be supplied through DHCP."
 fi
 
 qm cloudinit update "$VMID"
@@ -504,6 +522,7 @@ echo
 echo "================================================================="
 echo " VM configuration"
 echo "================================================================="
+echo
 
 qm config "$VMID"
 
@@ -523,19 +542,21 @@ log "VM started successfully."
 # Wait for cloud-init poweroff
 ###############################################################################
 
-if ! wait_for_vm_shutdown "$VMID" 3600; then
-  warning "VM did not power off within one hour."
-  warning "Cloud-init may still be running or may have failed."
-  warning "Check the VM console and:"
+if ! wait_for_vm_shutdown "$VMID" 7200; then
+  warning "VM did not power off within two hours."
+  warning "Cloud-init may still be downloading images or Docker containers."
+  warning
+  warning "Check the VM console and run:"
   warning "cloud-init status --long"
+  warning "tail -n 200 /var/log/cloud-init-output.log"
   exit 1
 fi
 
 ###############################################################################
-# Create clean baseline snapshot
+# Create baseline snapshot
 ###############################################################################
 
-log "Creating clean baseline snapshot..."
+log "Creating baseline snapshot..."
 
 if qm listsnapshot "$VMID" 2>/dev/null |
    grep -q 'First_snapshot'; then
@@ -545,7 +566,7 @@ else
   qm snapshot \
     "$VMID" \
     First_snapshot \
-    --description "Clean baseline snapshot after cloud-init"
+    --description "Clean CyberRepo baseline after cloud-init"
 
   log "Snapshot created successfully."
 fi
@@ -554,7 +575,7 @@ fi
 # Start VM again
 ###############################################################################
 
-log "Starting Image Server VM again..."
+log "Starting Image Server again..."
 
 qm start "$VMID"
 
@@ -565,14 +586,19 @@ echo "================================================================="
 echo " Image Server installation completed"
 echo "================================================================="
 echo
-echo "VMID:        ${VMID}"
-echo "VM name:     ${VM_NAME}"
-echo "Bridge:      ${EXTERNAL_BRIDGE}"
-echo "IP config:   ${IMAGE_SERVER_IPCONFIG}"
-echo "DNS:         ${IMAGE_SERVER_DNS:-Provided through DHCP}"
-echo "Snapshot:    First_snapshot"
-echo "Status:      Started"
+echo "VMID:       ${VMID}"
+echo "VM name:    ${VM_NAME}"
+echo "Bridge:     ${EXTERNAL_BRIDGE}"
+echo "IP config:  ${IMAGE_SERVER_IPCONFIG}"
+echo "DNS:        ${IMAGE_SERVER_DNS:-Provided through DHCP}"
+echo "Snapshot:   First_snapshot"
+echo "Status:     Started"
 echo
-echo "Other Proxmox servers must be able to reach the Image Server"
-echo "through the net0 address."
+echo "CyberRepo should be available on the IP configured for net0."
+echo
+echo "HTTP repository:"
+echo "  http://IMAGE-SERVER-IP/"
+echo
+echo "Docker Registry:"
+echo "  IMAGE-SERVER-IP:5000"
 echo

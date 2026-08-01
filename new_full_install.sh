@@ -123,7 +123,7 @@ case "$CHOICE" in
     ;;
   80)
     echo "Starting Image Server VM creation..."
-    bash "$IMAGESRV" "99"
+    bash "$IMAGESRV"
     ;;
   89)
     echo "Change proxmox repo to no-enterprise"
