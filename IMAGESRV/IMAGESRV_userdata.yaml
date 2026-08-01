@@ -4,10 +4,8 @@ hostname: cyberrepo
 manage_etc_hosts: true
 
 users:
-  - default
-
   - name: ubuntu
-    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
     lock_passwd: false
     passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
@@ -20,7 +18,7 @@ chpasswd:
   expire: false
 
 package_update: true
-package_upgrade: true
+package_upgrade: false
 
 packages:
   - ca-certificates
@@ -1044,217 +1042,196 @@ write_files:
       [Install]
       WantedBy=timers.target
 
+  ###########################################################################
+  # First-boot installer
+  #
+  # Keeping the installation logic in a Bash script avoids /bin/sh syntax
+  # problems in cloud-init runcmd blocks.
+  ###########################################################################
+
+  - path: /usr/local/sbin/cyberrepo-firstboot
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env bash
+      set -Eeuo pipefail
+      IFS=$'\n\t'
+
+      LOG_FILE="/var/log/cyberrepo-firstboot.log"
+      exec > >(tee -a "$LOG_FILE") 2>&1
+
+      log() {
+        printf '[+] %s\n' "$*"
+      }
+
+      warning() {
+        printf '[WARNING] %s\n' "$*" >&2
+      }
+
+      die() {
+        printf '[ERROR] %s\n' "$*" >&2
+        exit 1
+      }
+
+      wait_for_http() {
+        local url="$1"
+        local description="$2"
+        local attempts="${3:-60}"
+
+        for attempt in $(seq 1 "$attempts"); do
+          if curl -fsS "$url" >/dev/null; then
+            log "${description} is ready."
+            return 0
+          fi
+
+          sleep 2
+        done
+
+        die "${description} did not become ready: ${url}"
+      }
+
+      log "Starting CyberRepo first-boot installation."
+
+      systemctl enable --now qemu-guest-agent
+      systemctl enable --now docker
+      usermod -aG docker ubuntu
+
+      mkdir -p \
+        /etc/cyberrepo \
+        /opt/cyberrepo \
+        /srv/cyberrepo/public \
+        /srv/cyberrepo/images/ubuntu \
+        /srv/cyberrepo/images/kali \
+        /srv/cyberrepo/images/opnsense \
+        /srv/cyberrepo/images/wazuh \
+        /srv/cyberrepo/images/windows \
+        /srv/cyberrepo/isos \
+        /srv/cyberrepo/cloud-init \
+        /srv/cyberrepo/scripts \
+        /srv/cyberrepo/packages \
+        /srv/cyberrepo/templates \
+        /srv/cyberrepo/testfiles \
+        /srv/cyberrepo/manifests \
+        /srv/cyberrepo/registry
+
+      chmod 0755 /srv/cyberrepo
+      chmod -R 0755 \
+        /srv/cyberrepo/public \
+        /srv/cyberrepo/images \
+        /srv/cyberrepo/isos \
+        /srv/cyberrepo/cloud-init \
+        /srv/cyberrepo/scripts \
+        /srv/cyberrepo/packages \
+        /srv/cyberrepo/templates \
+        /srv/cyberrepo/testfiles \
+        /srv/cyberrepo/manifests
+
+      /usr/local/sbin/cyberrepo-update-config
+      test -s /etc/cyberrepo/config.env
+
+      /usr/local/sbin/cyberrepo-resolve-network
+      test -s /etc/cyberrepo/runtime.env
+
+      # shellcheck disable=SC1090
+      source /etc/cyberrepo/config.env
+      # shellcheck disable=SC1090
+      source /etc/cyberrepo/runtime.env
+
+      log "Detected repository interface: ${REPO_INTERFACE_RESOLVED}"
+      log "Detected repository IP: ${SERVER_IP}"
+
+      # The local registry initially uses HTTP. Docker must explicitly trust it.
+      mkdir -p /etc/docker
+
+      cat > /etc/docker/daemon.json <<EOF
+      {
+        "insecure-registries": [
+          "${REGISTRY_HOST}:${REGISTRY_PORT}"
+        ]
+      }
+      EOF
+
+      systemctl restart docker
+
+      rm -f /etc/nginx/sites-enabled/default
+      ln -sfn \
+        /etc/nginx/sites-available/cyberrepo \
+        /etc/nginx/sites-enabled/cyberrepo
+
+      nginx -t
+      systemctl enable nginx
+      systemctl restart nginx
+
+      ufw default deny incoming
+      ufw default allow outgoing
+      ufw allow 22/tcp
+      ufw allow 80/tcp
+      ufw allow 5000/tcp
+      ufw --force enable
+
+      if [[ "${ENABLE_REGISTRY:-yes}" == "yes" ]]; then
+        docker compose \
+          -f /opt/cyberrepo/docker-compose.yml \
+          up -d
+
+        wait_for_http \
+          "http://127.0.0.1:${REGISTRY_PORT}/v2/" \
+          "Docker Registry" \
+          90
+      else
+        log "Docker Registry is disabled in config.env."
+      fi
+
+      /usr/local/sbin/cyberrepo-download-images
+      /usr/local/sbin/cyberrepo-generate-manifest
+      /usr/local/sbin/cyberrepo-generate-index
+
+      wait_for_http \
+        "http://127.0.0.1/health" \
+        "CyberRepo HTTP service" \
+        60
+
+      if [[ "${ENABLE_REGISTRY:-yes}" == "yes" ]]; then
+        /usr/local/sbin/cyberrepo-cache-docker-images
+      fi
+
+      systemctl daemon-reload
+
+      if [[ "${DAILY_UPDATE:-yes}" == "yes" ]]; then
+        systemctl enable --now cyberrepo-update.timer
+      else
+        systemctl disable --now cyberrepo-update.timer || true
+      fi
+
+      nginx -t
+      curl -fsS http://127.0.0.1/health
+      curl -fsS http://127.0.0.1/runtime.json
+      curl -fsS http://127.0.0.1/manifest.json
+
+      if [[ "${ENABLE_REGISTRY:-yes}" == "yes" ]]; then
+        docker compose \
+          -f /opt/cyberrepo/docker-compose.yml \
+          ps
+
+        curl -fsS \
+          "http://127.0.0.1:${REGISTRY_PORT}/v2/"
+      fi
+
+      touch /var/lib/cyberrepo-install-complete
+      chmod 0644 /var/lib/cyberrepo-install-complete
+
+      log "CyberRepo first-boot installation completed."
+
+
 runcmd:
-
-  ###########################################################################
-  # Enable base services
-  ###########################################################################
-
-  - systemctl enable --now docker
-  - systemctl enable --now qemu-guest-agent
-
-  - usermod -aG docker ubuntu
-
-  ###########################################################################
-  # Create directories
-  ###########################################################################
-
-  - mkdir -p /etc/cyberrepo
-  - mkdir -p /opt/cyberrepo
-
-  - mkdir -p /srv/cyberrepo/public
-
-  - mkdir -p /srv/cyberrepo/images/ubuntu
-  - mkdir -p /srv/cyberrepo/images/kali
-  - mkdir -p /srv/cyberrepo/images/opnsense
-  - mkdir -p /srv/cyberrepo/images/wazuh
-  - mkdir -p /srv/cyberrepo/images/windows
-
-  - mkdir -p /srv/cyberrepo/isos
-  - mkdir -p /srv/cyberrepo/cloud-init
-  - mkdir -p /srv/cyberrepo/scripts
-  - mkdir -p /srv/cyberrepo/packages
-  - mkdir -p /srv/cyberrepo/templates
-  - mkdir -p /srv/cyberrepo/testfiles
-  - mkdir -p /srv/cyberrepo/manifests
-  - mkdir -p /srv/cyberrepo/registry
-
-  - chmod 0755 /srv/cyberrepo
-  - chmod -R 0755 /srv/cyberrepo/public
-  - chmod -R 0755 /srv/cyberrepo/images
-  - chmod -R 0755 /srv/cyberrepo/isos
-  - chmod -R 0755 /srv/cyberrepo/cloud-init
-  - chmod -R 0755 /srv/cyberrepo/scripts
-  - chmod -R 0755 /srv/cyberrepo/packages
-  - chmod -R 0755 /srv/cyberrepo/templates
-  - chmod -R 0755 /srv/cyberrepo/testfiles
-  - chmod -R 0755 /srv/cyberrepo/manifests
-
-  ###########################################################################
-  # Download external configuration
-  ###########################################################################
-
-  - /usr/local/sbin/cyberrepo-update-config
-
-  - test -s /etc/cyberrepo/config.env
-
-  ###########################################################################
-  # Detect interface and IP
-  ###########################################################################
-
-  - /usr/local/sbin/cyberrepo-resolve-network
-
-  - cat /etc/cyberrepo/runtime.env
-
-  ###########################################################################
-  # Configure Nginx
-  ###########################################################################
-
-  - rm -f /etc/nginx/sites-enabled/default
-
-  - ln -sfn /etc/nginx/sites-available/cyberrepo /etc/nginx/sites-enabled/cyberrepo
-
-  - nginx -t
-
-  - systemctl enable nginx
-  - systemctl restart nginx
-
-  ###########################################################################
-  # Firewall
-  ###########################################################################
-
-  - ufw default deny incoming
-  - ufw default allow outgoing
-
-  - ufw allow 22/tcp
-  - ufw allow 80/tcp
-  - ufw allow 5000/tcp
-
-  - ufw --force enable
-
-  ###########################################################################
-  # Start Docker Registry
-  ###########################################################################
-
-  - |
-    set -e
-
-    source /etc/cyberrepo/config.env
-
-    if [[ "${ENABLE_REGISTRY:-yes}" == "yes" ]]; then
-      docker compose -f /opt/cyberrepo/docker-compose.yml up -d
-    else
-      echo "Docker Registry is disabled."
-    fi
-
-  ###########################################################################
-  # Wait for Registry
-  ###########################################################################
-
-  - |
-    set -e
-
-    source /etc/cyberrepo/config.env
-
-    if [[ "${ENABLE_REGISTRY:-yes}" != "yes" ]]; then
-      exit 0
-    fi
-
-    for attempt in $(seq 1 60); do
-      if curl -fsS http://127.0.0.1:5000/v2/ >/dev/null; then
-        echo "Docker Registry is ready."
-        exit 0
-      fi
-
-      sleep 2
-    done
-
-    echo "Docker Registry did not become ready." >&2
-    docker logs cyberrepo-registry --tail=100 || true
-    exit 1
-
-  ###########################################################################
-  # Download configured VM images
-  ###########################################################################
-
-  - /usr/local/sbin/cyberrepo-download-images
-
-  ###########################################################################
-  # Generate repository metadata and page
-  ###########################################################################
-
-  - /usr/local/sbin/cyberrepo-generate-manifest
-  - /usr/local/sbin/cyberrepo-generate-index
-
-  ###########################################################################
-  # Wait for Nginx
-  ###########################################################################
-
-  - |
-    set -e
-
-    for attempt in $(seq 1 60); do
-      if curl -fsS http://127.0.0.1/health >/dev/null; then
-        echo "CyberRepo HTTP service is ready."
-        exit 0
-      fi
-
-      sleep 2
-    done
-
-    echo "CyberRepo HTTP service did not become ready." >&2
-    systemctl status nginx --no-pager || true
-    exit 1
-
-  ###########################################################################
-  # Cache Docker images
-  ###########################################################################
-
-  - |
-    set -e
-
-    source /etc/cyberrepo/config.env
-
-    if [[ "${ENABLE_REGISTRY:-yes}" == "yes" ]]; then
-      /usr/local/sbin/cyberrepo-cache-docker-images
-    fi
-
-  ###########################################################################
-  # Enable automatic updates
-  ###########################################################################
-
-  - systemctl daemon-reload
-
-  - |
-    set -e
-
-    source /etc/cyberrepo/config.env
-
-    if [[ "${DAILY_UPDATE:-yes}" == "yes" ]]; then
-      systemctl enable --now cyberrepo-update.timer
-    else
-      systemctl disable --now cyberrepo-update.timer || true
-    fi
-
-  ###########################################################################
-  # Final checks
-  ###########################################################################
-
-  - nginx -t
-  - curl -fsS http://127.0.0.1/health
-  - curl -fsS http://127.0.0.1/runtime.json
-  - curl -fsS http://127.0.0.1/manifest.json
-
-  - |
-    source /etc/cyberrepo/config.env
-
-    if [[ "${ENABLE_REGISTRY:-yes}" == "yes" ]]; then
-      docker compose -f /opt/cyberrepo/docker-compose.yml ps
-      curl -fsS http://127.0.0.1:5000/v2/
-    fi
+  - /usr/local/sbin/cyberrepo-firstboot
 
 final_message: |
   CyberRepo installation completed.
+
+  Login:
+    Username: ubuntu
+    Password: Password1!
 
   Static configuration:
     /etc/cyberrepo/config.env
@@ -1262,8 +1239,14 @@ final_message: |
   Detected network configuration:
     /etc/cyberrepo/runtime.env
 
+  Installation log:
+    /var/log/cyberrepo-firstboot.log
+
   Repository storage:
     /srv/cyberrepo
+
+  Completion marker:
+    /var/lib/cyberrepo-install-complete
 
   Useful commands:
     cyberrepo-update-config
@@ -1274,3 +1257,4 @@ final_message: |
     cyberrepo-generate-index
     cyberrepo-update
 
+  The VM remains powered on after cloud-init.
