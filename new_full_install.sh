@@ -24,6 +24,7 @@ WAZUH="./WAZUH/WAZUH_multi_installer.sh"
 TPOT="./TPOT01/TPOT01_multi_installer.sh"
 WIN11="./WIN11/WIN11_installer.sh"
 WIN2025="./WIN2025/WIN2025_multi_installer.sh"
+IMAGESRV="./IMAGESRV/IMAGESRV_installer.sh"
 
 echo "=============================="
 echo " Proxmox Deployment Menu"
@@ -43,6 +44,7 @@ echo "12) Create Client01 VM"
 echo "13) Create WAZUH VM"
 echo "14) Create TPOT01 VM"
 echo "15) Create Guacamole VM"
+echo "80) Create Image Server VM"
 echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
 echo "95) Run ALL in background"
@@ -118,6 +120,10 @@ case "$CHOICE" in
     echo "Starting Guacamole VM creation..."
     bash "$GUACVM02_IP" $LAB
     bash "$GUACVM02" $LAB
+    ;;
+  80)
+    echo "Starting Image Server VM creation..."
+    bash "$IMAGESRV" "99"
     ;;
   89)
     echo "Change proxmox repo to no-enterprise"

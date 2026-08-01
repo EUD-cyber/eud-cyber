@@ -1,0 +1,1283 @@
+#cloud-config
+
+hostname: cyberrepo
+manage_etc_hosts: true
+
+users:
+  - default
+
+  - name: ubuntu
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: "$6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0"
+
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
+
+ssh_pwauth: true
+disable_root: true
+
+chpasswd:
+  expire: false
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - ca-certificates
+  - curl
+  - wget
+  - jq
+  - nginx
+  - docker.io
+  - docker-compose-v2
+  - qemu-guest-agent
+  - zstd
+  - gzip
+  - unzip
+  - rsync
+  - openssl
+  - ufw
+  - tree
+  - python3
+
+write_files:
+
+  ###########################################################################
+  # Docker Registry
+  ###########################################################################
+
+  - path: /opt/cyberrepo/docker-compose.yml
+    owner: root:root
+    permissions: '0644'
+    content: |
+      name: cyberrepo
+
+      services:
+        registry:
+          container_name: cyberrepo-registry
+          image: registry:2
+          restart: always
+
+          ports:
+            - "5000:5000"
+
+          environment:
+            REGISTRY_STORAGE_DELETE_ENABLED: "true"
+
+          volumes:
+            - /srv/cyberrepo/registry:/var/lib/registry
+
+      networks:
+        default:
+          name: cyberrepo-network
+
+  ###########################################################################
+  # Nginx
+  ###########################################################################
+
+  - path: /etc/nginx/sites-available/cyberrepo
+    owner: root:root
+    permissions: '0644'
+    content: |
+      server {
+          listen 80 default_server;
+          listen [::]:80 default_server;
+
+          server_name _;
+
+          root /srv/cyberrepo/public;
+          index index.html;
+
+          client_max_body_size 0;
+
+          sendfile on;
+          tcp_nopush on;
+          tcp_nodelay on;
+
+          location = / {
+              try_files /index.html =404;
+          }
+
+          location /images/ {
+              alias /srv/cyberrepo/images/;
+
+              autoindex on;
+              autoindex_exact_size off;
+              autoindex_localtime on;
+
+              add_header Cache-Control "public, max-age=3600";
+          }
+
+          location /isos/ {
+              alias /srv/cyberrepo/isos/;
+
+              autoindex on;
+              autoindex_exact_size off;
+              autoindex_localtime on;
+
+              add_header Cache-Control "public, max-age=3600";
+          }
+
+          location /cloud-init/ {
+              alias /srv/cyberrepo/cloud-init/;
+
+              autoindex on;
+              autoindex_exact_size off;
+              autoindex_localtime on;
+
+              add_header Cache-Control "no-cache";
+          }
+
+          location /scripts/ {
+              alias /srv/cyberrepo/scripts/;
+
+              autoindex on;
+              autoindex_exact_size off;
+              autoindex_localtime on;
+
+              add_header Cache-Control "no-cache";
+          }
+
+          location /packages/ {
+              alias /srv/cyberrepo/packages/;
+
+              autoindex on;
+              autoindex_exact_size off;
+              autoindex_localtime on;
+
+              add_header Cache-Control "public, max-age=3600";
+          }
+
+          location /templates/ {
+              alias /srv/cyberrepo/templates/;
+
+              autoindex on;
+              autoindex_exact_size off;
+              autoindex_localtime on;
+
+              add_header Cache-Control "no-cache";
+          }
+
+          location /testfiles/ {
+              alias /srv/cyberrepo/testfiles/;
+
+              autoindex on;
+              autoindex_exact_size off;
+              autoindex_localtime on;
+          }
+
+          location /manifests/ {
+              alias /srv/cyberrepo/manifests/;
+
+              autoindex on;
+              autoindex_exact_size off;
+              autoindex_localtime on;
+
+              add_header Cache-Control "no-cache";
+          }
+
+          location = /manifest.json {
+              alias /srv/cyberrepo/manifests/manifest.json;
+
+              default_type application/json;
+              add_header Cache-Control "no-cache";
+          }
+
+          location = /sha256sums.txt {
+              alias /srv/cyberrepo/manifests/sha256sums.txt;
+
+              default_type text/plain;
+              add_header Cache-Control "no-cache";
+          }
+
+          location = /runtime.json {
+              alias /srv/cyberrepo/manifests/runtime.json;
+
+              default_type application/json;
+              add_header Cache-Control "no-cache";
+          }
+
+          location = /health {
+              default_type application/json;
+
+              return 200 '{"ready":true,"service":"cyberrepo"}';
+          }
+      }
+
+  ###########################################################################
+  # Download config.env from GitHub
+  ###########################################################################
+
+  - path: /usr/local/sbin/cyberrepo-update-config
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env bash
+      set -Eeuo pipefail
+
+      CONFIG_URL="https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/IMAGESRV/config.env"
+
+      CONFIG_FILE="/etc/cyberrepo/config.env"
+      TEMP_FILE="${CONFIG_FILE}.new"
+
+      log() {
+        printf '[+] %s\n' "$*"
+      }
+
+      die() {
+        printf '[ERROR] %s\n' "$*" >&2
+        exit 1
+      }
+
+      mkdir -p "$(dirname "$CONFIG_FILE")"
+
+      log "Downloading CyberRepo configuration."
+      log "Source: ${CONFIG_URL}"
+
+      rm -f "$TEMP_FILE"
+
+      wget \
+        --tries=5 \
+        --timeout=30 \
+        -O "$TEMP_FILE" \
+        "$CONFIG_URL"
+
+      [[ -s "$TEMP_FILE" ]] ||
+        die "Downloaded config.env is empty."
+
+      bash -n "$TEMP_FILE" ||
+        die "Downloaded config.env contains invalid Bash syntax."
+
+      install \
+        -m 0644 \
+        "$TEMP_FILE" \
+        "$CONFIG_FILE"
+
+      rm -f "$TEMP_FILE"
+
+      log "Configuration installed: ${CONFIG_FILE}"
+
+  ###########################################################################
+  # Resolve dynamic server IP
+  ###########################################################################
+
+  - path: /usr/local/sbin/cyberrepo-resolve-network
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env bash
+      set -Eeuo pipefail
+
+      CONFIG_FILE="/etc/cyberrepo/config.env"
+      RUNTIME_FILE="/etc/cyberrepo/runtime.env"
+      RUNTIME_JSON="/srv/cyberrepo/manifests/runtime.json"
+
+      log() {
+        printf '[+] %s\n' "$*"
+      }
+
+      die() {
+        printf '[ERROR] %s\n' "$*" >&2
+        exit 1
+      }
+
+      [[ -s "$CONFIG_FILE" ]] ||
+        die "Missing configuration: ${CONFIG_FILE}"
+
+      # shellcheck disable=SC1090
+      source "$CONFIG_FILE"
+
+      INTERFACE=""
+
+      if [[ "${REPO_INTERFACE:-auto}" != "auto" ]]; then
+        INTERFACE="$REPO_INTERFACE"
+      else
+        INTERFACE="$(
+          ip -4 route show default 2>/dev/null |
+          awk 'NR == 1 {print $5}'
+        )"
+      fi
+
+      if [[ -z "$INTERFACE" ]]; then
+        INTERFACE="$(
+          ip -4 -o addr show scope global 2>/dev/null |
+          awk 'NR == 1 {print $2}'
+        )"
+      fi
+
+      [[ -n "$INTERFACE" ]] ||
+        die "Could not determine the repository interface."
+
+      SERVER_IP=""
+
+      for attempt in $(seq 1 60); do
+        SERVER_IP="$(
+          ip -4 -o addr show dev "$INTERFACE" scope global 2>/dev/null |
+          awk 'NR == 1 {print $4}' |
+          cut -d/ -f1
+        )"
+
+        if [[ -n "$SERVER_IP" ]]; then
+          break
+        fi
+
+        log "Waiting for an IPv4 address on ${INTERFACE}: ${attempt}/60"
+        sleep 2
+      done
+
+      [[ -n "$SERVER_IP" ]] ||
+        die "No IPv4 address found on ${INTERFACE}."
+
+      REPO_HOST="${REPO_HOST_OVERRIDE:-$SERVER_IP}"
+      REGISTRY_HOST="${REGISTRY_HOST_OVERRIDE:-$SERVER_IP}"
+
+      REPO_BASE_URL="${REPO_SCHEME:-http}://${REPO_HOST}"
+
+      mkdir -p "$(dirname "$RUNTIME_FILE")"
+      mkdir -p "$(dirname "$RUNTIME_JSON")"
+
+      cat > "$RUNTIME_FILE" <<EOF
+      REPO_INTERFACE_RESOLVED="${INTERFACE}"
+      SERVER_IP="${SERVER_IP}"
+      REPO_HOST="${REPO_HOST}"
+      REPO_BASE_URL="${REPO_BASE_URL}"
+      REGISTRY_HOST="${REGISTRY_HOST}"
+      REGISTRY_PORT="${REGISTRY_PORT:-5000}"
+      REPO_ROOT="${REPO_ROOT:-/srv/cyberrepo}"
+      EOF
+
+      python3 \
+        - "$INTERFACE" \
+        "$SERVER_IP" \
+        "$REPO_BASE_URL" \
+        "$REGISTRY_HOST" \
+        "${REGISTRY_PORT:-5000}" \
+        > "$RUNTIME_JSON" <<'PY'
+      import json
+      import sys
+
+      interface = sys.argv[1]
+      server_ip = sys.argv[2]
+      repository_url = sys.argv[3]
+      registry_host = sys.argv[4]
+      registry_port = sys.argv[5]
+
+      print(json.dumps({
+          "interface": interface,
+          "server_ip": server_ip,
+          "repository_url": repository_url,
+          "registry": f"{registry_host}:{registry_port}",
+      }, indent=2))
+      PY
+
+      chmod 0644 "$RUNTIME_FILE"
+      chmod 0644 "$RUNTIME_JSON"
+
+      log "Resolved interface: ${INTERFACE}"
+      log "Resolved IPv4: ${SERVER_IP}"
+      log "Repository URL: ${REPO_BASE_URL}"
+      log "Registry: ${REGISTRY_HOST}:${REGISTRY_PORT:-5000}"
+
+  ###########################################################################
+  # Download VM images
+  ###########################################################################
+
+  - path: /usr/local/sbin/cyberrepo-download-images
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env bash
+      set -Eeuo pipefail
+
+      CONFIG_FILE="/etc/cyberrepo/config.env"
+      RUNTIME_FILE="/etc/cyberrepo/runtime.env"
+
+      log() {
+        printf '[+] %s\n' "$*"
+      }
+
+      warning() {
+        printf '[WARNING] %s\n' "$*" >&2
+      }
+
+      die() {
+        printf '[ERROR] %s\n' "$*" >&2
+        exit 1
+      }
+
+      [[ -s "$CONFIG_FILE" ]] ||
+        die "Missing configuration: ${CONFIG_FILE}"
+
+      /usr/local/sbin/cyberrepo-resolve-network
+
+      # shellcheck disable=SC1090
+      source "$CONFIG_FILE"
+
+      # shellcheck disable=SC1090
+      source "$RUNTIME_FILE"
+
+      download_file() {
+        local enabled="$1"
+        local description="$2"
+        local url="$3"
+        local destination="$4"
+
+        if [[ "$enabled" != "yes" ]]; then
+          log "${description}: automatic download disabled."
+          return 0
+        fi
+
+        if [[ -z "$url" ]]; then
+          warning "${description}: URL is empty."
+          return 0
+        fi
+
+        mkdir -p "$(dirname "$destination")"
+
+        if [[ -s "$destination" ]]; then
+          log "${description}: already exists."
+          log "File: ${destination}"
+          return 0
+        fi
+
+        local temporary_file="${destination}.part"
+
+        rm -f "$temporary_file"
+
+        log "Downloading ${description}."
+        log "Source: ${url}"
+        log "Destination: ${destination}"
+
+        wget \
+          --tries=5 \
+          --timeout=60 \
+          --show-progress \
+          -O "$temporary_file" \
+          "$url"
+
+        [[ -s "$temporary_file" ]] ||
+          die "${description}: downloaded file is empty."
+
+        mv "$temporary_file" "$destination"
+
+        log "${description}: download completed."
+      }
+
+      download_file \
+        "${DOWNLOAD_UBUNTU:-no}" \
+        "Ubuntu image" \
+        "${UBUNTU_IMAGE_URL:-}" \
+        "${REPO_ROOT}/images/ubuntu/${UBUNTU_IMAGE_NAME}"
+
+      download_file \
+        "${DOWNLOAD_KALI:-no}" \
+        "Kali image" \
+        "${KALI_IMAGE_URL:-}" \
+        "${REPO_ROOT}/images/kali/${KALI_IMAGE_NAME}"
+
+      download_file \
+        "${DOWNLOAD_OPNSENSE:-no}" \
+        "OPNsense image" \
+        "${OPNSENSE_IMAGE_URL:-}" \
+        "${REPO_ROOT}/images/opnsense/${OPNSENSE_IMAGE_NAME}"
+
+      download_file \
+        "${DOWNLOAD_WAZUH:-no}" \
+        "Wazuh image" \
+        "${WAZUH_IMAGE_URL:-}" \
+        "${REPO_ROOT}/images/wazuh/${WAZUH_IMAGE_NAME}"
+
+      download_file \
+        "${DOWNLOAD_WINDOWS:-no}" \
+        "Windows image" \
+        "${WINDOWS_IMAGE_URL:-}" \
+        "${REPO_ROOT}/images/windows/${WINDOWS_IMAGE_NAME}"
+
+      for definition in "${ADDITIONAL_IMAGES[@]:-}"; do
+        [[ -n "$definition" ]] || continue
+
+        IFS='|' read -r \
+          enabled \
+          description \
+          url \
+          relative_destination \
+          <<< "$definition"
+
+        if [[ -z "$relative_destination" ]]; then
+          warning "Invalid additional image definition: ${definition}"
+          continue
+        fi
+
+        download_file \
+          "$enabled" \
+          "$description" \
+          "$url" \
+          "${REPO_ROOT}/${relative_destination}"
+      done
+
+  ###########################################################################
+  # Cache Docker images
+  ###########################################################################
+
+  - path: /usr/local/sbin/cyberrepo-cache-docker-images
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env bash
+      set -Eeuo pipefail
+
+      CONFIG_FILE="/etc/cyberrepo/config.env"
+      RUNTIME_FILE="/etc/cyberrepo/runtime.env"
+
+      log() {
+        printf '[+] %s\n' "$*"
+      }
+
+      warning() {
+        printf '[WARNING] %s\n' "$*" >&2
+      }
+
+      [[ -s "$CONFIG_FILE" ]] || {
+        echo "Missing configuration: ${CONFIG_FILE}" >&2
+        exit 1
+      }
+
+      /usr/local/sbin/cyberrepo-resolve-network
+
+      # shellcheck disable=SC1090
+      source "$CONFIG_FILE"
+
+      # shellcheck disable=SC1090
+      source "$RUNTIME_FILE"
+
+      if [[ "${ENABLE_REGISTRY:-yes}" != "yes" ]]; then
+        log "Docker Registry is disabled."
+        exit 0
+      fi
+
+      REGISTRY="${REGISTRY_HOST}:${REGISTRY_PORT}"
+
+      for definition in "${DOCKER_IMAGES[@]:-}"; do
+        [[ -n "$definition" ]] || continue
+
+        source_image="${definition%%|*}"
+        local_image="${definition#*|}"
+
+        if [[ -z "$source_image" || -z "$local_image" ]]; then
+          warning "Invalid Docker image definition: ${definition}"
+          continue
+        fi
+
+        target_image="${REGISTRY}/${local_image}"
+
+        log "Pulling ${source_image}"
+
+        if ! docker pull "$source_image"; then
+          warning "Could not pull ${source_image}"
+          continue
+        fi
+
+        docker tag "$source_image" "$target_image"
+
+        log "Pushing ${target_image}"
+
+        if ! docker push "$target_image"; then
+          warning "Could not push ${target_image}"
+        fi
+      done
+
+  ###########################################################################
+  # Generate manifest and SHA256
+  ###########################################################################
+
+  - path: /usr/local/sbin/cyberrepo-generate-manifest
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env bash
+      set -Eeuo pipefail
+
+      CONFIG_FILE="/etc/cyberrepo/config.env"
+      RUNTIME_FILE="/etc/cyberrepo/runtime.env"
+
+      [[ -s "$CONFIG_FILE" ]] || {
+        echo "Missing configuration: ${CONFIG_FILE}" >&2
+        exit 1
+      }
+
+      /usr/local/sbin/cyberrepo-resolve-network
+
+      # shellcheck disable=SC1090
+      source "$CONFIG_FILE"
+
+      # shellcheck disable=SC1090
+      source "$RUNTIME_FILE"
+
+      MANIFEST_DIR="${REPO_ROOT}/manifests"
+      MANIFEST_FILE="${MANIFEST_DIR}/manifest.json"
+      CHECKSUM_FILE="${MANIFEST_DIR}/sha256sums.txt"
+      TEMP_MANIFEST="${MANIFEST_FILE}.tmp"
+
+      mkdir -p "$MANIFEST_DIR"
+
+      if [[ "${GENERATE_SHA256:-yes}" == "yes" ]]; then
+        : > "$CHECKSUM_FILE"
+
+        find \
+          "${REPO_ROOT}/images" \
+          "${REPO_ROOT}/isos" \
+          "${REPO_ROOT}/cloud-init" \
+          "${REPO_ROOT}/scripts" \
+          "${REPO_ROOT}/packages" \
+          "${REPO_ROOT}/templates" \
+          "${REPO_ROOT}/testfiles" \
+          -type f \
+          ! -name '*.part' \
+          -print0 |
+        sort -z |
+        while IFS= read -r -d '' file; do
+          relative_path="${file#${REPO_ROOT}/}"
+
+          (
+            cd "$REPO_ROOT"
+            sha256sum "$relative_path"
+          ) >> "$CHECKSUM_FILE"
+        done
+
+        chmod 0644 "$CHECKSUM_FILE"
+      fi
+
+      if [[ "${GENERATE_MANIFEST:-yes}" != "yes" ]]; then
+        exit 0
+      fi
+
+      python3 \
+        - "$REPO_ROOT" \
+        "$REPO_BASE_URL" \
+        > "$TEMP_MANIFEST" <<'PY'
+      import hashlib
+      import json
+      import mimetypes
+      import sys
+
+      from datetime import datetime, timezone
+      from pathlib import Path
+
+      root = Path(sys.argv[1])
+      base_url = sys.argv[2].rstrip("/")
+
+      directories = [
+          root / "images",
+          root / "isos",
+          root / "cloud-init",
+          root / "scripts",
+          root / "packages",
+          root / "templates",
+          root / "testfiles",
+      ]
+
+      files = []
+
+      for directory in directories:
+          if not directory.exists():
+              continue
+
+          for path in sorted(directory.rglob("*")):
+              if not path.is_file():
+                  continue
+
+              if path.name.endswith(".part"):
+                  continue
+
+              relative = path.relative_to(root).as_posix()
+              digest = hashlib.sha256()
+
+              with path.open("rb") as source:
+                  for chunk in iter(
+                      lambda: source.read(1024 * 1024),
+                      b"",
+                  ):
+                      digest.update(chunk)
+
+              files.append({
+                  "path": relative,
+                  "url": f"{base_url}/{relative}",
+                  "size": path.stat().st_size,
+                  "sha256": digest.hexdigest(),
+                  "content_type": (
+                      mimetypes.guess_type(path.name)[0]
+                      or "application/octet-stream"
+                  ),
+              })
+
+      manifest = {
+          "repository": "CyberRepo",
+          "base_url": base_url,
+          "generated_at": datetime.now(timezone.utc).isoformat(),
+          "file_count": len(files),
+          "files": files,
+      }
+
+      json.dump(manifest, sys.stdout, indent=2)
+      print()
+      PY
+
+      mv "$TEMP_MANIFEST" "$MANIFEST_FILE"
+      chmod 0644 "$MANIFEST_FILE"
+
+      echo "[+] Manifest generated: ${MANIFEST_FILE}"
+
+  ###########################################################################
+  # Generate repository web page
+  ###########################################################################
+
+  - path: /usr/local/sbin/cyberrepo-generate-index
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env bash
+      set -Eeuo pipefail
+
+      CONFIG_FILE="/etc/cyberrepo/config.env"
+      RUNTIME_FILE="/etc/cyberrepo/runtime.env"
+
+      /usr/local/sbin/cyberrepo-resolve-network
+
+      # shellcheck disable=SC1090
+      source "$CONFIG_FILE"
+
+      # shellcheck disable=SC1090
+      source "$RUNTIME_FILE"
+
+      INDEX_FILE="${REPO_ROOT}/public/index.html"
+
+      mkdir -p "$(dirname "$INDEX_FILE")"
+
+      cat > "$INDEX_FILE" <<EOF
+      <!doctype html>
+      <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>${REPO_NAME}</title>
+
+        <style>
+          :root {
+            color-scheme: dark;
+            --background: #07101f;
+            --panel: #0e192c;
+            --line: #20304a;
+            --text: #f5f7fb;
+            --muted: #8fa1bb;
+            --blue: #48a8ff;
+            --green: #27d79a;
+          }
+
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            min-height: 100vh;
+            background:
+              radial-gradient(
+                circle at 75% 0,
+                #0e2747 0,
+                transparent 35%
+              ),
+              var(--background);
+            color: var(--text);
+            font: 15px/1.5 Inter, system-ui, sans-serif;
+          }
+
+          header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 72px;
+            padding: 0 28px;
+            border-bottom: 1px solid var(--line);
+            background: rgba(7, 16, 31, .9);
+          }
+
+          header h1 {
+            margin: 0;
+            font-size: 22px;
+          }
+
+          .status {
+            color: #a7f3d0;
+          }
+
+          .status::before {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            margin-right: 8px;
+            border-radius: 50%;
+            background: var(--green);
+            box-shadow: 0 0 10px var(--green);
+            content: "";
+          }
+
+          main {
+            width: min(1200px, calc(100% - 40px));
+            margin: 38px auto;
+          }
+
+          .eyebrow {
+            margin: 0 0 5px;
+            color: var(--blue);
+            font-size: 11px;
+            font-weight: 900;
+            letter-spacing: .18em;
+          }
+
+          .hero h2 {
+            margin: 0 0 7px;
+            font-size: 34px;
+          }
+
+          .hero p {
+            color: var(--muted);
+          }
+
+          .grid {
+            display: grid;
+            grid-template-columns:
+              repeat(auto-fit, minmax(250px, 1fr));
+            gap: 18px;
+            margin-top: 25px;
+          }
+
+          .card {
+            display: block;
+            padding: 22px;
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            background:
+              linear-gradient(160deg, #101e33, #0b1628);
+            color: var(--text);
+            text-decoration: none;
+            transition: .18s ease;
+          }
+
+          .card:hover {
+            transform: translateY(-3px);
+            border-color: #3f86c7;
+          }
+
+          .card strong {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 18px;
+          }
+
+          .card span {
+            color: var(--muted);
+          }
+
+          .info {
+            margin-top: 25px;
+            padding: 18px;
+            border: 1px solid var(--line);
+            border-radius: 12px;
+            background: var(--panel);
+          }
+
+          code {
+            color: #b7e6ff;
+          }
+        </style>
+      </head>
+
+      <body>
+        <header>
+          <h1>${REPO_NAME}</h1>
+          <span class="status">Repository online</span>
+        </header>
+
+        <main>
+          <section class="hero">
+            <p class="eyebrow">EUD CYBER</p>
+            <h2>Cyberlab Repository</h2>
+
+            <p>
+              Central repository for Proxmox images, ISO files,
+              cloud-init files, scripts and Docker images.
+            </p>
+          </section>
+
+          <section class="grid">
+            <a class="card" href="/images/">
+              <strong>VM images</strong>
+              <span>Ubuntu, Kali, OPNsense, Wazuh and Windows</span>
+            </a>
+
+            <a class="card" href="/isos/">
+              <strong>ISO files</strong>
+              <span>Installation media and appliance images</span>
+            </a>
+
+            <a class="card" href="/cloud-init/">
+              <strong>Cloud-init</strong>
+              <span>Automatic VM configuration files</span>
+            </a>
+
+            <a class="card" href="/scripts/">
+              <strong>Scripts</strong>
+              <span>Deployment and maintenance scripts</span>
+            </a>
+
+            <a class="card" href="/packages/">
+              <strong>Packages</strong>
+              <span>Versioned Cyberlab packages</span>
+            </a>
+
+            <a class="card" href="/templates/">
+              <strong>Templates</strong>
+              <span>Proxmox templates and configuration</span>
+            </a>
+
+            <a class="card" href="/manifest.json">
+              <strong>Manifest</strong>
+              <span>URLs, file sizes and SHA256 hashes</span>
+            </a>
+
+            <a class="card" href="/sha256sums.txt">
+              <strong>SHA256 checksums</strong>
+              <span>Integrity verification</span>
+            </a>
+          </section>
+
+          <section class="info">
+            <strong>Detected interface</strong>
+            <p><code>${REPO_INTERFACE_RESOLVED}</code></p>
+
+            <strong>Detected server IP</strong>
+            <p><code>${SERVER_IP}</code></p>
+
+            <strong>Repository URL</strong>
+            <p><code>${REPO_BASE_URL}</code></p>
+
+            <strong>Docker Registry</strong>
+            <p><code>${REGISTRY_HOST}:${REGISTRY_PORT}</code></p>
+          </section>
+        </main>
+      </body>
+      </html>
+      EOF
+
+      chmod 0644 "$INDEX_FILE"
+
+  ###########################################################################
+  # Complete repository update
+  ###########################################################################
+
+  - path: /usr/local/sbin/cyberrepo-update
+    owner: root:root
+    permissions: '0755'
+    content: |
+      #!/usr/bin/env bash
+      set -Eeuo pipefail
+
+      CONFIG_FILE="/etc/cyberrepo/config.env"
+
+      [[ -s "$CONFIG_FILE" ]] || {
+        echo "Missing configuration: ${CONFIG_FILE}" >&2
+        exit 1
+      }
+
+      # shellcheck disable=SC1090
+      source "$CONFIG_FILE"
+
+      echo "[+] Updating CyberRepo."
+
+      if [[ "${DAILY_CONFIG_UPDATE:-no}" == "yes" ]]; then
+        /usr/local/sbin/cyberrepo-update-config
+      fi
+
+      /usr/local/sbin/cyberrepo-resolve-network
+      /usr/local/sbin/cyberrepo-download-images
+      /usr/local/sbin/cyberrepo-generate-manifest
+      /usr/local/sbin/cyberrepo-generate-index
+
+      if [[ "${DAILY_DOCKER_CACHE:-no}" == "yes" ]]; then
+        /usr/local/sbin/cyberrepo-cache-docker-images
+      fi
+
+      nginx -t
+      systemctl reload nginx
+
+      echo "[+] CyberRepo update completed."
+
+  ###########################################################################
+  # Update timer
+  ###########################################################################
+
+  - path: /etc/systemd/system/cyberrepo-update.service
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Update CyberRepo
+      After=network-online.target docker.service nginx.service
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/cyberrepo-update
+
+  - path: /etc/systemd/system/cyberrepo-update.timer
+    owner: root:root
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Daily CyberRepo update
+
+      [Timer]
+      OnBootSec=10min
+      OnCalendar=daily
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+
+runcmd:
+
+  ###########################################################################
+  # Enable base services
+  ###########################################################################
+
+  - systemctl enable --now docker
+  - systemctl enable --now qemu-guest-agent
+
+  - usermod -aG docker ubuntu
+
+  ###########################################################################
+  # Create directories
+  ###########################################################################
+
+  - mkdir -p /etc/cyberrepo
+  - mkdir -p /opt/cyberrepo
+
+  - mkdir -p /srv/cyberrepo/public
+
+  - mkdir -p /srv/cyberrepo/images/ubuntu
+  - mkdir -p /srv/cyberrepo/images/kali
+  - mkdir -p /srv/cyberrepo/images/opnsense
+  - mkdir -p /srv/cyberrepo/images/wazuh
+  - mkdir -p /srv/cyberrepo/images/windows
+
+  - mkdir -p /srv/cyberrepo/isos
+  - mkdir -p /srv/cyberrepo/cloud-init
+  - mkdir -p /srv/cyberrepo/scripts
+  - mkdir -p /srv/cyberrepo/packages
+  - mkdir -p /srv/cyberrepo/templates
+  - mkdir -p /srv/cyberrepo/testfiles
+  - mkdir -p /srv/cyberrepo/manifests
+  - mkdir -p /srv/cyberrepo/registry
+
+  - chmod 0755 /srv/cyberrepo
+  - chmod -R 0755 /srv/cyberrepo/public
+  - chmod -R 0755 /srv/cyberrepo/images
+  - chmod -R 0755 /srv/cyberrepo/isos
+  - chmod -R 0755 /srv/cyberrepo/cloud-init
+  - chmod -R 0755 /srv/cyberrepo/scripts
+  - chmod -R 0755 /srv/cyberrepo/packages
+  - chmod -R 0755 /srv/cyberrepo/templates
+  - chmod -R 0755 /srv/cyberrepo/testfiles
+  - chmod -R 0755 /srv/cyberrepo/manifests
+
+  ###########################################################################
+  # Download external configuration
+  ###########################################################################
+
+  - /usr/local/sbin/cyberrepo-update-config
+
+  - test -s /etc/cyberrepo/config.env
+
+  ###########################################################################
+  # Detect interface and IP
+  ###########################################################################
+
+  - /usr/local/sbin/cyberrepo-resolve-network
+
+  - cat /etc/cyberrepo/runtime.env
+
+  ###########################################################################
+  # Configure Nginx
+  ###########################################################################
+
+  - rm -f /etc/nginx/sites-enabled/default
+
+  - ln -sfn /etc/nginx/sites-available/cyberrepo /etc/nginx/sites-enabled/cyberrepo
+
+  - nginx -t
+
+  - systemctl enable nginx
+  - systemctl restart nginx
+
+  ###########################################################################
+  # Firewall
+  ###########################################################################
+
+  - ufw default deny incoming
+  - ufw default allow outgoing
+
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 5000/tcp
+
+  - ufw --force enable
+
+  ###########################################################################
+  # Start Docker Registry
+  ###########################################################################
+
+  - |
+    set -e
+
+    source /etc/cyberrepo/config.env
+
+    if [[ "${ENABLE_REGISTRY:-yes}" == "yes" ]]; then
+      docker compose -f /opt/cyberrepo/docker-compose.yml up -d
+    else
+      echo "Docker Registry is disabled."
+    fi
+
+  ###########################################################################
+  # Wait for Registry
+  ###########################################################################
+
+  - |
+    set -e
+
+    source /etc/cyberrepo/config.env
+
+    if [[ "${ENABLE_REGISTRY:-yes}" != "yes" ]]; then
+      exit 0
+    fi
+
+    for attempt in $(seq 1 60); do
+      if curl -fsS http://127.0.0.1:5000/v2/ >/dev/null; then
+        echo "Docker Registry is ready."
+        exit 0
+      fi
+
+      sleep 2
+    done
+
+    echo "Docker Registry did not become ready." >&2
+    docker logs cyberrepo-registry --tail=100 || true
+    exit 1
+
+  ###########################################################################
+  # Download configured VM images
+  ###########################################################################
+
+  - /usr/local/sbin/cyberrepo-download-images
+
+  ###########################################################################
+  # Generate repository metadata and page
+  ###########################################################################
+
+  - /usr/local/sbin/cyberrepo-generate-manifest
+  - /usr/local/sbin/cyberrepo-generate-index
+
+  ###########################################################################
+  # Wait for Nginx
+  ###########################################################################
+
+  - |
+    set -e
+
+    for attempt in $(seq 1 60); do
+      if curl -fsS http://127.0.0.1/health >/dev/null; then
+        echo "CyberRepo HTTP service is ready."
+        exit 0
+      fi
+
+      sleep 2
+    done
+
+    echo "CyberRepo HTTP service did not become ready." >&2
+    systemctl status nginx --no-pager || true
+    exit 1
+
+  ###########################################################################
+  # Cache Docker images
+  ###########################################################################
+
+  - |
+    set -e
+
+    source /etc/cyberrepo/config.env
+
+    if [[ "${ENABLE_REGISTRY:-yes}" == "yes" ]]; then
+      /usr/local/sbin/cyberrepo-cache-docker-images
+    fi
+
+  ###########################################################################
+  # Enable automatic updates
+  ###########################################################################
+
+  - systemctl daemon-reload
+
+  - |
+    set -e
+
+    source /etc/cyberrepo/config.env
+
+    if [[ "${DAILY_UPDATE:-yes}" == "yes" ]]; then
+      systemctl enable --now cyberrepo-update.timer
+    else
+      systemctl disable --now cyberrepo-update.timer || true
+    fi
+
+  ###########################################################################
+  # Final checks
+  ###########################################################################
+
+  - nginx -t
+  - curl -fsS http://127.0.0.1/health
+  - curl -fsS http://127.0.0.1/runtime.json
+  - curl -fsS http://127.0.0.1/manifest.json
+
+  - |
+    source /etc/cyberrepo/config.env
+
+    if [[ "${ENABLE_REGISTRY:-yes}" == "yes" ]]; then
+      docker compose -f /opt/cyberrepo/docker-compose.yml ps
+      curl -fsS http://127.0.0.1:5000/v2/
+    fi
+
+final_message: |
+  CyberRepo installation completed.
+
+  Static configuration:
+    /etc/cyberrepo/config.env
+
+  Detected network configuration:
+    /etc/cyberrepo/runtime.env
+
+  Repository storage:
+    /srv/cyberrepo
+
+  Useful commands:
+    cyberrepo-update-config
+    cyberrepo-resolve-network
+    cyberrepo-download-images
+    cyberrepo-cache-docker-images
+    cyberrepo-generate-manifest
+    cyberrepo-generate-index
+    cyberrepo-update
+
+power_state:
+  mode: poweroff
+  message: "CyberRepo installation finished - powering off"
+  timeout: 30
+  condition: true
