@@ -1276,8 +1276,3 @@ final_message: |
     cyberrepo-generate-index
     cyberrepo-update
 
-power_state:
-  mode: poweroff
-  message: "CyberRepo installation finished - powering off"
-  timeout: 30
-  condition: true
