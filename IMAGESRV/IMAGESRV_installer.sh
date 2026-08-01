@@ -538,47 +538,6 @@ qm start "$VMID"
 
 log "VM started successfully."
 
-###############################################################################
-# Wait for cloud-init poweroff
-###############################################################################
-
-if ! wait_for_vm_shutdown "$VMID" 7200; then
-  warning "VM did not power off within two hours."
-  warning "Cloud-init may still be downloading images or Docker containers."
-  warning
-  warning "Check the VM console and run:"
-  warning "cloud-init status --long"
-  warning "tail -n 200 /var/log/cloud-init-output.log"
-  exit 1
-fi
-
-###############################################################################
-# Create baseline snapshot
-###############################################################################
-
-log "Creating baseline snapshot..."
-
-if qm listsnapshot "$VMID" 2>/dev/null |
-   grep -q 'First_snapshot'; then
-
-  warning "Snapshot First_snapshot already exists."
-else
-  qm snapshot \
-    "$VMID" \
-    First_snapshot \
-    --description "Clean CyberRepo baseline after cloud-init"
-
-  log "Snapshot created successfully."
-fi
-
-###############################################################################
-# Start VM again
-###############################################################################
-
-log "Starting Image Server again..."
-
-qm start "$VMID"
-
 trap - ERR
 
 echo
