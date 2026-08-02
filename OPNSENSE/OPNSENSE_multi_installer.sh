@@ -37,10 +37,21 @@ LAN_BRIDGE="lab${LAB}_lan1"
 LAN_BRIDGE1="lab${LAB}_lan2"
 OOBM="lab${LAB}_oobm"
 
-OPN_VERSION="${OPNSENSE_VERSION:-25.7}"
 
-IMG_BASE="OPNsense-${OPN_VERSION}-nano-amd64.img"
-IMG_BZ2="${IMG_BASE}.bz2"
+#gammel image
+#OPN_VERSION="${OPNSENSE_VERSION:-25.7}"
+#IMG_BASE="OPNsense-${OPN_VERSION}-nano-amd64.img"
+#IMG_BZ2="${IMG_BASE}.bz2"
+
+#ny test image 
+
+OPN_VERSION="${OPNSENSE_VERSION:-25.7}"
+DEFAULT_OPNSENSE_URL="https://pkg.opnsense.org/releases/${OPN_VERSION}/OPNsense-${OPN_VERSION}-nano-amd64.img.bz2"
+OPNSENSE_DOWNLOAD_URL="${OPNSENSE_IMG_URL:-$DEFAULT_OPNSENSE_URL}"
+IMG_BZ2="$(basename "$OPNSENSE_DOWNLOAD_URL")"
+IMG_BASE="${IMG_BZ2%.bz2}"
+
+
 
 IMG_DIR="$(pwd)/OPNSENSE"
 IMG_PATH="${IMG_DIR}/${IMG_BASE}"
@@ -62,8 +73,17 @@ fi
 if [[ ! -f "$IMG_PATH" ]]; then
   if [[ ! -f "$IMG_BZ2_PATH" ]]; then
     echo "Downloading OPNsense nano image..."
-    wget -O "$IMG_BZ2_PATH" \
-      https://pkg.opnsense.org/releases/${OPN_VERSION}/${IMG_BZ2}
+    #wget -O "$IMG_BZ2_PATH" \
+    #  https://pkg.opnsense.org/releases/${OPN_VERSION}/${IMG_BZ2}
+    echo "Downloading OPNsense image from:"
+    echo "  $OPNSENSE_DOWNLOAD_URL"
+
+    wget \
+      --tries=5 \
+      --timeout=60 \
+      --show-progress \
+      -O "$IMG_BZ2_PATH" \
+      "$OPNSENSE_DOWNLOAD_URL"
   fi
 
   echo "Unpacking image..."

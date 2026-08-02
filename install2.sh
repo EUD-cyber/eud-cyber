@@ -9,12 +9,14 @@ IFS=$'\n\t'
 #   1. Internet image sources
 #   2. CyberRepo / ImageSrv discovered through manifest.json
 #
-# Ubuntu, Kali and Wazuh URLs are exported as:
+# Ubuntu, Kali, Wazuh and OPNsense URLs are exported as:
 #   LINUX_IMG
 #   KALI_IMG
 #   WAZUH_IMG
+#   OPNSENSE_IMG_URL
 #
-# OPNsense continues to use OPNSENSE_VERSION for now.
+# OPNSENSE_VERSION is exported as well. If an OPNsense image is selected from
+# CyberRepo, the version is detected automatically from the filename.
 ###############################################################################
 
 SCRIPT_DIR="$(
@@ -35,7 +37,7 @@ INTERNET_KALI_IMG="https://kali.download/cloud-images/kali-2025.4/kali-linux-202
 DEFAULT_IMAGE_SERVER="http://10.134.71.139"
 
 OPNSENSE_VERSION="26.1.2"
-export OPNSENSE_VERSION
+INTERNET_OPNSENSE_IMG="https://pkg.opnsense.org/releases/${OPNSENSE_VERSION}/OPNsense-${OPNSENSE_VERSION}-nano-amd64.img.bz2"
 
 ###############################################################################
 # Deployment scripts
@@ -367,6 +369,26 @@ select_bridge() {
   done
 }
 
+infer_opnsense_version() {
+  local image_url="$1"
+  local filename
+  local detected_version=""
+
+  filename="$(basename "${image_url%%\?*}")"
+
+  if [[ "$filename" =~ ^OPNsense-([0-9]+\.[0-9]+(\.[0-9]+)?)-nano-amd64\.img\.bz2$ ]]; then
+    detected_version="${BASH_REMATCH[1]}"
+  fi
+
+  if [[ -n "$detected_version" ]]; then
+    OPNSENSE_VERSION="$detected_version"
+    log "Detected OPNsense version: ${OPNSENSE_VERSION}"
+  else
+    warning "Could not detect OPNsense version from ${filename}."
+    warning "Keeping configured version: ${OPNSENSE_VERSION}"
+  fi
+}
+
 ###############################################################################
 # Validate host
 ###############################################################################
@@ -425,10 +447,12 @@ case "$IMAGE_SOURCE_CHOICE" in
     LINUX_IMG="$INTERNET_LINUX_IMG"
     KALI_IMG="$INTERNET_KALI_IMG"
     WAZUH_IMG="$INTERNET_WAZUH_IMG"
+    OPNSENSE_IMG_URL="$INTERNET_OPNSENSE_IMG"
 
     LINUX_IMAGE_SOURCE="Internet"
     KALI_IMAGE_SOURCE="Internet"
     WAZUH_IMAGE_SOURCE="Internet"
+    OPNSENSE_IMAGE_SOURCE="Internet"
     ;;
 
   2)
@@ -482,6 +506,13 @@ case "$IMAGE_SOURCE_CHOICE" in
 
     WAZUH_IMG="$SELECTED_IMAGE_URL"
     WAZUH_IMAGE_SOURCE="$SELECTED_IMAGE_SOURCE"
+
+    select_manifest_image       "OPNsense"       '^images/opnsense/.*OPNsense-[0-9]+\.[0-9]+(\.[0-9]+)?-nano-amd64\.img\.bz2$'       "$INTERNET_OPNSENSE_IMG"       "$MANIFEST_FILE"
+
+    OPNSENSE_IMG_URL="$SELECTED_IMAGE_URL"
+    OPNSENSE_IMAGE_SOURCE="$SELECTED_IMAGE_SOURCE"
+
+    infer_opnsense_version "$OPNSENSE_IMG_URL"
     ;;
 
   0)
@@ -499,6 +530,8 @@ export IMAGE_SERVER_URL
 export LINUX_IMG
 export KALI_IMG
 export WAZUH_IMG
+export OPNSENSE_IMG_URL
+export OPNSENSE_VERSION
 
 ###############################################################################
 # Confirm selected images
@@ -518,8 +551,9 @@ echo
 echo "Wazuh (${WAZUH_IMAGE_SOURCE}):"
 echo "  ${WAZUH_IMG}"
 echo
-echo "OPNsense:"
-echo "  Version ${OPNSENSE_VERSION}"
+echo "OPNsense (${OPNSENSE_IMAGE_SOURCE}):"
+echo "  ${OPNSENSE_IMG_URL}"
+echo "  Version: ${OPNSENSE_VERSION}"
 echo
 
 read -r -p "Use these images? [Y/n]: " CONFIRM_IMAGES
@@ -667,6 +701,7 @@ echo "Image source: ${IMAGE_SOURCE}"
 echo "Ubuntu:       ${LINUX_IMAGE_SOURCE}"
 echo "Kali:         ${KALI_IMAGE_SOURCE}"
 echo "Wazuh:        ${WAZUH_IMAGE_SOURCE}"
+echo "OPNsense:     ${OPNSENSE_IMAGE_SOURCE}"
 echo
 echo "ISO storage:  ${LOCAL}"
 echo "Disk storage: ${LVM}"
