@@ -7,7 +7,7 @@
 
   <title>Documentation · Cyberlab</title>
 
-  <link rel="stylesheet" href="/style.css?v=22">
+  <link rel="stylesheet" href="/style.css?v=23">
 </head>
 
 <body>
@@ -321,43 +321,217 @@ docker compose logs --tail=100 guacamole</code></pre>
         <h1>Topology</h1>
 
         <p>
-          The Topology page is used to document devices and connections in
-          the Cyberlab environment.
+          The Topology page is used to document the Cyberlab network visually.
+          Devices can be added to the canvas, moved freely, connected and saved
+          centrally on the GuacVM server.
         </p>
 
         <h2>Open the Topology page</h2>
 
         <pre><code>https://&lt;Cyberlab-IP-or-DNS&gt;/pages/topology.html</code></pre>
 
-        <h2>Workflow</h2>
+        <h2>Device library</h2>
+
+        <p>
+          The panel on the left contains the available device types.
+          A device can be added in two ways:
+        </p>
+
+        <ul>
+          <li>Click a device type to add it to the canvas.</li>
+          <li>Drag a device type from the library onto the canvas.</li>
+        </ul>
+
+        <div class="doc-table-wrapper">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Device type</th>
+                <th>Example use</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Firewall</td><td>OPNsense or FortiGate</td></tr>
+              <tr><td>Router</td><td>WAN router or lab router</td></tr>
+              <tr><td>Switch</td><td>Physical or virtual network switch</td></tr>
+              <tr><td>Linux</td><td>Kali, Ubuntu or another Linux host</td></tr>
+              <tr><td>Windows</td><td>Windows client or Windows Server</td></tr>
+              <tr><td>Server</td><td>Application, database or security server</td></tr>
+              <tr><td>Docker host</td><td>Server running Docker containers</td></tr>
+              <tr><td>Cloud / Internet</td><td>External network or cloud service</td></tr>
+              <tr><td>Network</td><td>LAN, VLAN, DMZ or another network segment</td></tr>
+              <tr><td>Unknown</td><td>Discovered device that has not yet been identified</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>Recommended workflow</h2>
 
         <ol class="doc-steps">
           <li>Scan the lab network from Kali.</li>
-          <li>Add discovered systems to the topology.</li>
-          <li>Enter the system name, IP address and network.</li>
-          <li>Connect the devices.</li>
+          <li>Add the discovered systems to the topology.</li>
+          <li>Move each device to the correct position on the canvas.</li>
+          <li>Select a device and enter its properties.</li>
+          <li>Use the Connect tool to create links between devices.</li>
           <li>Press <strong>Save topology</strong>.</li>
         </ol>
 
+        <h2>Moving devices</h2>
+
+        <p>
+          Select the <strong>Select</strong> tool and drag a device to move it.
+          The position is kept in the browser until the topology is saved.
+        </p>
+
+        <h2>Device properties</h2>
+
+        <p>
+          Select a device on the canvas to edit its information in the panel
+          on the right.
+        </p>
+
+        <div class="doc-table-wrapper">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Property</th>
+                <th>Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Device type</td><td>Changes the device category and icon.</td></tr>
+              <tr><td>Name</td><td>The hostname or friendly system name.</td></tr>
+              <tr><td>IP address</td><td>The IPv4 or IPv6 address discovered during scanning.</td></tr>
+              <tr><td>Network</td><td>The LAN, VLAN, DMZ or network segment.</td></tr>
+              <tr><td>Status</td><td>Active, Unknown or Offline.</td></tr>
+              <tr><td>Description</td><td>Notes about services, roles or discovered information.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2>Connecting devices</h2>
+
+        <p>
+          Select the <strong>Connect</strong> tool. Click the first device and
+          then click the second device. A connection is created between them.
+        </p>
+
+        <p>To remove a connection:</p>
+
+        <ol class="doc-steps">
+          <li>Click the connection line.</li>
+          <li>Press <strong>Delete link</strong>.</li>
+        </ol>
+
+        <h2>Deleting devices</h2>
+
+        <p>
+          Select the device and press <strong>Delete device</strong> in the
+          properties panel. Connections attached to the device are also removed.
+        </p>
+
+        <h2>Save topology</h2>
+
+        <p>
+          Press <strong>Save topology</strong> after adding, moving, editing or
+          connecting devices.
+        </p>
+
+        <p>The status box at the top of the page shows whether the topology:</p>
+
+        <ul>
+          <li>has been loaded from the server,</li>
+          <li>contains unsaved changes,</li>
+          <li>has been saved successfully, or</li>
+          <li>could not contact the Topology API.</li>
+        </ul>
+
         <h2>Server storage</h2>
 
-        <p>The topology is saved on GuacVM as:</p>
+        <p>The topology is saved centrally on GuacVM as:</p>
 
         <pre><code>/opt/guacamole/data/topology.json</code></pre>
 
         <p>
-          The saved topology is loaded automatically when the page is opened
-          from another computer.
+          Because the topology is stored on the server, the same saved topology
+          is shown when the page is opened from another computer.
+        </p>
+
+        <h2>Topology API</h2>
+
+        <p>The Topology API loads, saves and resets the shared topology.</p>
+
+        <pre><code>GET    /api/topology
+POST   /api/topology
+DELETE /api/topology
+
+GET    /api/topology/status</code></pre>
+
+        <h2>Import and export</h2>
+
+        <div class="doc-table-wrapper">
+          <table class="doc-table">
+            <thead>
+              <tr>
+                <th>Button</th>
+                <th>Function</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Export</td>
+                <td>Downloads the current topology as a JSON file.</td>
+              </tr>
+              <tr>
+                <td>Import</td>
+                <td>Loads a previously exported topology JSON file.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="doc-warning">
+          Importing a topology only loads it into the browser.
+          Press Save topology afterwards to store it on the server.
+        </div>
+
+        <h2>Reset topology</h2>
+
+        <p>
+          Press <strong>Reset topology</strong> to delete the saved topology
+          and return to an empty canvas.
         </p>
 
         <div class="doc-warning">
           Reset topology deletes the shared topology for all users.
+          This affects every computer using the same Cyberlab installation.
         </div>
+
+        <h2>Troubleshooting</h2>
+
+        <p>Check the Topology API:</p>
+
+        <pre><code>curl -k https://127.0.0.1/api/topology/status</code></pre>
+
+        <p>Expected response:</p>
+
+        <pre><code>{"ready":true,"saved":true}</code></pre>
+
+        <p>View the saved topology:</p>
+
+        <pre><code>cat /opt/guacamole/data/topology.json</code></pre>
+
+        <p>Check the containers:</p>
+
+        <pre><code>cd /opt/guacamole
+docker compose ps
+docker compose logs --tail=100 topology-api
+docker compose logs --tail=100 nginx</code></pre>
       </section>
 
     </main>
   </div>
 
-  <script src="/documentation.js?v=22"></script>
+  <script src="/documentation.js?v=23"></script>
 </body>
 </html>

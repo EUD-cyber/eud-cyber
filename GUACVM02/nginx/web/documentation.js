@@ -1,37 +1,106 @@
 (() => {
   "use strict";
 
-  const links = document.querySelectorAll(".docs-link");
-  const pages = document.querySelectorAll(".doc-page");
+  const DEFAULT_PAGE = "overview";
 
-  function showPage(pageId) {
+  const links = Array.from(
+    document.querySelectorAll(".docs-link[data-page]")
+  );
 
-    if (!document.getElementById(pageId)) {
-      pageId = "overview";
-    }
+  const pages = Array.from(
+    document.querySelectorAll(".doc-page[id]")
+  );
+
+  function pageExists(pageId) {
+    return pages.some(page => page.id === pageId);
+  }
+
+  function normalizePageId(pageId) {
+    const cleanPageId = String(pageId || "")
+      .trim()
+      .replace(/^#/, "");
+
+    return pageExists(cleanPageId)
+      ? cleanPageId
+      : DEFAULT_PAGE;
+  }
+
+  function showPage(pageId, updateHistory = true) {
+    const activePageId = normalizePageId(pageId);
 
     links.forEach(link => {
-      link.classList.toggle(
-        "active",
-        link.dataset.page === pageId
+      const isActive =
+        link.dataset.page === activePageId;
+
+      link.classList.toggle("active", isActive);
+
+      link.setAttribute(
+        "aria-current",
+        isActive ? "page" : "false"
       );
     });
 
     pages.forEach(page => {
-      page.classList.toggle(
-        "active",
-        page.id === pageId
-      );
+      const isActive =
+        page.id === activePageId;
+
+      page.classList.toggle("active", isActive);
+      page.hidden = !isActive;
     });
 
-    history.replaceState(null, "", `#${pageId}`);
+    if (updateHistory) {
+      history.pushState(
+        { page: activePageId },
+        "",
+        `#${activePageId}`
+      );
+    }
+
+    const activePage =
+      document.getElementById(activePageId);
+
+    activePage?.scrollTo?.({
+      top: 0,
+      behavior: "instant"
+    });
+
+    document.querySelector(".docs-content")?.scrollTo?.({
+      top: 0,
+      behavior: "instant"
+    });
   }
 
   links.forEach(link => {
-    link.addEventListener("click", () => {
+    link.addEventListener("click", event => {
+      event.preventDefault();
+
       showPage(link.dataset.page);
     });
   });
 
-  showPage(location.hash.substring(1) || "overview");
+  window.addEventListener("popstate", () => {
+    showPage(
+      window.location.hash.substring(1),
+      false
+    );
+  });
+
+  window.addEventListener("hashchange", () => {
+    showPage(
+      window.location.hash.substring(1),
+      false
+    );
+  });
+
+  const initialPage = normalizePageId(
+    window.location.hash.substring(1)
+  );
+
+  showPage(initialPage, false);
+
+  history.replaceState(
+    { page: initialPage },
+    "",
+    `#${initialPage}`
+  );
 })();
