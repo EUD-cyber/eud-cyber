@@ -73,14 +73,11 @@ command_exists() {
 url_is_reachable() {
   local url="$1"
 
-  curl \
-    --fail \
-    --silent \
-    --show-error \
-    --location \
-    --connect-timeout 10 \
-    --max-time 30 \
-    --output /dev/null \
+  wget \
+    --spider \
+    --quiet \
+    --timeout=15 \
+    --tries=2 \
     "$url"
 }
 
