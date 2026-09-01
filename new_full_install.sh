@@ -25,6 +25,7 @@ TPOT="./TPOT01/TPOT01_multi_installer.sh"
 WIN11="./WIN11/WIN11_installer.sh"
 WIN2025="./WIN2025/WIN2025_multi_installer.sh"
 IMAGESRV="./IMAGESRV/IMAGESRV_installer.sh"
+INCIDENTVM="./INCIDENTVM/IncidentVM_installer.sh"
 
 echo "=============================="
 echo " Proxmox Deployment Menu"
@@ -49,6 +50,7 @@ echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
 echo "95) Run ALL in background"
 echo "99) Cleanup all installation"
+ehco "666) Create IncidentVM"
 echo "0) Exit"
 echo "=============================="
 
@@ -265,6 +267,9 @@ case "$CHOICE" in
      rm -rf /var/lib/vz/snippets/*
      rm -rf /var/lib/vz/template/iso/*
      ;;
+  666)
+     echo 'Starting Wazuh VM creation'
+    bash '$INCIDENTVM' $LAB
   0)
     echo "Exiting."
     exit 0
