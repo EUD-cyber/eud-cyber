@@ -3,8 +3,18 @@
 hostname: kali01
 manage_etc_hosts: true
 
+#########################################################
+# Groups
+#########################################################
+
+groups:
+  - wireshark
+
+#########################################################
+# Users
+#########################################################
+
 users:
-  - default
   - name: kali
     sudo: "ALL=(ALL) NOPASSWD:ALL"
     groups:
@@ -61,84 +71,198 @@ users:
       - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
 
 ssh_pwauth: true
-#ssh_pwauth: false
 disable_root: true
 
-packages:
-  - kali-desktop-xfce
-  - openssh-server
-  - tigervnc-standalone-server
-  - dbus-x11
-  - wireshark
-  - qemu-guest-agent
-  - curl
-  - ethtool
+#########################################################
+# Files
+#########################################################
 
 write_files:
 
   #########################################################
-  # Kali tools auto install
+  # Complete Kali first-boot installer
   #########################################################
 
-  - path: /usr/local/bin/install-kali-tools.sh
+  - path: /usr/local/sbin/cyberlab-kali-firstboot.sh
     permissions: "0755"
     content: |
       #!/bin/bash
-      set -e
 
-      # Force IPv4 to avoid Kali mirror IPv6 TLS issues
-      echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4
-  
-      cat > /etc/apt/sources.list <<EOF
-      deb https://http.kali.org/kali kali-rolling main contrib non-free non-free-firmware
-      EOF
-  
-      sleep 10
-  
-      apt-get update -o Acquire::Retries=5
-  
-      apt-get install -y --fix-missing \
-        kali-linux-default \
-        nikto \
-        seclists \
-        gobuster \
-        sshpass \
-        sqlmap \
-        zaproxy
+      set -Eeuo pipefail
 
-      touch /var/lib/kali-tools-installed
+      export DEBIAN_FRONTEND=noninteractive
 
-  - path: /etc/systemd/system/kali-tools-install.service
-    permissions: "0644"
-    content: |
-      [Unit]
-      Description=Install Kali tools after first boot
-      After=network-online.target
-      Wants=network-online.target
-      ConditionPathExists=!/var/lib/kali-tools-installed
+      LOG="/var/log/cyberlab-kali-install.log"
 
-      [Service]
-      Type=oneshot
-      ExecStart=/usr/local/bin/install-kali-tools.sh
+      exec > >(tee -a "$LOG") 2>&1
 
-      [Install]
-      WantedBy=multi-user.target
-
-  
-    #########################################################
-  # Multi user VNC setup script
-  #########################################################
-
-  - path: /usr/local/sbin/setup-vnc-multiuser.sh
-    permissions: "0755"
-    content: |
-      #!/bin/bash
-      set -e
+      echo "===================================================="
+      echo " Cyberlab Kali first boot"
+      echo " $(date)"
+      echo "===================================================="
 
       USERS=(kali kali1 kali2 kali3 kali4)
 
+      #####################################################
+      # Wait for network
+      #####################################################
+
+      echo "[+] Waiting for network..."
+
+      for i in $(seq 1 60); do
+        if ip route | grep -q '^default'; then
+          echo "[+] Default route detected."
+          break
+        fi
+
+        echo "[*] Waiting for default route... $i/60"
+        sleep 2
+      done
+
+      #####################################################
+      # Kali repository
+      #####################################################
+
+      echo "[+] Configuring Kali repository..."
+
+      cat > /etc/apt/sources.list <<'EOF'
+      deb http://http.kali.org/kali kali-rolling main contrib non-free non-free-firmware
+      EOF
+
+      #####################################################
+      # Force IPv4 and improve APT reliability
+      #####################################################
+
+      cat > /etc/apt/apt.conf.d/99cyberlab <<'EOF'
+      Acquire::ForceIPv4 "true";
+      Acquire::Retries "10";
+      Acquire::http::Timeout "60";
+      Acquire::https::Timeout "60";
+      Dpkg::Options {
+         "--force-confdef";
+         "--force-confold";
+      };
+      EOF
+
+      #####################################################
+      # APT update with retry
+      #####################################################
+
+      apt_update_retry() {
+
+        local attempt
+
+        for attempt in 1 2 3 4 5 6 7 8 9 10; do
+
+          echo "[+] APT update attempt ${attempt}/10..."
+
+          apt-get clean
+          rm -rf /var/lib/apt/lists/*
+          mkdir -p /var/lib/apt/lists/partial
+
+          if apt-get update; then
+            echo "[+] APT update successful."
+            return 0
+          fi
+
+          echo "[!] APT update failed."
+          echo "[*] Waiting 15 seconds before retry..."
+
+          sleep 15
+        done
+
+        echo "[ERROR] APT update failed after 10 attempts."
+        return 1
+      }
+
+      apt_update_retry
+
+      #####################################################
+      # Wireshark debconf before installation
+      #####################################################
+
+      echo "wireshark-common wireshark-common/install-setuid boolean true" \
+        | debconf-set-selections
+
+      #####################################################
+      # Install required VNC / GUI packages FIRST
+      #####################################################
+
+      echo "[+] Installing base Kali desktop and VNC packages..."
+
+      apt-get install -y --fix-missing \
+        kali-desktop-xfce \
+        openssh-server \
+        tigervnc-standalone-server \
+        tigervnc-tools \
+        dbus-x11 \
+        wireshark \
+        qemu-guest-agent \
+        curl \
+        wget \
+        ethtool \
+        libcap2-bin
+
+      #####################################################
+      # Validate VNC
+      #####################################################
+
+      echo "[+] Checking TigerVNC installation..."
+
+      command -v vncserver >/dev/null 2>&1 || {
+        echo "[ERROR] vncserver not found."
+        exit 1
+      }
+
+      command -v vncpasswd >/dev/null 2>&1 || {
+        echo "[ERROR] vncpasswd not found."
+        exit 1
+      }
+
+      echo "[+] vncserver: $(command -v vncserver)"
+      echo "[+] vncpasswd: $(command -v vncpasswd)"
+
+      #####################################################
+      # Disable local display manager
+      #
+      # Display :0 is reserved for VNC user kali.
+      #####################################################
+
+      systemctl disable --now lightdm.service 2>/dev/null || true
+
+      #####################################################
+      # Wireshark
+      #####################################################
+
+      echo "[+] Configuring Wireshark..."
+
+      dpkg-reconfigure -f noninteractive wireshark-common || true
+
       for u in "${USERS[@]}"; do
-        HOME_DIR=$(getent passwd "$u" | cut -d: -f6)
+        usermod -aG wireshark "$u"
+      done
+
+      if [ -x /usr/bin/dumpcap ]; then
+        setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap || true
+        getcap /usr/bin/dumpcap || true
+      fi
+
+      #####################################################
+      # User VNC configuration
+      #####################################################
+
+      echo "[+] Configuring VNC users..."
+
+      for u in "${USERS[@]}"; do
+
+        echo "[+] Configuring VNC for $u..."
+
+        HOME_DIR="$(getent passwd "$u" | cut -d: -f6)"
+
+        if [ -z "$HOME_DIR" ]; then
+          echo "[ERROR] Could not determine home directory for $u"
+          exit 1
+        fi
 
         mkdir -p "$HOME_DIR/.config/tigervnc"
         mkdir -p "$HOME_DIR/.config/autostart"
@@ -146,15 +270,17 @@ write_files:
         mkdir -p "$HOME_DIR/Desktop/IPS"
         mkdir -p "$HOME_DIR/Desktop/wireshark"
         mkdir -p "$HOME_DIR/Desktop/PASSWORD"
-        
 
-      cat > "$HOME_DIR/.config/tigervnc/xstartup" <<'EOF'
+        ###################################################
+        # TigerVNC xstartup
+        ###################################################
+
+        cat > "$HOME_DIR/.config/tigervnc/xstartup" <<'EOF'
       #!/bin/sh
 
       unset SESSION_MANAGER
       unset DBUS_SESSION_BUS_ADDRESS
 
-      # Wait until XFCE and the VNC display are ready, then disable locking
       (
         sleep 5
 
@@ -169,7 +295,13 @@ write_files:
       exec dbus-launch --exit-with-session startxfce4
       EOF
 
-      cat > "$HOME_DIR/.config/autostart/disable-vnc-lock.desktop" <<'EOF'
+        chmod 0755 "$HOME_DIR/.config/tigervnc/xstartup"
+
+        ###################################################
+        # Disable lock screen in XFCE
+        ###################################################
+
+        cat > "$HOME_DIR/.config/autostart/disable-vnc-lock.desktop" <<'EOF'
       [Desktop Entry]
       Type=Application
       Name=Disable VNC screen locking
@@ -179,113 +311,291 @@ write_files:
       NoDisplay=true
       X-GNOME-Autostart-enabled=true
       EOF
-      
-        chmod 0755 "$HOME_DIR/.config/tigervnc/xstartup"
-        chmod 0644 "$HOME_DIR/.config/autostart/disable-vnc-lock.desktop"
+
+        chmod 0644 \
+          "$HOME_DIR/.config/autostart/disable-vnc-lock.desktop"
+
+        ###################################################
+        # VNC password
+        #
+        # Password = password
+        ###################################################
+
+        printf '%s\n' 'password' \
+          | vncpasswd -f \
+          > "$HOME_DIR/.config/tigervnc/passwd"
+
+        chmod 0600 "$HOME_DIR/.config/tigervnc/passwd"
+
         chown -R "$u:$u" "$HOME_DIR/.config"
-
-        # VNC password = password
-        su - "$u" -c "printf 'password\npassword\n' | vncpasswd"
-
-        # Download lab files
-        wget -q -O "$HOME_DIR/Desktop/IPS/testips.sh" \
-          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/testips.sh
-
-        wget -q -O "$HOME_DIR/Desktop/wireshark/rsasnakeoil2.cap" \
-          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.cap
-
-        wget -q -O "$HOME_DIR/Desktop/wireshark/rsasnakeoil2.key" \
-          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.key
-
-        wget -q -O "$HOME_DIR/Desktop/wireshark/owasp_top5_traffic.pcap" \
-          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/owasp_top5_lab_traffic.pcap
-
-        wget -q -O "$HOME_DIR/Desktop/PASSWORD/John-readme.txt" \
-          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/John-readme.txt
-
-         wget -q -O "$HOME_DIR/Desktop/PASSWORD/easy.zip" \
-          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/easy.zip
-
-         wget -q -O "$HOME_DIR/Desktop/PASSWORD/hard.zip" \
-          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/hard.zip
-
-         wget -q -O "$HOME_DIR/Desktop/PASSWORD/hardAES.zip" \
-          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/hardAES.zip
-
-        wget -q -O "$HOME_DIR/Desktop/PASSWORD/medium.zip" \
-          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/medium.zip
-
-        wget -q -O "$HOME_DIR/Desktop/PASSWORD/mediumAES.zip" \
-          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/mediumAES.zip
-
-        wget -q -O "$HOME_DIR/Desktop/PASSWORD/simple.zip" \
-          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/simple.zip
-
-         wget -q -O "$HOME_DIR/Desktop/PASSWORD/simpleAES.zip" \
-          https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/simpleAES.zip
-
-        chmod +x "$HOME_DIR/Desktop/IPS/testips.sh"
         chown -R "$u:$u" "$HOME_DIR/Desktop"
+
       done
 
-        # --------------------------------------------------
-        # Fix Wireshark permissions for all users
-        # --------------------------------------------------
-        
-        echo "Configuring Wireshark permissions..."
-        
-        echo "wireshark-common wireshark-common/install-setuid boolean true" | debconf-set-selections
-        dpkg-reconfigure -f noninteractive wireshark-common
-        
-        for u in "${USERS[@]}"; do
-          usermod -aG wireshark "$u"
-        done
-        
-        setcap cap_net_raw,cap_net_admin+eip /usr/bin/dumpcap || true
-        
-        getcap /usr/bin/dumpcap
-      create_service() {
-        USERNAME=$1
-        DISPLAY=$2
+      #####################################################
+      # Create VNC systemd service
+      #####################################################
 
-      cat > /etc/systemd/system/vnc-${USERNAME}.service <<EOF
+      create_vnc_service() {
+
+        USERNAME="$1"
+        DISPLAY_NUMBER="$2"
+
+        HOME_DIR="$(getent passwd "$USERNAME" | cut -d: -f6)"
+
+        cat > "/etc/systemd/system/vnc-${USERNAME}.service" <<EOF
       [Unit]
-      Description=VNC Server for ${USERNAME}
+      Description=Cyberlab TigerVNC server for ${USERNAME}
       After=network.target
+      Wants=network.target
 
       [Service]
       Type=forking
       User=${USERNAME}
-      ExecStart=/usr/bin/vncserver -localhost no :${DISPLAY}
-      ExecStop=/usr/bin/vncserver -kill :${DISPLAY}
+      Group=${USERNAME}
+      WorkingDirectory=${HOME_DIR}
+      Environment=HOME=${HOME_DIR}
+
+      ExecStartPre=-/usr/bin/vncserver -kill :${DISPLAY_NUMBER}
+      ExecStart=/usr/bin/vncserver \
+        -localhost no \
+        -geometry 1920x1080 \
+        -depth 24 \
+        :${DISPLAY_NUMBER}
+
+      ExecStop=-/usr/bin/vncserver -kill :${DISPLAY_NUMBER}
+
       Restart=on-failure
+      RestartSec=5
 
       [Install]
       WantedBy=multi-user.target
       EOF
+
       }
 
-      create_service kali 0
-      create_service kali1 1
-      create_service kali2 2
-      create_service kali3 3
-      create_service kali4 4
+      echo "[+] Creating VNC services..."
+
+      create_vnc_service kali 0
+      create_vnc_service kali1 1
+      create_vnc_service kali2 2
+      create_vnc_service kali3 3
+      create_vnc_service kali4 4
+
+      #####################################################
+      # Enable VNC BEFORE downloading lab files
+      #####################################################
 
       systemctl daemon-reload
-      systemctl enable --now vnc-kali.service
-      systemctl enable --now vnc-kali1.service
-      systemctl enable --now vnc-kali2.service
-      systemctl enable --now vnc-kali3.service
-      systemctl enable --now vnc-kali4.service
-      systemctl enable --now kali-tools-install.service
-      systemctl enable --now ssh
-      systemctl enable --now qemu-guest-agent
+
+      systemctl enable vnc-kali.service
+      systemctl enable vnc-kali1.service
+      systemctl enable vnc-kali2.service
+      systemctl enable vnc-kali3.service
+      systemctl enable vnc-kali4.service
+
+      systemctl enable ssh.service
+      systemctl enable qemu-guest-agent.service 2>/dev/null || true
+
+      systemctl start ssh.service
+      systemctl start qemu-guest-agent.service 2>/dev/null || true
+
+      #####################################################
+      # Start VNC
+      #####################################################
+
+      echo "[+] Starting VNC servers..."
+
+      systemctl restart vnc-kali.service
+      systemctl restart vnc-kali1.service
+      systemctl restart vnc-kali2.service
+      systemctl restart vnc-kali3.service
+      systemctl restart vnc-kali4.service
+
+      #####################################################
+      # Test VNC ports
+      #####################################################
+
+      sleep 5
+
+      echo
+      echo "===================================================="
+      echo " VNC status"
+      echo "===================================================="
+
+      systemctl --no-pager --full status vnc-kali.service || true
+      systemctl --no-pager --full status vnc-kali1.service || true
+      systemctl --no-pager --full status vnc-kali2.service || true
+      systemctl --no-pager --full status vnc-kali3.service || true
+      systemctl --no-pager --full status vnc-kali4.service || true
+
+      echo
+      echo "Listening VNC ports:"
+      ss -lntp | grep -E ':590[0-4]' || true
+
+      #####################################################
+      # Download Cyberlab files
+      #
+      # IMPORTANT:
+      # Downloads are allowed to fail without breaking VNC.
+      #####################################################
+
+      download_file() {
+
+        URL="$1"
+        DEST="$2"
+
+        echo "[+] Downloading:"
+        echo "    $URL"
+
+        if wget \
+          --timeout=30 \
+          --tries=3 \
+          -q \
+          -O "$DEST" \
+          "$URL"; then
+
+          echo "[+] Downloaded $(basename "$DEST")"
+
+        else
+
+          echo "[WARNING] Could not download:"
+          echo "          $URL"
+
+          rm -f "$DEST"
+
+        fi
+      }
+
+      echo
+      echo "[+] Downloading Cyberlab exercise files..."
+
+      for u in "${USERS[@]}"; do
+
+        HOME_DIR="$(getent passwd "$u" | cut -d: -f6)"
+
+        download_file \
+          "https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/testips.sh" \
+          "$HOME_DIR/Desktop/IPS/testips.sh"
+
+        download_file \
+          "https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.cap" \
+          "$HOME_DIR/Desktop/wireshark/rsasnakeoil2.cap"
+
+        download_file \
+          "https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/rsasnakeoil2.key" \
+          "$HOME_DIR/Desktop/wireshark/rsasnakeoil2.key"
+
+        download_file \
+          "https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/WIRESHARK/owasp_top5_lab_traffic.pcap" \
+          "$HOME_DIR/Desktop/wireshark/owasp_top5_traffic.pcap"
+
+        download_file \
+          "https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/John-readme.txt" \
+          "$HOME_DIR/Desktop/PASSWORD/John-readme.txt"
+
+        download_file \
+          "https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/easy.zip" \
+          "$HOME_DIR/Desktop/PASSWORD/easy.zip"
+
+        download_file \
+          "https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/hard.zip" \
+          "$HOME_DIR/Desktop/PASSWORD/hard.zip"
+
+        download_file \
+          "https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/hardAES.zip" \
+          "$HOME_DIR/Desktop/PASSWORD/hardAES.zip"
+
+        download_file \
+          "https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/medium.zip" \
+          "$HOME_DIR/Desktop/PASSWORD/medium.zip"
+
+        download_file \
+          "https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/mediumAES.zip" \
+          "$HOME_DIR/Desktop/PASSWORD/mediumAES.zip"
+
+        download_file \
+          "https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/simple.zip" \
+          "$HOME_DIR/Desktop/PASSWORD/simple.zip"
+
+        download_file \
+          "https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/PASSWORD/simpleAES.zip" \
+          "$HOME_DIR/Desktop/PASSWORD/simpleAES.zip"
+
+        if [ -f "$HOME_DIR/Desktop/IPS/testips.sh" ]; then
+          chmod 0755 "$HOME_DIR/Desktop/IPS/testips.sh"
+        fi
+
+        chown -R "$u:$u" "$HOME_DIR/Desktop"
+
+      done
+
+      #####################################################
+      # Install additional Kali tools
+      #
+      # Failure here does NOT destroy VNC installation.
+      #####################################################
+
+      echo
+      echo "[+] Installing additional Kali tools..."
+
+      if apt-get install -y --fix-missing \
+        kali-linux-default \
+        nikto \
+        seclists \
+        gobuster \
+        sshpass \
+        sqlmap \
+        zaproxy; then
+
+        touch /var/lib/kali-tools-installed
+        echo "[+] Kali tools installed."
+
+      else
+
+        echo "[WARNING] Some Kali tools could not be installed."
+        echo "[WARNING] VNC installation is still complete."
+
+      fi
+
+      #####################################################
+      # Final VNC validation
+      #####################################################
+
+      echo
+      echo "===================================================="
+      echo " Cyberlab Kali installation complete"
+      echo "===================================================="
+
+      echo
+      echo "VNC sessions:"
+      echo
+      echo " kali  -> :0 -> TCP 5900"
+      echo " kali1 -> :1 -> TCP 5901"
+      echo " kali2 -> :2 -> TCP 5902"
+      echo " kali3 -> :3 -> TCP 5903"
+      echo " kali4 -> :4 -> TCP 5904"
+      echo
+      echo "VNC password: password"
+      echo
+
+      ss -lntp | grep -E ':590[0-4]' || true
+
+      touch /var/lib/cyberlab-kali-installed
+
+#########################################################
+# Run first boot installation
+#########################################################
 
 runcmd:
-  - /usr/local/sbin/setup-vnc-multiuser.sh
-  
+  - [ bash, /usr/local/sbin/cyberlab-kali-firstboot.sh ]
+
+#########################################################
+# Power off when EVERYTHING is finished
+#########################################################
+
 power_state:
   mode: poweroff
-  message: "Cloud-init finished - powering off"
-  timeout: 30
+  message: "Cyberlab Kali installation complete - powering off"
+  timeout: 60
   condition: True
