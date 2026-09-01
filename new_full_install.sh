@@ -270,6 +270,7 @@ case "$CHOICE" in
   666)
      echo 'Starting Wazuh VM creation'
     bash '$INCIDENTVM' $LAB
+    ;;
   0)
     echo "Exiting."
     exit 0
