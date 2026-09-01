@@ -50,7 +50,7 @@ echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
 echo "95) Run ALL in background"
 echo "99) Cleanup all installation"
-ehco "666) Create IncidentVM"
+echo "666) Create IncidentVM"
 echo "0) Exit"
 echo "=============================="
 
