@@ -38,12 +38,10 @@ DNS_SERVER="192.168.1.1"
 IP_GW="gw=192.168.1.1"
 OOBM_IP="ip=172.20.0.254/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
-SRC_USERDATA="$(pwd)/IncidentVM/IncidentVM_userdata.yaml"     # source file
+SRC_USERDATA="$(pwd)/INCIDENTVM/IncidentVM_userdata.yaml"     # source file
 DST_USERDATA="IncidentVM_userdata_lab${LAB}.yaml"            # destination filename
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
-
-echo "Checking Cloud-Init user-data snippet..."
 
 # Check if snippet already exists
 if [[ -f "$DST_PATH" ]]; then
