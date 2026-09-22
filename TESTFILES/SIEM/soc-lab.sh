@@ -13,7 +13,12 @@
 #   soc-lab
 # ============================================================
 
-BASE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# ============================================================
+# Find rigtig placering - også når scriptet køres via symlink
+# ============================================================
+
+SCRIPT_PATH="$(readlink -f "${BASH_SOURCE[0]}")"
+BASE_DIR="$(dirname "$SCRIPT_PATH")"
 EVENT_DIR="${BASE_DIR}/events"
 
 # ============================================================
@@ -38,35 +43,42 @@ pause_menu() {
 
 run_event() {
 
-    SCRIPT="$1"
+    local SCRIPT="$1"
+    local SCRIPT_FILE="${EVENT_DIR}/${SCRIPT}"
 
     echo
 
-    if [[ ! -f "${EVENT_DIR}/${SCRIPT}" ]]; then
+    # Kontroller at filen eksisterer
+    if [[ ! -f "$SCRIPT_FILE" ]]; then
 
         echo -e "${RED}[!] Event-scriptet findes ikke:${NC}"
         echo
-        echo "    ${EVENT_DIR}/${SCRIPT}"
+        echo "    $SCRIPT_FILE"
+
         pause_menu
         return
 
     fi
 
-    if [[ ! -s "${EVENT_DIR}/${SCRIPT}" ]]; then
+    # Kontroller at filen ikke er tom
+    if [[ ! -s "$SCRIPT_FILE" ]]; then
 
         echo -e "${RED}[!] Event-scriptet er tomt:${NC}"
         echo
-        echo "    ${EVENT_DIR}/${SCRIPT}"
+        echo "    $SCRIPT_FILE"
+
         pause_menu
         return
 
     fi
 
-    if [[ ! -x "${EVENT_DIR}/${SCRIPT}" ]]; then
-        chmod +x "${EVENT_DIR}/${SCRIPT}"
+    # Sørg for execute permission
+    if [[ ! -x "$SCRIPT_FILE" ]]; then
+        chmod +x "$SCRIPT_FILE"
     fi
 
-    "${EVENT_DIR}/${SCRIPT}"
+    # Start event-script
+    "$SCRIPT_FILE"
 
     pause_menu
 }
