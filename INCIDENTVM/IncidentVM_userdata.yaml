@@ -1,0 +1,132 @@
+#cloud-config
+
+hostname: attackervm
+manage_etc_hosts: true
+
+users:
+  - name: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
+    ssh_authorized_keys:
+      - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
+
+ssh_pwauth: true
+
+chpasswd:
+  expire: false
+
+
+packages:
+  - ca-certificates
+  - curl
+  - wget
+  - git
+  - jq
+  - zip
+  - unzip
+  - python3
+  - python3-pip
+  - python3-venv
+  - python3-flask
+  - nmap
+  - smbclient
+  - netcat-openbsd
+  - tcpdump
+  - dnsutils
+  - net-tools
+  - openssh-client
+  - qemu-guest-agent
+
+
+runcmd:
+
+  # --------------------------------------------------
+  # Update system
+  # --------------------------------------------------
+
+  - apt-get update
+
+
+  # --------------------------------------------------
+  # QEMU Guest Agent
+  # --------------------------------------------------
+
+  - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent
+
+
+  # --------------------------------------------------
+  # Create attack directories
+  # --------------------------------------------------
+
+  - mkdir -p /opt/nordic-attack
+  - mkdir -p /opt/nordic-attack/scripts
+  - mkdir -p /opt/nordic-attack/logs
+  - mkdir -p /opt/nordic-attack/uploads
+  - mkdir -p /opt/nordic-attack/data
+
+
+  # --------------------------------------------------
+  # Download main attack controller
+  # --------------------------------------------------
+
+  - wget -O /opt/nordic-attack/attackctl https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/ATTACKER/attackctl
+
+
+  # --------------------------------------------------
+  # Download attack phases
+  # --------------------------------------------------
+
+  - wget -O /opt/nordic-attack/scripts/01-recon.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/ATTACKER/scripts/01-recon.sh
+
+  - wget -O /opt/nordic-attack/scripts/02-web.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/ATTACKER/scripts/02-web.sh
+
+  - wget -O /opt/nordic-attack/scripts/03-auth.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/ATTACKER/scripts/03-auth.sh
+
+  - wget -O /opt/nordic-attack/scripts/04-lateral.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/ATTACKER/scripts/04-lateral.sh
+
+  - wget -O /opt/nordic-attack/scripts/05-staging.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/ATTACKER/scripts/05-staging.sh
+
+  - wget -O /opt/nordic-attack/scripts/06-exfil.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/ATTACKER/scripts/06-exfil.sh
+
+  - wget -O /opt/nordic-attack/scripts/07-ransomware-sim.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/ATTACKER/scripts/07-ransomware-sim.sh
+
+
+  # --------------------------------------------------
+  # Optional upload receiver
+  # --------------------------------------------------
+
+  - wget -O /opt/nordic-attack/sink.py https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/ATTACKER/sink.py
+
+
+  # --------------------------------------------------
+  # Permissions
+  # --------------------------------------------------
+
+  - chmod +x /opt/nordic-attack/attackctl
+  - chmod +x /opt/nordic-attack/scripts/*.sh
+
+  - chown -R ubuntu:ubuntu /opt/nordic-attack
+
+
+  # --------------------------------------------------
+  # Convenience command
+  # --------------------------------------------------
+
+  - ln -sf /opt/nordic-attack/attackctl /usr/local/bin/attackctl
+
+
+  # --------------------------------------------------
+  # Finish
+  # --------------------------------------------------
+
+  - echo "Nordic AttackVM installation completed" > /opt/nordic-attack/INSTALL_COMPLETE
+
+
+power_state:
+  mode: poweroff
+  message: "Cloud-init finished - powering off"
+  timeout: 30
+  condition: True
