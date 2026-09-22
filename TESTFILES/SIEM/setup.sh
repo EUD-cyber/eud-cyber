@@ -6,14 +6,11 @@
 # SOC / SIEM Lab - Kali Setup
 # ============================================================
 
-set -e
-
 BASE_URL="https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/SIEM"
 INSTALL_DIR="/opt/nordic-soc-lab"
 
 # ------------------------------------------------------------
-# Filer der skal hentes fra GitHub
-# Tilføj de endelige scripts her.
+# Filer der skal hentes
 # ------------------------------------------------------------
 
 FILES=(
@@ -26,7 +23,7 @@ FILES=(
 )
 
 # ------------------------------------------------------------
-# Programmer som SOC-labben skal bruge
+# Programmer der skal være installeret
 # format: kommando:apt-pakke
 # ------------------------------------------------------------
 
@@ -48,6 +45,10 @@ RED="\033[0;31m"
 BLUE="\033[0;34m"
 NC="\033[0m"
 
+# ------------------------------------------------------------
+# Banner
+# ------------------------------------------------------------
+
 clear
 
 echo -e "${BLUE}"
@@ -61,10 +62,12 @@ echo -e "${NC}"
 # ------------------------------------------------------------
 
 if [[ $EUID -ne 0 ]]; then
-    echo -e "${RED}[!] Setup skal køres med sudo.${NC}"
+    echo -e "${RED}[!] Setup skal køres som root.${NC}"
     echo
     echo "Kør:"
-    echo "sudo ./setup.sh"
+    echo
+    echo "  sudo ./setup.sh"
+    echo
     exit 1
 fi
 
@@ -74,45 +77,49 @@ fi
 
 echo -e "${BLUE}[*] Kontrollerer operativsystem...${NC}"
 
-if [[ -f /etc/os-release ]]; then
-    source /etc/os-release
-
-    echo "[+] Fundet: $PRETTY_NAME"
-
-    if [[ "${ID:-}" != "kali" ]]; then
-        echo
-        echo -e "${YELLOW}[!] Dette system ser ikke ud til at være Kali Linux.${NC}"
-        read -r -p "Vil du fortsætte alligevel? [y/N]: " answer
-
-        case "$answer" in
-            y|Y)
-                ;;
-            *)
-                exit 1
-                ;;
-        esac
-    fi
-else
-    echo -e "${RED}[!] Kunne ikke identificere Linux distributionen.${NC}"
+if [[ ! -f /etc/os-release ]]; then
+    echo -e "${RED}[!] /etc/os-release blev ikke fundet.${NC}"
     exit 1
 fi
 
+source /etc/os-release
+
+echo -e "${GREEN}[+] Fundet: ${PRETTY_NAME}${NC}"
+
+if [[ "${ID:-}" != "kali" ]]; then
+    echo
+    echo -e "${YELLOW}[!] Dette system ser ikke ud til at være Kali Linux.${NC}"
+
+    read -r -p "Vil du fortsætte alligevel? [y/N]: " ANSWER
+
+    case "$ANSWER" in
+        y|Y)
+            ;;
+        *)
+            exit 1
+            ;;
+    esac
+fi
+
 # ------------------------------------------------------------
-# Internet / GitHub test
+# Internet check
 # ------------------------------------------------------------
 
 echo
-echo -e "${BLUE}[*] Tester forbindelse til GitHub...${NC}"
+echo -e "${BLUE}[*] Kontrollerer internetforbindelse...${NC}"
 
-if curl -fsI --connect-timeout 5 \
-    "https://raw.githubusercontent.com" >/dev/null; then
-
-    echo -e "${GREEN}[+] GitHub kan nås.${NC}"
-
+if ping -c 1 -W 3 github.com >/dev/null 2>&1; then
+    echo -e "${GREEN}[+] Internet/GitHub forbindelse OK.${NC}"
 else
-    echo -e "${RED}[!] Kan ikke nå GitHub.${NC}"
-    echo "Kontroller internetforbindelsen."
-    exit 1
+    echo -e "${YELLOW}[!] Ping til GitHub fejlede.${NC}"
+    echo "[*] Tester HTTPS i stedet..."
+
+    if curl -fsSL --connect-timeout 5 https://github.com >/dev/null 2>&1; then
+        echo -e "${GREEN}[+] HTTPS forbindelse til GitHub OK.${NC}"
+    else
+        echo -e "${RED}[!] GitHub kan ikke nås.${NC}"
+        exit 1
+    fi
 fi
 
 # ------------------------------------------------------------
@@ -124,18 +131,18 @@ echo -e "${BLUE}[*] Kontrollerer nødvendige programmer...${NC}"
 
 MISSING_PACKAGES=()
 
-for item in "${REQUIREMENTS[@]}"; do
+for ITEM in "${REQUIREMENTS[@]}"; do
 
-    COMMAND="${item%%:*}"
-    PACKAGE="${item##*:}"
+    COMMAND="${ITEM%%:*}"
+    PACKAGE="${ITEM##*:}"
 
     if command -v "$COMMAND" >/dev/null 2>&1; then
 
-        echo -e "${GREEN}[OK]${NC} $COMMAND"
+        echo -e "    ${GREEN}[OK]${NC} $COMMAND"
 
     else
 
-        echo -e "${YELLOW}[MISSING]${NC} $COMMAND"
+        echo -e "    ${YELLOW}[MANGLER]${NC} $COMMAND"
         MISSING_PACKAGES+=("$PACKAGE")
 
     fi
@@ -149,18 +156,30 @@ done
 if [[ ${#MISSING_PACKAGES[@]} -gt 0 ]]; then
 
     echo
-    echo -e "${YELLOW}Følgende pakker mangler:${NC}"
+    echo -e "${YELLOW}Følgende pakker skal installeres:${NC}"
 
-    printf ' - %s\n' "${MISSING_PACKAGES[@]}"
-
-    echo
-    echo "[*] Installerer manglende pakker..."
-
-    apt-get update
-    apt-get install -y "${MISSING_PACKAGES[@]}"
+    for PACKAGE in "${MISSING_PACKAGES[@]}"; do
+        echo "    - $PACKAGE"
+    done
 
     echo
-    echo -e "${GREEN}[+] Programmer installeret.${NC}"
+    echo -e "${BLUE}[*] Kører apt update...${NC}"
+
+    if ! apt-get update; then
+        echo -e "${RED}[!] apt update fejlede.${NC}"
+        exit 1
+    fi
+
+    echo
+    echo -e "${BLUE}[*] Installerer pakker...${NC}"
+
+    if ! apt-get install -y "${MISSING_PACKAGES[@]}"; then
+        echo -e "${RED}[!] Installation af pakker fejlede.${NC}"
+        exit 1
+    fi
+
+    echo
+    echo -e "${GREEN}[+] Manglende programmer er installeret.${NC}"
 
 else
 
@@ -174,114 +193,142 @@ fi
 # ------------------------------------------------------------
 
 echo
-echo -e "${BLUE}[*] Opretter SOC Lab mappe...${NC}"
+echo -e "${BLUE}[*] Opretter installationsmappe...${NC}"
 
 mkdir -p "$INSTALL_DIR"
+
+if [[ ! -d "$INSTALL_DIR" ]]; then
+    echo -e "${RED}[!] Kunne ikke oprette $INSTALL_DIR${NC}"
+    exit 1
+fi
 
 echo -e "${GREEN}[+] $INSTALL_DIR${NC}"
 
 # ------------------------------------------------------------
-# Download filer
+# Download scripts
 # ------------------------------------------------------------
 
 echo
-echo -e "${BLUE}[*] Henter SOC Lab filer fra GitHub...${NC}"
+echo -e "${BLUE}[*] Henter SOC Lab scripts...${NC}"
+echo
 
 DOWNLOAD_ERROR=0
 
 for FILE in "${FILES[@]}"; do
 
-    echo -n "    $FILE ... "
+    URL="${BASE_URL}/${FILE}"
+    DESTINATION="${INSTALL_DIR}/${FILE}"
 
-    if curl -fsSL \
-        "$BASE_URL/$FILE" \
-        -o "$INSTALL_DIR/$FILE"; then
+    printf "    %-25s " "$FILE"
 
-        echo -e "${GREEN}OK${NC}"
+    if curl -fsSL "$URL" -o "$DESTINATION"; then
+
+        chmod +x "$DESTINATION"
+
+        echo -e "${GREEN}[OK]${NC}"
 
     else
 
-        echo -e "${RED}FAILED${NC}"
-        DOWNLOAD_ERROR=1
+        echo -e "${RED}[FEJL]${NC}"
 
-        # Fjern eventuel tom/ufuldstændig fil
-        rm -f "$INSTALL_DIR/$FILE"
+        rm -f "$DESTINATION"
+
+        DOWNLOAD_ERROR=1
 
     fi
 
 done
 
+# ------------------------------------------------------------
+# Kontroller download
+# ------------------------------------------------------------
+
+echo
+
 if [[ $DOWNLOAD_ERROR -ne 0 ]]; then
 
-    echo
     echo -e "${YELLOW}[!] En eller flere filer kunne ikke hentes.${NC}"
     echo
-    echo "Kontroller at filnavnene findes her:"
+    echo "Kontroller filerne i:"
+    echo
     echo "https://github.com/EUD-cyber/eud-cyber/tree/main/TESTFILES/SIEM"
+    echo
 
 fi
 
 # ------------------------------------------------------------
-# Gør scripts executable
-# ------------------------------------------------------------
-
-echo
-echo -e "${BLUE}[*] Sætter execute permissions...${NC}"
-
-find "$INSTALL_DIR" \
-    -maxdepth 1 \
-    -type f \
-    -name "*.sh" \
-    -exec chmod +x {} \;
-
-echo -e "${GREEN}[+] Permissions sat.${NC}"
-
-# ------------------------------------------------------------
-# Opret launcher
+# Opret soc-lab launcher
 # ------------------------------------------------------------
 
 if [[ -f "$INSTALL_DIR/soc-lab.sh" ]]; then
 
-    echo
-    echo -e "${BLUE}[*] Opretter kommandoen 'soc-lab'...${NC}"
+    echo -e "${BLUE}[*] Opretter kommandoen soc-lab...${NC}"
+
+    chmod +x "$INSTALL_DIR/soc-lab.sh"
 
     ln -sf "$INSTALL_DIR/soc-lab.sh" /usr/local/bin/soc-lab
 
-    echo -e "${GREEN}[+] Launcher oprettet.${NC}"
+    if command -v soc-lab >/dev/null 2>&1; then
+
+        echo -e "${GREEN}[+] Kommandoen soc-lab er oprettet.${NC}"
+
+    else
+
+        echo -e "${YELLOW}[!] Launcher blev oprettet, men findes ikke i PATH.${NC}"
+        echo "    Brug: $INSTALL_DIR/soc-lab.sh"
+
+    fi
+
+else
+
+    echo -e "${YELLOW}[!] soc-lab.sh blev ikke fundet.${NC}"
+    echo "[!] Kommandoen soc-lab bliver derfor ikke oprettet."
 
 fi
 
 # ------------------------------------------------------------
-# Resultat
+# Vis installerede filer
+# ------------------------------------------------------------
+
+echo
+echo -e "${BLUE}[*] Installerede filer:${NC}"
+echo
+
+ls -lh "$INSTALL_DIR"
+
+# ------------------------------------------------------------
+# Slutresultat
 # ------------------------------------------------------------
 
 echo
 echo -e "${BLUE}============================================================${NC}"
-echo -e "${GREEN} SOC Lab installation færdig${NC}"
-echo -e "${BLUE}============================================================${NC}"
-echo
-
-echo "Installeret i:"
-echo
-echo "  $INSTALL_DIR"
-echo
-
-echo "Filer:"
-ls -1 "$INSTALL_DIR"
-
-echo
 
 if [[ -f "$INSTALL_DIR/soc-lab.sh" ]]; then
 
-    echo "Start SOC Lab med:"
+    echo -e "${GREEN}       SOC Lab installation færdig${NC}"
+
+    echo -e "${BLUE}============================================================${NC}"
+
     echo
-    echo "  soc-lab"
+    echo "Start labben med:"
     echo
-    echo "eller:"
+    echo "    soc-lab"
     echo
-    echo "  $INSTALL_DIR/soc-lab.sh"
+    echo "Installation:"
+    echo
+    echo "    $INSTALL_DIR"
+    echo
+
+else
+
+    echo -e "${YELLOW}       Installation ikke komplet${NC}"
+
+    echo -e "${BLUE}============================================================${NC}"
+
+    echo
+    echo "soc-lab.sh mangler."
+    echo "Kontroller GitHub-filerne ovenfor."
+    echo
 
 fi
-
-echo
 ```
