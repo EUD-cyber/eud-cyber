@@ -1,4 +1,3 @@
-bash
 #!/usr/bin/env bash
 
 # ============================================================
@@ -15,12 +14,14 @@ INSTALL_DIR="/opt/nordic-soc-lab"
 
 FILES=(
     "soc-lab.sh"
-    "failed-ssh.sh"
-    "successful-ssh.sh"
-    "sudo-activity.sh"
-    "user-created.sh"
-    "file-change.sh"
+    "events/failed-ssh.sh"
+    "events/file-change.sh"
+    "events/successful-ssh.sh"
+    "events/sudo-activity.sh"
+    "events/user-created.sh"
 )
+
+
 
 # ------------------------------------------------------------
 # Programmer der skal være installeret
