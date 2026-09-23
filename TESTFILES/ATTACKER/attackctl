@@ -1,0 +1,19 @@
+====================================================
+ NORDIC MANUFACTURING - INCIDENT / ATTACK CONTROL
+====================================================
+
+[1]  Reconnaissance
+[2]  Web Attack
+[3]  Authentication / Initial Access
+[4]  Internal Discovery / Lateral Movement
+[5]  Data Staging
+[6]  Data Exfiltration
+[7]  Ransomware / Impact
+
+[50] Full Incident H3
+
+[90] Status
+[91] Ground Truth
+[92] Exfiltrated Files
+
+[0]  Exit
