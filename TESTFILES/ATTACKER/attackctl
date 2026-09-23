@@ -1,19 +1,135 @@
-====================================================
- NORDIC MANUFACTURING - INCIDENT / ATTACK CONTROL
-====================================================
+#!/bin/bash
 
-[1]  Reconnaissance
-[2]  Web Attack
-[3]  Authentication / Initial Access
-[4]  Internal Discovery / Lateral Movement
-[5]  Data Staging
-[6]  Data Exfiltration
-[7]  Ransomware / Impact
+BASE_DIR="/opt/nordic-attack"
+SCRIPT_DIR="$BASE_DIR/scripts"
+SCENARIO_DIR="$BASE_DIR/scenarios"
+LOG_DIR="$BASE_DIR/logs"
+UPLOAD_DIR="$BASE_DIR/uploads"
 
-[50] Full Incident H3
+while true; do
 
-[90] Status
-[91] Ground Truth
-[92] Exfiltrated Files
+    clear
 
-[0]  Exit
+    echo "===================================================="
+    echo " NORDIC MANUFACTURING - INCIDENT / ATTACK CONTROL"
+    echo "===================================================="
+    echo
+    echo "[1]  Reconnaissance"
+    echo "[2]  Web Attack"
+    echo "[3]  Authentication / Initial Access"
+    echo "[4]  Internal Discovery / Lateral Movement"
+    echo "[5]  Data Staging"
+    echo "[6]  Data Exfiltration"
+    echo "[7]  Ransomware / Impact"
+    echo
+    echo "[50] Full Incident H3"
+    echo
+    echo "[90] Status"
+    echo "[91] Ground Truth"
+    echo "[92] Exfiltrated Files"
+    echo
+    echo "[0]  Exit"
+    echo
+
+    read -rp "Select option: " OPTION
+
+    case "$OPTION" in
+
+        1)
+            "$SCRIPT_DIR/01-recon.sh"
+            ;;
+
+        2)
+            "$SCRIPT_DIR/02-web.sh"
+            ;;
+
+        3)
+            "$SCRIPT_DIR/03-auth.sh"
+            ;;
+
+        4)
+            "$SCRIPT_DIR/04-lateral.sh"
+            ;;
+
+        5)
+            "$SCRIPT_DIR/05-staging.sh"
+            ;;
+
+        6)
+            "$SCRIPT_DIR/06-exfil.sh"
+            ;;
+
+        7)
+            "$SCRIPT_DIR/07-ransomware-sim.sh"
+            ;;
+
+        50)
+            "$SCENARIO_DIR/full-incident-h3.sh"
+            ;;
+
+        90)
+            echo
+            echo "========== ATTACKVM STATUS =========="
+            echo
+            echo "Hostname:"
+            hostname
+            echo
+            echo "IP addresses:"
+            ip -brief address
+            echo
+            echo "Routes:"
+            ip route
+            echo
+            echo "Attack scripts:"
+            ls -1 "$SCRIPT_DIR"
+            echo
+            echo "Scenario scripts:"
+            ls -1 "$SCENARIO_DIR"
+            echo
+            ;;
+
+        91)
+            echo
+            echo "========== GROUND TRUTH =========="
+            echo
+
+            if ls "$LOG_DIR"/*.log >/dev/null 2>&1; then
+                ls -lht "$LOG_DIR"/*.log
+            else
+                echo "No incident logs found."
+            fi
+
+            echo
+            ;;
+
+        92)
+            echo
+            echo "========== EXFILTRATED FILES =========="
+            echo
+
+            if [[ -d "$UPLOAD_DIR" ]]; then
+                ls -lah "$UPLOAD_DIR"
+            else
+                echo "Upload directory does not exist."
+            fi
+
+            echo
+            ;;
+
+        0)
+            echo
+            echo "Exiting attack control."
+            exit 0
+            ;;
+
+        *)
+            echo
+            echo "Invalid option."
+            ;;
+
+    esac
+
+    echo
+    read -rp "Press ENTER to return to menu..."
+
+done
