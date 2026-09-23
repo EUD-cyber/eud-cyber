@@ -2,81 +2,26 @@
 
 # ============================================================
 # Nordic Manufacturing A/S - Attack Simulation
-# Phase 05 - Collection / Data Staging
-#
-# Purpose:
-#   Simulate collection and staging of company data on an
-#   already compromised Linux host.
-#
-# Flow:
-#
-#   IncidentVM
-#       |
-#       | SSH
-#       v
-#   Compromised Host
-#       |
-#       +-- Create synthetic company documents
-#       +-- Discover documents
-#       +-- Copy selected files
-#       +-- Create staging archive
-#       v
-#   /tmp/.cache-update/nordic-data.tar.gz
-#
-# IMPORTANT:
-#   Only synthetic CyberLab data is used.
+# Phase 05 - Data Discovery / Staging
 # ============================================================
 
 set -u
 
-BASE_DIR="/opt/nordic-attack"
-LOG_DIR="$BASE_DIR/logs"
-
+LOG_DIR="/opt/nordic-attack/logs"
 mkdir -p "$LOG_DIR"
 
 TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
-LOGFILE="$LOG_DIR/staging-$TIMESTAMP.log"
-GROUNDTRUTH="$LOG_DIR/incident-ground-truth.log"
+INCIDENT_ID="${NORDIC_INCIDENT_ID:-MANUAL-$TIMESTAMP}"
+LOG_FILE="$LOG_DIR/${INCIDENT_ID}-05-staging.log"
 
-
-# ------------------------------------------------------------
-# Functions
-# ------------------------------------------------------------
-
-log_event() {
-    echo "$(date --iso-8601=seconds) | STAGING | $1" >> "$GROUNDTRUTH"
-}
-
-banner() {
-    clear
-    echo "============================================================"
-    echo "    NORDIC MANUFACTURING - DATA STAGING"
-    echo "============================================================"
-    echo
-}
-
-validate_ipv4() {
-
-    local IP="$1"
-
-    if ! [[ "$IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-        return 1
-    fi
-
-    IFS='.' read -r o1 o2 o3 o4 <<< "$IP"
-
-    for octet in "$o1" "$o2" "$o3" "$o4"; do
-        if (( octet < 0 || octet > 255 )); then
-            return 1
-        fi
-    done
-
-    return 0
-}
-
+echo "======================================================"
+echo " Nordic Manufacturing - Phase 05"
+echo " Data Discovery / Staging"
+echo "======================================================"
+echo
 
 # ------------------------------------------------------------
-# Dependency check
+# Dependency
 # ------------------------------------------------------------
 
 if ! command -v sshpass >/dev/null 2>&1; then
@@ -84,303 +29,320 @@ if ! command -v sshpass >/dev/null 2>&1; then
     exit 1
 fi
 
-
 # ------------------------------------------------------------
-# Start
+# AUTO / MANUAL
 # ------------------------------------------------------------
 
-banner
+if [[ "${NORDIC_AUTO:-0}" == "1" ]]; then
 
-echo "This phase simulates collection and staging of"
-echo "synthetic Nordic Manufacturing company data."
-echo
+    for VAR in \
+        NORDIC_COMPROMISED_HOST \
+        NORDIC_SSH_USER \
+        NORDIC_SSH_PASSWORD
+    do
+        if [[ -z "${!VAR:-}" ]]; then
+            echo "[ERROR] $VAR is not set."
+            exit 1
+        fi
+    done
 
-read -rp "Compromised host IP: " COMPROMISED_HOST
+    TARGET="$NORDIC_COMPROMISED_HOST"
+    SSH_USER="$NORDIC_SSH_USER"
+    SSH_PASSWORD="$NORDIC_SSH_PASSWORD"
 
-if ! validate_ipv4 "$COMPROMISED_HOST"; then
+    echo "[AUTO MODE]"
+    echo "Target : $TARGET"
+    echo "User   : $SSH_USER"
+
+else
+
+    echo "[MANUAL MODE]"
+
+    read -rp "Compromised Linux host: " TARGET
+    read -rp "SSH username: " SSH_USER
+    read -rsp "SSH password: " SSH_PASSWORD
     echo
-    echo "[ERROR] Invalid IPv4 address."
+
+fi
+
+if [[ -z "$TARGET" || -z "$SSH_USER" || -z "$SSH_PASSWORD" ]]; then
+    echo "[ERROR] Missing required information."
     exit 1
 fi
 
 echo
-
-read -rp "SSH username: " SSH_USER
-read -rsp "SSH password: " SSH_PASSWORD
-
-echo
-echo
-
-echo "Compromised host: $COMPROMISED_HOST"
-echo "SSH user:         $SSH_USER"
+echo "[*] Incident ID : $INCIDENT_ID"
+echo "[*] Target      : $TARGET"
+echo "[*] Account     : $SSH_USER"
+echo "[*] Log         : $LOG_FILE"
 echo
 
-log_event "Data collection started on $COMPROMISED_HOST"
-
+{
+    echo "Incident ID: $INCIDENT_ID"
+    echo "Phase: DATA DISCOVERY / STAGING"
+    echo "Timestamp: $(date --iso-8601=seconds)"
+    echo "Target: $TARGET"
+    echo "Account: $SSH_USER"
+    echo
+} >> "$LOG_FILE"
 
 # ------------------------------------------------------------
-# Remote simulation
+# Verify access
 # ------------------------------------------------------------
 
-REMOTE_COMMAND=$(cat <<'EOF'
+echo "[1/5] Verifying access..."
 
-set -e
+if ! sshpass -p "$SSH_PASSWORD" \
+    ssh \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=5 \
+    -o PreferredAuthentications=password \
+    -o PubkeyAuthentication=no \
+    "$SSH_USER@$TARGET" \
+    "true" >/dev/null 2>&1
+then
+    echo "[ERROR] Unable to access $TARGET."
+    exit 1
+fi
 
-LAB_DATA="$HOME/nordic-company-data"
-STAGING="/tmp/.cache-update"
-
-echo "===== COLLECTION / STAGING ====="
+echo "[+] Access confirmed."
 echo
-
-echo "[TIME]"
-date --iso-8601=seconds
-echo
-
-echo "[USER]"
-whoami
-echo
-
-echo "[HOST]"
-hostname
-echo
-
 
 # ------------------------------------------------------------
 # Create synthetic company data
 # ------------------------------------------------------------
 
-echo "[+] Preparing synthetic company data"
-
-mkdir -p "$LAB_DATA/finance"
-mkdir -p "$LAB_DATA/hr"
-mkdir -p "$LAB_DATA/it"
-mkdir -p "$LAB_DATA/management"
-
-
-cat > "$LAB_DATA/finance/customer-invoices.csv" <<'DATA'
-invoice_id,customer,amount,status
-INV-2026-1001,Contoso Production,48500,PAID
-INV-2026-1002,Fabrikam Logistics,127500,OPEN
-INV-2026-1003,Northwind Industrial,76000,OPEN
-INV-2026-1004,Adventure Components,33200,PAID
-DATA
-
-
-cat > "$LAB_DATA/hr/employees.csv" <<'DATA'
-employee_id,name,department,email
-NM001,Anna Jensen,Finance,anna.jensen@nordic.example
-NM002,Lars Nielsen,Production,lars.nielsen@nordic.example
-NM003,Maria Hansen,IT,maria.hansen@nordic.example
-NM004,Peter Sørensen,Management,peter.sorensen@nordic.example
-DATA
-
-
-cat > "$LAB_DATA/it/server-inventory.txt" <<'DATA'
-NORDIC MANUFACTURING - INTERNAL SERVER INVENTORY
-
-DC01       Windows Server       Active Directory
-FILE01     Windows Server       Corporate File Server
-WEB01      Ubuntu               Webshop
-BACKUP01   Linux                Backup Server
-SIEM01     Linux                Security Monitoring
-
-CLASSIFICATION: INTERNAL
-DATA
-
-
-cat > "$LAB_DATA/management/strategy-2027.txt" <<'DATA'
-NORDIC MANUFACTURING A/S
-CONFIDENTIAL - MANAGEMENT
-
-2027 Strategic Planning Draft
-
-- Expansion of production capacity
-- New supplier agreements
-- ERP modernization project
-- OT network modernization
-- Cybersecurity improvement programme
-
-CLASSIFICATION: CONFIDENTIAL
-DATA
-
-
-# ------------------------------------------------------------
-# Discovery
-# ------------------------------------------------------------
-
-echo
-echo "[+] Searching for interesting files"
-
-find "$LAB_DATA" \
-    -type f \
-    \( -name "*.csv" -o -name "*.txt" -o -name "*.conf" \) \
-    -print
-
-echo
-
-du -ah "$LAB_DATA"
-
-
-# ------------------------------------------------------------
-# Staging
-# ------------------------------------------------------------
-
-echo
-echo "[+] Creating staging directory"
-
-rm -rf "$STAGING"
-mkdir -p "$STAGING/collection"
-
-
-echo
-echo "[+] Copying selected files"
-
-cp "$LAB_DATA/finance/customer-invoices.csv" \
-   "$STAGING/collection/"
-
-cp "$LAB_DATA/hr/employees.csv" \
-   "$STAGING/collection/"
-
-cp "$LAB_DATA/it/server-inventory.txt" \
-   "$STAGING/collection/"
-
-cp "$LAB_DATA/management/strategy-2027.txt" \
-   "$STAGING/collection/"
-
-
-# ------------------------------------------------------------
-# Create manifest
-# ------------------------------------------------------------
-
-echo
-echo "[+] Creating file manifest"
-
-find "$STAGING/collection" \
-    -type f \
-    -exec sha256sum {} \; \
-    > "$STAGING/manifest.txt"
-
-
-# ------------------------------------------------------------
-# Compress staged data
-# ------------------------------------------------------------
-
-echo
-echo "[+] Compressing collected data"
-
-tar \
-    -czf "$STAGING/nordic-data.tar.gz" \
-    -C "$STAGING" \
-    collection manifest.txt
-
-
-# ------------------------------------------------------------
-# Evidence
-# ------------------------------------------------------------
-
-echo
-echo "===== STAGED FILES ====="
-
-ls -lah "$STAGING"
-
-echo
-
-echo "===== ARCHIVE ====="
-
-ls -lh "$STAGING/nordic-data.tar.gz"
-
-echo
-
-echo "===== SHA256 ====="
-
-sha256sum "$STAGING/nordic-data.tar.gz"
-
-echo
-
-echo "===== STAGING COMPLETE ====="
-
-EOF
-)
-
-
-# ------------------------------------------------------------
-# Execute
-# ------------------------------------------------------------
-
-echo "[1/3] Connecting to compromised host..."
-
-log_event "SSH session opened to $COMPROMISED_HOST for collection"
-
+echo "[2/5] Preparing synthetic Nordic Manufacturing data..."
 
 sshpass -p "$SSH_PASSWORD" \
+ssh \
+-o StrictHostKeyChecking=no \
+-o UserKnownHostsFile=/dev/null \
+"$SSH_USER@$TARGET" \
+'bash -s' <<'REMOTE'
+
+DATA_DIR="$HOME/nordic-company-data"
+
+mkdir -p "$DATA_DIR"
+
+cat > "$DATA_DIR/employees.csv" <<'EOF'
+employee_id,name,department,email
+1001,Anna Jensen,Finance,anna.jensen@nordic.example
+1002,Peter Hansen,Production,peter.hansen@nordic.example
+1003,Lars Nielsen,IT,lars.nielsen@nordic.example
+1004,Sofie Larsen,Management,sofie.larsen@nordic.example
+EOF
+
+cat > "$DATA_DIR/customers.csv" <<'EOF'
+customer_id,company,contact
+C1001,Example Industries A/S,procurement@example.invalid
+C1002,Demo Logistics A/S,office@demo.invalid
+C1003,Training Manufacturing A/S,sales@training.invalid
+EOF
+
+cat > "$DATA_DIR/network-notes.txt" <<'EOF'
+Nordic Manufacturing A/S
+INTERNAL TRAINING DATA
+
+Head Office:
+LAN1: 192.168.1.0/24
+LAN2: 192.168.2.0/24
+
+Security:
+Firewall protects network boundaries.
+VPN is used for approved remote connectivity.
+
+NOTE:
+This file contains synthetic CyberLab information only.
+EOF
+
+cat > "$DATA_DIR/management-notes.txt" <<'EOF'
+CONFIDENTIAL - TRAINING DATA
+
+Nordic Manufacturing A/S
+
+Planned projects:
+- New production site
+- Network segmentation improvements
+- VPN deployment
+- SIEM expansion
+- Improved backup procedures
+
+This is synthetic data created for the H3 incident exercise.
+EOF
+
+echo "[REMOTE] Synthetic company data prepared."
+
+REMOTE
+
+echo "[+] Synthetic data available."
+echo
+
+sleep 2
+
+# ------------------------------------------------------------
+# Simulated discovery
+# ------------------------------------------------------------
+
+echo "[3/5] Simulating data discovery..."
+
+DISCOVERY=$(sshpass -p "$SSH_PASSWORD" \
     ssh \
     -o StrictHostKeyChecking=no \
     -o UserKnownHostsFile=/dev/null \
-    -o PreferredAuthentications=password \
-    -o PubkeyAuthentication=no \
-    -o ConnectTimeout=5 \
-    "$SSH_USER@$COMPROMISED_HOST" \
-    "$REMOTE_COMMAND" >> "$LOGFILE" 2>&1
+    "$SSH_USER@$TARGET" \
+    '
+        echo "=== SEARCHING USER FILES ==="
 
-SSH_RESULT=$?
+        find "$HOME/nordic-company-data" \
+            -maxdepth 2 \
+            -type f \
+            2>/dev/null
 
+        echo
+        echo "=== FILE DETAILS ==="
 
-# ------------------------------------------------------------
-# Result
-# ------------------------------------------------------------
+        ls -lah "$HOME/nordic-company-data" 2>/dev/null
+    ' 2>/dev/null)
 
-if [[ "$SSH_RESULT" -ne 0 ]]; then
+echo "$DISCOVERY"
 
+{
+    echo "DATA DISCOVERY"
+    echo "$DISCOVERY"
     echo
-    echo "[ERROR] Data staging failed."
-
-    log_event "Data staging FAILED on $COMPROMISED_HOST"
-
-    exit 1
-
-fi
-
-
-echo
-echo "[2/3] Synthetic company data collected."
-
-log_event "Synthetic company files collected on $COMPROMISED_HOST"
+} >> "$LOG_FILE"
 
 sleep 2
 
+# ------------------------------------------------------------
+# Stage data
+# ------------------------------------------------------------
 
 echo
-echo "[3/3] Data archive created."
+echo "[4/5] Staging discovered data..."
 
-log_event "Staging archive created at /tmp/.cache-update/nordic-data.tar.gz on $COMPROMISED_HOST"
+STAGING_RESULT=$(sshpass -p "$SSH_PASSWORD" \
+    ssh \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    "$SSH_USER@$TARGET" \
+    '
+        SOURCE="$HOME/nordic-company-data"
+        STAGE="/tmp/.cache-update"
+
+        rm -rf "$STAGE"
+        mkdir -p "$STAGE/files"
+
+        cp -a "$SOURCE"/. "$STAGE/files/"
+
+        echo "=== STAGED FILES ==="
+        find "$STAGE/files" -type f -print
+
+        echo
+        echo "=== HASH MANIFEST ==="
+
+        find "$STAGE/files" -type f -print0 \
+            | sort -z \
+            | xargs -0 sha256sum \
+            | tee "$STAGE/manifest.sha256"
+    ' 2>/dev/null)
+
+echo "$STAGING_RESULT"
+
+{
+    echo
+    echo "DATA STAGING"
+    echo "$STAGING_RESULT"
+} >> "$LOG_FILE"
 
 sleep 2
 
+# ------------------------------------------------------------
+# Archive data
+# ------------------------------------------------------------
+
+echo
+echo "[5/5] Creating staged archive..."
+
+ARCHIVE_RESULT=$(sshpass -p "$SSH_PASSWORD" \
+    ssh \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    "$SSH_USER@$TARGET" \
+    '
+        STAGE="/tmp/.cache-update"
+        ARCHIVE="$STAGE/nordic-data.tar.gz"
+
+        rm -f "$ARCHIVE"
+
+        tar \
+            --exclude="nordic-data.tar.gz" \
+            -czf "$ARCHIVE" \
+            -C "$STAGE" \
+            files manifest.sha256
+
+        echo "=== ARCHIVE ==="
+        ls -lh "$ARCHIVE"
+
+        echo
+        echo "=== SHA256 ==="
+        sha256sum "$ARCHIVE"
+    ' 2>/dev/null)
+
+echo "$ARCHIVE_RESULT"
+
+{
+    echo
+    echo "ARCHIVE CREATED"
+    echo "$ARCHIVE_RESULT"
+} >> "$LOG_FILE"
 
 # ------------------------------------------------------------
-# Finish
+# Ground truth
 # ------------------------------------------------------------
 
-log_event "Data staging completed on $COMPROMISED_HOST"
+{
+    echo
+    echo "=================================================="
+    echo "GROUND TRUTH"
+    echo "=================================================="
+    echo "Incident: $INCIDENT_ID"
+    echo "Phase: DATA DISCOVERY / STAGING"
+    echo "Target: $TARGET"
+    echo "Account: $SSH_USER"
+    echo
+    echo "Synthetic source data:"
+    echo "\$HOME/nordic-company-data"
+    echo
+    echo "Staging directory:"
+    echo "/tmp/.cache-update"
+    echo
+    echo "Archive:"
+    echo "/tmp/.cache-update/nordic-data.tar.gz"
+    echo
+    echo "Activity:"
+    echo "- Synthetic company data discovered"
+    echo "- Files enumerated"
+    echo "- Files copied into staging directory"
+    echo "- SHA256 manifest generated"
+    echo "- Data compressed into tar.gz archive"
+    echo
+    echo "IMPORTANT:"
+    echo "All company information created by this script"
+    echo "is synthetic CyberLab training data."
+    echo "=================================================="
+} >> "$LOG_FILE"
 
-
 echo
-echo "============================================================"
-echo " Data staging completed"
-echo "============================================================"
+echo "======================================================"
+echo " Phase 05 complete - Data staged"
+echo "======================================================"
 echo
-echo "Compromised host:"
-echo "  $COMPROMISED_HOST"
-echo
-echo "Remote staging directory:"
-echo "  /tmp/.cache-update/"
-echo
-echo "Staged archive:"
-echo "  /tmp/.cache-update/nordic-data.tar.gz"
-echo
-echo "Attack log:"
-echo "  $LOGFILE"
-echo
-echo "Ground truth:"
-echo "  $GROUNDTRUTH"
+echo "Target       : $TARGET"
+echo "Staging      : /tmp/.cache-update"
+echo "Archive      : /tmp/.cache-update/nordic-data.tar.gz"
+echo "Incident ID  : $INCIDENT_ID"
+echo "Ground truth : $LOG_FILE"
 echo

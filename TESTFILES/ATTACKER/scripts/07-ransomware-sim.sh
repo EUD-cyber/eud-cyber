@@ -4,80 +4,32 @@
 # Nordic Manufacturing A/S - Attack Simulation
 # Phase 07 - Ransomware / Impact Simulation
 #
-# Purpose:
-#   Generate safe ransomware-like forensic evidence on an
-#   already compromised Linux CyberLab host.
+# SAFE SIMULATION:
+# Only operates inside:
+#   /opt/nordic-ransomware-lab
 #
-# This script DOES NOT perform real encryption.
-#
-# It only operates inside:
-#
-#   /opt/nordic-ransomware-lab/
-#
-# Evidence:
-#   - Rapid file creation/modification
-#   - File extensions changed to .locked
-#   - Ransom note creation
-#   - SHA256 changes
-#   - SSH activity
-#   - Filesystem activity suitable for FIM
-#
-# IMPORTANT:
-#   Intended for the Nordic Manufacturing CyberLab only.
+# No real encryption is performed.
 # ============================================================
 
 set -u
 
-BASE_DIR="/opt/nordic-attack"
-LOG_DIR="$BASE_DIR/logs"
-
+LOG_DIR="/opt/nordic-attack/logs"
 mkdir -p "$LOG_DIR"
 
 TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
-LOGFILE="$LOG_DIR/ransomware-$TIMESTAMP.log"
-GROUNDTRUTH="$LOG_DIR/incident-ground-truth.log"
+INCIDENT_ID="${NORDIC_INCIDENT_ID:-MANUAL-$TIMESTAMP}"
+LOG_FILE="$LOG_DIR/${INCIDENT_ID}-07-ransomware.log"
 
-REMOTE_LAB="/opt/nordic-ransomware-lab"
+LAB_DIR="/opt/nordic-ransomware-lab"
 
-
-# ------------------------------------------------------------
-# Functions
-# ------------------------------------------------------------
-
-log_event() {
-    echo "$(date --iso-8601=seconds) | IMPACT | $1" >> "$GROUNDTRUTH"
-}
-
-banner() {
-    clear
-    echo "============================================================"
-    echo "   NORDIC MANUFACTURING - RANSOMWARE SIMULATION"
-    echo "============================================================"
-    echo
-}
-
-validate_ipv4() {
-
-    local IP="$1"
-
-    if ! [[ "$IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-        return 1
-    fi
-
-    IFS='.' read -r o1 o2 o3 o4 <<< "$IP"
-
-    for octet in "$o1" "$o2" "$o3" "$o4"; do
-        if (( octet < 0 || octet > 255 )); then
-            return 1
-        fi
-    done
-
-    return 0
-}
-
+echo "======================================================"
+echo " Nordic Manufacturing - Phase 07"
+echo " Ransomware / Impact Simulation"
+echo "======================================================"
+echo
 
 # ------------------------------------------------------------
-# Dependencies
+# Dependency
 # ------------------------------------------------------------
 
 if ! command -v sshpass >/dev/null 2>&1; then
@@ -85,390 +37,386 @@ if ! command -v sshpass >/dev/null 2>&1; then
     exit 1
 fi
 
-
 # ------------------------------------------------------------
-# Start
+# AUTO / MANUAL
 # ------------------------------------------------------------
 
-banner
+if [[ "${NORDIC_AUTO:-0}" == "1" ]]; then
 
-echo "SAFE ransomware simulation."
-echo
-echo "No real files will be encrypted."
-echo
-echo "The simulation only operates inside:"
-echo
-echo "  $REMOTE_LAB"
-echo
+    for VAR in \
+        NORDIC_COMPROMISED_HOST \
+        NORDIC_SSH_USER \
+        NORDIC_SSH_PASSWORD
+    do
+        if [[ -z "${!VAR:-}" ]]; then
+            echo "[ERROR] $VAR is not set."
+            exit 1
+        fi
+    done
 
-read -rp "Compromised host IP: " COMPROMISED_HOST
+    TARGET="$NORDIC_COMPROMISED_HOST"
+    SSH_USER="$NORDIC_SSH_USER"
+    SSH_PASSWORD="$NORDIC_SSH_PASSWORD"
 
-if ! validate_ipv4 "$COMPROMISED_HOST"; then
+    echo "[AUTO MODE]"
+    echo "Target : $TARGET"
+    echo "User   : $SSH_USER"
+
+else
+
+    echo "[MANUAL MODE]"
+
+    read -rp "Compromised Linux host: " TARGET
+    read -rp "SSH username: " SSH_USER
+    read -rsp "SSH password: " SSH_PASSWORD
     echo
-    echo "[ERROR] Invalid IPv4 address."
+
+fi
+
+if [[ -z "$TARGET" || -z "$SSH_USER" || -z "$SSH_PASSWORD" ]]; then
+    echo "[ERROR] Missing required information."
     exit 1
 fi
 
 echo
-
-read -rp "SSH username: " SSH_USER
-read -rsp "SSH password: " SSH_PASSWORD
-
-echo
-echo
-
-echo "Target:"
-echo "  $COMPROMISED_HOST"
-echo
-echo "Lab directory:"
-echo "  $REMOTE_LAB"
+echo "[*] Incident ID : $INCIDENT_ID"
+echo "[*] Target      : $TARGET"
+echo "[*] Account     : $SSH_USER"
+echo "[*] Lab path    : $LAB_DIR"
+echo "[*] Log         : $LOG_FILE"
 echo
 
-log_event "Ransomware simulation started against $COMPROMISED_HOST"
-
+{
+    echo "Incident ID: $INCIDENT_ID"
+    echo "Phase: RANSOMWARE / IMPACT"
+    echo "Timestamp: $(date --iso-8601=seconds)"
+    echo "Target: $TARGET"
+    echo "Account: $SSH_USER"
+    echo "Lab directory: $LAB_DIR"
+    echo
+} >> "$LOG_FILE"
 
 # ------------------------------------------------------------
-# Remote simulation
+# Verify access
 # ------------------------------------------------------------
 
-REMOTE_COMMAND=$(cat <<'EOF'
+echo "[1/5] Verifying access..."
 
-set -e
+if ! sshpass -p "$SSH_PASSWORD" \
+    ssh \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=5 \
+    "$SSH_USER@$TARGET" \
+    "true" >/dev/null 2>&1
+then
+    echo "[ERROR] Unable to access compromised host."
+    exit 1
+fi
+
+echo "[+] Access confirmed."
+echo
+
+# ------------------------------------------------------------
+# Prepare safe ransomware lab
+# ------------------------------------------------------------
+
+echo "[2/5] Preparing synthetic company files..."
+
+sshpass -p "$SSH_PASSWORD" \
+ssh \
+-o StrictHostKeyChecking=no \
+-o UserKnownHostsFile=/dev/null \
+"$SSH_USER@$TARGET" \
+"sudo bash -s" <<'REMOTE'
 
 LAB="/opt/nordic-ransomware-lab"
-DATA="$LAB/company-data"
 
-echo "============================================================"
-echo " NORDIC RANSOMWARE IMPACT SIMULATION"
-echo "============================================================"
-echo
-
-echo "[TIME]"
-date --iso-8601=seconds
-
-echo
-
-echo "[USER]"
-whoami
-
-echo
-
-echo "[HOST]"
-hostname
-
-echo
-
-
-# ------------------------------------------------------------
-# Safety
-# ------------------------------------------------------------
-
+# Safety guard
 if [[ "$LAB" != "/opt/nordic-ransomware-lab" ]]; then
     echo "SAFETY CHECK FAILED"
-    exit 1
+    exit 10
 fi
 
+rm -rf "$LAB"
 
-# ------------------------------------------------------------
-# Prepare dedicated lab area
-# ------------------------------------------------------------
+mkdir -p "$LAB"/{finance,production,management,shared}
 
-echo "[+] Preparing isolated ransomware simulation directory"
+cat > "$LAB/finance/budget-2026.txt" <<'EOF'
+Nordic Manufacturing A/S
+Synthetic Finance Data
 
-sudo mkdir -p "$DATA/finance"
-sudo mkdir -p "$DATA/hr"
-sudo mkdir -p "$DATA/production"
-sudo mkdir -p "$DATA/management"
+Annual budget: 25,000,000 DKK
+Training file only.
+EOF
 
-sudo chown -R "$(id -un):$(id -gn)" "$LAB"
+cat > "$LAB/finance/payroll.txt" <<'EOF'
+Nordic Manufacturing A/S
+Synthetic Payroll Data
 
+This file contains no real employee information.
+EOF
 
-# ------------------------------------------------------------
-# Create synthetic files
-# ------------------------------------------------------------
+cat > "$LAB/production/production-plan.txt" <<'EOF'
+Nordic Manufacturing A/S
+Synthetic Production Plan
 
+Line A: Normal
+Line B: Normal
+Line C: Maintenance
+EOF
+
+cat > "$LAB/management/strategy.txt" <<'EOF'
+Nordic Manufacturing A/S
+Synthetic Management Data
+
+Expansion plans
+New site
+Network modernization
+EOF
+
+cat > "$LAB/shared/customers.txt" <<'EOF'
+Nordic Manufacturing A/S
+Synthetic Customer Data
+
+Example Customer 01
+Example Customer 02
+Example Customer 03
+EOF
+
+chmod -R 777 "$LAB"
+
+echo "Synthetic files created."
+
+REMOTE
+
+echo "[+] Synthetic files prepared."
 echo
-echo "[+] Creating synthetic company files"
-
-
-cat > "$DATA/finance/budget-2027.txt" <<'DATAFILE'
-NORDIC MANUFACTURING A/S
-FINANCE DEPARTMENT
-
-Budget forecast 2027
-Production expansion: 4,500,000 DKK
-Infrastructure: 1,250,000 DKK
-Cybersecurity: 850,000 DKK
-
-CLASSIFICATION: CONFIDENTIAL
-DATAFILE
-
-
-cat > "$DATA/finance/payroll-september.csv" <<'DATAFILE'
-employee_id,department,salary
-NM001,Finance,48500
-NM002,Production,42100
-NM003,IT,51750
-NM004,Management,68500
-DATAFILE
-
-
-cat > "$DATA/hr/employees.txt" <<'DATAFILE'
-Nordic Manufacturing Employee Records
-
-NM001 Anna Jensen - Finance
-NM002 Lars Nielsen - Production
-NM003 Maria Hansen - IT
-NM004 Peter Sorensen - Management
-
-CLASSIFICATION: CONFIDENTIAL
-DATAFILE
-
-
-cat > "$DATA/production/orders.csv" <<'DATAFILE'
-order_id,customer,status
-PO-1001,Contoso Production,ACTIVE
-PO-1002,Fabrikam Logistics,ACTIVE
-PO-1003,Northwind Industrial,PENDING
-DATAFILE
-
-
-cat > "$DATA/production/production-plan.txt" <<'DATAFILE'
-Nordic Manufacturing Production Plan
-
-Line 1 - Normal operation
-Line 2 - Maintenance scheduled
-Line 3 - Expansion project
-
-CLASSIFICATION: INTERNAL
-DATAFILE
-
-
-cat > "$DATA/management/strategy.txt" <<'DATAFILE'
-NORDIC MANUFACTURING A/S
-MANAGEMENT STRATEGY
-
-Confidential strategic planning document.
-
-CLASSIFICATION: CONFIDENTIAL
-DATAFILE
-
-
-# Create additional files to generate FIM activity
-for i in $(seq -w 1 20)
-do
-    echo "Nordic Manufacturing synthetic document $i" \
-        > "$DATA/production/document-$i.txt"
-done
-
 
 # ------------------------------------------------------------
 # Baseline
 # ------------------------------------------------------------
 
-echo
-echo "[+] Files before impact"
+echo "[3/5] Recording file baseline..."
 
-find "$DATA" -type f -print
+BASELINE=$(sshpass -p "$SSH_PASSWORD" \
+    ssh \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    "$SSH_USER@$TARGET" \
+    "
+        echo '=== FILES BEFORE IMPACT ==='
 
-echo
+        find '$LAB_DIR' \
+            -type f \
+            -print \
+            -exec sha256sum {} \;
 
-echo "[+] Creating baseline hashes"
+        echo
+        echo '=== DIRECTORY ==='
 
-find "$DATA" \
-    -type f \
-    -exec sha256sum {} \; \
-    > "$LAB/hashes-before.txt"
+        find '$LAB_DIR' -maxdepth 2 -type f -ls
+    " 2>/dev/null)
 
+echo "$BASELINE"
+
+{
+    echo "BEFORE IMPACT"
+    echo "$BASELINE"
+    echo
+} >> "$LOG_FILE"
+
+sleep 2
 
 # ------------------------------------------------------------
 # Simulate ransomware impact
 # ------------------------------------------------------------
 
 echo
-echo "[!] Beginning simulated ransomware impact"
+echo "[4/5] Simulating ransomware impact..."
+echo
 
-sleep 2
+IMPACT=$(sshpass -p "$SSH_PASSWORD" \
+    ssh \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    "$SSH_USER@$TARGET" \
+    "LAB='$LAB_DIR' bash -s" <<'REMOTE'
 
+# ------------------------------------------------------------
+# HARD SAFETY CHECK
+# ------------------------------------------------------------
 
-find "$DATA" -type f -print0 |
+if [[ "$LAB" != "/opt/nordic-ransomware-lab" ]]; then
+    echo "SAFETY CHECK FAILED"
+    exit 20
+fi
+
+if [[ ! -d "$LAB" ]]; then
+    echo "LAB DIRECTORY DOES NOT EXIST"
+    exit 21
+fi
+
+echo "=== STARTING SAFE IMPACT SIMULATION ==="
+
+find "$LAB" \
+    -type f \
+    ! -name "*.locked" \
+    ! -name "README_RECOVER_FILES.txt" \
+    -print0 |
 while IFS= read -r -d '' FILE
 do
 
-    ORIGINAL_NAME="$FILE"
-    LOCKED_NAME="${FILE}.locked"
+    echo "[SIMULATED-RANSOMWARE-IMPACT]" >> "$FILE"
 
-    # Modify content so hashes change.
-    # This is NOT encryption.
-    printf '\n[SIMULATED-RANSOMWARE-IMPACT]\n' >> "$FILE"
+    mv -- "$FILE" "${FILE}.locked"
 
-    mv "$FILE" "$LOCKED_NAME"
-
-    echo "LOCKED: $ORIGINAL_NAME -> $LOCKED_NAME"
-
-    sleep 0.15
+    echo "LOCKED: ${FILE}.locked"
 
 done
 
+cat > "$LAB/README_RECOVER_FILES.txt" <<'EOF'
+========================================================
+          NORDIC MANUFACTURING A/S
+          CYBERLAB RANSOMWARE SIMULATION
+========================================================
 
-# ------------------------------------------------------------
-# Ransom note
-# ------------------------------------------------------------
+Your files appear to have been locked.
 
-cat > "$LAB/README-RECOVER-FILES.txt" <<'NOTE'
-============================================================
-        NORDIC MANUFACTURING SECURITY INCIDENT
-============================================================
-
-Your files are unavailable.
-
-This is a CYBERLAB RANSOMWARE SIMULATION.
+This is a SAFE TRAINING SIMULATION.
 
 No real encryption has been performed.
+No payment should be made.
+No external attacker is involved.
 
-Incident reference:
-INC-H3-RANSOMWARE
+Incident Response Team should:
 
-Do not use this file as evidence of real ransomware.
-============================================================
-NOTE
+1. Identify affected systems
+2. Isolate the affected host
+3. Investigate initial access
+4. Review authentication logs
+5. Investigate lateral movement
+6. Identify staged/exfiltrated data
+7. Restore affected services
+8. Document the incident
 
-
-# Copy ransom note into several locations to create evidence
-
-cp "$LAB/README-RECOVER-FILES.txt" \
-   "$DATA/README-RECOVER-FILES.txt"
-
-cp "$LAB/README-RECOVER-FILES.txt" \
-   "$DATA/finance/README-RECOVER-FILES.txt"
-
-cp "$LAB/README-RECOVER-FILES.txt" \
-   "$DATA/production/README-RECOVER-FILES.txt"
-
-
-# ------------------------------------------------------------
-# After-state
-# ------------------------------------------------------------
-
-echo
-echo "[+] Files after impact"
-
-find "$DATA" -type f -print
-
-echo
-
-echo "[+] Hashing affected files"
-
-find "$DATA" \
-    -type f \
-    -exec sha256sum {} \; \
-    > "$LAB/hashes-after.txt"
-
-
-# ------------------------------------------------------------
-# Incident marker
-# ------------------------------------------------------------
-
-cat > "$LAB/INCIDENT.txt" <<MARKER
-Incident: INC-H3-RANSOMWARE
-Host: $(hostname)
-User: $(whoami)
-Time: $(date --iso-8601=seconds)
-Simulation: Nordic Manufacturing H3
-MARKER
-
-
-echo
-echo "============================================================"
-echo " SIMULATED IMPACT COMPLETE"
-echo "============================================================"
-
-echo
-echo "Affected directory:"
-echo "$DATA"
-
-echo
-echo "Locked files:"
-find "$DATA" -type f -name "*.locked" | wc -l
-
-echo
-
+========================================================
 EOF
+
+echo
+echo "Ransom note created:"
+echo "$LAB/README_RECOVER_FILES.txt"
+
+REMOTE
 )
 
+IMPACT_RESULT=$?
 
-# ------------------------------------------------------------
-# Execute simulation
-# ------------------------------------------------------------
+echo "$IMPACT"
 
-echo "[1/3] Connecting to compromised host..."
-
-log_event "SSH session opened to $COMPROMISED_HOST for impact phase"
-
-
-sshpass -p "$SSH_PASSWORD" \
-    ssh \
-    -tt \
-    -o StrictHostKeyChecking=no \
-    -o UserKnownHostsFile=/dev/null \
-    -o PreferredAuthentications=password \
-    -o PubkeyAuthentication=no \
-    -o ConnectTimeout=5 \
-    "$SSH_USER@$COMPROMISED_HOST" \
-    "$REMOTE_COMMAND" >> "$LOGFILE" 2>&1
-
-SSH_RESULT=$?
-
-
-if [[ "$SSH_RESULT" -ne 0 ]]; then
-
+{
     echo
-    echo "[ERROR] Ransomware simulation failed."
+    echo "IMPACT ACTIVITY"
+    echo "$IMPACT"
+} >> "$LOG_FILE"
 
-    log_event "Ransomware simulation FAILED on $COMPROMISED_HOST"
-
+if [[ $IMPACT_RESULT -ne 0 ]]; then
+    echo
+    echo "[ERROR] Impact simulation failed."
     exit 1
-
 fi
-
-
-# ------------------------------------------------------------
-# Evidence
-# ------------------------------------------------------------
-
-echo
-echo "[2/3] Impact generated."
-
-log_event "Synthetic files modified and renamed on $COMPROMISED_HOST"
 
 sleep 2
 
-
-echo
-echo "[3/3] Ransom note created."
-
-log_event "Ransom note created on $COMPROMISED_HOST"
-log_event "Ransomware simulation completed on $COMPROMISED_HOST"
-
-
 # ------------------------------------------------------------
-# Finish
+# Verify impact
 # ------------------------------------------------------------
 
 echo
-echo "============================================================"
-echo " Ransomware simulation completed"
-echo "============================================================"
+echo "[5/5] Verifying simulated impact..."
+
+AFTER=$(sshpass -p "$SSH_PASSWORD" \
+    ssh \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    "$SSH_USER@$TARGET" \
+    "
+        echo '=== FILES AFTER IMPACT ==='
+
+        find '$LAB_DIR' \
+            -type f \
+            -print
+
+        echo
+        echo '=== LOCKED FILE COUNT ==='
+
+        find '$LAB_DIR' \
+            -type f \
+            -name '*.locked' |
+        wc -l
+
+        echo
+        echo '=== RANSOM NOTE ==='
+
+        cat '$LAB_DIR/README_RECOVER_FILES.txt' 2>/dev/null || true
+
+        echo
+        echo '=== HASHES AFTER IMPACT ==='
+
+        find '$LAB_DIR' \
+            -type f \
+            -name '*.locked' \
+            -exec sha256sum {} \;
+    " 2>/dev/null)
+
+echo "$AFTER"
+
+{
+    echo
+    echo "AFTER IMPACT"
+    echo "$AFTER"
+} >> "$LOG_FILE"
+
+# ------------------------------------------------------------
+# Ground truth
+# ------------------------------------------------------------
+
+{
+    echo
+    echo "=================================================="
+    echo "GROUND TRUTH"
+    echo "=================================================="
+    echo "Incident: $INCIDENT_ID"
+    echo "Phase: RANSOMWARE / IMPACT"
+    echo "Target: $TARGET"
+    echo "Account: $SSH_USER"
+    echo
+    echo "Affected directory:"
+    echo "$LAB_DIR"
+    echo
+    echo "Activity:"
+    echo "- Synthetic company files created"
+    echo "- File hashes recorded"
+    echo "- File contents modified with simulation marker"
+    echo "- Files renamed with .locked extension"
+    echo "- Ransom note created"
+    echo "- Post-impact file state recorded"
+    echo
+    echo "SAFETY:"
+    echo "No real encryption was performed."
+    echo "Only files under:"
+    echo "$LAB_DIR"
+    echo "were modified."
+    echo "=================================================="
+} >> "$LOG_FILE"
+
 echo
-echo "Target:"
-echo "  $COMPROMISED_HOST"
+echo "======================================================"
+echo " Phase 07 complete - Impact simulated"
+echo "======================================================"
 echo
-echo "Affected directory:"
-echo "  $REMOTE_LAB"
-echo
-echo "Attack log:"
-echo "  $LOGFILE"
-echo
-echo "Ground truth:"
-echo "  $GROUNDTRUTH"
+echo "Target       : $TARGET"
+echo "Affected     : $LAB_DIR"
+echo "Incident ID  : $INCIDENT_ID"
+echo "Ground truth : $LOG_FILE"
 echo

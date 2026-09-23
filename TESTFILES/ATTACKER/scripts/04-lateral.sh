@@ -3,85 +3,25 @@
 # ============================================================
 # Nordic Manufacturing A/S - Attack Simulation
 # Phase 04 - Internal Discovery / Lateral Movement
-#
-# Purpose:
-#   Use an already compromised Linux host to perform internal
-#   discovery against another CyberLab system.
-#
-# Flow:
-#
-#   IncidentVM
-#       |
-#       | SSH
-#       v
-#   Compromised Linux Host
-#       |
-#       | Internal discovery
-#       v
-#   Internal Target
-#
-# Evidence:
-#   - SSH session from IncidentVM
-#   - Commands executed on compromised host
-#   - Network discovery from compromised host
-#   - Connections towards another internal system
-#
-# IMPORTANT:
-#   Intended for the Nordic Manufacturing CyberLab only.
 # ============================================================
 
 set -u
 
-BASE_DIR="/opt/nordic-attack"
-LOG_DIR="$BASE_DIR/logs"
-
+LOG_DIR="/opt/nordic-attack/logs"
 mkdir -p "$LOG_DIR"
 
 TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
-LOGFILE="$LOG_DIR/lateral-$TIMESTAMP.log"
-GROUNDTRUTH="$LOG_DIR/incident-ground-truth.log"
+INCIDENT_ID="${NORDIC_INCIDENT_ID:-MANUAL-$TIMESTAMP}"
+LOG_FILE="$LOG_DIR/${INCIDENT_ID}-04-lateral.log"
 
-
-# ------------------------------------------------------------
-# Functions
-# ------------------------------------------------------------
-
-log_event() {
-    echo "$(date --iso-8601=seconds) | LATERAL | $1" >> "$GROUNDTRUTH"
-}
-
-banner() {
-    clear
-    echo "============================================================"
-    echo "   NORDIC MANUFACTURING - INTERNAL DISCOVERY"
-    echo "============================================================"
-    echo
-}
-
-validate_ipv4() {
-
-    local IP="$1"
-
-    if ! [[ "$IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-        return 1
-    fi
-
-    IFS='.' read -r o1 o2 o3 o4 <<< "$IP"
-
-    for octet in "$o1" "$o2" "$o3" "$o4"; do
-
-        if (( octet < 0 || octet > 255 )); then
-            return 1
-        fi
-
-    done
-
-    return 0
-}
-
+echo "======================================================"
+echo " Nordic Manufacturing - Phase 04"
+echo " Internal Discovery / Lateral Movement"
+echo "======================================================"
+echo
 
 # ------------------------------------------------------------
-# Dependencies
+# Dependency
 # ------------------------------------------------------------
 
 if ! command -v sshpass >/dev/null 2>&1; then
@@ -89,258 +29,271 @@ if ! command -v sshpass >/dev/null 2>&1; then
     exit 1
 fi
 
-
 # ------------------------------------------------------------
-# Start
-# ------------------------------------------------------------
-
-banner
-
-echo "This phase assumes that a Linux server has already"
-echo "been compromised during the previous authentication phase."
-echo
-
-echo "The compromised server will perform discovery against"
-echo "another internal CyberLab system."
-echo
-
-
-# ------------------------------------------------------------
-# Compromised host
+# AUTO / MANUAL
 # ------------------------------------------------------------
 
-read -rp "Compromised host IP: " COMPROMISED_HOST
+if [[ "${NORDIC_AUTO:-0}" == "1" ]]; then
 
-if ! validate_ipv4 "$COMPROMISED_HOST"; then
-    echo
-    echo "[ERROR] Invalid compromised host IPv4 address."
-    exit 1
-fi
+    for VAR in \
+        NORDIC_COMPROMISED_HOST \
+        NORDIC_INTERNAL_TARGET \
+        NORDIC_SSH_USER \
+        NORDIC_SSH_PASSWORD
+    do
+        if [[ -z "${!VAR:-}" ]]; then
+            echo "[ERROR] $VAR is not set."
+            exit 1
+        fi
+    done
 
-echo
+    COMPROMISED_HOST="$NORDIC_COMPROMISED_HOST"
+    INTERNAL_TARGET="$NORDIC_INTERNAL_TARGET"
+    SSH_USER="$NORDIC_SSH_USER"
+    SSH_PASSWORD="$NORDIC_SSH_PASSWORD"
 
-read -rp "SSH username: " SSH_USER
-read -rsp "SSH password: " SSH_PASSWORD
-
-echo
-echo
-
-
-# ------------------------------------------------------------
-# Internal target
-# ------------------------------------------------------------
-
-read -rp "Internal target IP: " INTERNAL_TARGET
-
-if ! validate_ipv4 "$INTERNAL_TARGET"; then
-    echo
-    echo "[ERROR] Invalid internal target IPv4 address."
-    exit 1
-fi
-
-
-echo
-echo "Attack path:"
-echo
-echo "  IncidentVM"
-echo "      |"
-echo "      | SSH"
-echo "      v"
-echo "  $COMPROMISED_HOST"
-echo "      |"
-echo "      | Internal discovery"
-echo "      v"
-echo "  $INTERNAL_TARGET"
-echo
-
-
-log_event "Lateral movement phase started"
-log_event "Compromised host: $COMPROMISED_HOST"
-log_event "Internal target: $INTERNAL_TARGET"
-
-
-{
-    echo "============================================================"
-    echo "Nordic Manufacturing - Internal Discovery"
-    echo "============================================================"
-    echo
-    echo "Time:             $(date --iso-8601=seconds)"
-    echo "AttackVM:         $(hostname)"
-    echo "Compromised host: $COMPROMISED_HOST"
-    echo "Internal target:  $INTERNAL_TARGET"
-    echo
-} >> "$LOGFILE"
-
-
-# ------------------------------------------------------------
-# Build remote command
-# ------------------------------------------------------------
-
-REMOTE_COMMAND=$(cat <<EOF
-
-echo "===== INTERNAL DISCOVERY ====="
-echo
-
-echo "[TIME]"
-date --iso-8601=seconds
-echo
-
-echo "[CURRENT USER]"
-whoami
-echo
-
-echo "[HOSTNAME]"
-hostname
-echo
-
-echo "[IDENTITY]"
-id
-echo
-
-echo "[NETWORK INTERFACES]"
-ip addr
-echo
-
-echo "[ROUTING TABLE]"
-ip route
-echo
-
-echo "[ARP / NEIGHBOURS]"
-ip neigh
-echo
-
-echo "[DNS CONFIGURATION]"
-cat /etc/resolv.conf
-echo
-
-
-echo "===== TARGET DISCOVERY ====="
-echo
-
-echo "[PING]"
-ping -c 3 -W 1 "$INTERNAL_TARGET" || true
-echo
-
-
-echo "[TCP CONNECTION TESTS]"
-
-for PORT in 22 80 135 139 443 445 3389 8080
-do
-
-    echo "Testing $INTERNAL_TARGET:\$PORT"
-
-    timeout 2 bash -c \
-        "echo > /dev/tcp/$INTERNAL_TARGET/\$PORT" \
-        2>/dev/null \
-        && echo "OPEN: $INTERNAL_TARGET:\$PORT" \
-        || echo "CLOSED/FILTERED: $INTERNAL_TARGET:\$PORT"
-
-done
-
-echo
-
-
-echo "[WEB PROBE]"
-
-curl \
-    --connect-timeout 3 \
-    --max-time 5 \
-    -A "Mozilla/5.0" \
-    -I \
-    "http://$INTERNAL_TARGET/" \
-    2>/dev/null || true
-
-echo
-
-
-echo "===== INTERNAL DISCOVERY COMPLETE ====="
-
-EOF
-)
-
-
-# ------------------------------------------------------------
-# Execute from compromised host
-# ------------------------------------------------------------
-
-echo
-echo "[1/2] Connecting to compromised host..."
-
-log_event "SSH connection from IncidentVM to $COMPROMISED_HOST as $SSH_USER"
-
-
-sshpass -p "$SSH_PASSWORD" \
-    ssh \
-    -o StrictHostKeyChecking=no \
-    -o UserKnownHostsFile=/dev/null \
-    -o PreferredAuthentications=password \
-    -o PubkeyAuthentication=no \
-    -o ConnectTimeout=5 \
-    "$SSH_USER@$COMPROMISED_HOST" \
-    "$REMOTE_COMMAND" >> "$LOGFILE" 2>&1
-
-SSH_RESULT=$?
-
-
-# ------------------------------------------------------------
-# Result
-# ------------------------------------------------------------
-
-if [[ "$SSH_RESULT" -eq 0 ]]; then
-
-    echo
-    echo "[+] Remote execution successful."
-
-    log_event "Internal discovery executed from $COMPROMISED_HOST"
-    log_event "$COMPROMISED_HOST probed $INTERNAL_TARGET"
+    echo "[AUTO MODE]"
+    echo "Compromised host : $COMPROMISED_HOST"
+    echo "Internal target  : $INTERNAL_TARGET"
+    echo "Account          : $SSH_USER"
 
 else
 
+    echo "[MANUAL MODE]"
+
+    read -rp "Compromised Linux host: " COMPROMISED_HOST
+    read -rp "Internal target: " INTERNAL_TARGET
+    read -rp "SSH username: " SSH_USER
+    read -rsp "SSH password: " SSH_PASSWORD
     echo
-    echo "[ERROR] Could not execute commands on compromised host."
-
-    log_event "Remote discovery FAILED from $COMPROMISED_HOST"
-
-    exit 1
 
 fi
 
+if [[ -z "$COMPROMISED_HOST" ||
+      -z "$INTERNAL_TARGET" ||
+      -z "$SSH_USER" ||
+      -z "$SSH_PASSWORD" ]]; then
+
+    echo "[ERROR] Missing required information."
+    exit 1
+fi
+
+echo
+echo "[*] Incident ID     : $INCIDENT_ID"
+echo "[*] Pivot host      : $COMPROMISED_HOST"
+echo "[*] Internal target : $INTERNAL_TARGET"
+echo "[*] Log             : $LOG_FILE"
+echo
+
+{
+    echo "Incident ID: $INCIDENT_ID"
+    echo "Phase: INTERNAL DISCOVERY / LATERAL MOVEMENT"
+    echo "Timestamp: $(date --iso-8601=seconds)"
+    echo "Pivot host: $COMPROMISED_HOST"
+    echo "Internal target: $INTERNAL_TARGET"
+    echo "Account: $SSH_USER"
+    echo
+} >> "$LOG_FILE"
 
 # ------------------------------------------------------------
-# Small delay before next incident phase
+# Verify access to compromised host
+# ------------------------------------------------------------
+
+echo "[1/5] Verifying access to compromised host..."
+
+if ! sshpass -p "$SSH_PASSWORD" \
+    ssh \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o ConnectTimeout=5 \
+    -o PreferredAuthentications=password \
+    -o PubkeyAuthentication=no \
+    "$SSH_USER@$COMPROMISED_HOST" \
+    "true" >/dev/null 2>&1
+then
+    echo "[ERROR] Unable to access compromised host."
+    exit 1
+fi
+
+echo "[+] Access confirmed."
+echo
+sleep 2
+
+# ------------------------------------------------------------
+# Host discovery
+# ------------------------------------------------------------
+
+echo "[2/5] Running discovery from compromised host..."
+
+DISCOVERY=$(sshpass -p "$SSH_PASSWORD" \
+    ssh \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    "$SSH_USER@$COMPROMISED_HOST" \
+    '
+        echo "=== HOST ==="
+        hostname
+
+        echo
+        echo "=== USER ==="
+        whoami
+        id
+
+        echo
+        echo "=== INTERFACES ==="
+        ip -brief address 2>/dev/null || true
+
+        echo
+        echo "=== ROUTING ==="
+        ip route 2>/dev/null || true
+
+        echo
+        echo "=== NEIGHBOURS ==="
+        ip neigh 2>/dev/null || true
+
+        echo
+        echo "=== DNS ==="
+        cat /etc/resolv.conf 2>/dev/null || true
+    ' 2>/dev/null)
+
+echo "$DISCOVERY"
+
+{
+    echo "INTERNAL DISCOVERY"
+    echo "$DISCOVERY"
+    echo
+} >> "$LOG_FILE"
+
+sleep 2
+
+# ------------------------------------------------------------
+# Reachability
 # ------------------------------------------------------------
 
 echo
-echo "[2/2] Internal discovery completed."
+echo "[3/5] Testing internal target reachability..."
 
-sleep 3
+PING_RESULT=$(sshpass -p "$SSH_PASSWORD" \
+    ssh \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    "$SSH_USER@$COMPROMISED_HOST" \
+    "ping -c 3 -W 1 '$INTERNAL_TARGET' 2>&1 || true")
 
+echo "$PING_RESULT"
+
+{
+    echo "PING TEST"
+    echo "$PING_RESULT"
+    echo
+} >> "$LOG_FILE"
+
+sleep 2
 
 # ------------------------------------------------------------
-# Finish
+# Selected service probes
 # ------------------------------------------------------------
 
-log_event "Lateral movement phase completed"
+echo
+echo "[4/5] Checking selected services on internal target..."
+echo
 
+PORTS=(22 80 443 445 3389)
+
+for PORT in "${PORTS[@]}"; do
+
+    RESULT=$(sshpass -p "$SSH_PASSWORD" \
+        ssh \
+        -o StrictHostKeyChecking=no \
+        -o UserKnownHostsFile=/dev/null \
+        "$SSH_USER@$COMPROMISED_HOST" \
+        "timeout 2 bash -c 'echo >/dev/tcp/$INTERNAL_TARGET/$PORT' >/dev/null 2>&1 && echo OPEN || echo CLOSED" \
+        2>/dev/null)
+
+    echo "TCP/$PORT : $RESULT"
+
+    echo "[$(date --iso-8601=seconds)] target=$INTERNAL_TARGET port=$PORT result=$RESULT" \
+        >> "$LOG_FILE"
+
+    sleep 1
+
+done
+
+# ------------------------------------------------------------
+# HTTP probe
+# ------------------------------------------------------------
 
 echo
-echo "============================================================"
-echo " Internal discovery completed"
-echo "============================================================"
+echo "[5/5] Testing HTTP access from compromised host..."
+
+HTTP_RESULT=$(sshpass -p "$SSH_PASSWORD" \
+    ssh \
+    -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    "$SSH_USER@$COMPROMISED_HOST" \
+    "curl -s -I --max-time 4 http://$INTERNAL_TARGET/ 2>/dev/null | head -n 5 || true")
+
+if [[ -n "$HTTP_RESULT" ]]; then
+    echo "$HTTP_RESULT"
+else
+    echo "[*] No HTTP response."
+fi
+
+{
+    echo
+    echo "HTTP PROBE"
+    echo "$HTTP_RESULT"
+} >> "$LOG_FILE"
+
+# ------------------------------------------------------------
+# Ground truth
+# ------------------------------------------------------------
+
+{
+    echo
+    echo "=================================================="
+    echo "GROUND TRUTH"
+    echo "=================================================="
+    echo "Incident: $INCIDENT_ID"
+    echo "Phase: INTERNAL DISCOVERY / LATERAL MOVEMENT"
+    echo
+    echo "AttackVM:"
+    echo "$(hostname)"
+    echo
+    echo "Pivot / compromised host:"
+    echo "$COMPROMISED_HOST"
+    echo
+    echo "Internal target:"
+    echo "$INTERNAL_TARGET"
+    echo
+    echo "Activity:"
+    echo "- Logged into previously compromised Linux host"
+    echo "- Enumerated interfaces"
+    echo "- Enumerated routing table"
+    echo "- Enumerated neighbour table"
+    echo "- Examined DNS configuration"
+    echo "- Tested internal host reachability"
+    echo "- Probed TCP/22"
+    echo "- Probed TCP/80"
+    echo "- Probed TCP/443"
+    echo "- Probed TCP/445"
+    echo "- Probed TCP/3389"
+    echo "- Tested HTTP access"
+    echo
+    echo "IMPORTANT:"
+    echo "This phase simulates internal discovery and"
+    echo "preparation for lateral movement."
+    echo "It does not exploit the internal target."
+    echo "=================================================="
+} >> "$LOG_FILE"
+
 echo
-echo "Attack path:"
+echo "======================================================"
+echo " Phase 04 complete"
+echo "======================================================"
 echo
-echo "  IncidentVM"
-echo "      |"
-echo "      v"
-echo "  $COMPROMISED_HOST"
-echo "      |"
-echo "      v"
-echo "  $INTERNAL_TARGET"
-echo
-echo "Attack log:"
-echo "  $LOGFILE"
-echo
-echo "Ground truth:"
-echo "  $GROUNDTRUTH"
+echo "Pivot host    : $COMPROMISED_HOST"
+echo "Internal host : $INTERNAL_TARGET"
+echo "Incident ID   : $INCIDENT_ID"
+echo "Ground truth  : $LOG_FILE"
 echo

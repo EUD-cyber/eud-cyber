@@ -2,28 +2,16 @@
 
 # ============================================================
 # Nordic Manufacturing A/S
-# H3 - Full Integrated Security Incident
+# H3 - Full Incident Scenario
 #
-# Teacher controlled incident orchestration.
-#
-# Attack chain:
-#
-#   01 Reconnaissance
-#        ↓
-#   02 Web Attack
-#        ↓
+# Runs:
+#   01 Recon
+#   02 Web Activity
 #   03 Authentication / Initial Access
-#        ↓
-#   04 Internal Discovery / Lateral Activity
-#        ↓
-#   05 Collection / Staging
-#        ↓
+#   04 Internal Discovery / Lateral Movement
+#   05 Data Staging
 #   06 Exfiltration
-#        ↓
 #   07 Ransomware / Impact
-#
-# IMPORTANT:
-#   Intended for the Nordic Manufacturing CyberLab only.
 # ============================================================
 
 set -u
@@ -31,76 +19,229 @@ set -u
 BASE_DIR="/opt/nordic-attack"
 SCRIPT_DIR="$BASE_DIR/scripts"
 LOG_DIR="$BASE_DIR/logs"
-DATA_DIR="$BASE_DIR/data"
 
-mkdir -p "$LOG_DIR" "$DATA_DIR"
-
-GROUNDTRUTH="$LOG_DIR/incident-ground-truth.log"
-TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
-SCENARIO_LOG="$LOG_DIR/full-h3-incident-$TIMESTAMP.log"
-
-INCIDENT_ID="INC-H3-$TIMESTAMP"
-
+mkdir -p "$LOG_DIR"
 
 # ------------------------------------------------------------
-# Functions
+# Banner
 # ------------------------------------------------------------
 
-log_event() {
-    echo "$(date --iso-8601=seconds) | SCENARIO | $1" \
-        >> "$GROUNDTRUTH"
-}
+clear
 
-banner() {
+echo "======================================================"
+echo "       NORDIC MANUFACTURING A/S"
+echo "       H3 FULL INCIDENT SCENARIO"
+echo "======================================================"
+echo
+echo "This scenario will simulate:"
+echo
+echo "  01  Recon"
+echo "  02  Web Activity"
+echo "  03  Authentication / Initial Access"
+echo "  04  Internal Discovery / Lateral Movement"
+echo "  05  Data Discovery / Staging"
+echo "  06  Data Exfiltration"
+echo "  07  Ransomware / Impact"
+echo
+echo "All activity must remain inside the CyberLab."
+echo
 
-    clear
+# ------------------------------------------------------------
+# Required scripts
+# ------------------------------------------------------------
 
-    echo "============================================================"
-    echo "       NORDIC MANUFACTURING A/S"
-    echo "       H3 INTEGRATED SECURITY INCIDENT"
-    echo "============================================================"
-    echo
-    echo "Incident ID:"
-    echo "  $INCIDENT_ID"
-    echo
-}
+echo "[*] Running pre-flight checks..."
 
+REQUIRED_SCRIPTS=(
+    "01-recon.sh"
+    "02-web.sh"
+    "03-auth.sh"
+    "04-lateral.sh"
+    "05-staging.sh"
+    "06-exfil.sh"
+    "07-ransomware-sim.sh"
+)
 
-validate_ipv4() {
+for SCRIPT in "${REQUIRED_SCRIPTS[@]}"; do
 
-    local IP="$1"
-
-    if ! [[ "$IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-        return 1
+    if [[ ! -x "$SCRIPT_DIR/$SCRIPT" ]]; then
+        echo
+        echo "[ERROR] Missing or non-executable:"
+        echo "        $SCRIPT_DIR/$SCRIPT"
+        exit 1
     fi
 
-    IFS='.' read -r o1 o2 o3 o4 <<< "$IP"
+done
 
-    for octet in "$o1" "$o2" "$o3" "$o4"; do
-        if (( octet < 0 || octet > 255 )); then
-            return 1
-        fi
-    done
+for CMD in sshpass curl python3; do
 
-    return 0
-}
+    if ! command -v "$CMD" >/dev/null 2>&1; then
+        echo
+        echo "[ERROR] Required command missing: $CMD"
+        exit 1
+    fi
 
+done
 
-wait_between_phases() {
+echo "[+] Pre-flight checks passed."
+echo
 
-    local MIN_SECONDS="$1"
-    local MAX_SECONDS="$2"
+# ------------------------------------------------------------
+# Incident information
+# ------------------------------------------------------------
 
-    local RANGE=$((MAX_SECONDS - MIN_SECONDS + 1))
-    local DELAY=$((RANDOM % RANGE + MIN_SECONDS))
+DEFAULT_INCIDENT_ID="H3-$(date +'%Y%m%d-%H%M%S')"
 
+read -rp "Incident ID [$DEFAULT_INCIDENT_ID]: " INPUT_INCIDENT_ID
+
+NORDIC_INCIDENT_ID="${INPUT_INCIDENT_ID:-$DEFAULT_INCIDENT_ID}"
+
+echo
+echo "------------------------------------------------------"
+echo " Primary compromised host"
+echo "------------------------------------------------------"
+
+read -rp "Linux target IP: " NORDIC_COMPROMISED_HOST
+
+echo
+echo "------------------------------------------------------"
+echo " Web target"
+echo "------------------------------------------------------"
+
+read -rp "Web target IP [$NORDIC_COMPROMISED_HOST]: " NORDIC_WEB_TARGET
+NORDIC_WEB_TARGET="${NORDIC_WEB_TARGET:-$NORDIC_COMPROMISED_HOST}"
+
+read -rp "Web port [80]: " NORDIC_WEB_PORT
+NORDIC_WEB_PORT="${NORDIC_WEB_PORT:-80}"
+
+echo
+echo "------------------------------------------------------"
+echo " Internal target"
+echo "------------------------------------------------------"
+
+read -rp "Internal target IP: " NORDIC_INTERNAL_TARGET
+
+echo
+echo "------------------------------------------------------"
+echo " IncidentVM / AttackVM"
+echo "------------------------------------------------------"
+
+read -rp "IncidentVM IP for exfiltration: " NORDIC_INCIDENT_IP
+
+echo
+echo "------------------------------------------------------"
+echo " Compromised account"
+echo "------------------------------------------------------"
+
+read -rp "SSH username: " NORDIC_SSH_USER
+read -rsp "SSH password: " NORDIC_SSH_PASSWORD
+echo
+
+# ------------------------------------------------------------
+# Basic validation
+# ------------------------------------------------------------
+
+REQUIRED_VALUES=(
+    NORDIC_INCIDENT_ID
+    NORDIC_COMPROMISED_HOST
+    NORDIC_WEB_TARGET
+    NORDIC_WEB_PORT
+    NORDIC_INTERNAL_TARGET
+    NORDIC_INCIDENT_IP
+    NORDIC_SSH_USER
+    NORDIC_SSH_PASSWORD
+)
+
+for VAR in "${REQUIRED_VALUES[@]}"; do
+
+    if [[ -z "${!VAR:-}" ]]; then
+        echo
+        echo "[ERROR] $VAR cannot be empty."
+        exit 1
+    fi
+
+done
+
+if ! [[ "$NORDIC_WEB_PORT" =~ ^[0-9]+$ ]] ||
+   (( NORDIC_WEB_PORT < 1 || NORDIC_WEB_PORT > 65535 )); then
+
+    echo "[ERROR] Invalid web port."
+    exit 1
+fi
+
+# ------------------------------------------------------------
+# Export automatic-mode variables
+# ------------------------------------------------------------
+
+export NORDIC_AUTO=1
+
+export NORDIC_INCIDENT_ID
+export NORDIC_COMPROMISED_HOST
+export NORDIC_WEB_TARGET
+export NORDIC_WEB_PORT
+export NORDIC_INTERNAL_TARGET
+export NORDIC_INCIDENT_IP
+export NORDIC_SSH_USER
+export NORDIC_SSH_PASSWORD
+
+MASTER_LOG="$LOG_DIR/${NORDIC_INCIDENT_ID}-FULL-INCIDENT.log"
+
+# ------------------------------------------------------------
+# Confirmation
+# ------------------------------------------------------------
+
+echo
+echo "======================================================"
+echo " INCIDENT CONFIGURATION"
+echo "======================================================"
+echo
+echo "Incident ID      : $NORDIC_INCIDENT_ID"
+echo "Primary target   : $NORDIC_COMPROMISED_HOST"
+echo "Web target       : $NORDIC_WEB_TARGET:$NORDIC_WEB_PORT"
+echo "Internal target  : $NORDIC_INTERNAL_TARGET"
+echo "IncidentVM       : $NORDIC_INCIDENT_IP"
+echo "SSH account      : $NORDIC_SSH_USER"
+echo
+echo "Password is intentionally not displayed."
+echo
+echo "======================================================"
+echo
+
+read -rp "Start full incident? [y/N]: " CONFIRM
+
+case "$CONFIRM" in
+    y|Y|yes|YES)
+        ;;
+    *)
+        echo "Incident cancelled."
+        exit 0
+        ;;
+esac
+
+# ------------------------------------------------------------
+# Master log
+# ------------------------------------------------------------
+
+{
+    echo "=================================================="
+    echo "NORDIC MANUFACTURING A/S"
+    echo "FULL INCIDENT"
+    echo "=================================================="
     echo
-    echo "[*] Waiting before next attack phase..."
+    echo "Incident ID: $NORDIC_INCIDENT_ID"
+    echo "Started: $(date --iso-8601=seconds)"
     echo
+    echo "Primary target: $NORDIC_COMPROMISED_HOST"
+    echo "Web target: $NORDIC_WEB_TARGET:$NORDIC_WEB_PORT"
+    echo "Internal target: $NORDIC_INTERNAL_TARGET"
+    echo "IncidentVM: $NORDIC_INCIDENT_IP"
+    echo "SSH user: $NORDIC_SSH_USER"
+    echo
+} > "$MASTER_LOG"
 
-    sleep "$DELAY"
-}
-
+# ------------------------------------------------------------
+# Helper
+# ------------------------------------------------------------
 
 run_phase() {
 
@@ -109,392 +250,151 @@ run_phase() {
     local SCRIPT="$3"
 
     echo
-    echo "============================================================"
+    echo "======================================================"
     echo " PHASE $NUMBER - $NAME"
-    echo "============================================================"
+    echo "======================================================"
     echo
 
-    log_event "Phase $NUMBER started - $NAME"
+    {
+        echo
+        echo "PHASE $NUMBER - $NAME"
+        echo "Started: $(date --iso-8601=seconds)"
+    } >> "$MASTER_LOG"
 
-    if [[ ! -x "$SCRIPT" ]]; then
-        chmod +x "$SCRIPT"
-    fi
-
-    "$SCRIPT"
+    "$SCRIPT_DIR/$SCRIPT"
 
     RESULT=$?
 
-    if [[ "$RESULT" -eq 0 ]]; then
-
-        log_event "Phase $NUMBER completed - $NAME"
+    if [[ $RESULT -ne 0 ]]; then
 
         echo
-        echo "[+] Phase $NUMBER completed."
-
-    else
-
-        log_event "Phase $NUMBER FAILED - $NAME"
-
+        echo "======================================================"
+        echo " INCIDENT STOPPED"
+        echo "======================================================"
         echo
-        echo "[ERROR] Phase $NUMBER failed."
+        echo "Phase $NUMBER failed:"
+        echo "$NAME"
         echo
 
-        read -rp "Continue incident anyway? [y/N]: " CONTINUE
+        {
+            echo "RESULT: FAILED"
+            echo "Exit code: $RESULT"
+            echo "Incident stopped: $(date --iso-8601=seconds)"
+        } >> "$MASTER_LOG"
 
-        if [[ ! "$CONTINUE" =~ ^[Yy]$ ]]; then
-
-            log_event "Incident stopped by operator"
-
-            exit 1
-        fi
+        exit "$RESULT"
 
     fi
+
+    {
+        echo "RESULT: SUCCESS"
+        echo "Completed: $(date --iso-8601=seconds)"
+    } >> "$MASTER_LOG"
+
+    echo
+    echo "[+] Phase $NUMBER completed."
+
 }
 
-
 # ------------------------------------------------------------
-# Start
-# ------------------------------------------------------------
-
-banner
-
-echo "This scenario will generate a complete security incident"
-echo "inside the Nordic Manufacturing CyberLab."
-echo
-echo "Students should normally NOT see this screen."
-echo
-
-echo "The scenario includes:"
-echo
-echo "  Reconnaissance"
-echo "  Web attack"
-echo "  Authentication attack"
-echo "  Internal discovery"
-echo "  Data collection"
-echo "  Data exfiltration"
-echo "  Ransomware impact"
-echo
-
-read -rp "Press ENTER to configure incident..."
-
-
-# ------------------------------------------------------------
-# Compromised Linux host
+# Random pause
 # ------------------------------------------------------------
 
-echo
-echo "------------------------------------------------------------"
-echo " PRIMARY COMPROMISED HOST"
-echo "------------------------------------------------------------"
-echo
+incident_pause() {
 
-read -rp "Primary Linux target IP: " COMPROMISED_HOST
+    MIN="$1"
+    MAX="$2"
 
-if ! validate_ipv4 "$COMPROMISED_HOST"; then
-    echo "[ERROR] Invalid IPv4 address."
-    exit 1
-fi
+    DELAY=$(( RANDOM % (MAX - MIN + 1) + MIN ))
 
-echo
-
-read -rp "SSH username: " SSH_USER
-read -rsp "SSH password: " SSH_PASSWORD
-
-echo
-
-
-# ------------------------------------------------------------
-# Web target
-# ------------------------------------------------------------
-
-echo
-echo "------------------------------------------------------------"
-echo " WEB TARGET"
-echo "------------------------------------------------------------"
-echo
-
-read -rp "Web server IP: " WEB_TARGET
-read -rp "Web server port [80]: " WEB_PORT
-
-WEB_PORT=${WEB_PORT:-80}
-
-if ! validate_ipv4 "$WEB_TARGET"; then
-    echo "[ERROR] Invalid web target."
-    exit 1
-fi
-
-if ! [[ "$WEB_PORT" =~ ^[0-9]+$ ]] ||
-   (( WEB_PORT < 1 || WEB_PORT > 65535 )); then
-
-    echo "[ERROR] Invalid web port."
-    exit 1
-fi
-
-
-# ------------------------------------------------------------
-# Internal target
-# ------------------------------------------------------------
-
-echo
-echo "------------------------------------------------------------"
-echo " INTERNAL / LATERAL TARGET"
-echo "------------------------------------------------------------"
-echo
-
-read -rp "Internal target IP: " INTERNAL_TARGET
-
-if ! validate_ipv4 "$INTERNAL_TARGET"; then
-    echo "[ERROR] Invalid internal target."
-    exit 1
-fi
-
-
-# ------------------------------------------------------------
-# IncidentVM address
-# ------------------------------------------------------------
-
-echo
-echo "------------------------------------------------------------"
-echo " INCIDENTVM"
-echo "------------------------------------------------------------"
-echo
-
-DEFAULT_INCIDENT_IP=$(hostname -I | awk '{print $1}')
-
-read -rp "IncidentVM IP [$DEFAULT_INCIDENT_IP]: " INCIDENT_IP
-
-INCIDENT_IP=${INCIDENT_IP:-$DEFAULT_INCIDENT_IP}
-
-if ! validate_ipv4 "$INCIDENT_IP"; then
-    echo "[ERROR] Invalid IncidentVM IP."
-    exit 1
-fi
-
-
-# ------------------------------------------------------------
-# Confirmation
-# ------------------------------------------------------------
-
-clear
-
-echo "============================================================"
-echo " INCIDENT CONFIGURATION"
-echo "============================================================"
-echo
-
-echo "Incident ID:"
-echo "  $INCIDENT_ID"
-echo
-
-echo "IncidentVM:"
-echo "  $INCIDENT_IP"
-echo
-
-echo "Primary compromised host:"
-echo "  $COMPROMISED_HOST"
-echo
-
-echo "Web target:"
-echo "  $WEB_TARGET:$WEB_PORT"
-echo
-
-echo "Internal target:"
-echo "  $INTERNAL_TARGET"
-echo
-
-echo "SSH account:"
-echo "  $SSH_USER"
-echo
-
-echo "============================================================"
-echo
-
-read -rp "Type START to launch incident: " CONFIRM
-
-if [[ "$CONFIRM" != "START" ]]; then
     echo
-    echo "Incident cancelled."
-    exit 0
-fi
-
-
-# ------------------------------------------------------------
-# Save teacher configuration
-# ------------------------------------------------------------
-
-cat > "$DATA_DIR/current-incident.conf" <<EOF
-INCIDENT_ID=$INCIDENT_ID
-INCIDENT_IP=$INCIDENT_IP
-COMPROMISED_HOST=$COMPROMISED_HOST
-WEB_TARGET=$WEB_TARGET
-WEB_PORT=$WEB_PORT
-INTERNAL_TARGET=$INTERNAL_TARGET
-SSH_USER=$SSH_USER
-EOF
-
-chmod 600 "$DATA_DIR/current-incident.conf"
-
-
-# ------------------------------------------------------------
-# Start ground truth
-# ------------------------------------------------------------
-
-{
+    echo "[*] Waiting ${DELAY}s before next phase..."
     echo
-    echo "============================================================"
-    echo "INCIDENT START"
-    echo "============================================================"
-    echo "$(date --iso-8601=seconds) | INCIDENT | $INCIDENT_ID"
-    echo "$(date --iso-8601=seconds) | INCIDENT | AttackVM=$INCIDENT_IP"
-    echo "$(date --iso-8601=seconds) | INCIDENT | Primary=$COMPROMISED_HOST"
-    echo "$(date --iso-8601=seconds) | INCIDENT | Web=$WEB_TARGET:$WEB_PORT"
-    echo "$(date --iso-8601=seconds) | INCIDENT | Internal=$INTERNAL_TARGET"
-    echo "============================================================"
-} >> "$GROUNDTRUTH"
 
+    sleep "$DELAY"
 
-log_event "Full H3 incident started"
-
+}
 
 # ------------------------------------------------------------
-# Export scenario configuration
-#
-# Individual scripts will use these variables when running
-# as part of the automatic scenario.
-# ------------------------------------------------------------
-
-export NORDIC_AUTO=1
-
-export NORDIC_COMPROMISED_HOST="$COMPROMISED_HOST"
-export NORDIC_WEB_TARGET="$WEB_TARGET"
-export NORDIC_WEB_PORT="$WEB_PORT"
-
-export NORDIC_INTERNAL_TARGET="$INTERNAL_TARGET"
-
-export NORDIC_INCIDENT_IP="$INCIDENT_IP"
-
-export NORDIC_SSH_USER="$SSH_USER"
-export NORDIC_SSH_PASSWORD="$SSH_PASSWORD"
-
-export NORDIC_INCIDENT_ID="$INCIDENT_ID"
-
-
-# ------------------------------------------------------------
-# PHASE 01
-# Reconnaissance
+# Execute attack chain
 # ------------------------------------------------------------
 
 run_phase \
     "01" \
-    "RECONNAISSANCE" \
-    "$SCRIPT_DIR/01-recon.sh"
+    "Reconnaissance" \
+    "01-recon.sh"
 
-wait_between_phases 5 12
-
-
-# ------------------------------------------------------------
-# PHASE 02
-# Web attack
-# ------------------------------------------------------------
+incident_pause 3 7
 
 run_phase \
     "02" \
-    "WEB APPLICATION ATTACK" \
-    "$SCRIPT_DIR/02-web.sh"
+    "Web Activity" \
+    "02-web.sh"
 
-wait_between_phases 8 15
-
-
-# ------------------------------------------------------------
-# PHASE 03
-# Authentication / Initial Access
-# ------------------------------------------------------------
+incident_pause 3 8
 
 run_phase \
     "03" \
-    "AUTHENTICATION / INITIAL ACCESS" \
-    "$SCRIPT_DIR/03-auth.sh"
+    "Authentication / Initial Access" \
+    "03-auth.sh"
 
-wait_between_phases 10 20
-
-
-# ------------------------------------------------------------
-# PHASE 04
-# Internal discovery
-# ------------------------------------------------------------
+incident_pause 4 10
 
 run_phase \
     "04" \
-    "INTERNAL DISCOVERY / LATERAL ACTIVITY" \
-    "$SCRIPT_DIR/04-lateral.sh"
+    "Internal Discovery / Lateral Movement" \
+    "04-lateral.sh"
 
-wait_between_phases 8 15
-
-
-# ------------------------------------------------------------
-# PHASE 05
-# Collection / staging
-# ------------------------------------------------------------
+incident_pause 3 8
 
 run_phase \
     "05" \
-    "DATA COLLECTION / STAGING" \
-    "$SCRIPT_DIR/05-staging.sh"
+    "Data Discovery / Staging" \
+    "05-staging.sh"
 
-wait_between_phases 10 20
-
-
-# ------------------------------------------------------------
-# PHASE 06
-# Exfiltration
-# ------------------------------------------------------------
+incident_pause 4 10
 
 run_phase \
     "06" \
-    "DATA EXFILTRATION" \
-    "$SCRIPT_DIR/06-exfil.sh"
+    "Data Exfiltration" \
+    "06-exfil.sh"
 
-wait_between_phases 10 20
-
-
-# ------------------------------------------------------------
-# PHASE 07
-# Impact
-# ------------------------------------------------------------
+incident_pause 5 12
 
 run_phase \
     "07" \
-    "RANSOMWARE / IMPACT" \
-    "$SCRIPT_DIR/07-ransomware-sim.sh"
-
+    "Ransomware / Impact" \
+    "07-ransomware-sim.sh"
 
 # ------------------------------------------------------------
-# Incident complete
+# Complete
 # ------------------------------------------------------------
-
-log_event "Full H3 incident completed"
-
 
 {
-    echo "============================================================"
-    echo "$(date --iso-8601=seconds) | INCIDENT | INCIDENT COMPLETE"
-    echo "============================================================"
-} >> "$GROUNDTRUTH"
-
+    echo
+    echo "=================================================="
+    echo "INCIDENT COMPLETE"
+    echo "Completed: $(date --iso-8601=seconds)"
+    echo "=================================================="
+} >> "$MASTER_LOG"
 
 echo
-echo "============================================================"
-echo " H3 SECURITY INCIDENT COMPLETE"
-echo "============================================================"
+echo "======================================================"
+echo "       FULL INCIDENT COMPLETE"
+echo "======================================================"
 echo
 echo "Incident ID:"
-echo "  $INCIDENT_ID"
+echo "  $NORDIC_INCIDENT_ID"
 echo
-echo "Ground truth:"
-echo "  $GROUNDTRUTH"
+echo "Master log:"
+echo "  $MASTER_LOG"
 echo
-echo "Scenario log:"
-echo "  $SCENARIO_LOG"
+echo "Phase logs:"
+echo "  $LOG_DIR/${NORDIC_INCIDENT_ID}-*.log"
+echo
+echo "Exfiltrated files:"
+echo "  /opt/nordic-attack/uploads/"
 echo
 echo "The CyberLab is now ready for student investigation."
+echo "======================================================"
 echo
