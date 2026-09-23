@@ -126,6 +126,9 @@ runcmd:
 
   - chown -R ubuntu:ubuntu /opt/nordic-attack
 
+  - sed -i 's/\r$//' /opt/nordic-attack/attackctl
+  - chmod +x /opt/nordic-attack/attackctl
+  - ln -sf /opt/nordic-attack/attackctl /usr/local/bin/attackctl
 
   # --------------------------------------------------
   # Convenience command
