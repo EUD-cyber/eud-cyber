@@ -1,5 +1,4 @@
 #!/bin/bash
-
 BASE_DIR="/opt/nordic-attack"
 SCRIPT_DIR="$BASE_DIR/scripts"
 SCENARIO_DIR="$BASE_DIR/scenarios"
