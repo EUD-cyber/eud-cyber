@@ -32,8 +32,10 @@ MEMORY=4096       # in MB
 CORES=4
 DISK_SIZE="32G"    # the number is in GB
 BRIDGE="lab${LAB}_lan1"
+BRIDGE2="lab${LAB}_lan2"
 BRIDGE1="lab${LAB}_oobm"
 IP_ADDR="ip=192.168.1.254/24"
+IP_ADDR2="ip=192.168.2.254/24"
 DNS_SERVER="192.168.1.1"
 IP_GW="gw=192.168.1.1"
 OOBM_IP="ip=172.20.0.254/24"
@@ -87,6 +89,7 @@ qm create $VMID \
   --cpu host \
   --net0 virtio,bridge=$BRIDGE \
   --net1 virtio,bridge=$BRIDGE1 \
+  --net2 virtio,bridge=$BRIDGE2 \
   --ostype l26
 
 # ===== Add LVM disk =====
@@ -112,6 +115,7 @@ qm set $VMID --onboot 1
 # ===== Cloud-init =====
 qm set $VMID --ipconfig0 $IP_ADDR,$IP_GW \
   --ipconfig1 $OOBM_IP \
+  --ipconfig2 $IP_ADDR2 \
   --searchdomain cloud.local \
   --nameserver $DNS_SERVER \
   --ciupgrade \
