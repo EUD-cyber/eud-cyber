@@ -38,7 +38,7 @@ packages:
   - net-tools
   - openssh-client
   - qemu-guest-agent
-
+  - sshpass
 
 runcmd:
 
