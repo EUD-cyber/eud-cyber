@@ -198,18 +198,30 @@ echo
 
 echo "[3/5] Testing receiver..."
 
-HEALTH=$(curl -s \
+HTTP_CODE=$(curl \
+    -s \
+    -o /tmp/nordic-sink-health.txt \
+    -w "%{http_code}" \
     --max-time 3 \
     "http://127.0.0.1:$SINK_PORT/health" \
     2>/dev/null || true)
 
-if [[ "$HEALTH" != *"OK"* && "$HEALTH" != *"ok"* ]]; then
+HEALTH=$(cat /tmp/nordic-sink-health.txt 2>/dev/null || true)
+rm -f /tmp/nordic-sink-health.txt
+
+if [[ "$HTTP_CODE" != "200" ]]; then
     echo "[ERROR] Receiver health check failed."
+    echo "HTTP status: ${HTTP_CODE:-NONE}"
+    echo "Response: ${HEALTH:-NONE}"
+    echo "Check: $SINK_LOG"
     exit 1
 fi
 
 echo "[+] Receiver ready."
+echo "    HTTP: $HTTP_CODE"
+echo "    Response: $HEALTH"
 echo
+
 sleep 2
 
 # ------------------------------------------------------------
