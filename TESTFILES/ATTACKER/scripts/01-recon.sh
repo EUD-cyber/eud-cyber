@@ -7,6 +7,14 @@
 # Purpose:
 #   Simulate attacker reconnaissance against a lab target.
 #
+# Modes:
+#   MANUAL:
+#       User enters target IP.
+#
+#   AUTO:
+#       Target is supplied by full-incident-h3.sh through:
+#       NORDIC_COMPROMISED_HOST
+#
 # Evidence:
 #   - ICMP traffic
 #   - TCP SYN scanning
@@ -28,6 +36,7 @@ TIMESTAMP=$(date +"%Y%m%d-%H%M%S")
 LOGFILE="$LOG_DIR/recon-$TIMESTAMP.log"
 GROUNDTRUTH="$LOG_DIR/incident-ground-truth.log"
 
+
 # ------------------------------------------------------------
 # Functions
 # ------------------------------------------------------------
@@ -44,6 +53,32 @@ banner() {
     echo
 }
 
+validate_ipv4() {
+
+    local IP="$1"
+
+    if [[ -z "$IP" ]]; then
+        return 1
+    fi
+
+    if ! [[ "$IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+        return 1
+    fi
+
+    IFS='.' read -r o1 o2 o3 o4 <<< "$IP"
+
+    for octet in "$o1" "$o2" "$o3" "$o4"; do
+
+        if (( octet < 0 || octet > 255 )); then
+            return 1
+        fi
+
+    done
+
+    return 0
+}
+
+
 # ------------------------------------------------------------
 # Start
 # ------------------------------------------------------------
@@ -52,31 +87,71 @@ banner
 
 echo "This simulation performs reconnaissance against a lab host."
 echo
-read -rp "Target IP: " TARGET
 
-if [[ -z "$TARGET" ]]; then
-    echo
-    echo "[ERROR] No target specified."
-    exit 1
-fi
 
-# Only allow IPv4 addresses
-if ! [[ "$TARGET" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-    echo
-    echo "[ERROR] Invalid IPv4 address."
-    exit 1
-fi
+# ------------------------------------------------------------
+# Input
+# Manual mode / Full incident automatic mode
+# ------------------------------------------------------------
 
-# Validate each octet
-IFS='.' read -r o1 o2 o3 o4 <<< "$TARGET"
+if [[ "${NORDIC_AUTO:-0}" == "1" ]]; then
 
-for octet in "$o1" "$o2" "$o3" "$o4"; do
-    if (( octet < 0 || octet > 255 )); then
-        echo
-        echo "[ERROR] Invalid IPv4 address."
+    # --------------------------------------------------------
+    # Automatic mode
+    # --------------------------------------------------------
+
+    if [[ -z "${NORDIC_COMPROMISED_HOST:-}" ]]; then
+
+        echo "[ERROR] Automatic mode enabled but"
+        echo "        NORDIC_COMPROMISED_HOST is not set."
+
         exit 1
+
     fi
-done
+
+    TARGET="$NORDIC_COMPROMISED_HOST"
+
+    echo "[AUTO MODE]"
+    echo
+    echo "Target supplied by Full H3 Incident:"
+    echo
+    echo "  $TARGET"
+    echo
+
+else
+
+    # --------------------------------------------------------
+    # Manual mode
+    # --------------------------------------------------------
+
+    echo "[MANUAL MODE]"
+    echo
+
+    read -rp "Target IP: " TARGET
+
+fi
+
+
+# ------------------------------------------------------------
+# Validate target
+# ------------------------------------------------------------
+
+if ! validate_ipv4 "$TARGET"; then
+
+    echo
+    echo "[ERROR] Invalid IPv4 address:"
+    echo
+    echo "  $TARGET"
+    echo
+
+    exit 1
+
+fi
+
+
+# ------------------------------------------------------------
+# Attack information
+# ------------------------------------------------------------
 
 echo
 echo "Target: $TARGET"
@@ -108,7 +183,12 @@ log_event "ICMP host discovery against $TARGET"
 {
     echo
     echo "===== HOST DISCOVERY ====="
-    ping -c 3 -W 1 "$TARGET"
+
+    ping \
+        -c 3 \
+        -W 1 \
+        "$TARGET"
+
 } >> "$LOGFILE" 2>&1
 
 sleep 2
@@ -178,6 +258,7 @@ log_event "HTTP reconnaissance against $TARGET"
 
     echo
     echo "--- HTTP :80 ---"
+
     curl \
         --connect-timeout 3 \
         --max-time 5 \
@@ -185,8 +266,10 @@ log_event "HTTP reconnaissance against $TARGET"
         -I \
         "http://$TARGET/" 2>&1 || true
 
+
     echo
     echo "--- HTTP :8080 ---"
+
     curl \
         --connect-timeout 3 \
         --max-time 5 \
@@ -194,8 +277,10 @@ log_event "HTTP reconnaissance against $TARGET"
         -I \
         "http://$TARGET:8080/" 2>&1 || true
 
+
     echo
     echo "--- HTTPS :443 ---"
+
     curl \
         -k \
         --connect-timeout 3 \
@@ -218,7 +303,8 @@ echo "============================================================"
 echo " Reconnaissance completed"
 echo "============================================================"
 echo
-echo "Target: $TARGET"
+echo "Target:"
+echo "  $TARGET"
 echo
 echo "Attack log:"
 echo "  $LOGFILE"
