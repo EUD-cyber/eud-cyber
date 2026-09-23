@@ -1,0 +1,138 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    background: #080d12;
+    color: #d7e2ea;
+    font-family: Consolas, Monaco, monospace;
+}
+
+.container {
+    width: 1100px;
+    max-width: 95%;
+    margin: 40px auto;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 30px;
+}
+
+header h1 {
+    margin: 0;
+    color: #38e89d;
+    letter-spacing: 2px;
+}
+
+header p {
+    margin-top: 6px;
+    color: #7c8c98;
+}
+
+.status {
+    color: #38e89d;
+}
+
+.status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    background: #38e89d;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.card {
+    background: #101820;
+    border: 1px solid #26333d;
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 20px;
+}
+
+.card h2 {
+    margin-top: 0;
+    color: #ffffff;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+}
+
+label {
+    color: #8fa3b0;
+    font-size: 14px;
+}
+
+input {
+    display: block;
+    width: 100%;
+    margin-top: 7px;
+    padding: 11px;
+    background: #070c10;
+    border: 1px solid #31404c;
+    color: #ffffff;
+    border-radius: 4px;
+    font-family: inherit;
+}
+
+input:focus {
+    outline: none;
+    border-color: #38e89d;
+}
+
+.phases {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+button {
+    background: #14232b;
+    color: #38e89d;
+    border: 1px solid #2b4a57;
+    border-radius: 5px;
+    padding: 20px 10px;
+    font-family: inherit;
+    font-size: 20px;
+    cursor: pointer;
+}
+
+button span {
+    display: block;
+    color: #c9d5dc;
+    font-size: 12px;
+    margin-top: 7px;
+}
+
+button:hover {
+    background: #19333b;
+    border-color: #38e89d;
+}
+
+pre {
+    min-height: 100px;
+    background: #05090c;
+    padding: 15px;
+    overflow: auto;
+    color: #7df7bd;
+    border-radius: 4px;
+}
+
+@media(max-width: 800px) {
+
+    .grid {
+        grid-template-columns: 1fr;
+    }
+
+    .phases {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+}

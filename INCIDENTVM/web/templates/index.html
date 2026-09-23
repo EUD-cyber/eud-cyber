@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Nordic Manufacturing - Incident Control</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+<div class="container">
+
+    <header>
+        <div>
+            <h1>NORDIC MANUFACTURING</h1>
+            <p>Incident / Attack Control</p>
+        </div>
+
+        <div class="status">
+            <span class="status-dot"></span>
+            IncidentVM ONLINE
+        </div>
+    </header>
+
+
+    <section class="card">
+
+        <h2>Incident Configuration</h2>
+
+        <div class="grid">
+
+            <label>
+                Compromised Linux Host
+                <input id="compromised_host"
+                       value="192.168.1.20">
+            </label>
+
+            <label>
+                Web Server
+                <input id="web_target"
+                       value="192.168.1.21">
+            </label>
+
+            <label>
+                Web Port
+                <input id="web_port"
+                       value="80">
+            </label>
+
+            <label>
+                Internal Target
+                <input id="internal_target"
+                       value="192.168.2.22">
+            </label>
+
+            <label>
+                IncidentVM IP
+                <input id="incident_ip"
+                       value="192.168.1.254">
+            </label>
+
+            <label>
+                SSH Username
+                <input id="ssh_user"
+                       value="ubuntu">
+            </label>
+
+            <label>
+                SSH Password
+                <input id="ssh_password"
+                       type="password">
+            </label>
+
+        </div>
+
+    </section>
+
+
+    <section class="card">
+
+        <h2>Attack Phases</h2>
+
+        <div class="phases">
+
+            <button onclick="runPhase('recon')">
+                01
+                <span>Reconnaissance</span>
+            </button>
+
+            <button onclick="runPhase('web')">
+                02
+                <span>Web Attack</span>
+            </button>
+
+            <button onclick="runPhase('auth')">
+                03
+                <span>Initial Access</span>
+            </button>
+
+            <button onclick="runPhase('lateral')">
+                04
+                <span>Internal Discovery</span>
+            </button>
+
+            <button onclick="runPhase('staging')">
+                05
+                <span>Data Staging</span>
+            </button>
+
+            <button onclick="runPhase('exfil')">
+                06
+                <span>Exfiltration</span>
+            </button>
+
+            <button onclick="runPhase('ransomware')">
+                07
+                <span>Impact</span>
+            </button>
+
+        </div>
+
+    </section>
+
+
+    <section class="card">
+
+        <h2>Activity</h2>
+
+        <pre id="output">Ready.</pre>
+
+    </section>
+
+</div>
+
+
+<script>
+
+function configuration() {
+
+    return {
+
+        compromised_host:
+            document.getElementById("compromised_host").value,
+
+        web_target:
+            document.getElementById("web_target").value,
+
+        web_port:
+            document.getElementById("web_port").value,
+
+        internal_target:
+            document.getElementById("internal_target").value,
+
+        incident_ip:
+            document.getElementById("incident_ip").value,
+
+        ssh_user:
+            document.getElementById("ssh_user").value,
+
+        ssh_password:
+            document.getElementById("ssh_password").value
+
+    };
+
+}
+
+
+async function runPhase(phase) {
+
+    const output =
+        document.getElementById("output");
+
+    output.textContent =
+        "Starting " + phase + "...";
+
+    try {
+
+        const response =
+            await fetch("/api/run/" + phase, {
+
+                method: "POST",
+
+                headers: {
+                    "Content-Type": "application/json"
+                },
+
+                body: JSON.stringify(
+                    configuration()
+                )
+
+            });
+
+        const result =
+            await response.json();
+
+        output.textContent =
+            JSON.stringify(
+                result,
+                null,
+                2
+            );
+
+    }
+
+    catch(error) {
+
+        output.textContent =
+            "ERROR: " + error;
+
+    }
+
+}
+
+</script>
+
+</body>
+</html>
