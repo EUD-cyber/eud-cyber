@@ -18,6 +18,10 @@ chpasswd:
   expire: false
 
 
+# ============================================================
+# PACKAGES
+# ============================================================
+
 packages:
   - ca-certificates
   - curl
@@ -41,180 +45,249 @@ packages:
   - sshpass
 
 
+# ============================================================
+# SYSTEMD SERVICE
+# ============================================================
+
 write_files:
 
-  # --------------------------------------------------
-  # Nordic Incident Control Web GUI service
-  # --------------------------------------------------
-
   - path: /etc/systemd/system/nordic-incident-web.service
+    owner: root:root
     permissions: '0644'
     content: |
       [Unit]
       Description=Nordic Manufacturing Incident Control Web GUI
-      After=network-online.target
       Wants=network-online.target
+      After=network-online.target
 
       [Service]
       Type=simple
-      User=root
-      Group=root
+
+      User=ubuntu
+      Group=ubuntu
+
       WorkingDirectory=/opt/nordic-attack/web
+
       ExecStart=/usr/bin/python3 /opt/nordic-attack/web/app.py
+
       Restart=on-failure
       RestartSec=5
+
+      StandardOutput=journal
+      StandardError=journal
 
       [Install]
       WantedBy=multi-user.target
 
 
+# ============================================================
+# INSTALLATION
+# ============================================================
+
 runcmd:
 
-  # ==================================================
-  # SYSTEM
-  # ==================================================
+  # ----------------------------------------------------------
+  # Installation log
+  # ----------------------------------------------------------
+
+  - touch /var/log/nordic-incident-install.log
+
+  - echo "==============================================" >> /var/log/nordic-incident-install.log
+  - echo "Nordic IncidentVM installation starting" >> /var/log/nordic-incident-install.log
+  - date >> /var/log/nordic-incident-install.log
+  - echo "==============================================" >> /var/log/nordic-incident-install.log
+
+
+  # ----------------------------------------------------------
+  # System update
+  # ----------------------------------------------------------
 
   - apt-get update
+
+
+  # ----------------------------------------------------------
+  # QEMU Guest Agent
+  # ----------------------------------------------------------
 
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
 
 
-  # ==================================================
+  # ==========================================================
   # DIRECTORY STRUCTURE
-  # ==================================================
+  # ==========================================================
 
   - mkdir -p /opt/nordic-attack
+
   - mkdir -p /opt/nordic-attack/scripts
+
   - mkdir -p /opt/nordic-attack/scenarios
+
   - mkdir -p /opt/nordic-attack/logs
+
   - mkdir -p /opt/nordic-attack/uploads
+
   - mkdir -p /opt/nordic-attack/data
 
   - mkdir -p /opt/nordic-attack/web
+
   - mkdir -p /opt/nordic-attack/web/templates
+
   - mkdir -p /opt/nordic-attack/web/static
 
 
-  # ==================================================
+  # ==========================================================
   # ATTACK ENGINE
   #
   # GitHub:
   # TESTFILES/ATTACKER/
-  # ==================================================
+  # ==========================================================
 
 
-  # --------------------------------------------------
-  # Attack controller
-  # --------------------------------------------------
+  # ----------------------------------------------------------
+  # attackctl
+  # ----------------------------------------------------------
 
-  - wget -q --show-progress -O /opt/nordic-attack/attackctl https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/attackctl
-
-
-  # --------------------------------------------------
-  # Phase 01 - Recon
-  # --------------------------------------------------
-
-  - wget -q --show-progress -O /opt/nordic-attack/scripts/01-recon.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/01-recon.sh
+  - wget -O /opt/nordic-attack/attackctl https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/attackctl
 
 
-  # --------------------------------------------------
-  # Phase 02 - Web
-  # --------------------------------------------------
+  # ----------------------------------------------------------
+  # 01 - Recon
+  # ----------------------------------------------------------
 
-  - wget -q --show-progress -O /opt/nordic-attack/scripts/02-web.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/02-web.sh
-
-
-  # --------------------------------------------------
-  # Phase 03 - Authentication / Initial Access
-  # --------------------------------------------------
-
-  - wget -q --show-progress -O /opt/nordic-attack/scripts/03-auth.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/03-auth.sh
+  - wget -O /opt/nordic-attack/scripts/01-recon.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/01-recon.sh
 
 
-  # --------------------------------------------------
-  # Phase 04 - Internal Discovery / Lateral Movement
-  # --------------------------------------------------
+  # ----------------------------------------------------------
+  # 02 - Web
+  # ----------------------------------------------------------
 
-  - wget -q --show-progress -O /opt/nordic-attack/scripts/04-lateral.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/04-lateral.sh
-
-
-  # --------------------------------------------------
-  # Phase 05 - Data Staging
-  # --------------------------------------------------
-
-  - wget -q --show-progress -O /opt/nordic-attack/scripts/05-staging.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/05-staging.sh
+  - wget -O /opt/nordic-attack/scripts/02-web.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/02-web.sh
 
 
-  # --------------------------------------------------
-  # Phase 06 - Data Exfiltration
-  # --------------------------------------------------
+  # ----------------------------------------------------------
+  # 03 - Authentication / Initial Access
+  # ----------------------------------------------------------
 
-  - wget -q --show-progress -O /opt/nordic-attack/scripts/06-exfil.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/06-exfil.sh
-
-
-  # --------------------------------------------------
-  # Phase 07 - Ransomware / Impact simulation
-  # --------------------------------------------------
-
-  - wget -q --show-progress -O /opt/nordic-attack/scripts/07-ransomware-sim.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/07-ransomware-sim.sh
+  - wget -O /opt/nordic-attack/scripts/03-auth.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/03-auth.sh
 
 
-  # --------------------------------------------------
-  # Controlled exfiltration receiver
-  # --------------------------------------------------
+  # ----------------------------------------------------------
+  # 04 - Internal Discovery / Lateral Movement
+  # ----------------------------------------------------------
 
-  - wget -q --show-progress -O /opt/nordic-attack/sink.py https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/sink.py
+  - wget -O /opt/nordic-attack/scripts/04-lateral.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/04-lateral.sh
 
 
-  # --------------------------------------------------
+  # ----------------------------------------------------------
+  # 05 - Data Staging
+  # ----------------------------------------------------------
+
+  - wget -O /opt/nordic-attack/scripts/05-staging.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/05-staging.sh
+
+
+  # ----------------------------------------------------------
+  # 06 - Exfiltration
+  # ----------------------------------------------------------
+
+  - wget -O /opt/nordic-attack/scripts/06-exfil.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/06-exfil.sh
+
+
+  # ----------------------------------------------------------
+  # 07 - Ransomware simulation
+  # ----------------------------------------------------------
+
+  - wget -O /opt/nordic-attack/scripts/07-ransomware-sim.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/07-ransomware-sim.sh
+
+
+  # ----------------------------------------------------------
+  # Exfiltration receiver
+  # ----------------------------------------------------------
+
+  - wget -O /opt/nordic-attack/sink.py https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/sink.py
+
+
+  # ----------------------------------------------------------
   # Full H3 Incident
-  # --------------------------------------------------
+  # ----------------------------------------------------------
 
-  - wget -q --show-progress -O /opt/nordic-attack/scenarios/full-incident-h3.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scenarios/full-incident-h3.sh
+  - wget -O /opt/nordic-attack/scenarios/full-incident-h3.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scenarios/full-incident-h3.sh
 
 
-  # ==================================================
+  # ==========================================================
   # INCIDENTVM WEB GUI
   #
   # GitHub:
   # INCIDENTVM/web/
-  # ==================================================
+  # ==========================================================
 
 
-  # --------------------------------------------------
+  # ----------------------------------------------------------
   # Flask application
-  # --------------------------------------------------
+  # ----------------------------------------------------------
 
-  - wget -q --show-progress -O /opt/nordic-attack/web/app.py https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INCIDENTVM/web/app.py
-
-
-  # --------------------------------------------------
-  # HTML
-  # --------------------------------------------------
-
-  - wget -q --show-progress -O /opt/nordic-attack/web/templates/index.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INCIDENTVM/web/templates/index.html
+  - wget -O /opt/nordic-attack/web/app.py https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INCIDENTVM/web/app.py
 
 
-  # --------------------------------------------------
+  # ----------------------------------------------------------
+  # HTML template
+  # ----------------------------------------------------------
+
+  - wget -O /opt/nordic-attack/web/templates/index.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INCIDENTVM/web/templates/index.html
+
+
+  # ----------------------------------------------------------
   # CSS
-  # --------------------------------------------------
+  # ----------------------------------------------------------
 
-  - wget -q --show-progress -O /opt/nordic-attack/web/static/style.css https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INCIDENTVM/web/static/style.css
+  - wget -O /opt/nordic-attack/web/static/style.css https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INCIDENTVM/web/static/style.css
 
 
-  # ==================================================
-  # LINE ENDINGS
-  # ==================================================
+  # ==========================================================
+  # VERIFY DOWNLOADED FILES
+  # ==========================================================
 
-  # attackctl currently requires CRLF cleanup
+  - test -s /opt/nordic-attack/attackctl
+
+  - test -s /opt/nordic-attack/scripts/01-recon.sh
+
+  - test -s /opt/nordic-attack/scripts/02-web.sh
+
+  - test -s /opt/nordic-attack/scripts/03-auth.sh
+
+  - test -s /opt/nordic-attack/scripts/04-lateral.sh
+
+  - test -s /opt/nordic-attack/scripts/05-staging.sh
+
+  - test -s /opt/nordic-attack/scripts/06-exfil.sh
+
+  - test -s /opt/nordic-attack/scripts/07-ransomware-sim.sh
+
+  - test -s /opt/nordic-attack/sink.py
+
+  - test -s /opt/nordic-attack/scenarios/full-incident-h3.sh
+
+  - test -s /opt/nordic-attack/web/app.py
+
+  - test -s /opt/nordic-attack/web/templates/index.html
+
+  - test -s /opt/nordic-attack/web/static/style.css
+
+
+  # ==========================================================
+  # FIX WINDOWS CRLF
+  # ==========================================================
 
   - sed -i 's/\r$//' /opt/nordic-attack/attackctl
 
+  - sed -i 's/\r$//' /opt/nordic-attack/scripts/*.sh
 
-  # ==================================================
+  - sed -i 's/\r$//' /opt/nordic-attack/scenarios/*.sh
+
+
+  # ==========================================================
   # PERMISSIONS
-  # ==================================================
+  # ==========================================================
 
   - chmod 755 /opt/nordic-attack/attackctl
 
@@ -233,16 +306,23 @@ runcmd:
   - chown -R ubuntu:ubuntu /opt/nordic-attack
 
 
-  # ==================================================
-  # ATTACKCTL CLI
-  # ==================================================
+  # ==========================================================
+  # CLI COMMAND
+  # ==========================================================
 
   - ln -sf /opt/nordic-attack/attackctl /usr/local/bin/attackctl
 
 
-  # ==================================================
-  # WEB GUI
-  # ==================================================
+  # ==========================================================
+  # VERIFY PYTHON / FLASK APPLICATION
+  # ==========================================================
+
+  - /usr/bin/python3 -m py_compile /opt/nordic-attack/web/app.py
+
+
+  # ==========================================================
+  # SYSTEMD WEB GUI
+  # ==========================================================
 
   - systemctl daemon-reload
 
@@ -251,42 +331,92 @@ runcmd:
   - systemctl start nordic-incident-web.service
 
 
-  # ==================================================
+  # ----------------------------------------------------------
+  # Give Flask a moment to start
+  # ----------------------------------------------------------
+
+  - sleep 3
+
+
+  # ==========================================================
   # INSTALLATION MARKER
-  # ==================================================
+  # ==========================================================
 
   - echo "Nordic IncidentVM installation completed" > /opt/nordic-attack/INSTALL_COMPLETE
 
   - date >> /opt/nordic-attack/INSTALL_COMPLETE
 
-  - echo "Attack CLI installed: /usr/local/bin/attackctl" >> /opt/nordic-attack/INSTALL_COMPLETE
+  - echo "" >> /opt/nordic-attack/INSTALL_COMPLETE
 
-  - echo "Web GUI installed: TCP/8080" >> /opt/nordic-attack/INSTALL_COMPLETE
+  - echo "CLI:" >> /opt/nordic-attack/INSTALL_COMPLETE
 
-
-  # ==================================================
-  # VERIFY INSTALLATION
-  # ==================================================
+  - echo "/usr/local/bin/attackctl" >> /opt/nordic-attack/INSTALL_COMPLETE
 
   - echo "" >> /opt/nordic-attack/INSTALL_COMPLETE
 
+  - echo "WEB GUI:" >> /opt/nordic-attack/INSTALL_COMPLETE
+
+  - echo "TCP/8080" >> /opt/nordic-attack/INSTALL_COMPLETE
+
+  - echo "" >> /opt/nordic-attack/INSTALL_COMPLETE
+
+
+  # ==========================================================
+  # VERIFY WEB SERVICE
+  # ==========================================================
+
   - echo "=== WEB SERVICE ===" >> /opt/nordic-attack/INSTALL_COMPLETE
+
+  - systemctl is-enabled nordic-incident-web.service >> /opt/nordic-attack/INSTALL_COMPLETE 2>&1 || true
 
   - systemctl is-active nordic-incident-web.service >> /opt/nordic-attack/INSTALL_COMPLETE 2>&1 || true
 
   - echo "" >> /opt/nordic-attack/INSTALL_COMPLETE
 
+
+  # ==========================================================
+  # VERIFY TCP 8080
+  # ==========================================================
+
   - echo "=== TCP 8080 ===" >> /opt/nordic-attack/INSTALL_COMPLETE
 
-  - ss -lntp | grep 8080 >> /opt/nordic-attack/INSTALL_COMPLETE 2>&1 || true
+  - ss -lntp | grep ':8080' >> /opt/nordic-attack/INSTALL_COMPLETE 2>&1 || true
+
+  - echo "" >> /opt/nordic-attack/INSTALL_COMPLETE
 
 
-# ====================================================
-# POWER OFF WHEN CLOUD-INIT IS COMPLETE
-# ====================================================
+  # ==========================================================
+  # VERIFY LOCAL WEB API
+  # ==========================================================
+
+  - echo "=== WEB API HEALTH ===" >> /opt/nordic-attack/INSTALL_COMPLETE
+
+  - curl --max-time 5 -s http://127.0.0.1:8080/api/health >> /opt/nordic-attack/INSTALL_COMPLETE 2>&1 || true
+
+  - echo "" >> /opt/nordic-attack/INSTALL_COMPLETE
+
+
+  # ==========================================================
+  # INSTALLATION LOG
+  # ==========================================================
+
+  - echo "==============================================" >> /var/log/nordic-incident-install.log
+
+  - echo "Nordic IncidentVM installation completed" >> /var/log/nordic-incident-install.log
+
+  - date >> /var/log/nordic-incident-install.log
+
+  - systemctl --no-pager status nordic-incident-web.service >> /var/log/nordic-incident-install.log 2>&1 || true
+
+  - echo "==============================================" >> /var/log/nordic-incident-install.log
+
+
+# ============================================================
+# POWER OFF AFTER CLOUD-INIT
+# ============================================================
 
 power_state:
   mode: poweroff
-  message: "Cloud-init finished - powering off"
+  message: "Nordic IncidentVM cloud-init completed - powering off"
   timeout: 30
-  condition: True
+  condition: true
