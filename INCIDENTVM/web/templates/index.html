@@ -259,7 +259,33 @@
         </div>
 
 
+        <!-- Campaign / phase summary -->
+
         <pre id="output">IncidentVM ready.</pre>
+
+
+        <!-- Live campaign output -->
+
+        <div
+            id="liveLogContainer"
+            style="display:none;"
+        >
+
+            <div
+                style="
+                    margin-top:25px;
+                    margin-bottom:12px;
+                    color:#38e89d;
+                    font-weight:bold;
+                    letter-spacing:1px;
+                "
+            >
+                LIVE CAMPAIGN OUTPUT
+            </div>
+
+            <pre id="liveOutput">Waiting for campaign output...</pre>
+
+        </div>
 
     </section>
 
@@ -268,61 +294,70 @@
 
 <script>
 
-/*
- * =========================================================
- * Read incident configuration
- * =========================================================
- */
+/* =========================================================
+   GLOBAL STATE
+   ========================================================= */
+
+let campaignTimer = null;
+
+
+/* =========================================================
+   READ CONFIGURATION
+   ========================================================= */
 
 function configuration() {
 
     return {
 
         compromised_host:
-            document.getElementById(
-                "compromised_host"
-            ).value.trim(),
+            document
+                .getElementById("compromised_host")
+                .value
+                .trim(),
 
         web_target:
-            document.getElementById(
-                "web_target"
-            ).value.trim(),
+            document
+                .getElementById("web_target")
+                .value
+                .trim(),
 
         web_port:
-            document.getElementById(
-                "web_port"
-            ).value.trim(),
+            document
+                .getElementById("web_port")
+                .value
+                .trim(),
 
         internal_target:
-            document.getElementById(
-                "internal_target"
-            ).value.trim(),
+            document
+                .getElementById("internal_target")
+                .value
+                .trim(),
 
         incident_ip:
-            document.getElementById(
-                "incident_ip"
-            ).value.trim(),
+            document
+                .getElementById("incident_ip")
+                .value
+                .trim(),
 
         ssh_user:
-            document.getElementById(
-                "ssh_user"
-            ).value.trim(),
+            document
+                .getElementById("ssh_user")
+                .value
+                .trim(),
 
         ssh_password:
-            document.getElementById(
-                "ssh_password"
-            ).value
+            document
+                .getElementById("ssh_password")
+                .value
 
     };
 
 }
 
 
-/*
- * =========================================================
- * Validate configuration
- * =========================================================
- */
+/* =========================================================
+   VALIDATE CONFIGURATION
+   ========================================================= */
 
 function validateConfiguration(config) {
 
@@ -355,19 +390,30 @@ function validateConfiguration(config) {
     }
 
     return null;
+
 }
 
 
-/*
- * =========================================================
- * Run individual attack phase
- * =========================================================
- */
+/* =========================================================
+   INDIVIDUAL ATTACK PHASE
+   ========================================================= */
 
 async function runPhase(phase) {
 
     const output =
         document.getElementById("output");
+
+    const liveContainer =
+        document.getElementById("liveLogContainer");
+
+
+    /*
+     * Hide campaign live output when running
+     * an individual phase.
+     */
+
+    liveContainer.style.display = "none";
+
 
     const config =
         configuration();
@@ -418,11 +464,21 @@ async function runPhase(phase) {
 
         output.textContent =
             "Attack phase started.\n\n" +
-            JSON.stringify(
-                result,
-                null,
-                2
-            );
+
+            "Incident ID : " +
+            result.incident_id +
+            "\n" +
+
+            "Phase       : " +
+            result.phase +
+            "\n" +
+
+            "PID         : " +
+            result.pid +
+            "\n" +
+
+            "Log         : " +
+            result.log;
 
     }
 
@@ -437,33 +493,34 @@ async function runPhase(phase) {
 }
 
 
-/*
- * =========================================================
- * Start H3 Full Incident Campaign
- * =========================================================
- */
+/* =========================================================
+   START FULL H3 CAMPAIGN
+   ========================================================= */
 
 async function startCampaign() {
 
     const output =
         document.getElementById("output");
 
+    const liveOutput =
+        document.getElementById("liveOutput");
+
+    const liveContainer =
+        document.getElementById("liveLogContainer");
+
     const status =
-        document.getElementById(
-            "campaignStatus"
-        );
+        document.getElementById("campaignStatus");
 
     const button =
-        document.getElementById(
-            "campaignButton"
-        );
+        document.getElementById("campaignButton");
+
 
     const config =
         configuration();
 
 
     /*
-     * Validate required fields
+     * Validate
      */
 
     const validationError =
@@ -478,6 +535,7 @@ async function startCampaign() {
         status.className =
             "campaign-status error";
 
+
         output.textContent =
             "Configuration error:\n\n" +
             validationError;
@@ -487,7 +545,32 @@ async function startCampaign() {
 
 
     /*
-     * Update GUI
+     * Stop previous monitor if present
+     */
+
+    if (campaignTimer) {
+
+        clearInterval(campaignTimer);
+
+        campaignTimer = null;
+
+    }
+
+
+    /*
+     * Reset live terminal
+     */
+
+    liveContainer.style.display =
+        "block";
+
+
+    liveOutput.textContent =
+        "Waiting for campaign output...";
+
+
+    /*
+     * GUI state
      */
 
     status.textContent =
@@ -495,6 +578,7 @@ async function startCampaign() {
 
     status.className =
         "campaign-status running";
+
 
     button.disabled =
         true;
@@ -522,9 +606,13 @@ async function startCampaign() {
 
         "IncidentVM       : " +
         config.incident_ip +
+        "\n" +
+
+        "SSH User         : " +
+        config.ssh_user +
         "\n\n" +
 
-        "Waiting for campaign controller...\n";
+        "Waiting for campaign controller...";
 
 
     try {
@@ -550,8 +638,14 @@ async function startCampaign() {
             await response.json();
 
 
-        if (!response.ok ||
-            !result.success) {
+        /*
+         * Campaign failed to start
+         */
+
+        if (
+            !response.ok ||
+            !result.success
+        ) {
 
             status.textContent =
                 "ERROR";
@@ -559,11 +653,16 @@ async function startCampaign() {
             status.className =
                 "campaign-status error";
 
+
             button.disabled =
                 false;
 
             button.textContent =
                 "START FULL H3 INCIDENT";
+
+
+            liveContainer.style.display =
+                "none";
 
 
             output.textContent =
@@ -579,6 +678,10 @@ async function startCampaign() {
         }
 
 
+        /*
+         * Campaign running
+         */
+
         status.textContent =
             "RUNNING";
 
@@ -589,6 +692,10 @@ async function startCampaign() {
         button.textContent =
             "H3 INCIDENT RUNNING";
 
+
+        /*
+         * Campaign summary
+         */
 
         output.textContent =
             "H3 Incident Campaign started.\n\n" +
@@ -613,20 +720,16 @@ async function startCampaign() {
             "04 Internal Discovery\n" +
             "05 Data Staging\n" +
             "06 Exfiltration\n" +
-            "07 Impact\n";
+            "07 Impact";
 
 
         /*
-         * Begin campaign status polling
+         * Start live monitoring
          */
 
-        if (result.incident_id) {
-
-            monitorCampaign(
-                result.incident_id
-            );
-
-        }
+        monitorCampaign(
+            result.incident_id
+        );
 
     }
 
@@ -646,6 +749,10 @@ async function startCampaign() {
             "START FULL H3 INCIDENT";
 
 
+        liveContainer.style.display =
+            "none";
+
+
         output.textContent =
             "ERROR starting H3 Incident Campaign:\n\n" +
             error;
@@ -655,37 +762,97 @@ async function startCampaign() {
 }
 
 
-/*
- * =========================================================
- * Campaign status polling
- *
- * This becomes active when app.py provides:
- *
- * /api/campaign/status/<incident_id>
- *
- * =========================================================
- */
+/* =========================================================
+   CAMPAIGN MONITOR
+   ========================================================= */
 
-async function monitorCampaign(incidentId) {
+function monitorCampaign(incidentId) {
 
     const status =
-        document.getElementById(
-            "campaignStatus"
-        );
+        document.getElementById("campaignStatus");
 
     const button =
-        document.getElementById(
-            "campaignButton"
-        );
+        document.getElementById("campaignButton");
+
+    const liveOutput =
+        document.getElementById("liveOutput");
+
+    const liveContainer =
+        document.getElementById("liveLogContainer");
 
 
-    const timer =
+    liveContainer.style.display =
+        "block";
+
+
+    campaignTimer =
         setInterval(
             async function() {
 
                 try {
 
-                    const response =
+                    /* ======================================
+                       FETCH LIVE LOG
+                       ====================================== */
+
+                    const logResponse =
+                        await fetch(
+                            "/api/campaign/log/" +
+                            encodeURIComponent(
+                                incidentId
+                            )
+                        );
+
+
+                    if (logResponse.ok) {
+
+                        const logResult =
+                            await logResponse.json();
+
+
+                        if (
+                            logResult.output !==
+                            undefined
+                        ) {
+
+                            /*
+                             * Determine if user is already
+                             * close to the bottom.
+                             */
+
+                            const nearBottom =
+                                liveOutput.scrollHeight -
+                                liveOutput.scrollTop -
+                                liveOutput.clientHeight
+                                < 80;
+
+
+                            liveOutput.textContent =
+                                logResult.output;
+
+
+                            /*
+                             * Auto-scroll while following
+                             * current campaign output.
+                             */
+
+                            if (nearBottom) {
+
+                                liveOutput.scrollTop =
+                                    liveOutput.scrollHeight;
+
+                            }
+
+                        }
+
+                    }
+
+
+                    /* ======================================
+                       FETCH CAMPAIGN STATUS
+                       ====================================== */
+
+                    const statusResponse =
                         await fetch(
                             "/api/campaign/status/" +
                             encodeURIComponent(
@@ -694,23 +861,33 @@ async function monitorCampaign(incidentId) {
                         );
 
 
-                    /*
-                     * Backend status endpoint may not
-                     * exist yet.
-                     */
+                    if (!statusResponse.ok) {
 
-                    if (!response.ok) {
                         return;
+
                     }
 
 
                     const result =
-                        await response.json();
+                        await statusResponse.json();
 
 
-                    if (result.status === "completed") {
+                    /* ======================================
+                       COMPLETED
+                       ====================================== */
 
-                        clearInterval(timer);
+                    if (
+                        result.status ===
+                        "completed"
+                    ) {
+
+                        clearInterval(
+                            campaignTimer
+                        );
+
+                        campaignTimer =
+                            null;
+
 
                         status.textContent =
                             "COMPLETED";
@@ -718,18 +895,41 @@ async function monitorCampaign(incidentId) {
                         status.className =
                             "campaign-status complete";
 
+
                         button.disabled =
                             false;
 
                         button.textContent =
                             "START FULL H3 INCIDENT";
 
+
+                        /*
+                         * Final log fetch
+                         */
+
+                        await fetchFinalLog(
+                            incidentId
+                        );
+
                     }
 
 
-                    if (result.status === "failed") {
+                    /* ======================================
+                       FAILED
+                       ====================================== */
 
-                        clearInterval(timer);
+                    if (
+                        result.status ===
+                        "failed"
+                    ) {
+
+                        clearInterval(
+                            campaignTimer
+                        );
+
+                        campaignTimer =
+                            null;
+
 
                         status.textContent =
                             "FAILED";
@@ -737,11 +937,22 @@ async function monitorCampaign(incidentId) {
                         status.className =
                             "campaign-status error";
 
+
                         button.disabled =
                             false;
 
                         button.textContent =
                             "START FULL H3 INCIDENT";
+
+
+                        /*
+                         * Fetch final output so the
+                         * actual failure remains visible.
+                         */
+
+                        await fetchFinalLog(
+                            incidentId
+                        );
 
                     }
 
@@ -749,32 +960,118 @@ async function monitorCampaign(incidentId) {
 
                 catch(error) {
 
-                    /*
-                     * Do not interrupt the campaign
-                     * if status polling fails.
-                     */
+                    console.log(
+                        "Campaign monitor error:",
+                        error
+                    );
 
                 }
 
             },
-            3000
+
+            1000
         );
 
 }
 
 
-/*
- * =========================================================
- * Clear activity window
- * =========================================================
- */
+/* =========================================================
+   FETCH FINAL CAMPAIGN LOG
+   ========================================================= */
+
+async function fetchFinalLog(
+    incidentId
+) {
+
+    const liveOutput =
+        document.getElementById(
+            "liveOutput"
+        );
+
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/campaign/log/" +
+                encodeURIComponent(
+                    incidentId
+                )
+            );
+
+
+        if (!response.ok) {
+            return;
+        }
+
+
+        const result =
+            await response.json();
+
+
+        if (
+            result.output !==
+            undefined
+        ) {
+
+            liveOutput.textContent =
+                result.output;
+
+
+            liveOutput.scrollTop =
+                liveOutput.scrollHeight;
+
+        }
+
+    }
+
+    catch(error) {
+
+        console.log(
+            "Final log fetch error:",
+            error
+        );
+
+    }
+
+}
+
+
+/* =========================================================
+   CLEAR ACTIVITY
+   ========================================================= */
 
 function clearOutput() {
 
-    document.getElementById(
-        "output"
-    ).textContent =
+    const output =
+        document.getElementById("output");
+
+    const liveOutput =
+        document.getElementById("liveOutput");
+
+    const liveContainer =
+        document.getElementById("liveLogContainer");
+
+
+    output.textContent =
         "IncidentVM ready.";
+
+
+    liveOutput.textContent =
+        "";
+
+
+    /*
+     * Only hide the live window when there isn't
+     * an active campaign monitor.
+     */
+
+    if (!campaignTimer) {
+
+        liveContainer.style.display =
+            "none";
+
+    }
 
 }
 
