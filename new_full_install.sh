@@ -268,7 +268,7 @@ case "$CHOICE" in
      rm -rf /var/lib/vz/template/iso/*
      ;;
   666)
-     echo 'Starting Wazuh VM creation'
+     echo 'Starting Incident VM creation'
     bash "$INCIDENTVM" $LAB
     ;;
   0)
