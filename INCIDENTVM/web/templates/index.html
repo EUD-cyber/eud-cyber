@@ -7,15 +7,22 @@
 
     <title>Nordic Manufacturing - Incident Control</title>
 
-    <link rel="stylesheet"
-          href="{{ url_for('static', filename='style.css') }}">
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
 </head>
 
 <body>
 
 <div class="container">
 
+    <!-- ================================================== -->
+    <!-- HEADER                                             -->
+    <!-- ================================================== -->
+
     <header>
+
         <div>
             <h1>NORDIC MANUFACTURING</h1>
             <p>Incident / Attack Control</p>
@@ -25,8 +32,13 @@
             <span class="status-dot"></span>
             IncidentVM ONLINE
         </div>
+
     </header>
 
+
+    <!-- ================================================== -->
+    <!-- INCIDENT CONFIGURATION                             -->
+    <!-- ================================================== -->
 
     <section class="card">
 
@@ -36,50 +48,144 @@
 
             <label>
                 Compromised Linux Host
-                <input id="compromised_host"
-                       value="192.168.1.20">
+
+                <input
+                    id="compromised_host"
+                    value="192.168.1.20"
+                    autocomplete="off"
+                >
             </label>
+
 
             <label>
                 Web Server
-                <input id="web_target"
-                       value="192.168.1.21">
+
+                <input
+                    id="web_target"
+                    value="192.168.1.21"
+                    autocomplete="off"
+                >
             </label>
+
 
             <label>
                 Web Port
-                <input id="web_port"
-                       value="80">
+
+                <input
+                    id="web_port"
+                    value="80"
+                    autocomplete="off"
+                >
             </label>
+
 
             <label>
                 Internal Target
-                <input id="internal_target"
-                       value="192.168.2.22">
+
+                <input
+                    id="internal_target"
+                    value="192.168.2.22"
+                    autocomplete="off"
+                >
             </label>
+
 
             <label>
                 IncidentVM IP
-                <input id="incident_ip"
-                       value="192.168.1.254">
+
+                <input
+                    id="incident_ip"
+                    value="192.168.1.254"
+                    autocomplete="off"
+                >
             </label>
+
 
             <label>
                 SSH Username
-                <input id="ssh_user"
-                       value="ubuntu">
+
+                <input
+                    id="ssh_user"
+                    value="ubuntu"
+                    autocomplete="off"
+                >
             </label>
+
 
             <label>
                 SSH Password
-                <input id="ssh_password"
-                       type="password">
+
+                <input
+                    id="ssh_password"
+                    type="password"
+                    autocomplete="new-password"
+                >
             </label>
 
         </div>
 
     </section>
 
+
+    <!-- ================================================== -->
+    <!-- H3 INCIDENT CAMPAIGN                               -->
+    <!-- ================================================== -->
+
+    <section class="card campaign-card">
+
+        <div class="campaign-header">
+
+            <div>
+
+                <h2>H3 Incident Campaign</h2>
+
+                <p class="campaign-description">
+
+                    Full incident simulation:
+
+                    <strong>Recon</strong>
+                    →
+                    <strong>Web Attack</strong>
+                    →
+                    <strong>Initial Access</strong>
+                    →
+                    <strong>Internal Discovery</strong>
+                    →
+                    <strong>Data Staging</strong>
+                    →
+                    <strong>Exfiltration</strong>
+                    →
+                    <strong>Impact</strong>
+
+                </p>
+
+            </div>
+
+
+            <div
+                id="campaignStatus"
+                class="campaign-status ready"
+            >
+                READY
+            </div>
+
+        </div>
+
+
+        <button
+            id="campaignButton"
+            class="campaign-button"
+            onclick="startCampaign()"
+        >
+            START FULL H3 INCIDENT
+        </button>
+
+    </section>
+
+
+    <!-- ================================================== -->
+    <!-- INDIVIDUAL ATTACK PHASES                           -->
+    <!-- ================================================== -->
 
     <section class="card">
 
@@ -92,30 +198,36 @@
                 <span>Reconnaissance</span>
             </button>
 
+
             <button onclick="runPhase('web')">
                 02
                 <span>Web Attack</span>
             </button>
+
 
             <button onclick="runPhase('auth')">
                 03
                 <span>Initial Access</span>
             </button>
 
+
             <button onclick="runPhase('lateral')">
                 04
                 <span>Internal Discovery</span>
             </button>
+
 
             <button onclick="runPhase('staging')">
                 05
                 <span>Data Staging</span>
             </button>
 
+
             <button onclick="runPhase('exfil')">
                 06
                 <span>Exfiltration</span>
             </button>
+
 
             <button onclick="runPhase('ransomware')">
                 07
@@ -127,11 +239,27 @@
     </section>
 
 
+    <!-- ================================================== -->
+    <!-- ACTIVITY                                           -->
+    <!-- ================================================== -->
+
     <section class="card">
 
-        <h2>Activity</h2>
+        <div class="activity-header">
 
-        <pre id="output">Ready.</pre>
+            <h2>Activity</h2>
+
+            <button
+                class="small-button"
+                onclick="clearOutput()"
+            >
+                CLEAR
+            </button>
+
+        </div>
+
+
+        <pre id="output">IncidentVM ready.</pre>
 
     </section>
 
@@ -140,65 +268,156 @@
 
 <script>
 
+/*
+ * =========================================================
+ * Read incident configuration
+ * =========================================================
+ */
+
 function configuration() {
 
     return {
 
         compromised_host:
-            document.getElementById("compromised_host").value,
+            document.getElementById(
+                "compromised_host"
+            ).value.trim(),
 
         web_target:
-            document.getElementById("web_target").value,
+            document.getElementById(
+                "web_target"
+            ).value.trim(),
 
         web_port:
-            document.getElementById("web_port").value,
+            document.getElementById(
+                "web_port"
+            ).value.trim(),
 
         internal_target:
-            document.getElementById("internal_target").value,
+            document.getElementById(
+                "internal_target"
+            ).value.trim(),
 
         incident_ip:
-            document.getElementById("incident_ip").value,
+            document.getElementById(
+                "incident_ip"
+            ).value.trim(),
 
         ssh_user:
-            document.getElementById("ssh_user").value,
+            document.getElementById(
+                "ssh_user"
+            ).value.trim(),
 
         ssh_password:
-            document.getElementById("ssh_password").value
+            document.getElementById(
+                "ssh_password"
+            ).value
 
     };
 
 }
 
 
+/*
+ * =========================================================
+ * Validate configuration
+ * =========================================================
+ */
+
+function validateConfiguration(config) {
+
+    if (!config.compromised_host) {
+        return "Compromised Linux Host is required.";
+    }
+
+    if (!config.web_target) {
+        return "Web Server is required.";
+    }
+
+    if (!config.web_port) {
+        return "Web Port is required.";
+    }
+
+    if (!config.internal_target) {
+        return "Internal Target is required.";
+    }
+
+    if (!config.incident_ip) {
+        return "IncidentVM IP is required.";
+    }
+
+    if (!config.ssh_user) {
+        return "SSH Username is required.";
+    }
+
+    if (!config.ssh_password) {
+        return "SSH Password is required.";
+    }
+
+    return null;
+}
+
+
+/*
+ * =========================================================
+ * Run individual attack phase
+ * =========================================================
+ */
+
 async function runPhase(phase) {
 
     const output =
         document.getElementById("output");
 
+    const config =
+        configuration();
+
+
     output.textContent =
-        "Starting " + phase + "...";
+        "Starting attack phase: " +
+        phase +
+        "...\n";
+
 
     try {
 
         const response =
-            await fetch("/api/run/" + phase, {
+            await fetch(
+                "/api/run/" + phase,
+                {
+                    method: "POST",
 
-                method: "POST",
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
 
-                headers: {
-                    "Content-Type": "application/json"
-                },
+                    body:
+                        JSON.stringify(config)
+                }
+            );
 
-                body: JSON.stringify(
-                    configuration()
-                )
-
-            });
 
         const result =
             await response.json();
 
+
+        if (!response.ok) {
+
+            output.textContent =
+                "ERROR\n\n" +
+                JSON.stringify(
+                    result,
+                    null,
+                    2
+                );
+
+            return;
+        }
+
+
         output.textContent =
+            "Attack phase started.\n\n" +
             JSON.stringify(
                 result,
                 null,
@@ -210,9 +429,352 @@ async function runPhase(phase) {
     catch(error) {
 
         output.textContent =
-            "ERROR: " + error;
+            "ERROR\n\n" +
+            error;
 
     }
+
+}
+
+
+/*
+ * =========================================================
+ * Start H3 Full Incident Campaign
+ * =========================================================
+ */
+
+async function startCampaign() {
+
+    const output =
+        document.getElementById("output");
+
+    const status =
+        document.getElementById(
+            "campaignStatus"
+        );
+
+    const button =
+        document.getElementById(
+            "campaignButton"
+        );
+
+    const config =
+        configuration();
+
+
+    /*
+     * Validate required fields
+     */
+
+    const validationError =
+        validateConfiguration(config);
+
+
+    if (validationError) {
+
+        status.textContent =
+            "CONFIG ERROR";
+
+        status.className =
+            "campaign-status error";
+
+        output.textContent =
+            "Configuration error:\n\n" +
+            validationError;
+
+        return;
+    }
+
+
+    /*
+     * Update GUI
+     */
+
+    status.textContent =
+        "STARTING";
+
+    status.className =
+        "campaign-status running";
+
+    button.disabled =
+        true;
+
+    button.textContent =
+        "STARTING H3 INCIDENT...";
+
+
+    output.textContent =
+        "Starting Nordic Manufacturing H3 Incident Campaign...\n\n" +
+
+        "Compromised Host : " +
+        config.compromised_host +
+        "\n" +
+
+        "Web Target       : " +
+        config.web_target +
+        ":" +
+        config.web_port +
+        "\n" +
+
+        "Internal Target  : " +
+        config.internal_target +
+        "\n" +
+
+        "IncidentVM       : " +
+        config.incident_ip +
+        "\n\n" +
+
+        "Waiting for campaign controller...\n";
+
+
+    try {
+
+        const response =
+            await fetch(
+                "/api/campaign/h3",
+                {
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type":
+                            "application/json"
+                    },
+
+                    body:
+                        JSON.stringify(config)
+                }
+            );
+
+
+        const result =
+            await response.json();
+
+
+        if (!response.ok ||
+            !result.success) {
+
+            status.textContent =
+                "ERROR";
+
+            status.className =
+                "campaign-status error";
+
+            button.disabled =
+                false;
+
+            button.textContent =
+                "START FULL H3 INCIDENT";
+
+
+            output.textContent =
+                "Unable to start H3 Incident Campaign.\n\n" +
+
+                JSON.stringify(
+                    result,
+                    null,
+                    2
+                );
+
+            return;
+        }
+
+
+        status.textContent =
+            "RUNNING";
+
+        status.className =
+            "campaign-status running";
+
+
+        button.textContent =
+            "H3 INCIDENT RUNNING";
+
+
+        output.textContent =
+            "H3 Incident Campaign started.\n\n" +
+
+            "Incident ID : " +
+            result.incident_id +
+            "\n" +
+
+            "PID         : " +
+            result.pid +
+            "\n" +
+
+            "Log         : " +
+            result.log +
+            "\n\n" +
+
+            "Attack chain:\n" +
+
+            "01 Reconnaissance\n" +
+            "02 Web Attack\n" +
+            "03 Initial Access\n" +
+            "04 Internal Discovery\n" +
+            "05 Data Staging\n" +
+            "06 Exfiltration\n" +
+            "07 Impact\n";
+
+
+        /*
+         * Begin campaign status polling
+         */
+
+        if (result.incident_id) {
+
+            monitorCampaign(
+                result.incident_id
+            );
+
+        }
+
+    }
+
+    catch(error) {
+
+        status.textContent =
+            "ERROR";
+
+        status.className =
+            "campaign-status error";
+
+
+        button.disabled =
+            false;
+
+        button.textContent =
+            "START FULL H3 INCIDENT";
+
+
+        output.textContent =
+            "ERROR starting H3 Incident Campaign:\n\n" +
+            error;
+
+    }
+
+}
+
+
+/*
+ * =========================================================
+ * Campaign status polling
+ *
+ * This becomes active when app.py provides:
+ *
+ * /api/campaign/status/<incident_id>
+ *
+ * =========================================================
+ */
+
+async function monitorCampaign(incidentId) {
+
+    const status =
+        document.getElementById(
+            "campaignStatus"
+        );
+
+    const button =
+        document.getElementById(
+            "campaignButton"
+        );
+
+
+    const timer =
+        setInterval(
+            async function() {
+
+                try {
+
+                    const response =
+                        await fetch(
+                            "/api/campaign/status/" +
+                            encodeURIComponent(
+                                incidentId
+                            )
+                        );
+
+
+                    /*
+                     * Backend status endpoint may not
+                     * exist yet.
+                     */
+
+                    if (!response.ok) {
+                        return;
+                    }
+
+
+                    const result =
+                        await response.json();
+
+
+                    if (result.status === "completed") {
+
+                        clearInterval(timer);
+
+                        status.textContent =
+                            "COMPLETED";
+
+                        status.className =
+                            "campaign-status complete";
+
+                        button.disabled =
+                            false;
+
+                        button.textContent =
+                            "START FULL H3 INCIDENT";
+
+                    }
+
+
+                    if (result.status === "failed") {
+
+                        clearInterval(timer);
+
+                        status.textContent =
+                            "FAILED";
+
+                        status.className =
+                            "campaign-status error";
+
+                        button.disabled =
+                            false;
+
+                        button.textContent =
+                            "START FULL H3 INCIDENT";
+
+                    }
+
+                }
+
+                catch(error) {
+
+                    /*
+                     * Do not interrupt the campaign
+                     * if status polling fails.
+                     */
+
+                }
+
+            },
+            3000
+        );
+
+}
+
+
+/*
+ * =========================================================
+ * Clear activity window
+ * =========================================================
+ */
+
+function clearOutput() {
+
+    document.getElementById(
+        "output"
+    ).textContent =
+        "IncidentVM ready.";
 
 }
 

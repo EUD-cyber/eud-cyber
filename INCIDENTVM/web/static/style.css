@@ -1,3 +1,8 @@
+/* ==========================================================
+   Nordic Manufacturing
+   Incident Control GUI
+   ========================================================== */
+
 * {
     box-sizing: border-box;
 }
@@ -6,35 +11,43 @@ body {
     margin: 0;
     background: #080d12;
     color: #d7e2ea;
-    font-family: Consolas, Monaco, monospace;
+    font-family: Consolas, Monaco, "Courier New", monospace;
 }
 
 .container {
-    width: 1100px;
-    max-width: 95%;
-    margin: 40px auto;
+    width: 1400px;
+    max-width: 97%;
+    margin: 24px auto 40px auto;
 }
+
+
+/* ==========================================================
+   HEADER
+   ========================================================== */
 
 header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 30px;
+    margin-bottom: 24px;
+    padding: 5px 10px;
 }
 
 header h1 {
     margin: 0;
     color: #38e89d;
     letter-spacing: 2px;
+    font-size: 30px;
 }
 
 header p {
-    margin-top: 6px;
+    margin: 7px 0 0 0;
     color: #7c8c98;
 }
 
 .status {
     color: #38e89d;
+    font-size: 14px;
 }
 
 .status-dot {
@@ -44,95 +57,381 @@ header p {
     background: #38e89d;
     border-radius: 50%;
     margin-right: 8px;
+    box-shadow: 0 0 8px #38e89d;
 }
+
+
+/* ==========================================================
+   CARDS
+   ========================================================== */
 
 .card {
     background: #101820;
-    border: 1px solid #26333d;
-    border-radius: 8px;
-    padding: 24px;
-    margin-bottom: 20px;
+    border: 1px solid #263946;
+    border-radius: 10px;
+    padding: 30px;
+    margin-bottom: 24px;
 }
 
 .card h2 {
     margin-top: 0;
+    margin-bottom: 25px;
     color: #ffffff;
+    font-size: 28px;
 }
+
+
+/* ==========================================================
+   CONFIGURATION
+   ========================================================== */
 
 .grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 18px;
+    gap: 24px;
 }
 
 label {
-    color: #8fa3b0;
-    font-size: 14px;
+    color: #9fc9df;
+    font-size: 16px;
 }
 
 input {
     display: block;
     width: 100%;
-    margin-top: 7px;
-    padding: 11px;
+    margin-top: 8px;
+    padding: 14px;
+
     background: #070c10;
-    border: 1px solid #31404c;
+
+    border: 1px solid #314957;
+    border-radius: 5px;
+
     color: #ffffff;
-    border-radius: 4px;
+
     font-family: inherit;
+    font-size: 16px;
 }
 
 input:focus {
     outline: none;
     border-color: #38e89d;
+    box-shadow: 0 0 4px rgba(56, 232, 157, 0.35);
 }
+
+
+/* ==========================================================
+   H3 CAMPAIGN
+   ========================================================== */
+
+.campaign-card {
+    border: 1px solid #28795b;
+    background: #0e1b1a;
+}
+
+.campaign-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 30px;
+}
+
+.campaign-header h2 {
+    color: #38e89d;
+    margin-bottom: 12px;
+}
+
+.campaign-description {
+    color: #9bb3bf;
+    margin: 0;
+    line-height: 1.8;
+    font-size: 14px;
+}
+
+.campaign-description strong {
+    color: #dce8ed;
+}
+
+
+/* ==========================================================
+   CAMPAIGN STATUS
+   ========================================================== */
+
+.campaign-status {
+    min-width: 115px;
+    text-align: center;
+
+    padding: 9px 14px;
+
+    border-radius: 5px;
+
+    font-weight: bold;
+    font-size: 13px;
+
+    letter-spacing: 1px;
+}
+
+
+/* READY */
+
+.campaign-status.ready {
+    color: #38e89d;
+    border: 1px solid #38e89d;
+    background: rgba(56, 232, 157, 0.05);
+}
+
+
+/* RUNNING */
+
+.campaign-status.running {
+    color: #ffd166;
+    border: 1px solid #ffd166;
+    background: rgba(255, 209, 102, 0.06);
+}
+
+
+/* COMPLETE */
+
+.campaign-status.complete {
+    color: #38e89d;
+    border: 1px solid #38e89d;
+    background: rgba(56, 232, 157, 0.12);
+}
+
+
+/* ERROR / FAILED */
+
+.campaign-status.error {
+    color: #ff6262;
+    border: 1px solid #ff6262;
+    background: rgba(255, 98, 98, 0.07);
+}
+
+
+/* ==========================================================
+   H3 CAMPAIGN BUTTON
+   ========================================================== */
+
+.campaign-button {
+    width: 100%;
+
+    margin-top: 25px;
+    padding: 22px;
+
+    background: #14372d;
+
+    border: 1px solid #38e89d;
+    border-radius: 6px;
+
+    color: #38e89d;
+
+    font-family: inherit;
+    font-size: 18px;
+    font-weight: bold;
+
+    letter-spacing: 1px;
+
+    cursor: pointer;
+
+    transition:
+        background 0.15s,
+        border-color 0.15s;
+}
+
+.campaign-button:hover {
+    background: #1b493c;
+}
+
+.campaign-button:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+    background: #15221f;
+}
+
+
+/* ==========================================================
+   ATTACK PHASES
+   ========================================================== */
 
 .phases {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
+    gap: 15px;
 }
 
-button {
-    background: #14232b;
+.phases button {
+    min-height: 108px;
+
+    background: #13252d;
+
     color: #38e89d;
-    border: 1px solid #2b4a57;
-    border-radius: 5px;
+
+    border: 1px solid #2b5664;
+    border-radius: 6px;
+
     padding: 20px 10px;
+
     font-family: inherit;
-    font-size: 20px;
+    font-size: 23px;
+
+    cursor: pointer;
+
+    transition:
+        background 0.15s,
+        border-color 0.15s,
+        transform 0.1s;
+}
+
+.phases button span {
+    display: block;
+
+    color: #ffffff;
+
+    font-size: 14px;
+
+    margin-top: 10px;
+}
+
+.phases button:hover {
+    background: #19343d;
+    border-color: #38e89d;
+    transform: translateY(-1px);
+}
+
+.phases button:active {
+    transform: translateY(1px);
+}
+
+
+/* ==========================================================
+   ACTIVITY
+   ========================================================== */
+
+.activity-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+
+    margin-bottom: 15px;
+}
+
+.activity-header h2 {
+    margin: 0;
+}
+
+.small-button {
+    width: auto;
+
+    background: #14232b;
+
+    color: #9fc9df;
+
+    border: 1px solid #314957;
+    border-radius: 4px;
+
+    padding: 8px 14px;
+
+    font-family: inherit;
+    font-size: 12px;
+
     cursor: pointer;
 }
 
-button span {
-    display: block;
-    color: #c9d5dc;
-    font-size: 12px;
-    margin-top: 7px;
+.small-button:hover {
+    border-color: #38e89d;
+    color: #38e89d;
 }
 
-button:hover {
-    background: #19333b;
-    border-color: #38e89d;
-}
+
+/* ==========================================================
+   TERMINAL / OUTPUT
+   ========================================================== */
 
 pre {
-    min-height: 100px;
+    min-height: 180px;
+    max-height: 500px;
+
+    margin: 0;
+
     background: #05090c;
-    padding: 15px;
+
+    border: 1px solid #1d303a;
+    border-radius: 5px;
+
+    padding: 18px;
+
     overflow: auto;
+
     color: #7df7bd;
-    border-radius: 4px;
+
+    font-family: Consolas, Monaco, "Courier New", monospace;
+    font-size: 14px;
+
+    line-height: 1.5;
+
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 
-@media(max-width: 800px) {
+
+/* ==========================================================
+   SCROLLBAR
+   ========================================================== */
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #070c10;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #263d48;
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #365462;
+}
+
+
+/* ==========================================================
+   RESPONSIVE
+   ========================================================== */
+
+@media (max-width: 1000px) {
+
+    .phases {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+}
+
+
+@media (max-width: 800px) {
+
+    .container {
+        max-width: 94%;
+    }
+
+    header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 15px;
+    }
 
     .grid {
         grid-template-columns: 1fr;
     }
 
+    .campaign-header {
+        flex-direction: column;
+    }
+
     .phases {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: 1fr;
     }
 
 }
