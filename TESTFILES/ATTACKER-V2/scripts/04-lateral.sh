@@ -15,8 +15,19 @@ set -u
 #   Other hosts discovered in Phase 01
 #
 # Purpose:
-#   Generate realistic east-west discovery activity from
+#   Generate visible east-west discovery activity from
 #   compromised hosts inside the CyberLab.
+#
+# Activity:
+#   - ICMP discovery
+#   - TCP probes against common internal services
+#
+# Ports:
+#   22   SSH
+#   80   HTTP
+#   443  HTTPS
+#   445  SMB
+#   3389 RDP
 # ============================================================
 
 
@@ -46,6 +57,8 @@ DISCOVERED_STATE="$NORDIC_DISCOVERED_STATE"
 COMPROMISED_STATE="$NORDIC_COMPROMISED_STATE"
 
 LOG_FILE="$NORDIC_LOG_DIR/${INCIDENT_ID}-04-lateral.log"
+
+PROBE_PORTS="22 80 443 445 3389"
 
 
 # ============================================================
@@ -150,7 +163,9 @@ with open(sys.argv[1], encoding="utf-8") as f:
 for host in data.get("hosts", []):
     ip = host.get("ip")
     port = host.get("ssh_port", 22)
-    user = host.get("ssh_user", "ubuntu")
+
+    # Support both names if older state files exist
+    user = host.get("ssh_user") or host.get("ssh_username") or "ubuntu"
 
     if ip:
         print(f"{ip}|{port}|{user}")
@@ -173,6 +188,7 @@ echo
 log "[*] Incident ID: $INCIDENT_ID"
 log "[*] Compromised source hosts: ${#COMPROMISED[@]}"
 log "[*] Discovered internal targets: ${#TARGETS[@]}"
+log "[*] Probe ports: $PROBE_PORTS"
 
 echo
 
@@ -182,7 +198,7 @@ if [[ ${#COMPROMISED[@]} -eq 0 ]]; then
     log "[*] No compromised hosts available."
     log "[*] Phase 04 has nothing to execute."
 
-    ground_truth "PHASE_COMPLETE sources=0"
+    ground_truth "PHASE_COMPLETE sources=0 relationships=0"
 
     exit 0
 fi
@@ -192,7 +208,10 @@ fi
 # INTERNAL DISCOVERY
 # ============================================================
 
-TOTAL_PROBES=0
+TOTAL_RELATIONSHIPS=0
+SUCCESSFUL_SOURCES=0
+FAILED_SOURCES=0
+
 
 for SOURCE_RECORD in "${COMPROMISED[@]}"; do
 
@@ -209,89 +228,131 @@ for SOURCE_RECORD in "${COMPROMISED[@]}"; do
 
 
     # --------------------------------------------------------
-    # Build target list for remote host
-    #
-    # Do not probe itself.
+    # Build target array
     # --------------------------------------------------------
 
-    REMOTE_TARGETS=""
+    REMOTE_TARGETS=()
 
     for TARGET in "${TARGETS[@]}"; do
 
+        # Never probe the source host itself
         if [[ "$TARGET" == "$SOURCE" ]]; then
             continue
         fi
 
-        REMOTE_TARGETS+="$TARGET "
+        REMOTE_TARGETS+=("$TARGET")
     done
 
 
-    if [[ -z "$REMOTE_TARGETS" ]]; then
+    if [[ ${#REMOTE_TARGETS[@]} -eq 0 ]]; then
+
         log "[*] No additional targets for $SOURCE"
+
         continue
     fi
 
 
+    log "[*] Starting internal discovery from $SOURCE"
+    log "[*] Targets from $SOURCE: ${#REMOTE_TARGETS[@]}"
+
+
     # --------------------------------------------------------
-    # Execute discovery FROM compromised host
+    # Remote discovery script
     #
-    # Generates:
-    #
-    # - ICMP activity
-    # - TCP connection attempts against common internal
-    #   administration/service ports
-    #
-    # Ports:
-    #
-    # 22   SSH
-    # 80   HTTP
-    # 443  HTTPS
-    # 445  SMB
-    # 3389 RDP
-    #
+    # Every target is passed as its own positional argument.
     # --------------------------------------------------------
 
-    REMOTE_SCRIPT='
-TARGETS="$1"
+    read -r -d '' REMOTE_SCRIPT <<'REMOTE_EOF' || true
 
-for TARGET in $TARGETS; do
+PORTS="22 80 443 445 3389"
 
-    echo "[DISCOVERY] $TARGET"
+for TARGET in "$@"; do
 
-    ping -c 1 -W 1 "$TARGET" >/dev/null 2>&1 || true
+    echo "[DISCOVERY] target=$TARGET"
 
-    for PORT in 22 80 443 445 3389; do
+    # --------------------------------------------------------
+    # ICMP
+    # --------------------------------------------------------
 
-        timeout 1 bash -c \
+    if ping -c 1 -W 1 "$TARGET" >/dev/null 2>&1; then
+
+        echo "[PING] target=$TARGET status=reachable"
+
+    else
+
+        echo "[PING] target=$TARGET status=no-reply"
+
+    fi
+
+
+    # --------------------------------------------------------
+    # TCP service probes
+    # --------------------------------------------------------
+
+    for PORT in $PORTS; do
+
+        if timeout 1 bash -c \
             "echo >/dev/tcp/$TARGET/$PORT" \
-            >/dev/null 2>&1 || true
+            >/dev/null 2>&1
+        then
+
+            echo "[TCP] target=$TARGET port=$PORT status=open"
+
+        else
+
+            echo "[TCP] target=$TARGET port=$PORT status=closed"
+
+        fi
 
     done
 
 done
-'
+
+REMOTE_EOF
 
 
-    log "[*] Starting internal discovery from $SOURCE"
+    # --------------------------------------------------------
+    # Execute FROM compromised host
+    # --------------------------------------------------------
 
-
-    sshpass -p "$SSH_PASSWORD" \
-        ssh \
-            -p "$SSH_PORT" \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            -o ConnectTimeout="$NORDIC_SSH_TIMEOUT" \
-            -o PreferredAuthentications=password \
-            -o PubkeyAuthentication=no \
-            "$SSH_USER@$SOURCE" \
-            bash -s -- "$REMOTE_TARGETS" \
-            <<< "$REMOTE_SCRIPT"
-
+    REMOTE_OUTPUT="$(
+        sshpass -p "$SSH_PASSWORD" \
+            ssh \
+                -p "$SSH_PORT" \
+                -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                -o ConnectTimeout="$NORDIC_SSH_TIMEOUT" \
+                -o PreferredAuthentications=password \
+                -o PubkeyAuthentication=no \
+                "$SSH_USER@$SOURCE" \
+                bash -s -- "${REMOTE_TARGETS[@]}" \
+                <<< "$REMOTE_SCRIPT" \
+                2>&1
+    )"
 
     RESULT=$?
 
 
+    # --------------------------------------------------------
+    # Display + log remote output
+    # --------------------------------------------------------
+
+    while IFS= read -r LINE; do
+
+        [[ -z "$LINE" ]] && continue
+
+        log "[$SOURCE] $LINE"
+
+    done <<< "$REMOTE_OUTPUT"
+
+
+    # --------------------------------------------------------
+    # SSH failure
+    # --------------------------------------------------------
+
     if [[ $RESULT -ne 0 ]]; then
+
+        FAILED_SOURCES=$(( FAILED_SOURCES + 1 ))
 
         log "[WARNING] Internal discovery failed from $SOURCE"
 
@@ -299,21 +360,19 @@ done
             "INTERNAL_DISCOVERY_FAILED source=$SOURCE"
 
         continue
-
     fi
+
+
+    SUCCESSFUL_SOURCES=$(( SUCCESSFUL_SOURCES + 1 ))
 
 
     # --------------------------------------------------------
     # Ground truth
     # --------------------------------------------------------
 
-    for TARGET in "${TARGETS[@]}"; do
+    for TARGET in "${REMOTE_TARGETS[@]}"; do
 
-        if [[ "$TARGET" == "$SOURCE" ]]; then
-            continue
-        fi
-
-        TOTAL_PROBES=$(( TOTAL_PROBES + 1 ))
+        TOTAL_RELATIONSHIPS=$(( TOTAL_RELATIONSHIPS + 1 ))
 
         ground_truth \
             "INTERNAL_DISCOVERY source=$SOURCE target=$TARGET"
@@ -341,13 +400,28 @@ echo "  ${#COMPROMISED[@]}"
 
 echo
 
+echo "Successful source hosts:"
+echo "  $SUCCESSFUL_SOURCES"
+
+echo
+
+echo "Failed source hosts:"
+echo "  $FAILED_SOURCES"
+
+echo
+
 echo "Discovered internal hosts:"
 echo "  ${#TARGETS[@]}"
 
 echo
 
 echo "Source → target relationships:"
-echo "  $TOTAL_PROBES"
+echo "  $TOTAL_RELATIONSHIPS"
+
+echo
+
+echo "Probe ports:"
+echo "  $PROBE_PORTS"
 
 echo
 
@@ -358,7 +432,7 @@ echo
 
 
 ground_truth \
-    "PHASE_COMPLETE sources=${#COMPROMISED[@]} relationships=$TOTAL_PROBES"
+    "PHASE_COMPLETE sources=${#COMPROMISED[@]} successful_sources=$SUCCESSFUL_SOURCES failed_sources=$FAILED_SOURCES relationships=$TOTAL_RELATIONSHIPS"
 
 
 exit 0
