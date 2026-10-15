@@ -1,18 +1,28 @@
 #cloud-config
 
-hostname: mrnobody
+hostname: incidentvm
 manage_etc_hosts: true
+
+
+# ============================================================
+# USER
+# ============================================================
 
 users:
   - name: ubuntu
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
     lock_passwd: false
+
+    # Samme password-hash som eksisterende IncidentVM
     passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
+
     ssh_authorized_keys:
       - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK9gExgup4UNA3vRiCBKdCK9+IdVKbosvXEDpTrjqGVW shared-admin-key
 
+
 ssh_pwauth: true
+
 
 chpasswd:
   expire: false
@@ -30,58 +40,635 @@ packages:
   - jq
   - zip
   - unzip
+
   - python3
   - python3-pip
   - python3-venv
   - python3-flask
+
+  - nginx
+  - openssl
+
   - nmap
   - smbclient
   - netcat-openbsd
   - tcpdump
   - dnsutils
   - net-tools
+
   - openssh-client
-  - qemu-guest-agent
   - sshpass
+
+  - qemu-guest-agent
 
 
 # ============================================================
-# SYSTEMD SERVICE
+# INSTALLER
 # ============================================================
 
 write_files:
 
-  - path: /etc/systemd/system/nordic-incident-web.service
+  - path: /usr/local/sbin/install-nordic-incident-v2
     owner: root:root
-    permissions: '0644'
+    permissions: '0755'
     content: |
-      [Unit]
-      Description=Nordic Manufacturing Incident Control Web GUI
-      Wants=network-online.target
-      After=network-online.target
+      #!/usr/bin/env bash
 
-      [Service]
-      Type=simple
+      set -Eeuo pipefail
 
-      User=ubuntu
-      Group=ubuntu
+      # ======================================================
+      # CONFIGURATION
+      # ======================================================
 
-      WorkingDirectory=/opt/nordic-attack/web
+      REPO="https://github.com/EUD-cyber/eud-cyber.git"
 
-      ExecStart=/usr/bin/python3 /opt/nordic-attack/web/app.py
+      BRANCH="main"
 
-      Restart=on-failure
-      RestartSec=5
+      SOURCE_SUBDIR="TESTFILES/ATTACKER-V2"
 
-      StandardOutput=journal
-      StandardError=journal
+      INSTALL_DIR="/opt/nordic-attack"
 
-      [Install]
-      WantedBy=multi-user.target
+      TEMP_DIR="/tmp/eud-cyber-v2"
+
+      LOG_FILE="/var/log/nordic-incident-install.log"
+
+      TLS_DIR="/etc/nordic-incident/tls"
+
+      CERT_FILE="${TLS_DIR}/incident.crt"
+
+      KEY_FILE="${TLS_DIR}/incident.key"
+
+
+      # ======================================================
+      # LOGGING
+      # ======================================================
+
+      exec > >(tee -a "$LOG_FILE") 2>&1
+
+
+      log() {
+          echo
+          echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+      }
+
+
+      fail() {
+          log "ERROR: $*"
+          exit 1
+      }
+
+
+      # ======================================================
+      # ERROR HANDLER
+      # ======================================================
+
+      trap '
+          rc=$?
+          echo
+          echo "================================================"
+          echo "INSTALLATION FAILED"
+          echo "Exit code: $rc"
+          echo "================================================"
+          exit $rc
+      ' ERR
+
+
+      echo
+      echo "================================================"
+      echo " Nordic Manufacturing A/S"
+      echo " H3 Incident Campaign V2"
+      echo " Installation"
+      echo "================================================"
+      echo
+
+
+      # ======================================================
+      # STOP OLD SERVICE IF PRESENT
+      # ======================================================
+
+      log "Stopping existing Incident service..."
+
+      systemctl stop nordic-incident-web.service \
+          2>/dev/null || true
+
+
+      # ======================================================
+      # CLEAN TEMP
+      # ======================================================
+
+      log "Preparing Git download..."
+
+      rm -rf "$TEMP_DIR"
+
+
+      # ======================================================
+      # DOWNLOAD FROM GITHUB
+      # ======================================================
+
+      log "Downloading ATTACKER-V2 from GitHub..."
+
+      git clone \
+          --depth 1 \
+          --branch "$BRANCH" \
+          "$REPO" \
+          "$TEMP_DIR"
+
+
+      SOURCE_DIR="${TEMP_DIR}/${SOURCE_SUBDIR}"
+
+
+      [[ -d "$SOURCE_DIR" ]] || \
+          fail "Git directory not found: $SOURCE_DIR"
+
+
+      # ======================================================
+      # VERIFY GIT SOURCE
+      # ======================================================
+
+      log "Verifying downloaded source..."
+
+
+      REQUIRED_FILES=(
+          "config/defaults.conf"
+
+          "scripts/01-discovery.sh"
+          "scripts/02-web.sh"
+          "scripts/03-access.sh"
+          "scripts/04-lateral.sh"
+          "scripts/05-staging.sh"
+          "scripts/06-exfil.sh"
+          "scripts/07-impact.sh"
+
+          "scenarios/full-incident-h3.sh"
+
+          "web/app.py"
+          "web/templates/index.html"
+          "web/static/style.css"
+          "web/static/app.js"
+
+          "nginx/nordic-incident.conf"
+
+          "systemd/nordic-incident-web.service"
+      )
+
+
+      for file in "${REQUIRED_FILES[@]}"; do
+
+          if [[ ! -s "${SOURCE_DIR}/${file}" ]]; then
+              fail "Missing Git file: $file"
+          fi
+
+          echo "  OK: $file"
+
+      done
+
+
+      # ======================================================
+      # CREATE INSTALL DIRECTORY
+      # ======================================================
+
+      log "Preparing ${INSTALL_DIR}..."
+
+      rm -rf "$INSTALL_DIR"
+
+      mkdir -p \
+          "$INSTALL_DIR/config" \
+          "$INSTALL_DIR/scripts" \
+          "$INSTALL_DIR/scenarios" \
+          "$INSTALL_DIR/logs" \
+          "$INSTALL_DIR/state" \
+          "$INSTALL_DIR/uploads" \
+          "$INSTALL_DIR/web/templates" \
+          "$INSTALL_DIR/web/static"
+
+
+      # ======================================================
+      # COPY CONFIG
+      # ======================================================
+
+      log "Installing configuration..."
+
+      cp \
+          "${SOURCE_DIR}/config/defaults.conf" \
+          "${INSTALL_DIR}/config/defaults.conf"
+
+
+      # ======================================================
+      # COPY ATTACK PHASES
+      # ======================================================
+
+      log "Installing campaign phases..."
+
+      cp \
+          "${SOURCE_DIR}/scripts/"*.sh \
+          "${INSTALL_DIR}/scripts/"
+
+
+      # ======================================================
+      # COPY SCENARIO
+      # ======================================================
+
+      log "Installing campaign orchestrator..."
+
+      cp \
+          "${SOURCE_DIR}/scenarios/full-incident-h3.sh" \
+          "${INSTALL_DIR}/scenarios/full-incident-h3.sh"
+
+
+      # ======================================================
+      # COPY WEB GUI
+      # ======================================================
+
+      log "Installing Web GUI..."
+
+      cp \
+          "${SOURCE_DIR}/web/app.py" \
+          "${INSTALL_DIR}/web/app.py"
+
+      cp \
+          "${SOURCE_DIR}/web/templates/index.html" \
+          "${INSTALL_DIR}/web/templates/index.html"
+
+      cp \
+          "${SOURCE_DIR}/web/static/style.css" \
+          "${INSTALL_DIR}/web/static/style.css"
+
+      cp \
+          "${SOURCE_DIR}/web/static/app.js" \
+          "${INSTALL_DIR}/web/static/app.js"
+
+
+      # ======================================================
+      # FIX WINDOWS CRLF
+      # ======================================================
+
+      log "Normalizing line endings..."
+
+      sed -i 's/\r$//' \
+          "${INSTALL_DIR}/scripts/"*.sh
+
+      sed -i 's/\r$//' \
+          "${INSTALL_DIR}/scenarios/"*.sh
+
+      sed -i 's/\r$//' \
+          "${INSTALL_DIR}/config/defaults.conf"
+
+
+      # ======================================================
+      # PERMISSIONS
+      # ======================================================
+
+      log "Setting permissions..."
+
+      chmod 755 \
+          "${INSTALL_DIR}/scripts/"*.sh
+
+      chmod 755 \
+          "${INSTALL_DIR}/scenarios/"*.sh
+
+      chmod 644 \
+          "${INSTALL_DIR}/config/defaults.conf"
+
+      chmod 644 \
+          "${INSTALL_DIR}/web/app.py"
+
+      chmod 644 \
+          "${INSTALL_DIR}/web/templates/index.html"
+
+      chmod 644 \
+          "${INSTALL_DIR}/web/static/style.css"
+
+      chmod 644 \
+          "${INSTALL_DIR}/web/static/app.js"
+
+
+      # ======================================================
+      # PYTHON VALIDATION
+      # ======================================================
+
+      log "Validating Flask application..."
+
+      /usr/bin/python3 \
+          -m py_compile \
+          "${INSTALL_DIR}/web/app.py"
+
+
+      # ======================================================
+      # BASH VALIDATION
+      # ======================================================
+
+      log "Validating campaign scripts..."
+
+      for script in \
+          "${INSTALL_DIR}/scripts/"*.sh \
+          "${INSTALL_DIR}/scenarios/"*.sh
+      do
+
+          echo "  Checking: $script"
+
+          bash -n "$script"
+
+      done
+
+
+      # ======================================================
+      # TLS
+      # ======================================================
+
+      log "Preparing HTTPS certificate..."
+
+      mkdir -p "$TLS_DIR"
+
+      chmod 700 "$TLS_DIR"
+
+
+      if [[ ! -s "$CERT_FILE" || ! -s "$KEY_FILE" ]]; then
+
+          log "Generating self-signed TLS certificate..."
+
+          openssl req \
+              -x509 \
+              -nodes \
+              -newkey rsa:3072 \
+              -sha256 \
+              -days 3650 \
+              -keyout "$KEY_FILE" \
+              -out "$CERT_FILE" \
+              -subj "/C=DK/O=Nordic Manufacturing A/S/OU=H3 Cyber Security/CN=incidentvm"
+
+      else
+
+          log "Existing TLS certificate retained."
+
+      fi
+
+
+      chmod 600 "$KEY_FILE"
+
+      chmod 644 "$CERT_FILE"
+
+
+      # ======================================================
+      # NGINX
+      # ======================================================
+
+      log "Installing nginx configuration..."
+
+      cp \
+          "${SOURCE_DIR}/nginx/nordic-incident.conf" \
+          /etc/nginx/sites-available/nordic-incident.conf
+
+
+      ln -sfn \
+          /etc/nginx/sites-available/nordic-incident.conf \
+          /etc/nginx/sites-enabled/nordic-incident.conf
+
+
+      # Disable Ubuntu default nginx site.
+
+      rm -f \
+          /etc/nginx/sites-enabled/default
+
+
+      log "Testing nginx configuration..."
+
+      nginx -t
+
+
+      # ======================================================
+      # SYSTEMD
+      # ======================================================
+
+      log "Installing systemd service..."
+
+      cp \
+          "${SOURCE_DIR}/systemd/nordic-incident-web.service" \
+          /etc/systemd/system/nordic-incident-web.service
+
+
+      chmod 644 \
+          /etc/systemd/system/nordic-incident-web.service
+
+
+      systemctl daemon-reload
+
+
+      # ======================================================
+      # QEMU GUEST AGENT
+      # ======================================================
+
+      log "Starting QEMU Guest Agent..."
+
+      systemctl enable qemu-guest-agent
+
+      systemctl restart qemu-guest-agent || true
+
+
+      # ======================================================
+      # ENABLE SERVICES
+      # ======================================================
+
+      log "Enabling Incident Web service..."
+
+      systemctl enable \
+          nordic-incident-web.service
+
+
+      log "Enabling nginx..."
+
+      systemctl enable nginx
+
+
+      # ======================================================
+      # START FLASK
+      # ======================================================
+
+      log "Starting Flask backend..."
+
+      systemctl restart \
+          nordic-incident-web.service
+
+
+      sleep 3
+
+
+      # ======================================================
+      # VERIFY FLASK
+      # ======================================================
+
+      log "Checking Flask API..."
+
+      curl \
+          --fail \
+          --silent \
+          --show-error \
+          --max-time 10 \
+          http://127.0.0.1:8082/api/health
+
+
+      echo
+
+
+      # ======================================================
+      # START NGINX
+      # ======================================================
+
+      log "Starting nginx..."
+
+      systemctl restart nginx
+
+
+      sleep 2
+
+
+      # ======================================================
+      # VERIFY HTTPS
+      # ======================================================
+
+      log "Checking HTTPS frontend..."
+
+      curl \
+          --insecure \
+          --fail \
+          --silent \
+          --show-error \
+          --max-time 10 \
+          https://127.0.0.1/api/health
+
+
+      echo
+
+
+      # ======================================================
+      # VERIFY PORTS
+      # ======================================================
+
+      log "Checking listening ports..."
+
+      ss -lntp | grep -E \
+          ':(80|443|8082)[[:space:]]' \
+          || true
+
+
+      # ======================================================
+      # VERIFY OOBM EXCLUSION
+      # ======================================================
+
+      log "Checking OOBM exclusion..."
+
+      grep \
+          'NORDIC_DISCOVERY_EXCLUDE_NETWORKS="172.20.0.0/24"' \
+          "${INSTALL_DIR}/config/defaults.conf" \
+          >/dev/null \
+          || fail "OOBM exclusion missing from defaults.conf"
+
+
+      # ======================================================
+      # INSTALL MARKER
+      # ======================================================
+
+      log "Writing installation marker..."
+
+      {
+          echo "Nordic Manufacturing A/S"
+          echo "H3 Incident Campaign V2"
+          echo
+          echo "Installation completed:"
+          date
+          echo
+
+          echo "Git repository:"
+          echo "$REPO"
+          echo
+
+          echo "Git source:"
+          echo "$SOURCE_SUBDIR"
+          echo
+
+          echo "Install directory:"
+          echo "$INSTALL_DIR"
+          echo
+
+          echo "Web GUI:"
+          echo "HTTPS TCP/443"
+          echo
+
+          echo "HTTP:"
+          echo "TCP/80 -> HTTPS redirect"
+          echo
+
+          echo "Flask backend:"
+          echo "127.0.0.1:8082"
+          echo
+
+          echo "OOBM excluded:"
+          echo "172.20.0.0/24"
+          echo
+
+          echo "Service:"
+          systemctl is-enabled \
+              nordic-incident-web.service \
+              2>&1 || true
+
+          systemctl is-active \
+              nordic-incident-web.service \
+              2>&1 || true
+
+          echo
+
+          echo "nginx:"
+          systemctl is-enabled nginx \
+              2>&1 || true
+
+          systemctl is-active nginx \
+              2>&1 || true
+
+          echo
+
+          echo "Health:"
+          curl \
+              --insecure \
+              --silent \
+              --max-time 5 \
+              https://127.0.0.1/api/health \
+              2>&1 || true
+
+      } > "${INSTALL_DIR}/INSTALL_COMPLETE"
+
+
+      # ======================================================
+      # CLEAN GIT DOWNLOAD
+      # ======================================================
+
+      log "Cleaning temporary Git repository..."
+
+      rm -rf "$TEMP_DIR"
+
+
+      # ======================================================
+      # COMPLETE
+      # ======================================================
+
+      echo
+      echo "================================================"
+      echo " INSTALLATION COMPLETE"
+      echo "================================================"
+      echo
+      echo " Web GUI:"
+      echo "   https://<IncidentVM-IP>/"
+      echo
+      echo " Flask:"
+      echo "   127.0.0.1:8082"
+      echo
+      echo " Logs:"
+      echo "   $LOG_FILE"
+      echo
+      echo "================================================"
+      echo
 
 
 # ============================================================
-# INSTALLATION
+# CLOUD-INIT
 # ============================================================
 
 runcmd:
@@ -93,330 +680,42 @@ runcmd:
   - touch /var/log/nordic-incident-install.log
 
   - echo "==============================================" >> /var/log/nordic-incident-install.log
-  - echo "Nordic IncidentVM installation starting" >> /var/log/nordic-incident-install.log
+  - echo "Nordic IncidentVM V2 cloud-init starting" >> /var/log/nordic-incident-install.log
   - date >> /var/log/nordic-incident-install.log
   - echo "==============================================" >> /var/log/nordic-incident-install.log
 
 
   # ----------------------------------------------------------
-  # System update
+  # Update package metadata
   # ----------------------------------------------------------
 
   - apt-get update
 
 
   # ----------------------------------------------------------
-  # QEMU Guest Agent
+  # Run complete V2 installer
   # ----------------------------------------------------------
 
-  - systemctl enable qemu-guest-agent
-  - systemctl start qemu-guest-agent
-
-
-  # ==========================================================
-  # DIRECTORY STRUCTURE
-  # ==========================================================
-
-  - mkdir -p /opt/nordic-attack
-
-  - mkdir -p /opt/nordic-attack/scripts
-
-  - mkdir -p /opt/nordic-attack/scenarios
-
-  - mkdir -p /opt/nordic-attack/logs
-
-  - mkdir -p /opt/nordic-attack/uploads
-
-  - mkdir -p /opt/nordic-attack/data
-
-  - mkdir -p /opt/nordic-attack/web
-
-  - mkdir -p /opt/nordic-attack/web/templates
-
-  - mkdir -p /opt/nordic-attack/web/static
-
-
-  # ==========================================================
-  # ATTACK ENGINE
-  #
-  # GitHub:
-  # TESTFILES/ATTACKER/
-  # ==========================================================
+  - /usr/local/sbin/install-nordic-incident-v2
 
 
   # ----------------------------------------------------------
-  # attackctl
+  # Final cloud-init marker
   # ----------------------------------------------------------
 
-  - wget -O /opt/nordic-attack/attackctl https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/attackctl
-
-
-  # ----------------------------------------------------------
-  # 01 - Recon
-  # ----------------------------------------------------------
-
-  - wget -O /opt/nordic-attack/scripts/01-recon.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/01-recon.sh
-
-
-  # ----------------------------------------------------------
-  # 02 - Web
-  # ----------------------------------------------------------
-
-  - wget -O /opt/nordic-attack/scripts/02-web.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/02-web.sh
-
-
-  # ----------------------------------------------------------
-  # 03 - Authentication / Initial Access
-  # ----------------------------------------------------------
-
-  - wget -O /opt/nordic-attack/scripts/03-auth.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/03-auth.sh
-
-
-  # ----------------------------------------------------------
-  # 04 - Internal Discovery / Lateral Movement
-  # ----------------------------------------------------------
-
-  - wget -O /opt/nordic-attack/scripts/04-lateral.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/04-lateral.sh
-
-
-  # ----------------------------------------------------------
-  # 05 - Data Staging
-  # ----------------------------------------------------------
-
-  - wget -O /opt/nordic-attack/scripts/05-staging.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/05-staging.sh
-
-
-  # ----------------------------------------------------------
-  # 06 - Exfiltration
-  # ----------------------------------------------------------
-
-  - wget -O /opt/nordic-attack/scripts/06-exfil.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/06-exfil.sh
-
-
-  # ----------------------------------------------------------
-  # 07 - Ransomware simulation
-  # ----------------------------------------------------------
-
-  - wget -O /opt/nordic-attack/scripts/07-ransomware-sim.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scripts/07-ransomware-sim.sh
-
-
-  # ----------------------------------------------------------
-  # Exfiltration receiver
-  # ----------------------------------------------------------
-
-  - wget -O /opt/nordic-attack/sink.py https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/sink.py
-
-
-  # ----------------------------------------------------------
-  # Full H3 Incident
-  # ----------------------------------------------------------
-
-  - wget -O /opt/nordic-attack/scenarios/full-incident-h3.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER/scenarios/full-incident-h3.sh
-
-
-  # ==========================================================
-  # INCIDENTVM WEB GUI
-  #
-  # GitHub:
-  # INCIDENTVM/web/
-  # ==========================================================
-
-
-  # ----------------------------------------------------------
-  # Flask application
-  # ----------------------------------------------------------
-
-  - wget -O /opt/nordic-attack/web/app.py https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INCIDENTVM/web/app.py
-
-
-  # ----------------------------------------------------------
-  # HTML template
-  # ----------------------------------------------------------
-
-  - wget -O /opt/nordic-attack/web/templates/index.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INCIDENTVM/web/templates/index.html
-
-
-  # ----------------------------------------------------------
-  # CSS
-  # ----------------------------------------------------------
-
-  - wget -O /opt/nordic-attack/web/static/style.css https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INCIDENTVM/web/static/style.css
-
-
-  # ==========================================================
-  # VERIFY DOWNLOADED FILES
-  # ==========================================================
-
-  - test -s /opt/nordic-attack/attackctl
-
-  - test -s /opt/nordic-attack/scripts/01-recon.sh
-
-  - test -s /opt/nordic-attack/scripts/02-web.sh
-
-  - test -s /opt/nordic-attack/scripts/03-auth.sh
-
-  - test -s /opt/nordic-attack/scripts/04-lateral.sh
-
-  - test -s /opt/nordic-attack/scripts/05-staging.sh
-
-  - test -s /opt/nordic-attack/scripts/06-exfil.sh
-
-  - test -s /opt/nordic-attack/scripts/07-ransomware-sim.sh
-
-  - test -s /opt/nordic-attack/sink.py
-
-  - test -s /opt/nordic-attack/scenarios/full-incident-h3.sh
-
-  - test -s /opt/nordic-attack/web/app.py
-
-  - test -s /opt/nordic-attack/web/templates/index.html
-
-  - test -s /opt/nordic-attack/web/static/style.css
-
-
-  # ==========================================================
-  # FIX WINDOWS CRLF
-  # ==========================================================
-
-  - sed -i 's/\r$//' /opt/nordic-attack/attackctl
-
-  - sed -i 's/\r$//' /opt/nordic-attack/scripts/*.sh
-
-  - sed -i 's/\r$//' /opt/nordic-attack/scenarios/*.sh
-
-
-  # ==========================================================
-  # PERMISSIONS
-  # ==========================================================
-
-  - chmod 755 /opt/nordic-attack/attackctl
-
-  - chmod 755 /opt/nordic-attack/scripts/*.sh
-
-  - chmod 755 /opt/nordic-attack/scenarios/*.sh
-
-  - chmod 644 /opt/nordic-attack/sink.py
-
-  - chmod 644 /opt/nordic-attack/web/app.py
-
-  - chmod 644 /opt/nordic-attack/web/templates/index.html
-
-  - chmod 644 /opt/nordic-attack/web/static/style.css
-
-  - chown -R ubuntu:ubuntu /opt/nordic-attack
-
-
-  # ==========================================================
-  # CLI COMMAND
-  # ==========================================================
-
-  - ln -sf /opt/nordic-attack/attackctl /usr/local/bin/attackctl
-
-
-  # ==========================================================
-  # VERIFY PYTHON / FLASK APPLICATION
-  # ==========================================================
-
-  - /usr/bin/python3 -m py_compile /opt/nordic-attack/web/app.py
-
-
-  # ==========================================================
-  # SYSTEMD WEB GUI
-  # ==========================================================
-
-  - systemctl daemon-reload
-
-  - systemctl enable nordic-incident-web.service
-
-  - systemctl start nordic-incident-web.service
-
-
-  # ----------------------------------------------------------
-  # Give Flask a moment to start
-  # ----------------------------------------------------------
-
-  - sleep 3
-
-
-  # ==========================================================
-  # INSTALLATION MARKER
-  # ==========================================================
-
-  - echo "Nordic IncidentVM installation completed" > /opt/nordic-attack/INSTALL_COMPLETE
-
-  - date >> /opt/nordic-attack/INSTALL_COMPLETE
-
-  - echo "" >> /opt/nordic-attack/INSTALL_COMPLETE
-
-  - echo "CLI:" >> /opt/nordic-attack/INSTALL_COMPLETE
-
-  - echo "/usr/local/bin/attackctl" >> /opt/nordic-attack/INSTALL_COMPLETE
-
-  - echo "" >> /opt/nordic-attack/INSTALL_COMPLETE
-
-  - echo "WEB GUI:" >> /opt/nordic-attack/INSTALL_COMPLETE
-
-  - echo "TCP/8080" >> /opt/nordic-attack/INSTALL_COMPLETE
-
-  - echo "" >> /opt/nordic-attack/INSTALL_COMPLETE
-
-
-  # ==========================================================
-  # VERIFY WEB SERVICE
-  # ==========================================================
-
-  - echo "=== WEB SERVICE ===" >> /opt/nordic-attack/INSTALL_COMPLETE
-
-  - systemctl is-enabled nordic-incident-web.service >> /opt/nordic-attack/INSTALL_COMPLETE 2>&1 || true
-
-  - systemctl is-active nordic-incident-web.service >> /opt/nordic-attack/INSTALL_COMPLETE 2>&1 || true
-
-  - echo "" >> /opt/nordic-attack/INSTALL_COMPLETE
-
-
-  # ==========================================================
-  # VERIFY TCP 8080
-  # ==========================================================
-
-  - echo "=== TCP 8080 ===" >> /opt/nordic-attack/INSTALL_COMPLETE
-
-  - ss -lntp | grep ':8080' >> /opt/nordic-attack/INSTALL_COMPLETE 2>&1 || true
-
-  - echo "" >> /opt/nordic-attack/INSTALL_COMPLETE
-
-
-  # ==========================================================
-  # VERIFY LOCAL WEB API
-  # ==========================================================
-
-  - echo "=== WEB API HEALTH ===" >> /opt/nordic-attack/INSTALL_COMPLETE
-
-  - curl --max-time 5 -s http://127.0.0.1:8080/api/health >> /opt/nordic-attack/INSTALL_COMPLETE 2>&1 || true
-
-  - echo "" >> /opt/nordic-attack/INSTALL_COMPLETE
-
-
-  # ==========================================================
-  # INSTALLATION LOG
-  # ==========================================================
-
+  - echo "" >> /var/log/nordic-incident-install.log
   - echo "==============================================" >> /var/log/nordic-incident-install.log
-
-  - echo "Nordic IncidentVM installation completed" >> /var/log/nordic-incident-install.log
-
+  - echo "Nordic IncidentVM V2 cloud-init completed" >> /var/log/nordic-incident-install.log
   - date >> /var/log/nordic-incident-install.log
-
-  - systemctl --no-pager status nordic-incident-web.service >> /var/log/nordic-incident-install.log 2>&1 || true
-
   - echo "==============================================" >> /var/log/nordic-incident-install.log
 
 
 # ============================================================
-# POWER OFF AFTER CLOUD-INIT
+# POWER OFF AFTER INSTALLATION
 # ============================================================
 
 power_state:
   mode: poweroff
-  message: "Nordic IncidentVM cloud-init completed - powering off"
+  message: "Nordic IncidentVM V2 installation completed - powering off"
   timeout: 30
   condition: true
