@@ -1,6 +1,6 @@
 #cloud-config
 
-hostname: incidentvm
+hostname: mrnobody
 manage_etc_hosts: true
 
 
