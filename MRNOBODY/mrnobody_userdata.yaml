@@ -281,7 +281,7 @@ write_files:
           "${INSTALL_DIR}/scenarios/"*.sh
 
       sed -i 's/\r$//' \
-          "${INSTALL_DIR}/config/defaults.conf
+          "${INSTALL_DIR}/config/defaults.conf"
 
 
       # ======================================================
