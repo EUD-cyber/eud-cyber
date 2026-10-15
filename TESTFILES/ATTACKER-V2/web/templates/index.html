@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>
+        Nordic Manufacturing - H3 Incident Campaign V2
+    </title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
+</head>
+
+
+<body>
+
+
+<!-- ========================================================
+     HEADER
+========================================================= -->
+
+<header class="top-header">
+
+    <div class="header-left">
+
+        <div class="logo-box">
+            NM
+        </div>
+
+        <div>
+
+            <h1>
+                Nordic Manufacturing A/S
+            </h1>
+
+            <div class="subtitle">
+                H3 Incident Campaign V2
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <div class="header-right">
+
+        <div
+            id="systemStatus"
+            class="status-badge status-idle"
+        >
+            IDLE
+        </div>
+
+    </div>
+
+</header>
+
+
+<!-- ========================================================
+     MAIN
+========================================================= -->
+
+<main class="main-container">
+
+
+    <!-- ====================================================
+         CAMPAIGN DESCRIPTION
+    ===================================================== -->
+
+    <section class="panel intro-panel">
+
+        <h2>
+            Dynamic Incident Simulation
+        </h2>
+
+        <p>
+            Full incident simulation:
+            Recon → Web Discovery → Initial Access →
+            Internal Discovery → Data Staging →
+            Exfiltration → Impact
+        </p>
+
+        <p class="muted">
+            Targets are discovered dynamically from the
+            CyberLab network. Hosts are only considered
+            compromised when the configured SSH credentials
+            successfully authenticate.
+        </p>
+
+    </section>
+
+
+
+    <!-- ====================================================
+         CONFIGURATION
+    ===================================================== -->
+
+    <section class="panel">
+
+        <div class="panel-header">
+
+            <h2>
+                Campaign Configuration
+            </h2>
+
+            <span class="panel-tag">
+                V2 Dynamic Discovery
+            </span>
+
+        </div>
+
+
+        <div class="form-grid">
+
+
+            <!-- ============================================
+                 INCIDENTVM IP
+            ============================================= -->
+
+            <div class="form-group">
+
+                <label for="incidentIp">
+                    IncidentVM IP
+                </label>
+
+                <input
+                    id="incidentIp"
+                    type="text"
+                    value="{{ incident_ip }}"
+                    placeholder="192.168.1.254"
+                    autocomplete="off"
+                >
+
+                <div class="field-help">
+                    IP address used as the exfiltration
+                    destination.
+                </div>
+
+            </div>
+
+
+
+            <!-- ============================================
+                 WEB PORTS
+            ============================================= -->
+
+            <div class="form-group form-group-wide">
+
+                <label for="webPorts">
+                    Web / Proxy Ports
+                </label>
+
+                <input
+                    id="webPorts"
+                    type="text"
+                    value="{{ default_web_ports }}"
+                    autocomplete="off"
+                >
+
+                <div class="field-help">
+
+                    Default ports:
+                    <strong>
+                        80, 443, 3010, 8080, 8443
+                    </strong>
+
+                    — add or remove ports as required.
+
+                </div>
+
+            </div>
+
+
+
+            <!-- ============================================
+                 SSH USER
+            ============================================= -->
+
+            <div class="form-group">
+
+                <label for="sshUser">
+                    SSH Username
+                </label>
+
+                <input
+                    id="sshUser"
+                    type="text"
+                    value="{{ default_ssh_user }}"
+                    autocomplete="off"
+                >
+
+                <div class="field-help">
+                    Used against discovered SSH services.
+                </div>
+
+            </div>
+
+
+
+            <!-- ============================================
+                 SSH PASSWORD
+            ============================================= -->
+
+            <div class="form-group">
+
+                <label for="sshPassword">
+                    SSH Password
+                </label>
+
+                <input
+                    id="sshPassword"
+                    type="password"
+                    value=""
+                    placeholder="Required"
+                    autocomplete="new-password"
+                >
+
+                <div class="field-help">
+                    Password is not stored in campaign state
+                    or logs.
+                </div>
+
+            </div>
+
+
+
+            <!-- ============================================
+                 SSH PORT
+            ============================================= -->
+
+            <div class="form-group">
+
+                <label for="sshPort">
+                    SSH Port
+                </label>
+
+                <input
+                    id="sshPort"
+                    type="number"
+                    min="1"
+                    max="65535"
+                    value="{{ default_ssh_port }}"
+                >
+
+            </div>
+
+
+
+            <!-- ============================================
+                 EXFIL PORT
+            ============================================= -->
+
+            <div class="form-group">
+
+                <label for="exfilPort">
+                    Exfiltration Port
+                </label>
+
+                <input
+                    id="exfilPort"
+                    type="number"
+                    min="1024"
+                    max="65535"
+                    value="{{ default_exfil_port }}"
+                >
+
+                <div class="field-help">
+                    Temporary HTTP receiver on IncidentVM.
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ================================================
+             CONTROLS
+        ================================================= -->
+
+        <div class="campaign-controls">
+
+            <button
+                id="startButton"
+                class="button button-start"
+                type="button"
+            >
+                START FULL H3 INCIDENT
+            </button>
+
+
+            <button
+                id="stopButton"
+                class="button button-stop"
+                type="button"
+                disabled
+            >
+                STOP CAMPAIGN
+            </button>
+
+        </div>
+
+
+        <div
+            id="messageBox"
+            class="message-box hidden"
+        ></div>
+
+    </section>
+
+
+
+    <!-- ====================================================
+         INCIDENT STATUS
+    ===================================================== -->
+
+    <section class="panel">
+
+        <div class="panel-header">
+
+            <h2>
+                Incident Status
+            </h2>
+
+            <span
+                id="incidentId"
+                class="incident-id"
+            >
+                No active incident
+            </span>
+
+        </div>
+
+
+        <!-- ================================================
+             PHASES
+        ================================================= -->
+
+        <div class="phase-grid">
+
+
+            <div
+                class="phase-card"
+                data-phase="01"
+            >
+
+                <div class="phase-number">
+                    01
+                </div>
+
+                <div class="phase-info">
+
+                    <strong>
+                        Dynamic Discovery
+                    </strong>
+
+                    <span>
+                        Networks & hosts
+                    </span>
+
+                </div>
+
+                <div class="phase-status">
+                    PENDING
+                </div>
+
+            </div>
+
+
+
+            <div
+                class="phase-card"
+                data-phase="02"
+            >
+
+                <div class="phase-number">
+                    02
+                </div>
+
+                <div class="phase-info">
+
+                    <strong>
+                        Web Discovery
+                    </strong>
+
+                    <span>
+                        HTTP / HTTPS services
+                    </span>
+
+                </div>
+
+                <div class="phase-status">
+                    PENDING
+                </div>
+
+            </div>
+
+
+
+            <div
+                class="phase-card"
+                data-phase="03"
+            >
+
+                <div class="phase-number">
+                    03
+                </div>
+
+                <div class="phase-info">
+
+                    <strong>
+                        Initial Access
+                    </strong>
+
+                    <span>
+                        SSH authentication
+                    </span>
+
+                </div>
+
+                <div class="phase-status">
+                    PENDING
+                </div>
+
+            </div>
+
+
+
+            <div
+                class="phase-card"
+                data-phase="04"
+            >
+
+                <div class="phase-number">
+                    04
+                </div>
+
+                <div class="phase-info">
+
+                    <strong>
+                        Internal Discovery
+                    </strong>
+
+                    <span>
+                        East-west activity
+                    </span>
+
+                </div>
+
+                <div class="phase-status">
+                    PENDING
+                </div>
+
+            </div>
+
+
+
+            <div
+                class="phase-card"
+                data-phase="05"
+            >
+
+                <div class="phase-number">
+                    05
+                </div>
+
+                <div class="phase-info">
+
+                    <strong>
+                        Data Staging
+                    </strong>
+
+                    <span>
+                        Synthetic company data
+                    </span>
+
+                </div>
+
+                <div class="phase-status">
+                    PENDING
+                </div>
+
+            </div>
+
+
+
+            <div
+                class="phase-card"
+                data-phase="06"
+            >
+
+                <div class="phase-number">
+                    06
+                </div>
+
+                <div class="phase-info">
+
+                    <strong>
+                        Exfiltration
+                    </strong>
+
+                    <span>
+                        Outbound data transfer
+                    </span>
+
+                </div>
+
+                <div class="phase-status">
+                    PENDING
+                </div>
+
+            </div>
+
+
+
+            <div
+                class="phase-card"
+                data-phase="07"
+            >
+
+                <div class="phase-number">
+                    07
+                </div>
+
+                <div class="phase-info">
+
+                    <strong>
+                        Impact
+                    </strong>
+
+                    <span>
+                        Ransomware simulation
+                    </span>
+
+                </div>
+
+                <div class="phase-status">
+                    PENDING
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+
+    <!-- ====================================================
+         DYNAMIC INVENTORY
+    ===================================================== -->
+
+    <section class="panel">
+
+        <div class="panel-header">
+
+            <h2>
+                Dynamic Target Inventory
+            </h2>
+
+            <button
+                id="refreshInventoryButton"
+                class="button button-small"
+                type="button"
+            >
+                REFRESH
+            </button>
+
+        </div>
+
+
+        <div class="stats-grid">
+
+
+            <div class="stat-card">
+
+                <div
+                    id="networkCount"
+                    class="stat-number"
+                >
+                    0
+                </div>
+
+                <div class="stat-label">
+                    Networks
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div
+                    id="hostCount"
+                    class="stat-number"
+                >
+                    0
+                </div>
+
+                <div class="stat-label">
+                    Hosts
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div
+                    id="webCount"
+                    class="stat-number"
+                >
+                    0
+                </div>
+
+                <div class="stat-label">
+                    Web Targets
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div
+                    id="compromisedCount"
+                    class="stat-number"
+                >
+                    0
+                </div>
+
+                <div class="stat-label">
+                    Compromised
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div
+                    id="exfilCount"
+                    class="stat-number"
+                >
+                    0
+                </div>
+
+                <div class="stat-label">
+                    Exfiltrated
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div
+                    id="impactCount"
+                    class="stat-number"
+                >
+                    0
+                </div>
+
+                <div class="stat-label">
+                    Impacted
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ================================================
+             HOST TABLE
+        ================================================= -->
+
+        <div class="table-container">
+
+            <table class="inventory-table">
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            IP Address
+                        </th>
+
+                        <th>
+                            Network
+                        </th>
+
+                        <th>
+                            Interface
+                        </th>
+
+                        <th>
+                            Web
+                        </th>
+
+                        <th>
+                            Compromised
+                        </th>
+
+                        <th>
+                            Status
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody id="inventoryTable">
+
+                    <tr>
+
+                        <td
+                            colspan="6"
+                            class="empty-table"
+                        >
+                            No discovery data available.
+                        </td>
+
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+
+
+    <!-- ====================================================
+         CAMPAIGN LOG
+    ===================================================== -->
+
+    <section class="panel">
+
+        <div class="panel-header">
+
+            <h2>
+                Campaign Log
+            </h2>
+
+            <button
+                id="refreshLogButton"
+                class="button button-small"
+                type="button"
+            >
+                REFRESH
+            </button>
+
+        </div>
+
+
+        <pre id="campaignLog" class="campaign-log">Waiting for campaign...</pre>
+
+    </section>
+
+
+</main>
+
+
+<!-- ========================================================
+     FOOTER
+========================================================= -->
+
+<footer>
+
+    Nordic Manufacturing A/S
+    · H3 Cyber Security Training
+    · Incident Campaign V2
+
+</footer>
+
+
+<!-- ========================================================
+     JAVASCRIPT
+========================================================= -->
+
+<script
+    src="{{ url_for('static', filename='app.js') }}"
+></script>
+
+
+</body>
+
+</html>

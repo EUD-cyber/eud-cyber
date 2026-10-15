@@ -1,0 +1,49 @@
+# ============================================================
+# Nordic Manufacturing A/S
+# H3 Incident Campaign V2
+#
+# Flask Web Control Service
+# ============================================================
+
+[Unit]
+Description=Nordic Manufacturing H3 Incident Control V2
+After=network-online.target
+Wants=network-online.target
+
+
+[Service]
+
+Type=simple
+
+User=root
+Group=root
+
+WorkingDirectory=/opt/nordic-attack/web
+
+Environment="PYTHONUNBUFFERED=1"
+
+ExecStart=/usr/bin/python3 /opt/nordic-attack/web/app.py
+
+Restart=on-failure
+RestartSec=3
+
+TimeoutStopSec=15
+
+KillMode=control-group
+
+
+# ============================================================
+# Logging
+#
+# View with:
+#
+# journalctl -u nordic-incident-web.service -f
+# ============================================================
+
+StandardOutput=journal
+StandardError=journal
+
+
+[Install]
+
+WantedBy=multi-user.target
