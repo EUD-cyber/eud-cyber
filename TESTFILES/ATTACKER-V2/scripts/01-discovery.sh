@@ -1,52 +1,45 @@
 #!/usr/bin/env bash
 
-set -u
-
 # ============================================================
 # Nordic Manufacturing A/S
 # H3 Incident Campaign V2
 #
 # Phase 01 - Dynamic Network Discovery
 #
-# Purpose:
+# Discovers:
+#   - Directly connected RFC1918 networks
+#   - Active hosts on those networks
 #
-#   1. Detect directly connected private IPv4 networks
-#   2. Exclude loopback and default-route-only networks
-#   3. Discover active hosts
-#   4. Create JSON inventory for later phases
+# Does NOT:
+#   - Scan public/WAN networks
+#   - Scan explicitly excluded networks
+#   - Scan ignored interfaces
+#   - Perform service discovery
 #
 # Output:
-#
-#   /opt/nordic-attack/state/networks.json
-#   /opt/nordic-attack/state/discovered-hosts.json
+#   state/networks.json
+#   state/discovered-hosts.json
 #
 # ============================================================
 
+set -u
+
 
 # ============================================================
-# PATHS
+# BASE CONFIGURATION
 # ============================================================
 
 BASE_DIR="/opt/nordic-attack"
 
-CONFIG_FILE="$BASE_DIR/config/defaults.conf"
+DEFAULTS_FILE="${BASE_DIR}/config/defaults.conf"
 
-
-# ============================================================
-# LOAD CONFIGURATION
-# ============================================================
-
-if [[ ! -f "$CONFIG_FILE" ]]; then
-
-    echo "[ERROR] Configuration file not found:"
-    echo "$CONFIG_FILE"
-
+if [[ ! -f "$DEFAULTS_FILE" ]]; then
+    echo "[ERROR] Missing configuration: $DEFAULTS_FILE"
     exit 1
-
 fi
 
-# shellcheck source=/dev/null
-source "$CONFIG_FILE"
+# shellcheck disable=SC1090
+source "$DEFAULTS_FILE"
 
 
 mkdir -p \
@@ -54,39 +47,9 @@ mkdir -p \
     "$NORDIC_LOG_DIR"
 
 
-# ============================================================
-# CAMPAIGN
-# ============================================================
-
 INCIDENT_ID="${NORDIC_INCIDENT_ID:-H3-$(date +%Y%m%d-%H%M%S)}"
 
-LOG_FILE="$NORDIC_LOG_DIR/${INCIDENT_ID}-01-discovery.log"
-
-NETWORK_STATE="$NORDIC_NETWORK_STATE"
-
-DISCOVERED_STATE="$NORDIC_DISCOVERED_STATE"
-
-
-# ============================================================
-# REQUIRED COMMANDS
-# ============================================================
-
-REQUIRED_COMMANDS=(
-    ip
-    python3
-    nmap
-)
-
-for CMD in "${REQUIRED_COMMANDS[@]}"; do
-
-    if ! command -v "$CMD" >/dev/null 2>&1; then
-
-        echo "[ERROR] Required command not found: $CMD"
-        exit 1
-
-    fi
-
-done
+export NORDIC_INCIDENT_ID="$INCIDENT_ID"
 
 
 # ============================================================
@@ -95,475 +58,586 @@ done
 
 log() {
 
-    local MESSAGE="$1"
+    local message="$1"
 
-    echo "$MESSAGE"
-
-    printf '%s %s\n' \
-        "$(date --iso-8601=seconds)" \
-        "$MESSAGE" \
-        >> "$LOG_FILE"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $message"
 }
 
 
 ground_truth() {
 
-    local MESSAGE="$1"
+    local message="$1"
 
-    printf '%s INCIDENT=%s PHASE=01 %s\n' \
-        "$(date --iso-8601=seconds)" \
+    printf '%s | %s | PHASE01 | %s\n' \
+        "$(date '+%Y-%m-%d %H:%M:%S')" \
         "$INCIDENT_ID" \
-        "$MESSAGE" \
+        "$message" \
         >> "$NORDIC_GROUND_TRUTH_LOG"
 }
 
 
 # ============================================================
-# BANNER
+# REQUIREMENTS
 # ============================================================
 
-echo
-echo "============================================================"
-echo " NORDIC MANUFACTURING"
-echo " H3 INCIDENT CAMPAIGN V2"
-echo " PHASE 01 - DYNAMIC DISCOVERY"
-echo "============================================================"
-echo
+for command in ip python3 nmap; do
 
-log "[*] Incident ID: $INCIDENT_ID"
+    if ! command -v "$command" >/dev/null 2>&1; then
 
+        log "[ERROR] Required command not found: $command"
 
-# ============================================================
-# GET DEFAULT ROUTE INTERFACE
-# ============================================================
-
-DEFAULT_INTERFACE="$(
-    ip -4 route show default 2>/dev/null |
-    awk 'NR==1 {print $5}'
-)"
-
-if [[ -n "$DEFAULT_INTERFACE" ]]; then
-
-    log "[*] Default route interface: $DEFAULT_INTERFACE"
-
-else
-
-    log "[*] No IPv4 default route interface detected."
-
-fi
-
-
-# ============================================================
-# GET INTERFACE / NETWORK INFORMATION
-# ============================================================
-#
-# Format generated internally:
-#
-# interface|address/prefix
-#
-# Example:
-#
-# eth0|192.168.1.254/24
-# eth1|192.168.2.254/24
-#
-# ============================================================
-
-mapfile -t INTERFACE_ADDRESSES < <(
-    ip -o -4 addr show scope global |
-    awk '{print $2 "|" $4}'
-)
-
-
-if [[ ${#INTERFACE_ADDRESSES[@]} -eq 0 ]]; then
-
-    log "[ERROR] No global IPv4 interfaces detected."
-    exit 1
-
-fi
-
-
-# ============================================================
-# DETERMINE DIRECTLY CONNECTED PRIVATE NETWORKS
-# ============================================================
-
-NETWORK_RECORDS=()
-
-for RECORD in "${INTERFACE_ADDRESSES[@]}"; do
-
-    INTERFACE="${RECORD%%|*}"
-    ADDRESS_CIDR="${RECORD#*|}"
-
-    # --------------------------------------------------------
-    # Ignore configured interfaces
-    # --------------------------------------------------------
-
-    IGNORE=0
-
-    IFS=',' read -r -a IGNORED_INTERFACES \
-        <<< "$NORDIC_DISCOVERY_IGNORE_INTERFACES"
-
-    for IGNORED in "${IGNORED_INTERFACES[@]}"; do
-
-        IGNORED="${IGNORED//[[:space:]]/}"
-
-        if [[ "$INTERFACE" == "$IGNORED" ]]; then
-            IGNORE=1
-            break
-        fi
-
-    done
-
-    if [[ "$IGNORE" -eq 1 ]]; then
-        continue
+        exit 1
     fi
 
+done
 
-    # --------------------------------------------------------
-    # Convert interface CIDR to canonical network
-    # --------------------------------------------------------
 
-    NETWORK="$(
-        python3 - "$ADDRESS_CIDR" <<'PY'
+# ============================================================
+# TEMP FILES
+# ============================================================
+
+TMP_DIR="$(mktemp -d)"
+
+NETWORK_TMP="${TMP_DIR}/networks.txt"
+HOST_TMP="${TMP_DIR}/hosts.txt"
+
+touch "$NETWORK_TMP"
+touch "$HOST_TMP"
+
+
+cleanup() {
+
+    rm -rf "$TMP_DIR"
+}
+
+trap cleanup EXIT
+
+
+# ============================================================
+# HELPERS
+# ============================================================
+
+trim() {
+
+    local value="$1"
+
+    value="${value#"${value%%[![:space:]]*}"}"
+    value="${value%"${value##*[![:space:]]}"}"
+
+    printf '%s' "$value"
+}
+
+
+canonical_network() {
+
+    local cidr="$1"
+
+    python3 - "$cidr" <<'PY'
 import ipaddress
 import sys
 
 try:
     interface = ipaddress.ip_interface(sys.argv[1])
     print(interface.network)
+
 except ValueError:
     sys.exit(1)
 PY
-    )"
+}
 
-    if [[ -z "$NETWORK" ]]; then
+
+is_private_network() {
+
+    local cidr="$1"
+
+    python3 - "$cidr" <<'PY'
+import ipaddress
+import sys
+
+try:
+    network = ipaddress.ip_network(
+        sys.argv[1],
+        strict=False
+    )
+
+except ValueError:
+    sys.exit(1)
+
+private_ranges = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16")
+]
+
+if any(network.subnet_of(private) for private in private_ranges):
+    sys.exit(0)
+
+sys.exit(1)
+PY
+}
+
+
+network_prefix() {
+
+    local cidr="$1"
+
+    printf '%s\n' "${cidr##*/}"
+}
+
+
+interface_is_ignored() {
+
+    local interface="$1"
+
+    local configured="${NORDIC_DISCOVERY_IGNORE_INTERFACES:-lo}"
+
+    local entry
+
+    IFS=',' read -ra entries <<< "$configured"
+
+    for entry in "${entries[@]}"; do
+
+        entry="$(trim "$entry")"
+
+        [[ -z "$entry" ]] && continue
+
+        if [[ "$interface" == "$entry" ]]; then
+            return 0
+        fi
+
+    done
+
+    return 1
+}
+
+
+network_is_excluded() {
+
+    local candidate="$1"
+
+    local configured="${NORDIC_DISCOVERY_EXCLUDE_NETWORKS:-}"
+
+    [[ -z "$configured" ]] && return 1
+
+    local entry
+    local canonical
+
+    IFS=',' read -ra entries <<< "$configured"
+
+    for entry in "${entries[@]}"; do
+
+        entry="$(trim "$entry")"
+
+        [[ -z "$entry" ]] && continue
+
+        canonical="$(canonical_network "$entry" 2>/dev/null || true)"
+
+        if [[ -z "$canonical" ]]; then
+
+            log "[WARN] Invalid excluded network ignored: $entry"
+
+            continue
+        fi
+
+
+        if [[ "$candidate" == "$canonical" ]]; then
+            return 0
+        fi
+
+    done
+
+    return 1
+}
+
+
+# ============================================================
+# START
+# ============================================================
+
+echo
+echo "============================================================"
+echo " PHASE 01 - DYNAMIC NETWORK DISCOVERY"
+echo "============================================================"
+echo
+
+log "[INFO] Incident ID: $INCIDENT_ID"
+
+log "[INFO] Discovering directly connected IPv4 networks..."
+
+ground_truth "Dynamic network discovery started"
+
+
+# ============================================================
+# LOCAL INTERFACE INFORMATION
+# ============================================================
+
+declare -A LOCAL_IPS
+
+while read -r line; do
+
+    [[ -z "$line" ]] && continue
+
+    interface="$(awk '{print $2}' <<< "$line")"
+
+    address="$(awk '{print $4}' <<< "$line")"
+
+    ip_address="${address%%/*}"
+
+    LOCAL_IPS["$ip_address"]=1
+
+done < <(
+    ip -o -4 addr show scope global
+)
+
+
+# ============================================================
+# DISCOVER CONNECTED NETWORKS
+# ============================================================
+
+while read -r line; do
+
+    [[ -z "$line" ]] && continue
+
+
+    interface="$(awk '{print $2}' <<< "$line")"
+
+    address="$(awk '{print $4}' <<< "$line")"
+
+
+    # --------------------------------------------------------
+    # Ignore configured interfaces
+    # --------------------------------------------------------
+
+    if interface_is_ignored "$interface"; then
+
+        log "[SKIP] Interface ignored: $interface"
+
         continue
     fi
 
 
     # --------------------------------------------------------
-    # Verify private RFC1918 network
+    # Canonical network
     # --------------------------------------------------------
 
-    PRIVATE="$(
-        python3 - "$NETWORK" <<'PY'
-import ipaddress
-import sys
+    network="$(canonical_network "$address" 2>/dev/null || true)"
 
-try:
-    network = ipaddress.ip_network(sys.argv[1])
+    if [[ -z "$network" ]]; then
 
-    rfc1918 = (
-        ipaddress.ip_network("10.0.0.0/8"),
-        ipaddress.ip_network("172.16.0.0/12"),
-        ipaddress.ip_network("192.168.0.0/16"),
-    )
+        log "[SKIP] Unable to determine network for $address"
 
-    print(
-        "yes"
-        if any(network.subnet_of(private) for private in rfc1918)
-        else "no"
-    )
-
-except ValueError:
-    print("no")
-PY
-    )"
-
-
-    if [[ "$NORDIC_REQUIRE_PRIVATE_NETWORKS" == "1" ]] &&
-       [[ "$PRIVATE" != "yes" ]]; then
-
-        log "[SKIP] $INTERFACE $NETWORK is not an RFC1918 network."
         continue
+    fi
+
+
+    # --------------------------------------------------------
+    # RFC1918 only
+    # --------------------------------------------------------
+
+    if [[ "${NORDIC_DISCOVERY_PRIVATE_ONLY:-1}" == "1" ]]; then
+
+        if ! is_private_network "$network"; then
+
+            log "[SKIP] Non-private network: $network ($interface)"
+
+            ground_truth \
+                "Skipped non-private network=$network interface=$interface"
+
+            continue
+        fi
 
     fi
 
 
     # --------------------------------------------------------
     # Prefix safety
+    #
+    # Example:
+    #
+    # Minimum prefix = 16
+    #
+    # /24 -> allowed
+    # /20 -> allowed
+    # /16 -> allowed
+    # /8  -> rejected
     # --------------------------------------------------------
 
-    PREFIX="${NETWORK#*/}"
+    prefix="$(network_prefix "$network")"
 
-    if (( PREFIX < NORDIC_DISCOVERY_MIN_PREFIX )); then
+    if (( prefix < NORDIC_DISCOVERY_MIN_PREFIX )); then
 
-        log "[SKIP] $NETWORK is larger than allowed."
+        log "[SKIP] Network too large: $network"
+
+        ground_truth \
+            "Skipped oversized network=$network interface=$interface"
+
         continue
-
     fi
 
 
     # --------------------------------------------------------
-    # Default route interface handling
+    # EXCLUDED NETWORKS
     #
-    # IMPORTANT:
-    # We do NOT blindly exclude the interface containing the
-    # default route.
+    # Example:
     #
-    # IncidentVM may legitimately have its CyberLab LAN and
-    # default gateway on the same interface.
-    #
-    # We only use directly connected networks derived from
-    # actual interface addresses.
+    # 172.20.0.0/24 -> OOBM -> SKIP
     # --------------------------------------------------------
 
-    NETWORK_RECORDS+=(
-        "$INTERFACE|$ADDRESS_CIDR|$NETWORK|$PRIVATE"
-    )
+    if network_is_excluded "$network"; then
 
-done
+        log "[SKIP] Excluded network: $network ($interface)"
 
+        ground_truth \
+            "Excluded network=$network interface=$interface"
 
-if [[ ${#NETWORK_RECORDS[@]} -eq 0 ]]; then
-
-    log "[ERROR] No eligible private directly connected networks found."
-    exit 1
-
-fi
+        continue
+    fi
 
 
-# ============================================================
-# REMOVE DUPLICATE NETWORKS
-# ============================================================
+    # --------------------------------------------------------
+    # Duplicate check
+    # --------------------------------------------------------
 
-mapfile -t NETWORK_RECORDS < <(
-    printf '%s\n' "${NETWORK_RECORDS[@]}" |
-    awk -F'|' '!seen[$3]++'
+    if grep -Fqx \
+        "${network}|${interface}" \
+        "$NETWORK_TMP"; then
+
+        continue
+    fi
+
+
+    printf '%s|%s\n' \
+        "$network" \
+        "$interface" \
+        >> "$NETWORK_TMP"
+
+
+    log "[NETWORK] $network via $interface"
+
+    ground_truth \
+        "Discovery network=$network interface=$interface"
+
+
+done < <(
+    ip -o -4 addr show scope global
 )
 
 
 # ============================================================
-# DISPLAY NETWORKS
+# VERIFY NETWORKS
 # ============================================================
 
-echo
-echo "Detected CyberLab networks:"
-echo
+NETWORK_COUNT="$(wc -l < "$NETWORK_TMP")"
 
-for RECORD in "${NETWORK_RECORDS[@]}"; do
+if [[ "$NETWORK_COUNT" -eq 0 ]]; then
 
-    INTERFACE="${RECORD%%|*}"
+    log "[ERROR] No eligible CyberLab networks discovered."
 
-    REST="${RECORD#*|}"
-    ADDRESS_CIDR="${REST%%|*}"
+    ground_truth "No eligible networks discovered"
 
-    REST="${REST#*|}"
-    NETWORK="${REST%%|*}"
+    exit 1
+fi
 
-    printf "  %-12s %-20s %s\n" \
-        "$INTERFACE" \
-        "$ADDRESS_CIDR" \
-        "$NETWORK"
 
-    ground_truth \
-        "NETWORK interface=$INTERFACE address=$ADDRESS_CIDR network=$NETWORK"
-
-done
-
-echo
+log "[INFO] Eligible networks: $NETWORK_COUNT"
 
 
 # ============================================================
-# WRITE networks.json
+# WRITE NETWORK STATE
 # ============================================================
-
-TMP_NETWORKS="$NORDIC_STATE_DIR/.networks.tmp"
-
-printf '%s\n' "${NETWORK_RECORDS[@]}" > "$TMP_NETWORKS"
 
 python3 - \
-    "$TMP_NETWORKS" \
-    "$NETWORK_STATE" \
+    "$NETWORK_TMP" \
+    "$NORDIC_NETWORK_STATE" \
     "$INCIDENT_ID" <<'PY'
 
 import json
 import sys
 from datetime import datetime, timezone
 
-source_file = sys.argv[1]
-output_file = sys.argv[2]
+source = sys.argv[1]
+destination = sys.argv[2]
 incident_id = sys.argv[3]
 
 networks = []
 
-with open(source_file, "r", encoding="utf-8") as f:
-    for line in f:
+with open(source, encoding="utf-8") as handle:
+
+    for line in handle:
 
         line = line.strip()
 
         if not line:
             continue
 
-        interface, address, network, private = line.split("|", 3)
+        network, interface = line.split("|", 1)
 
         networks.append(
             {
-                "interface": interface,
-                "address": address,
                 "network": network,
-                "private": private == "yes",
+                "interface": interface
             }
         )
 
-data = {
+state = {
     "incident_id": incident_id,
-    "generated": datetime.now(timezone.utc).isoformat(),
-    "networks": networks,
+    "generated": datetime.now(
+        timezone.utc
+    ).isoformat(),
+    "count": len(networks),
+    "networks": networks
 }
 
-with open(output_file, "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2)
+with open(
+    destination,
+    "w",
+    encoding="utf-8"
+) as handle:
+
+    json.dump(
+        state,
+        handle,
+        indent=2
+    )
 
 PY
-
-rm -f "$TMP_NETWORKS"
 
 
 # ============================================================
 # HOST DISCOVERY
 # ============================================================
 
-DISCOVERED_RECORDS=()
+echo
 
-TOTAL_DISCOVERED=0
+log "[INFO] Starting host discovery..."
 
 
-for RECORD in "${NETWORK_RECORDS[@]}"; do
+TOTAL_HOSTS=0
 
-    INTERFACE="${RECORD%%|*}"
 
-    REST="${RECORD#*|}"
-    ADDRESS_CIDR="${REST%%|*}"
+while IFS='|' read -r network interface; do
 
-    REST="${REST#*|}"
-    NETWORK="${REST%%|*}"
+    [[ -z "$network" ]] && continue
 
-    INCIDENT_IP="${ADDRESS_CIDR%%/*}"
 
     echo
-    log "[*] Discovering hosts on $NETWORK via $INTERFACE"
-    echo
+    log "[SCAN] $network via $interface"
 
 
     # --------------------------------------------------------
-    # nmap host discovery
+    # NMAP HOST DISCOVERY
     #
     # -sn = host discovery only
+    # -n  = no DNS resolution
     #
-    # We deliberately do NOT perform the attack/service
-    # phases here.
+    # No service/port scanning in Phase 01.
     # --------------------------------------------------------
 
-    mapfile -t FOUND_HOSTS < <(
+    while read -r host; do
+
+        [[ -z "$host" ]] && continue
+
+
+        # ----------------------------------------------------
+        # Never add IncidentVM itself
+        # ----------------------------------------------------
+
+        if [[ -n "${LOCAL_IPS[$host]+x}" ]]; then
+
+            log "[SELF] $host"
+
+            continue
+        fi
+
+
+        # ----------------------------------------------------
+        # Duplicate host check
+        # ----------------------------------------------------
+
+        if grep -q "^${host}|" "$HOST_TMP"; then
+            continue
+        fi
+
+
+        printf '%s|%s|%s\n' \
+            "$host" \
+            "$network" \
+            "$interface" \
+            >> "$HOST_TMP"
+
+
+        TOTAL_HOSTS=$((TOTAL_HOSTS + 1))
+
+
+        log "[HOST] $host"
+
+        ground_truth \
+            "Discovered host=$host network=$network interface=$interface"
+
+
+        # ----------------------------------------------------
+        # Safety limit
+        # ----------------------------------------------------
+
+        if (( TOTAL_HOSTS >= NORDIC_MAX_DISCOVERED_HOSTS )); then
+
+            log "[WARN] Maximum discovered host limit reached."
+
+            break 2
+        fi
+
+
+    done < <(
+
         nmap \
             -sn \
             -n \
-            "$NETWORK" \
+            "$network" \
             -oG - \
-            2>/dev/null |
-        awk '/Status: Up/ {print $2}'
+            2>/dev/null \
+        | awk '/Status: Up/ {print $2}'
+
     )
 
 
-    for HOST in "${FOUND_HOSTS[@]}"; do
-
-        # Do not attack/discover IncidentVM itself as target.
-
-        if [[ "$HOST" == "$INCIDENT_IP" ]]; then
-            continue
-        fi
-
-
-        # Avoid duplicates where multiple routes/interfaces
-        # happen to expose the same host.
-
-        DUPLICATE=0
-
-        for EXISTING in "${DISCOVERED_RECORDS[@]}"; do
-
-            EXISTING_IP="${EXISTING%%|*}"
-
-            if [[ "$EXISTING_IP" == "$HOST" ]]; then
-                DUPLICATE=1
-                break
-            fi
-
-        done
-
-        if [[ "$DUPLICATE" -eq 1 ]]; then
-            continue
-        fi
-
-
-        TOTAL_DISCOVERED=$(( TOTAL_DISCOVERED + 1 ))
-
-
-        if (( TOTAL_DISCOVERED > NORDIC_MAX_DISCOVERED_HOSTS )); then
-
-            log "[WARNING] Maximum discovered host limit reached."
-            break 2
-
-        fi
-
-
-        DISCOVERED_RECORDS+=(
-            "$HOST|$NETWORK|$INTERFACE"
-        )
-
-        log "[+] Host discovered: $HOST"
-
-        ground_truth \
-            "HOST_DISCOVERED ip=$HOST network=$NETWORK interface=$INTERFACE"
-
-    done
-
-done
+done < "$NETWORK_TMP"
 
 
 # ============================================================
-# WRITE discovered-hosts.json
+# WRITE HOST STATE
 # ============================================================
-
-TMP_HOSTS="$NORDIC_STATE_DIR/.hosts.tmp"
-
-if [[ ${#DISCOVERED_RECORDS[@]} -gt 0 ]]; then
-
-    printf '%s\n' \
-        "${DISCOVERED_RECORDS[@]}" \
-        > "$TMP_HOSTS"
-
-else
-
-    : > "$TMP_HOSTS"
-
-fi
-
 
 python3 - \
-    "$TMP_HOSTS" \
-    "$DISCOVERED_STATE" \
+    "$HOST_TMP" \
+    "$NORDIC_DISCOVERED_STATE" \
     "$INCIDENT_ID" <<'PY'
 
 import json
 import sys
 from datetime import datetime, timezone
 
-source_file = sys.argv[1]
-output_file = sys.argv[2]
+source = sys.argv[1]
+destination = sys.argv[2]
 incident_id = sys.argv[3]
 
 hosts = []
 
-with open(source_file, "r", encoding="utf-8") as f:
+with open(
+    source,
+    encoding="utf-8"
+) as handle:
 
-    for line in f:
+    for line in handle:
 
         line = line.strip()
 
         if not line:
             continue
 
-        ip, network, interface = line.split("|", 2)
+        ip, network, interface = line.split(
+            "|",
+            2
+        )
 
         hosts.append(
             {
@@ -578,26 +652,35 @@ with open(source_file, "r", encoding="utf-8") as f:
                 "ssh_candidate": False,
                 "web_candidate": False,
 
-                "compromised": False,
+                "compromised": False
             }
         )
 
-
-data = {
+state = {
     "incident_id": incident_id,
-    "generated": datetime.now(timezone.utc).isoformat(),
+
+    "generated": datetime.now(
+        timezone.utc
+    ).isoformat(),
+
     "count": len(hosts),
-    "hosts": hosts,
+
+    "hosts": hosts
 }
 
+with open(
+    destination,
+    "w",
+    encoding="utf-8"
+) as handle:
 
-with open(output_file, "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2)
+    json.dump(
+        state,
+        handle,
+        indent=2
+    )
 
 PY
-
-
-rm -f "$TMP_HOSTS"
 
 
 # ============================================================
@@ -606,38 +689,26 @@ rm -f "$TMP_HOSTS"
 
 echo
 echo "============================================================"
-echo " PHASE 01 COMPLETED"
+echo " PHASE 01 COMPLETE"
 echo "============================================================"
 echo
 
-echo "Networks discovered:"
-echo "  ${#NETWORK_RECORDS[@]}"
+log "[INFO] Networks discovered : $NETWORK_COUNT"
+log "[INFO] Hosts discovered    : $TOTAL_HOSTS"
 
 echo
 
-echo "Hosts discovered:"
-echo "  ${#DISCOVERED_RECORDS[@]}"
+log "[INFO] Network state:"
+log "       $NORDIC_NETWORK_STATE"
 
-echo
-
-echo "Network state:"
-echo "  $NETWORK_STATE"
-
-echo
-
-echo "Host inventory:"
-echo "  $DISCOVERED_STATE"
-
-echo
-
-echo "Log:"
-echo "  $LOG_FILE"
+log "[INFO] Host state:"
+log "       $NORDIC_DISCOVERED_STATE"
 
 echo
 
 
 ground_truth \
-    "PHASE_COMPLETE networks=${#NETWORK_RECORDS[@]} hosts=${#DISCOVERED_RECORDS[@]}"
+    "Dynamic discovery completed networks=$NETWORK_COUNT hosts=$TOTAL_HOSTS"
 
 
 exit 0
