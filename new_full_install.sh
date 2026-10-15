@@ -26,7 +26,7 @@ WIN11="./WIN11/WIN11_installer.sh"
 WIN2025="./WIN2025/WIN2025_multi_installer.sh"
 IMAGESRV="./IMAGESRV/IMAGESRV_installer.sh"
 INCIDENTVM="./INCIDENTVM/IncidentVM_installer.sh"
-MRNOBODY="./MRNOBODY/MRNOBODY_installer.sh"
+MRNOBODY="./MRNOBODY/mrnobody_installer.sh"
 
 echo "=============================="
 echo " Proxmox Deployment Menu"
