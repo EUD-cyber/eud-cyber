@@ -1,6 +1,6 @@
 #cloud-config
 
-hostname: attackervm
+hostname: mrnobody
 manage_etc_hosts: true
 
 users:
