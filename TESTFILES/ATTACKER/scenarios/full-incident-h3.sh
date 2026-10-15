@@ -6,23 +6,20 @@ set -u
 # Nordic Manufacturing A/S
 # H3 Full Incident Campaign
 #
-# Supports:
+# Supports multiple compromised Linux hosts:
 #
-#   MANUAL MODE
-#   attackctl -> Full Incident
-#
-#   AUTO / GUI MODE
-#   NORDIC_AUTO=1
+#   192.168.1.20
+#   192.168.1.20,192.168.1.21
 #
 # Attack chain:
 #
-#   01 Reconnaissance
-#   02 Web Attack
-#   03 Initial Access
-#   04 Internal Discovery
-#   05 Data Staging
-#   06 Exfiltration
-#   07 Impact / Ransomware Simulation
+#   01 Reconnaissance       -> each compromised host
+#   02 Web Attack           -> web target once
+#   03 Initial Access       -> each compromised host
+#   04 Internal Discovery   -> each compromised host
+#   05 Data Staging         -> each compromised host
+#   06 Exfiltration         -> each compromised host
+#   07 Impact               -> each compromised host
 #
 # ============================================================
 
@@ -55,7 +52,6 @@ banner() {
     echo " H3 FULL INCIDENT CAMPAIGN"
     echo "============================================================"
     echo
-
 }
 
 
@@ -69,14 +65,10 @@ phase_header() {
     echo " PHASE $NUMBER - $NAME"
     echo "============================================================"
     echo
-
 }
 
 
 pause_between_phases() {
-
-    # Small variation makes the incident timeline easier
-    # for students to investigate afterwards.
 
     local DELAY=$(( RANDOM % 4 + 2 ))
 
@@ -96,7 +88,6 @@ require_value() {
     if [[ -z "$VALUE" ]]; then
 
         echo "[ERROR] Missing required value: $NAME"
-
         exit 1
 
     fi
@@ -115,13 +106,17 @@ run_phase() {
 
     echo "[*] Starting phase $NUMBER..."
     echo "[*] Script: $SCRIPT"
+
+    if [[ -n "${NORDIC_COMPROMISED_HOST:-}" ]]; then
+        echo "[*] Compromised host: $NORDIC_COMPROMISED_HOST"
+    fi
+
     echo
 
     if [[ ! -f "$SCRIPT" ]]; then
 
         echo "[ERROR] Script not found:"
         echo "$SCRIPT"
-
         exit 1
 
     fi
@@ -130,16 +125,13 @@ run_phase() {
 
         echo "[ERROR] Script is not executable:"
         echo "$SCRIPT"
-
         exit 1
 
     fi
 
-
     "$SCRIPT"
 
     RESULT=$?
-
 
     echo
 
@@ -152,6 +144,9 @@ run_phase() {
         echo "Phase:"
         echo "$NAME"
         echo
+        echo "Host:"
+        echo "${NORDIC_COMPROMISED_HOST:-N/A}"
+        echo
         echo "Exit code:"
         echo "$RESULT"
         echo
@@ -162,12 +157,42 @@ run_phase() {
 
     fi
 
-
     echo "============================================================"
     echo " PHASE $NUMBER COMPLETED"
     echo "============================================================"
     echo
+}
 
+
+run_phase_for_hosts() {
+
+    local NUMBER="$1"
+    local NAME="$2"
+    local SCRIPT="$3"
+
+    local HOST
+
+    for HOST in "${COMPROMISED_HOSTS[@]}"; do
+
+        export NORDIC_COMPROMISED_HOST="$HOST"
+
+        echo
+        echo "############################################################"
+        echo " TARGET HOST: $HOST"
+        echo "############################################################"
+        echo
+
+        run_phase \
+            "$NUMBER" \
+            "$NAME - $HOST" \
+            "$SCRIPT"
+
+        echo "$(date --iso-8601=seconds) PHASE${NUMBER} HOST=$HOST COMPLETE" \
+            >> "$MASTER_LOG"
+
+        pause_between_phases
+
+    done
 }
 
 
@@ -213,11 +238,6 @@ else
     echo "[MODE] MANUAL / CLI"
     echo
 
-
-    # --------------------------------------------------------
-    # Incident ID
-    # --------------------------------------------------------
-
     DEFAULT_INCIDENT_ID=$(
         date +"H3-%Y%m%d-%H%M%S"
     )
@@ -228,38 +248,31 @@ else
 
     INCIDENT_ID="${INCIDENT_ID:-$DEFAULT_INCIDENT_ID}"
 
-
     echo
 
-
-    # --------------------------------------------------------
-    # Primary compromised host
-    # --------------------------------------------------------
-
-    echo "Primary compromised host"
+    echo "Compromised Linux hosts"
+    echo
+    echo "Enter one or more IP addresses separated by commas."
+    echo "Example:"
+    echo "192.168.1.20,192.168.1.21"
     echo
 
     read -r -p \
-        "Linux target IP: " \
+        "Linux target IP(s): " \
         COMPROMISED_HOST
-
 
     echo
 
-
-    # --------------------------------------------------------
-    # Web target
-    # --------------------------------------------------------
+    FIRST_HOST="${COMPROMISED_HOST%%,*}"
 
     echo "Web target"
     echo
 
     read -r -p \
-        "Web target IP [$COMPROMISED_HOST]: " \
+        "Web target IP [$FIRST_HOST]: " \
         WEB_TARGET
 
-    WEB_TARGET="${WEB_TARGET:-$COMPROMISED_HOST}"
-
+    WEB_TARGET="${WEB_TARGET:-$FIRST_HOST}"
 
     read -r -p \
         "Web port [80]: " \
@@ -267,13 +280,7 @@ else
 
     WEB_PORT="${WEB_PORT:-80}"
 
-
     echo
-
-
-    # --------------------------------------------------------
-    # Internal target
-    # --------------------------------------------------------
 
     echo "Internal target"
     echo
@@ -282,13 +289,7 @@ else
         "Internal target IP: " \
         INTERNAL_TARGET
 
-
     echo
-
-
-    # --------------------------------------------------------
-    # IncidentVM
-    # --------------------------------------------------------
 
     echo "IncidentVM / Exfiltration receiver"
     echo
@@ -297,13 +298,7 @@ else
         "IncidentVM IP: " \
         INCIDENT_IP
 
-
     echo
-
-
-    # --------------------------------------------------------
-    # SSH credentials
-    # --------------------------------------------------------
 
     echo "Compromised host credentials"
     echo
@@ -313,7 +308,6 @@ else
         SSH_USER
 
     SSH_USER="${SSH_USER:-ubuntu}"
-
 
     read -r -s -p \
         "SSH password: " \
@@ -334,7 +328,7 @@ require_value \
     "$INCIDENT_ID"
 
 require_value \
-    "Compromised Linux Host" \
+    "Compromised Linux Host(s)" \
     "$COMPROMISED_HOST"
 
 require_value \
@@ -363,16 +357,39 @@ require_value \
 
 
 # ============================================================
-# EXPORT CONFIGURATION
-#
-# Individual phase scripts read these variables.
+# BUILD HOST ARRAY
+# ============================================================
+
+IFS=',' read -r -a RAW_HOSTS <<< "$COMPROMISED_HOST"
+
+COMPROMISED_HOSTS=()
+
+for HOST in "${RAW_HOSTS[@]}"; do
+
+    HOST="${HOST//[[:space:]]/}"
+
+    if [[ -n "$HOST" ]]; then
+        COMPROMISED_HOSTS+=("$HOST")
+    fi
+
+done
+
+
+if [[ ${#COMPROMISED_HOSTS[@]} -eq 0 ]]; then
+
+    echo "[ERROR] No compromised hosts configured."
+    exit 1
+
+fi
+
+
+# ============================================================
+# EXPORT COMMON CONFIGURATION
 # ============================================================
 
 export NORDIC_AUTO=1
 
 export NORDIC_INCIDENT_ID="$INCIDENT_ID"
-
-export NORDIC_COMPROMISED_HOST="$COMPROMISED_HOST"
 
 export NORDIC_WEB_TARGET="$WEB_TARGET"
 
@@ -413,8 +430,11 @@ echo "  $INCIDENT_ID"
 
 echo
 
-echo "Compromised Linux Host:"
-echo "  $COMPROMISED_HOST"
+echo "Compromised Linux Hosts:"
+
+for HOST in "${COMPROMISED_HOSTS[@]}"; do
+    echo "  $HOST"
+done
 
 echo
 
@@ -440,13 +460,13 @@ echo
 
 echo "Attack chain:"
 echo
-echo "  01 Reconnaissance"
-echo "  02 Web Attack"
-echo "  03 Initial Access"
-echo "  04 Internal Discovery"
-echo "  05 Data Staging"
-echo "  06 Exfiltration"
-echo "  07 Impact"
+echo "  01 Reconnaissance       - each compromised host"
+echo "  02 Web Attack           - web target"
+echo "  03 Initial Access       - each compromised host"
+echo "  04 Internal Discovery   - each compromised host"
+echo "  05 Data Staging         - each compromised host"
+echo "  06 Exfiltration         - each compromised host"
+echo "  07 Impact               - each compromised host"
 
 echo
 
@@ -458,8 +478,6 @@ echo
 
 # ============================================================
 # MANUAL CONFIRMATION
-#
-# GUI mode must not stop for input.
 # ============================================================
 
 if [[ "$AUTO_MODE" != "1" ]]; then
@@ -503,7 +521,14 @@ fi
 
     echo
 
-    echo "Compromised Host: $COMPROMISED_HOST"
+    echo "Compromised Hosts:"
+
+    for HOST in "${COMPROMISED_HOSTS[@]}"; do
+        echo "  $HOST"
+    done
+
+    echo
+
     echo "Web Target: $WEB_TARGET:$WEB_PORT"
     echo "Internal Target: $INTERNAL_TARGET"
     echo "IncidentVM: $INCIDENT_IP"
@@ -538,25 +563,32 @@ echo
 echo "Incident ID: $INCIDENT_ID"
 echo
 
+echo "[*] Number of compromised Linux hosts: ${#COMPROMISED_HOSTS[@]}"
+
+for HOST in "${COMPROMISED_HOSTS[@]}"; do
+    echo "[*] Host: $HOST"
+done
+
+echo
+
 
 # ============================================================
-# PHASE 01
+# PHASE 01 - RECON
 # ============================================================
 
-run_phase \
+run_phase_for_hosts \
     "01" \
     "RECONNAISSANCE" \
     "$SCRIPT_DIR/01-recon.sh"
 
-echo "$(date --iso-8601=seconds) PHASE01 COMPLETE" \
-    >> "$MASTER_LOG"
-
-pause_between_phases
-
 
 # ============================================================
-# PHASE 02
+# PHASE 02 - WEB
+#
+# Run ONCE against configured web target.
 # ============================================================
+
+export NORDIC_COMPROMISED_HOST="${COMPROMISED_HOSTS[0]}"
 
 run_phase \
     "02" \
@@ -570,84 +602,57 @@ pause_between_phases
 
 
 # ============================================================
-# PHASE 03
+# PHASE 03 - INITIAL ACCESS
 # ============================================================
 
-run_phase \
+run_phase_for_hosts \
     "03" \
     "INITIAL ACCESS" \
     "$SCRIPT_DIR/03-auth.sh"
 
-echo "$(date --iso-8601=seconds) PHASE03 COMPLETE" \
-    >> "$MASTER_LOG"
-
-pause_between_phases
-
 
 # ============================================================
-# PHASE 04
+# PHASE 04 - INTERNAL DISCOVERY
 # ============================================================
 
-run_phase \
+run_phase_for_hosts \
     "04" \
     "INTERNAL DISCOVERY" \
     "$SCRIPT_DIR/04-lateral.sh"
 
-echo "$(date --iso-8601=seconds) PHASE04 COMPLETE" \
-    >> "$MASTER_LOG"
-
-pause_between_phases
-
 
 # ============================================================
-# PHASE 05
+# PHASE 05 - DATA STAGING
 # ============================================================
 
-run_phase \
+run_phase_for_hosts \
     "05" \
     "DATA STAGING" \
     "$SCRIPT_DIR/05-staging.sh"
 
-echo "$(date --iso-8601=seconds) PHASE05 COMPLETE" \
-    >> "$MASTER_LOG"
-
-pause_between_phases
-
 
 # ============================================================
-# PHASE 06
+# PHASE 06 - EXFILTRATION
 # ============================================================
 
-run_phase \
+run_phase_for_hosts \
     "06" \
     "EXFILTRATION" \
     "$SCRIPT_DIR/06-exfil.sh"
 
-echo "$(date --iso-8601=seconds) PHASE06 COMPLETE" \
-    >> "$MASTER_LOG"
-
-pause_between_phases
-
 
 # ============================================================
-# PHASE 07
+# PHASE 07 - IMPACT
 # ============================================================
 
-run_phase \
+run_phase_for_hosts \
     "07" \
     "IMPACT / RANSOMWARE SIMULATION" \
     "$SCRIPT_DIR/07-ransomware-sim.sh"
 
-echo "$(date --iso-8601=seconds) PHASE07 COMPLETE" \
-    >> "$MASTER_LOG"
-
 
 # ============================================================
 # COMPLETION
-#
-# app.py searches for:
-#
-# FULL INCIDENT COMPLETED
 # ============================================================
 
 {
@@ -669,6 +674,14 @@ echo
 
 echo "Incident ID:"
 echo "  $INCIDENT_ID"
+
+echo
+
+echo "Compromised hosts:"
+
+for HOST in "${COMPROMISED_HOSTS[@]}"; do
+    echo "  $HOST"
+done
 
 echo
 
