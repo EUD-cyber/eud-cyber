@@ -103,6 +103,7 @@ async function apiPost(url, data = {}) {
     if (!response.ok) {
 
         throw new Error(
+            result.message ||
             result.error ||
             `HTTP ${response.status}`
         );
@@ -121,6 +122,10 @@ function showMessage(
     type = "info"
 ) {
 
+    if (!messageBox) {
+        return;
+    }
+
     messageBox.textContent =
         message;
 
@@ -135,9 +140,108 @@ function showMessage(
 
 function hideMessage() {
 
+    if (!messageBox) {
+        return;
+    }
+
     messageBox.classList.add(
         "hidden"
     );
+}
+
+
+// ==========================================================
+// CONFIGURATION
+// ==========================================================
+
+async function loadConfiguration() {
+
+    try {
+
+        const config =
+            await apiGet(
+                "/api/config"
+            );
+
+        const incidentIp =
+            document.getElementById(
+                "incidentIp"
+            );
+
+        const webPorts =
+            document.getElementById(
+                "webPorts"
+            );
+
+        const sshUser =
+            document.getElementById(
+                "sshUser"
+            );
+
+        const sshPort =
+            document.getElementById(
+                "sshPort"
+            );
+
+        const exfilPort =
+            document.getElementById(
+                "exfilPort"
+            );
+
+
+        if (incidentIp) {
+
+            incidentIp.value =
+                config.incident_ip ||
+                "192.168.1.254";
+        }
+
+
+        if (webPorts) {
+
+            webPorts.value =
+                config.web_ports ||
+                "80,443,3010,8080,8443";
+        }
+
+
+        if (sshUser) {
+
+            sshUser.value =
+                config.ssh_username ||
+                "ubuntu";
+        }
+
+
+        if (sshPort) {
+
+            sshPort.value =
+                config.ssh_port ||
+                "22";
+        }
+
+
+        if (exfilPort) {
+
+            exfilPort.value =
+                config.exfil_port ||
+                "9090";
+        }
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Configuration error:",
+            error
+        );
+
+        showMessage(
+            "Unable to load campaign configuration.",
+            "error"
+        );
+    }
 }
 
 
@@ -146,6 +250,10 @@ function hideMessage() {
 // ==========================================================
 
 function setSystemStatus(status) {
+
+    if (!systemStatus) {
+        return;
+    }
 
     const normalized =
         String(status || "idle")
@@ -237,6 +345,10 @@ function updatePhases(phases) {
                 ".phase-status"
             );
 
+        if (!statusElement) {
+            return;
+        }
+
         const status =
             phases?.[phase] ||
             "pending";
@@ -307,8 +419,16 @@ async function refreshStatus() {
                 "/api/status"
             );
 
+        /*
+         * Support both the current Flask response
+         * (process_running) and campaign-state responses
+         * containing running.
+         */
         const running =
-            Boolean(data.running);
+            Boolean(
+                data.process_running ??
+                data.running
+            );
 
         setSystemStatus(
             data.status
@@ -323,15 +443,18 @@ async function refreshStatus() {
             data.state?.incident_id ||
             data.incident_id;
 
-        if (id) {
+        if (incidentId) {
 
-            incidentId.textContent =
-                id;
+            if (id) {
 
-        } else {
+                incidentId.textContent =
+                    id;
 
-            incidentId.textContent =
-                "No active incident";
+            } else {
+
+                incidentId.textContent =
+                    "No active incident";
+            }
         }
 
 
@@ -344,6 +467,12 @@ async function refreshStatus() {
             updatePhases(
                 data.state.phases
             );
+
+        } else if (data.phases) {
+
+            updatePhases(
+                data.phases
+            );
         }
 
 
@@ -351,11 +480,17 @@ async function refreshStatus() {
         // BUTTONS
         // --------------------------------------------------
 
-        startButton.disabled =
-            running;
+        if (startButton) {
 
-        stopButton.disabled =
-            !running;
+            startButton.disabled =
+                running;
+        }
+
+        if (stopButton) {
+
+            stopButton.disabled =
+                !running;
+        }
 
 
         // --------------------------------------------------
@@ -415,8 +550,8 @@ async function startCampaign() {
             .getElementById(
                 "incidentIp"
             )
-            .value
-            .trim();
+            ?.value
+            .trim() || "";
 
 
     const webPorts =
@@ -424,8 +559,8 @@ async function startCampaign() {
             .getElementById(
                 "webPorts"
             )
-            .value
-            .trim();
+            ?.value
+            .trim() || "";
 
 
     const sshUser =
@@ -433,8 +568,8 @@ async function startCampaign() {
             .getElementById(
                 "sshUser"
             )
-            .value
-            .trim();
+            ?.value
+            .trim() || "";
 
 
     const sshPassword =
@@ -442,7 +577,7 @@ async function startCampaign() {
             .getElementById(
                 "sshPassword"
             )
-            .value;
+            ?.value || "";
 
 
     const sshPort =
@@ -451,7 +586,7 @@ async function startCampaign() {
                 .getElementById(
                     "sshPort"
                 )
-                .value
+                ?.value
         );
 
 
@@ -461,13 +596,46 @@ async function startCampaign() {
                 .getElementById(
                     "exfilPort"
                 )
-                .value
+                ?.value
         );
 
 
     // ------------------------------------------------------
     // CLIENT VALIDATION
     // ------------------------------------------------------
+
+    if (!incidentIp) {
+
+        showMessage(
+            "IncidentVM IP is required.",
+            "error"
+        );
+
+        return;
+    }
+
+
+    if (!webPorts) {
+
+        showMessage(
+            "At least one web/proxy port is required.",
+            "error"
+        );
+
+        return;
+    }
+
+
+    if (!sshUser) {
+
+        showMessage(
+            "SSH username is required.",
+            "error"
+        );
+
+        return;
+    }
+
 
     if (!sshPassword) {
 
@@ -480,10 +648,29 @@ async function startCampaign() {
     }
 
 
-    if (!webPorts) {
+    if (
+        !Number.isInteger(sshPort) ||
+        sshPort < 1 ||
+        sshPort > 65535
+    ) {
 
         showMessage(
-            "At least one web/proxy port is required.",
+            "Valid SSH port is required.",
+            "error"
+        );
+
+        return;
+    }
+
+
+    if (
+        !Number.isInteger(exfilPort) ||
+        exfilPort < 1 ||
+        exfilPort > 65535
+    ) {
+
+        showMessage(
+            "Valid exfiltration port is required.",
             "error"
         );
 
@@ -508,8 +695,11 @@ async function startCampaign() {
     }
 
 
-    startButton.disabled =
-        true;
+    if (startButton) {
+
+        startButton.disabled =
+            true;
+    }
 
 
     showMessage(
@@ -530,35 +720,46 @@ async function startCampaign() {
                     web_ports:
                         webPorts,
 
-                    ssh_user:
+                    ssh_username:
                         sshUser,
 
                     ssh_password:
                         sshPassword,
 
                     ssh_port:
-                        sshPort,
+                        String(sshPort),
 
                     exfil_port:
-                        exfilPort
+                        String(exfilPort)
                 }
             );
 
 
         // --------------------------------------------------
-        // Remove password from browser field immediately
-        // after successful submission.
+        // Remove password immediately after successful
+        // submission.
         // --------------------------------------------------
 
-        document
-            .getElementById(
+        const passwordField =
+            document.getElementById(
                 "sshPassword"
-            )
-            .value = "";
+            );
+
+        if (passwordField) {
+
+            passwordField.value =
+                "";
+        }
 
 
-        incidentId.textContent =
-            result.incident_id;
+        if (
+            incidentId &&
+            result.incident_id
+        ) {
+
+            incidentId.textContent =
+                result.incident_id;
+        }
 
 
         setSystemStatus(
@@ -571,7 +772,9 @@ async function startCampaign() {
 
 
         showMessage(
-            `Campaign ${result.incident_id} started.`,
+            result.incident_id
+                ? `Campaign ${result.incident_id} started.`
+                : "H3 Incident Campaign V2 started.",
             "success"
         );
 
@@ -584,8 +787,11 @@ async function startCampaign() {
 
     catch (error) {
 
-        startButton.disabled =
-            false;
+        if (startButton) {
+
+            startButton.disabled =
+                false;
+        }
 
 
         showMessage(
@@ -613,8 +819,11 @@ async function stopCampaign() {
     }
 
 
-    stopButton.disabled =
-        true;
+    if (stopButton) {
+
+        stopButton.disabled =
+            true;
+    }
 
 
     showMessage(
@@ -717,70 +926,52 @@ async function refreshInventory() {
             );
 
 
-        // --------------------------------------------------
-        // NETWORKS
-        // --------------------------------------------------
+        /*
+         * Support both aggregate inventory responses and
+         * the direct discovered-hosts response.
+         */
 
         const networks =
-            arrayFromState(
-                data.networks,
-                "networks"
-            );
+            data.networks?.networks
+                ? data.networks.networks
+                : [];
 
-
-        // --------------------------------------------------
-        // DISCOVERED HOSTS
-        // --------------------------------------------------
 
         const hosts =
-            arrayFromState(
-                data.discovered,
-                "hosts"
-            );
+            data.discovered?.hosts
+                ? data.discovered.hosts
+                : (
+                    Array.isArray(data.hosts)
+                        ? data.hosts
+                        : []
+                );
 
-
-        // --------------------------------------------------
-        // WEB TARGETS
-        // --------------------------------------------------
 
         const webTargets =
-            arrayFromState(
-                data.web,
-                "targets"
-            );
+            data.web?.targets
+                ? data.web.targets
+                : [];
 
-
-        // --------------------------------------------------
-        // COMPROMISED
-        // --------------------------------------------------
 
         const compromised =
-            arrayFromState(
-                data.compromised,
-                "hosts"
-            );
+            data.compromised?.hosts
+                ? data.compromised.hosts
+                : hosts.filter(
+                    host =>
+                        host.compromised === true
+                );
 
-
-        // --------------------------------------------------
-        // EXFIL
-        // --------------------------------------------------
 
         const transfers =
-            arrayFromState(
-                data.exfiltration,
-                "transfers"
-            );
+            data.exfiltration?.transfers
+                ? data.exfiltration.transfers
+                : [];
 
-
-        // --------------------------------------------------
-        // IMPACT
-        // --------------------------------------------------
 
         const impacted =
-            arrayFromState(
-                data.impact,
-                "hosts"
-            );
+            data.impact?.hosts
+                ? data.impact.hosts
+                : [];
 
 
         // --------------------------------------------------
@@ -846,6 +1037,11 @@ function renderInventory(
     impacted
 ) {
 
+    if (!inventoryTable) {
+        return;
+    }
+
+
     inventoryTable.innerHTML =
         "";
 
@@ -886,7 +1082,10 @@ function renderInventory(
     const compromisedIps =
         new Set(
             compromised.map(
-                host => host.ip
+                host =>
+                    typeof host === "string"
+                        ? host
+                        : host.ip
             )
         );
 
@@ -894,7 +1093,10 @@ function renderInventory(
     const impactedIps =
         new Set(
             impacted.map(
-                host => host.ip
+                host =>
+                    typeof host === "string"
+                        ? host
+                        : host.ip
             )
         );
 
@@ -959,7 +1161,9 @@ function renderInventory(
         const isCompromised =
             compromisedIps.has(
                 host.ip
-            );
+            ) ||
+            host.compromised === true;
+
 
         addStatusCell(
             row,
@@ -1107,9 +1311,17 @@ async function refreshLog() {
 
         if (!data.log) {
 
-            campaignLog.textContent =
-                "Waiting for campaign...";
+            if (campaignLog) {
 
+                campaignLog.textContent =
+                    "Waiting for campaign...";
+            }
+
+            return;
+        }
+
+
+        if (!campaignLog) {
             return;
         }
 
@@ -1185,28 +1397,40 @@ function startPolling() {
 // EVENT HANDLERS
 // ==========================================================
 
-startButton.addEventListener(
-    "click",
-    startCampaign
-);
+if (startButton) {
+
+    startButton.addEventListener(
+        "click",
+        startCampaign
+    );
+}
 
 
-stopButton.addEventListener(
-    "click",
-    stopCampaign
-);
+if (stopButton) {
+
+    stopButton.addEventListener(
+        "click",
+        stopCampaign
+    );
+}
 
 
-refreshInventoryButton.addEventListener(
-    "click",
-    refreshInventory
-);
+if (refreshInventoryButton) {
+
+    refreshInventoryButton.addEventListener(
+        "click",
+        refreshInventory
+    );
+}
 
 
-refreshLogButton.addEventListener(
-    "click",
-    refreshLog
-);
+if (refreshLogButton) {
+
+    refreshLogButton.addEventListener(
+        "click",
+        refreshLog
+    );
+}
 
 
 // ==========================================================
@@ -1221,6 +1445,14 @@ async function initialize() {
 
 
     try {
+
+        /*
+         * Configuration must be loaded before the other
+         * GUI components so the form receives defaults
+         * from Flask/defaults.conf.
+         */
+
+        await loadConfiguration();
 
         await refreshStatus();
         await refreshInventory();
