@@ -7,7 +7,9 @@ import uuid
 import re
 from datetime import datetime
 
+
 app = Flask(__name__)
+
 
 # ============================================================
 # PATHS
@@ -66,6 +68,8 @@ def valid_ip(value):
     if not value:
         return False
 
+    value = str(value).strip()
+
     parts = value.split(".")
 
     if len(parts) != 4:
@@ -81,6 +85,61 @@ def valid_ip(value):
     except ValueError:
 
         return False
+
+
+def parse_ip_list(value):
+    """
+    Parse one or more comma-separated IPv4 addresses.
+
+    Examples:
+
+        192.168.1.20
+
+        192.168.1.20,192.168.1.21
+
+        192.168.1.20, 192.168.1.21
+    """
+
+    if not value:
+        return []
+
+    return [
+        host.strip()
+        for host in str(value).split(",")
+        if host.strip()
+    ]
+
+
+def valid_ip_list(value):
+    """
+    Validate one or more comma-separated IPv4 addresses.
+    """
+
+    hosts = parse_ip_list(value)
+
+    if not hosts:
+        return False
+
+    return all(
+        valid_ip(host)
+        for host in hosts
+    )
+
+
+def normalize_ip_list(value):
+    """
+    Normalize:
+
+        192.168.1.20, 192.168.1.21
+
+    to:
+
+        192.168.1.20,192.168.1.21
+    """
+
+    return ",".join(
+        parse_ip_list(value)
+    )
 
 
 def valid_port(value):
@@ -101,12 +160,12 @@ def get_configuration(data):
     return {
 
         "compromised_host":
-            str(
+            normalize_ip_list(
                 data.get(
                     "compromised_host",
                     ""
                 )
-            ).strip(),
+            ),
 
         "web_target":
             str(
@@ -161,12 +220,33 @@ def get_configuration(data):
 
 def validate_configuration(config):
 
-    required_ips = [
+    # --------------------------------------------------------
+    # Compromised Linux Hosts
+    #
+    # Supports:
+    #
+    #   192.168.1.20
+    #
+    # or:
+    #
+    #   192.168.1.20,192.168.1.21
+    # --------------------------------------------------------
 
-        (
-            "Compromised Linux Host",
-            config["compromised_host"]
-        ),
+    if not valid_ip_list(
+        config["compromised_host"]
+    ):
+
+        return (
+            False,
+            "Compromised Linux Hosts must contain one or more "
+            "valid IPv4 addresses separated by commas."
+        )
+
+    # --------------------------------------------------------
+    # Single-IP configuration
+    # --------------------------------------------------------
+
+    required_ips = [
 
         (
             "Web Server",
@@ -194,7 +274,6 @@ def validate_configuration(config):
                 f"{name} is not a valid IPv4 address."
             )
 
-
     if not valid_port(
         config["web_port"]
     ):
@@ -204,7 +283,6 @@ def validate_configuration(config):
             "Web Port must be between 1 and 65535."
         )
 
-
     if not config["ssh_user"]:
 
         return (
@@ -212,14 +290,12 @@ def validate_configuration(config):
             "SSH Username is required."
         )
 
-
     if not config["ssh_password"]:
 
         return (
             False,
             "SSH Password is required."
         )
-
 
     return True, None
 
@@ -236,6 +312,14 @@ def build_environment(
     env["NORDIC_INCIDENT_ID"] = (
         incident_id
     )
+
+    # May contain one or more hosts:
+    #
+    # 192.168.1.20
+    #
+    # or
+    #
+    # 192.168.1.20,192.168.1.21
 
     env["NORDIC_COMPROMISED_HOST"] = (
         config["compromised_host"]
@@ -325,35 +409,29 @@ def run_phase(phase):
                 "Unknown attack phase."
         }), 400
 
-
     data = (
         request.get_json(
             silent=True
         ) or {}
     )
 
-
     config = get_configuration(
         data
     )
 
-
     iid = create_incident_id(
         phase.upper()
     )
-
 
     env = build_environment(
         config,
         iid
     )
 
-
     script = os.path.join(
         SCRIPT_DIR,
         SCRIPTS[phase]
     )
-
 
     if not os.path.isfile(
         script
@@ -364,7 +442,6 @@ def run_phase(phase):
             "message":
                 f"Script not found: {script}"
         }), 404
-
 
     if not os.access(
         script,
@@ -377,17 +454,14 @@ def run_phase(phase):
                 f"Script is not executable: {script}"
         }), 500
 
-
     run_id = str(
         uuid.uuid4()
     )[:8]
-
 
     log_path = os.path.join(
         LOG_DIR,
         f"{iid}-{run_id}-web.log"
     )
-
 
     try:
 
@@ -395,7 +469,6 @@ def run_phase(phase):
             log_path,
             "w"
         )
-
 
         process = subprocess.Popen(
             [script],
@@ -406,9 +479,7 @@ def run_phase(phase):
             start_new_session=True
         )
 
-
         logfile.close()
-
 
         return jsonify({
             "success": True,
@@ -417,7 +488,6 @@ def run_phase(phase):
             "pid": process.pid,
             "log": log_path
         })
-
 
     except Exception as error:
 
@@ -443,11 +513,9 @@ def start_h3_campaign():
         ) or {}
     )
 
-
     config = get_configuration(
         data
     )
-
 
     valid, error = (
         validate_configuration(
@@ -455,14 +523,12 @@ def start_h3_campaign():
         )
     )
 
-
     if not valid:
 
         return jsonify({
             "success": False,
             "message": error
         }), 400
-
 
     if not os.path.isfile(
         CAMPAIGN_SCRIPT
@@ -476,7 +542,6 @@ def start_h3_campaign():
                 CAMPAIGN_SCRIPT
         }), 404
 
-
     if not os.access(
         CAMPAIGN_SCRIPT,
         os.X_OK
@@ -489,7 +554,6 @@ def start_h3_campaign():
             "script":
                 CAMPAIGN_SCRIPT
         }), 500
-
 
     # --------------------------------------------------------
     # Prevent multiple campaigns at the same time
@@ -515,7 +579,6 @@ def start_h3_campaign():
                     campaign["pid"]
             }), 409
 
-
     # --------------------------------------------------------
     # Incident ID
     # --------------------------------------------------------
@@ -523,7 +586,6 @@ def start_h3_campaign():
     iid = create_incident_id(
         "H3"
     )
-
 
     # --------------------------------------------------------
     # Environment
@@ -534,7 +596,6 @@ def start_h3_campaign():
         iid
     )
 
-
     # --------------------------------------------------------
     # Campaign log
     # --------------------------------------------------------
@@ -544,14 +605,12 @@ def start_h3_campaign():
         f"{iid}-CAMPAIGN.log"
     )
 
-
     try:
 
         logfile = open(
             log_path,
             "w"
         )
-
 
         process = subprocess.Popen(
             [CAMPAIGN_SCRIPT],
@@ -562,9 +621,7 @@ def start_h3_campaign():
             start_new_session=True
         )
 
-
         logfile.close()
-
 
         campaigns[iid] = {
 
@@ -616,7 +673,6 @@ def start_h3_campaign():
 
         }
 
-
         return jsonify({
 
             "success": True,
@@ -634,7 +690,6 @@ def start_h3_campaign():
                 log_path
 
         })
-
 
     except Exception as error:
 
@@ -666,11 +721,9 @@ def campaign_status(
                 "Invalid incident ID."
         }), 400
 
-
     campaign = campaigns.get(
         incident_id
     )
-
 
     if not campaign:
 
@@ -680,9 +733,7 @@ def campaign_status(
                 "Campaign not found."
         }), 404
 
-
     pid = campaign["pid"]
-
 
     if (
         campaign["status"]
@@ -696,7 +747,6 @@ def campaign_status(
 
             new_status = "failed"
 
-
             try:
 
                 with open(
@@ -708,7 +758,6 @@ def campaign_status(
                     content = (
                         logfile.read()
                     )
-
 
                 if (
                     "FULL INCIDENT COMPLETED"
@@ -723,11 +772,9 @@ def campaign_status(
 
                 pass
 
-
             campaign["status"] = (
                 new_status
             )
-
 
     return jsonify({
 
@@ -777,7 +824,6 @@ def campaign_log(
                 "Invalid incident ID."
         }), 400
 
-
     # --------------------------------------------------------
     # Find campaign
     # --------------------------------------------------------
@@ -785,7 +831,6 @@ def campaign_log(
     campaign = campaigns.get(
         incident_id
     )
-
 
     if not campaign:
 
@@ -795,9 +840,7 @@ def campaign_log(
                 "Campaign not found."
         }), 404
 
-
     log_path = campaign["log"]
-
 
     # --------------------------------------------------------
     # Log may not exist immediately
@@ -822,7 +865,6 @@ def campaign_log(
 
         })
 
-
     # --------------------------------------------------------
     # Read log
     # --------------------------------------------------------
@@ -839,7 +881,6 @@ def campaign_log(
                 logfile.read()
             )
 
-
         # ----------------------------------------------------
         # Maximum 200 KB sent to browser
         # ----------------------------------------------------
@@ -849,7 +890,6 @@ def campaign_log(
             output = (
                 output[-200000:]
             )
-
 
         return jsonify({
 
@@ -865,7 +905,6 @@ def campaign_log(
                 output
 
         })
-
 
     except OSError as error:
 
@@ -885,7 +924,6 @@ def logs():
 
     files = []
 
-
     if os.path.isdir(
         LOG_DIR
     ):
@@ -900,19 +938,16 @@ def logs():
 
                 continue
 
-
             path = os.path.join(
                 LOG_DIR,
                 name
             )
-
 
             if not os.path.isfile(
                 path
             ):
 
                 continue
-
 
             files.append({
 
@@ -931,13 +966,11 @@ def logs():
 
             })
 
-
     files.sort(
         key=lambda item:
             item["mtime"],
         reverse=True
     )
-
 
     return jsonify(
         files[:50]
@@ -953,7 +986,6 @@ def uploads():
 
     files = []
 
-
     if os.path.isdir(
         UPLOAD_DIR
     ):
@@ -967,13 +999,11 @@ def uploads():
                 name
             )
 
-
             if not os.path.isfile(
                 path
             ):
 
                 continue
-
 
             files.append({
 
@@ -986,7 +1016,6 @@ def uploads():
                     )
 
             })
-
 
     return jsonify(
         files
