@@ -110,13 +110,13 @@ UP/DOWN = Move
 SPACE   = Select
 ENTER   = Continue" \
         25 78 12 \
-        "VULNSRV02"   "Vulnerable Server 02"          OFF \
-        "KALI02"      "Secondary Kali attacker"       OFF \
-        "APPSRV01"    "Security Application Server"   OFF \
-        "CLIENT01"    "Ubuntu Client"                 OFF \
-        "WAZUH"       "Wazuh SIEM"                    OFF \
-        "TPOT"        "T-Pot Honeypot"                OFF \
-        "MRNOBODY"    "MrNobody Attack VM"            OFF \
+        "VULNSRV02"   "Vulnerable Server 02 (LAN2)"          OFF \
+        "KALI02"      "Secondary Kali attacker (LAN1)"       OFF \
+        "APPSRV01"    "Security Application Server (LAN2)"   OFF \
+        "CLIENT01"    "Ubuntu Client (LAN1)"                 OFF \
+        "WAZUH"       "Wazuh SIEM (LAN2)"                    OFF \
+        "TPOT"        "T-Pot Honeypot (LAN1)"                OFF \
+        "MRNOBODY"    "MrNobody Attack VM LAN1 & LAN2)"            OFF \
         3>&1 1>&2 2>&3)
 
     STATUS=$?
