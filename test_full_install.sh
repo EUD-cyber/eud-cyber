@@ -43,8 +43,8 @@ GUACVM02_IP="./GUACVM02/GUACVM02_ip.sh"
 VULNSRV01="./VULNSRV01/VULNSRV01_multi_installer.sh"
 VULNSRV02="./VULNSRV02/VULNSRV02_multi_installer.sh"
 
-KALI01="./KALI01/KALI01_multi_installer.sh"
-KALI02="./KALI02/KALI02_multi_installer.sh"
+KALI01="./KALI01/KALI01_installer.sh"
+KALI02="./KALI02/KALI02_installer.sh"
 
 APPSRV01="./APPSRV01/APPSRV01_installer.sh"
 CLIENT01="./CLIENT01/CLIENT01_installer.sh"
