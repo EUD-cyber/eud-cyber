@@ -2,30 +2,30 @@
 set -e
 
 # ============================================================
-# CyberLab Deployment Menu
+# CyberLab Deployment
 #
 # BASIC:
-#   - OPNsense
-#   - Guacamole
-#   - Kali01
-#   - VulnSrv01
+#   OPNsense
+#   Guacamole
+#   Kali01
+#   VulnSrv01
 #
 # OPTIONAL:
-#   - VulnSrv02
-#   - Kali02
-#   - AppSrv01
-#   - Client01
-#   - Wazuh
-#   - T-Pot
-#   - PacketFence
-#   - MrNobody
+#   VulnSrv02
+#   Kali02
+#   AppSrv01
+#   Client01
+#   Wazuh
+#   T-Pot
+#   PacketFence
+#   MrNobody
 # ============================================================
 
 LAB="1"
 
-# ------------------------------------------------------------
+# ============================================================
 # Script paths
-# ------------------------------------------------------------
+# ============================================================
 
 REPO="./repo.sh"
 PREREQ="./pre_req.sh"
@@ -34,14 +34,11 @@ OPENVSWITCHPRE="./open-vswitch-multi-pre.sh"
 OPENVSWITCH="./open-vswitch-multi.sh"
 OPENVSWITCHLAST="./open-vswitch-multi-last.sh"
 
-OPNSENSECONF="./OPNSENSE/generate_config_multi.sh"
 OPNSENSE="./OPNSENSE/OPNSENSE_multi_installer.sh"
+OPNSENSECONF="./OPNSENSE/generate_config_multi.sh"
 
-GUACVM_IP="./GUACVM/GUACVM_ip_multi.sh"
-GUACVM="./GUACVM/GUACVM_multi_installer.sh"
-
-GUACVM02_IP="./GUACVM02/GUACVM02_ip.sh"
 GUACVM02="./GUACVM02/GUACVM02_installer.sh"
+GUACVM02_IP="./GUACVM02/GUACVM02_ip.sh"
 
 VULNSRV01="./VULNSRV01/VULNSRV01_multi_installer.sh"
 VULNSRV02="./VULNSRV02/VULNSRV02_multi_installer.sh"
@@ -72,15 +69,16 @@ pause() {
 }
 
 
-# ------------------------------------------------------------
-# Check/install whiptail
-# ------------------------------------------------------------
+# ============================================================
+# WHIPTAIL
+# ============================================================
 
 check_whiptail() {
 
     if ! command -v whiptail >/dev/null 2>&1; then
 
         echo "Installing whiptail..."
+
         apt-get update
         apt-get install -y whiptail
 
@@ -88,161 +86,25 @@ check_whiptail() {
 }
 
 
-# ------------------------------------------------------------
-# Prerequisites / network
-# ------------------------------------------------------------
-
-install_prerequisites() {
-
-    echo
-    echo "========================================"
-    echo " Installing prerequisites"
-    echo "========================================"
-
-    echo
-    echo "[1/2] Proxmox repository"
-    bash "$REPO"
-
-    echo
-    echo "[2/2] Packages and snippets"
-    bash "$PREREQ"
-}
-
-
-install_openvswitch() {
-
-    echo
-    echo "========================================"
-    echo " Installing / configuring Open vSwitch"
-    echo "========================================"
-
-    bash "$OPENVSWITCHPRE"
-    bash "$OPENVSWITCH" "$LAB"
-    bash "$OPENVSWITCHLAST"
-}
-
-
-# ------------------------------------------------------------
-# BASIC INSTALLATION
-# ------------------------------------------------------------
-
-install_basic() {
-
-    echo
-    echo "========================================"
-    echo "       BASIC CYBERLAB INSTALLATION"
-    echo "========================================"
-    echo
-    echo "Lab: $LAB"
-    echo
-    echo "Basic components:"
-    echo "  - OPNsense"
-    echo "  - Guacamole"
-    echo "  - Kali01"
-    echo "  - VulnSrv01"
-    echo
-    echo "========================================"
-
-
-    # --------------------------------------------------------
-    # Base Proxmox configuration
-    # --------------------------------------------------------
-
-    install_prerequisites
-
-    install_openvswitch
-
-
-    # --------------------------------------------------------
-    # OPNsense
-    #
-    # Keep configuration and installation together.
-    # --------------------------------------------------------
-
-    echo
-    echo "========================================"
-    echo " OPNsense"
-    echo "========================================"
-
-    echo
-    echo "[OPNsense] Generating configuration..."
-    bash "$OPNSENSECONF" "$LAB"
-
-    echo
-    echo "[OPNsense] Creating VM..."
-    bash "$OPNSENSE" "$LAB"
-
-
-    # --------------------------------------------------------
-    # Guacamole
-    #
-    # Keep IP configuration and installation together.
-    # --------------------------------------------------------
-
-    echo
-    echo "========================================"
-    echo " Guacamole"
-    echo "========================================"
-
-    echo
-    echo "[Guacamole] Configuring IP settings..."
-    bash "$GUACVM02_IP" "$LAB"
-
-    echo
-    echo "[Guacamole] Creating VM..."
-    bash "$GUACVM02" "$LAB"
-
-
-    # --------------------------------------------------------
-    # Kali01
-    # --------------------------------------------------------
-
-    echo
-    echo "========================================"
-    echo " Kali01"
-    echo "========================================"
-
-    bash "$KALI01" "$LAB"
-
-
-    # --------------------------------------------------------
-    # VulnSrv01
-    # --------------------------------------------------------
-
-    echo
-    echo "========================================"
-    echo " VulnSrv01"
-    echo "========================================"
-
-    bash "$VULNSRV01" "$LAB"
-
-
-    echo
-    echo "========================================"
-    echo " BASIC installation completed"
-    echo "========================================"
-}
-
-
-# ------------------------------------------------------------
-# Optional component selector
-# ------------------------------------------------------------
+# ============================================================
+# OPTIONAL COMPONENT SELECTION
+# ============================================================
 
 select_optional_components() {
 
     check_whiptail
 
     OPTIONS=$(whiptail \
-        --title "CyberLab Optional Components" \
+        --title "CyberLab - Optional Components" \
         --checklist \
-"Basic is always installed:
+"Basic installation always includes:
 
   OPNsense
   Guacamole
   Kali01
   VulnSrv01
 
-Select additional systems.
+Select additional systems:
 
 UP/DOWN = Move
 SPACE   = Select
@@ -258,48 +120,235 @@ ENTER   = Continue" \
         "MRNOBODY"    "MrNobody Attack VM"            OFF \
         3>&1 1>&2 2>&3)
 
-    EXITSTATUS=$?
+    STATUS=$?
 
-    if [ "$EXITSTATUS" -ne 0 ]; then
+    if [ "$STATUS" -ne 0 ]; then
+
         echo
         echo "Installation cancelled."
-        exit 1
+
+        exit 0
     fi
 }
 
 
-# ------------------------------------------------------------
-# Install optional components
-# ------------------------------------------------------------
+# ============================================================
+# PRE CONFIGURATION
+# ============================================================
 
-install_optional_components() {
+configure_opnsense() {
+
+    clear
+
+    echo "========================================"
+    echo "       OPNsense Configuration"
+    echo "========================================"
+    echo
+    echo "Configure OPNsense before deployment."
+    echo
+
+    bash "$OPNSENSECONF" "$LAB"
+
+    echo
+    echo "OPNsense configuration completed."
+
+    sleep 2
+}
+
+
+configure_guacamole() {
+
+    clear
+
+    echo "========================================"
+    echo "       Guacamole Configuration"
+    echo "========================================"
+    echo
+    echo "Configure Guacamole before deployment."
+    echo
+
+    bash "$GUACVM02_IP" "$LAB"
+
+    echo
+    echo "Guacamole configuration completed."
+
+    sleep 2
+}
+
+
+# ============================================================
+# PREREQUISITES
+# ============================================================
+
+install_prerequisites() {
 
     echo
     echo "========================================"
-    echo " Installing optional components"
+    echo " Proxmox prerequisites"
     echo "========================================"
 
+    echo
+    echo "[1/2] Configuring Proxmox repository..."
+
+    bash "$REPO"
+
+
+    echo
+    echo "[2/2] Installing packages and snippets..."
+
+    bash "$PREREQ"
+}
+
+
+# ============================================================
+# OPEN VSWITCH
+# ============================================================
+
+install_openvswitch() {
+
+    echo
+    echo "========================================"
+    echo " Open vSwitch"
+    echo "========================================"
+
+    bash "$OPENVSWITCHPRE"
+
+    bash "$OPENVSWITCH" "$LAB"
+
+    bash "$OPENVSWITCHLAST"
+}
+
+
+# ============================================================
+# BASIC INSTALLATION
+# ============================================================
+
+install_basic() {
+
+    echo
+    echo "========================================"
+    echo " BASIC CYBERLAB INSTALLATION"
+    echo "========================================"
+    echo
+    echo "Lab: $LAB"
+    echo
+    echo "Installing:"
+    echo
+    echo "  OPNsense"
+    echo "  Guacamole"
+    echo "  Kali01"
+    echo "  VulnSrv01"
+    echo
+    echo "========================================"
+
+
+    # --------------------------------------------------------
+    # Repository / prerequisites
+    # --------------------------------------------------------
+
+    install_prerequisites
+
+
+    # --------------------------------------------------------
+    # Open vSwitch
+    # --------------------------------------------------------
+
+    install_openvswitch
+
+
+    # --------------------------------------------------------
+    # OPNsense
+    # --------------------------------------------------------
+
+    echo
+    echo "========================================"
+    echo " Creating OPNsense"
+    echo "========================================"
+
+    bash "$OPNSENSE" "$LAB"
+
+
+    # --------------------------------------------------------
+    # Guacamole
+    # --------------------------------------------------------
+
+    echo
+    echo "========================================"
+    echo " Creating Guacamole"
+    echo "========================================"
+
+    bash "$GUACVM02" "$LAB"
+
+
+    # --------------------------------------------------------
+    # Kali01
+    # --------------------------------------------------------
+
+    echo
+    echo "========================================"
+    echo " Creating Kali01"
+    echo "========================================"
+
+    bash "$KALI01" "$LAB"
+
+
+    # --------------------------------------------------------
+    # VulnSrv01
+    # --------------------------------------------------------
+
+    echo
+    echo "========================================"
+    echo " Creating VulnSrv01"
+    echo "========================================"
+
+    bash "$VULNSRV01" "$LAB"
+
+
+    echo
+    echo "========================================"
+    echo " BASIC INSTALLATION COMPLETED"
+    echo "========================================"
+}
+
+
+# ============================================================
+# OPTIONAL INSTALLATION
+# ============================================================
+
+install_optional_components() {
+
     if [ -z "$OPTIONS" ]; then
+
         echo
         echo "No optional components selected."
+
         return
     fi
+
+
+    echo
+    echo "========================================"
+    echo " OPTIONAL COMPONENTS"
+    echo "========================================"
 
 
     for COMPONENT in $OPTIONS; do
 
         COMPONENT=$(echo "$COMPONENT" | tr -d '"')
 
+
         case "$COMPONENT" in
+
 
             VULNSRV02)
 
                 echo
                 echo "========================================"
-                echo " VulnSrv02"
+                echo " Creating VulnSrv02"
                 echo "========================================"
 
                 bash "$VULNSRV02" "$LAB"
+
                 ;;
 
 
@@ -307,10 +356,11 @@ install_optional_components() {
 
                 echo
                 echo "========================================"
-                echo " Kali02"
+                echo " Creating Kali02"
                 echo "========================================"
 
                 bash "$KALI02" "$LAB"
+
                 ;;
 
 
@@ -318,10 +368,11 @@ install_optional_components() {
 
                 echo
                 echo "========================================"
-                echo " AppSrv01"
+                echo " Creating AppSrv01"
                 echo "========================================"
 
                 bash "$APPSRV01" "$LAB"
+
                 ;;
 
 
@@ -329,10 +380,11 @@ install_optional_components() {
 
                 echo
                 echo "========================================"
-                echo " Client01"
+                echo " Creating Client01"
                 echo "========================================"
 
                 bash "$CLIENT01" "$LAB"
+
                 ;;
 
 
@@ -340,10 +392,11 @@ install_optional_components() {
 
                 echo
                 echo "========================================"
-                echo " Wazuh"
+                echo " Creating Wazuh"
                 echo "========================================"
 
                 bash "$WAZUH" "$LAB"
+
                 ;;
 
 
@@ -351,10 +404,11 @@ install_optional_components() {
 
                 echo
                 echo "========================================"
-                echo " T-Pot"
+                echo " Creating T-Pot"
                 echo "========================================"
 
                 bash "$TPOT" "$LAB"
+
                 ;;
 
 
@@ -362,10 +416,11 @@ install_optional_components() {
 
                 echo
                 echo "========================================"
-                echo " PacketFence"
+                echo " Creating PacketFence"
                 echo "========================================"
 
                 bash "$PACKETFENCE" "$LAB"
+
                 ;;
 
 
@@ -373,10 +428,11 @@ install_optional_components() {
 
                 echo
                 echo "========================================"
-                echo " MrNobody"
+                echo " Creating MrNobody"
                 echo "========================================"
 
                 bash "$MRNOBODY" "$LAB"
+
                 ;;
 
         esac
@@ -385,18 +441,59 @@ install_optional_components() {
 }
 
 
-# ------------------------------------------------------------
-# Basic + optional installation
-# ------------------------------------------------------------
+# ============================================================
+# CYBERLAB INSTALLATION
+# ============================================================
 
 custom_install() {
 
     clear
 
-    check_whiptail
+    echo "========================================"
+    echo "       CyberLab Installation"
+    echo "========================================"
+    echo
+    echo "Basic installation:"
+    echo
+    echo "  OPNsense"
+    echo "  Guacamole"
+    echo "  Kali01"
+    echo "  VulnSrv01"
+    echo
+    echo "You can now select optional systems."
+    echo
 
-    # Select optional systems BEFORE starting deployment
+    sleep 2
+
+
+    # ========================================================
+    # STEP 1
+    # Select optional VMs
+    # ========================================================
+
     select_optional_components
+
+
+    # ========================================================
+    # STEP 2
+    # Configure OPNsense
+    # ========================================================
+
+    configure_opnsense
+
+
+    # ========================================================
+    # STEP 3
+    # Configure Guacamole
+    # ========================================================
+
+    configure_guacamole
+
+
+    # ========================================================
+    # STEP 4
+    # Show deployment summary
+    # ========================================================
 
     clear
 
@@ -404,59 +501,109 @@ custom_install() {
     echo "       CyberLab Deployment"
     echo "========================================"
     echo
-    echo "Lab number: $LAB"
+    echo "Lab: $LAB"
     echo
     echo "BASIC:"
+    echo
     echo "  OPNsense"
     echo "  Guacamole"
     echo "  Kali01"
     echo "  VulnSrv01"
     echo
 
+    echo "OPTIONAL:"
+
     if [ -n "$OPTIONS" ]; then
 
-        echo "OPTIONAL:"
-
         for COMPONENT in $OPTIONS; do
-            echo "  - $(echo "$COMPONENT" | tr -d '"')"
+
+            COMPONENT=$(echo "$COMPONENT" | tr -d '"')
+
+            echo "  $COMPONENT"
+
         done
 
     else
 
-        echo "OPTIONAL:"
         echo "  None"
 
     fi
 
+
     echo
     echo "========================================"
+    echo
+    echo "OPNsense configuration:  DONE"
+    echo "Guacamole configuration: DONE"
+    echo
+    echo "========================================"
+    echo
 
-    read -rp "Start installation? [y/N]: " CONFIRM
 
-    case "$CONFIRM" in
-        y|Y|yes|YES)
-            ;;
-        *)
-            echo "Installation cancelled."
-            exit 0
-            ;;
-    esac
+    # ========================================================
+    # STEP 5
+    # Start automatically
+    # ========================================================
 
+    echo "Starting CyberLab deployment..."
+    echo
+
+    sleep 3
+
+
+    # ========================================================
+    # STEP 6
+    # Basic installation
+    # ========================================================
 
     install_basic
+
+
+    # ========================================================
+    # STEP 7
+    # Optional installation
+    # ========================================================
 
     install_optional_components
 
 
+    # ========================================================
+    # DONE
+    # ========================================================
+
     echo
     echo "========================================"
-    echo "     CYBERLAB DEPLOYMENT COMPLETE"
+    echo "       DEPLOYMENT COMPLETED"
     echo "========================================"
+    echo
+    echo "Basic:"
+    echo
+    echo "  OPNsense       OK"
+    echo "  Guacamole      OK"
+    echo "  Kali01         OK"
+    echo "  VulnSrv01      OK"
+    echo
+
+    if [ -n "$OPTIONS" ]; then
+
+        echo "Optional:"
+
+        for COMPONENT in $OPTIONS; do
+
+            COMPONENT=$(echo "$COMPONENT" | tr -d '"')
+
+            echo "  $COMPONENT      OK"
+
+        done
+
+    fi
+
+    echo
 }
 
 
 # ============================================================
-# Main menu
+# MAIN MENU
 # ============================================================
 
 while true; do
@@ -467,36 +614,36 @@ while true; do
     echo "       Proxmox Deployment Menu"
     echo "========================================"
     echo
-    echo "Lab number: $LAB"
+    echo "Lab: $LAB"
     echo
-    echo "----- Complete installations -----------"
+    echo "--------- INSTALL ----------------------"
     echo
-    echo "90) Basic + select optional components"
+    echo "90) CyberLab Basic + Optional"
     echo
-    echo "----- Basic components -----------------"
+    echo "--------- BASIC ------------------------"
     echo
     echo "1)  Check packages & snippets"
     echo "2)  Install & configure Open vSwitch"
     echo "3)  Create OPNsense VM"
     echo "4)  Create Guacamole VM"
-    echo "5)  Create Vuln-server01 VM"
-    echo "7)  Create KALI01 VM"
+    echo "5)  Create VulnSrv01 VM"
+    echo "7)  Create Kali01 VM"
     echo
-    echo "----- Optional components --------------"
+    echo "--------- OPTIONAL ---------------------"
     echo
-    echo "6)  Create Vuln-server02 VM"
-    echo "8)  Create KALI02 VM"
-    echo "9)  Create APPSRV01 VM"
+    echo "6)  Create VulnSrv02 VM"
+    echo "8)  Create Kali02 VM"
+    echo "9)  Create AppSrv01 VM"
     echo "10) Create Client01 VM"
-    echo "11) Create WAZUH VM"
-    echo "12) Create TPOT01 VM"
+    echo "11) Create Wazuh VM"
+    echo "12) Create T-Pot VM"
     echo "13) Create PacketFence VM"
     echo
-    echo "----- Other ----------------------------"
+    echo "--------- OTHER ------------------------"
     echo
     echo "80) Create Image Server VM"
-    echo "89) Change Proxmox repo to no-enterprise"
-    echo "99) Cleanup installation"
+    echo "89) Change Proxmox repo"
+    echo "99) Cleanup installation files"
     echo "666) Create MrNobody VM"
     echo
     echo "0) Exit"
@@ -508,198 +655,197 @@ while true; do
 
     case "$CHOICE" in
 
-        # ----------------------------------------------------
-        # Individual installation
-        # ----------------------------------------------------
 
         1)
+
             bash "$PREREQ"
+
             pause
+
             ;;
 
 
         2)
+
             install_openvswitch
+
             pause
+
             ;;
 
 
         3)
-            echo "Generating OPNsense configuration..."
-            bash "$OPNSENSECONF" "$LAB"
 
-            echo "Creating OPNsense VM..."
+            configure_opnsense
+
             bash "$OPNSENSE" "$LAB"
 
             pause
+
             ;;
 
 
         4)
-            echo "Configuring Guacamole IP settings..."
-            bash "$GUACVM02_IP" "$LAB"
 
-            echo "Creating Guacamole VM..."
+            configure_guacamole
+
             bash "$GUACVM02" "$LAB"
 
             pause
+
             ;;
 
 
         5)
-            echo "Creating VulnSrv01..."
+
             bash "$VULNSRV01" "$LAB"
+
             pause
+
             ;;
 
 
         6)
-            echo "Creating VulnSrv02..."
+
             bash "$VULNSRV02" "$LAB"
+
             pause
+
             ;;
 
 
         7)
-            echo "Creating Kali01..."
+
             bash "$KALI01" "$LAB"
+
             pause
+
             ;;
 
 
         8)
-            echo "Creating Kali02..."
+
             bash "$KALI02" "$LAB"
+
             pause
+
             ;;
 
 
         9)
-            echo "Creating AppSrv01..."
+
             bash "$APPSRV01" "$LAB"
+
             pause
+
             ;;
 
 
         10)
-            echo "Creating Client01..."
+
             bash "$CLIENT01" "$LAB"
+
             pause
+
             ;;
 
 
         11)
-            echo "Creating Wazuh..."
+
             bash "$WAZUH" "$LAB"
+
             pause
+
             ;;
 
 
         12)
-            echo "Creating T-Pot..."
+
             bash "$TPOT" "$LAB"
+
             pause
+
             ;;
 
 
         13)
-            echo "Creating PacketFence..."
+
             bash "$PACKETFENCE" "$LAB"
+
             pause
+
             ;;
 
-
-        # ----------------------------------------------------
-        # Image server
-        # ----------------------------------------------------
 
         80)
-            echo "Creating Image Server..."
+
             bash "$IMAGESRV" "99"
+
             pause
+
             ;;
 
-
-        # ----------------------------------------------------
-        # Repository
-        # ----------------------------------------------------
 
         89)
-            echo "Changing Proxmox repository..."
+
             bash "$REPO"
+
             pause
+
             ;;
 
 
-        # ----------------------------------------------------
-        # NEW INSTALLATION
-        # ----------------------------------------------------
+        # ====================================================
+        # MAIN CYBERLAB INSTALL
+        # ====================================================
 
         90)
+
             custom_install
+
             pause
+
             ;;
 
-
-        # ----------------------------------------------------
-        # Cleanup
-        # ----------------------------------------------------
 
         99)
 
+            rm -rf ./eud-cyber
+            rm -rf /var/lib/vz/snippets/*
+            rm -rf /var/lib/vz/template/iso/*
+
             echo
-            echo "WARNING!"
-            echo
-            echo "This will remove:"
-            echo "  ./eud-cyber"
-            echo "  /var/lib/vz/snippets/*"
-            echo "  /var/lib/vz/template/iso/*"
-            echo
-
-            read -rp "Are you sure? Type YES: " CONFIRM
-
-            if [ "$CONFIRM" = "YES" ]; then
-
-                rm -rf ./eud-cyber
-                rm -rf /var/lib/vz/snippets/*
-                rm -rf /var/lib/vz/template/iso/*
-
-                echo "Cleanup completed."
-
-            else
-
-                echo "Cleanup cancelled."
-
-            fi
+            echo "Cleanup completed."
 
             pause
+
             ;;
 
-
-        # ----------------------------------------------------
-        # MrNobody
-        # ----------------------------------------------------
 
         666)
-            echo "Creating MrNobody..."
+
             bash "$MRNOBODY" "$LAB"
+
             pause
+
             ;;
 
 
-        # ----------------------------------------------------
-        # Exit
-        # ----------------------------------------------------
-
         0)
+
             echo "Exiting."
+
             exit 0
+
             ;;
 
 
         *)
+
             echo "Invalid choice."
+
             sleep 2
+
             ;;
 
     esac
