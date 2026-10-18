@@ -121,265 +121,254 @@
         </div>
 
 
-        <div class="form-grid">
+        <!-- ==================================================
+             CAMPAIGN / NETWORK
+        =================================================== -->
+
+        <div class="config-section">
+
+            <div class="config-section-title">
+                Campaign / Network
+            </div>
+
+            <div class="form-grid">
+
+                <div class="form-group">
+
+                    <label for="incidentIp">
+                        IncidentVM IP
+                    </label>
+
+                    <input
+                        id="incidentIp"
+                        type="text"
+                        placeholder="192.168.1.254"
+                        autocomplete="off"
+                    >
+
+                    <div class="field-help">
+                        IP address used as the exfiltration destination.
+                    </div>
+
+                </div>
 
 
-            <!-- ============================================
-                 INCIDENTVM IP
-            ============================================= -->
+                <div class="form-group form-group-wide">
 
-            <div class="form-group">
+                    <label for="webPorts">
+                        Web / Proxy Ports
+                    </label>
 
-                <label for="incidentIp">
-                    IncidentVM IP
-                </label>
+                    <input
+                        id="webPorts"
+                        type="text"
+                        placeholder="80,443,3010,8080,8443"
+                        autocomplete="off"
+                    >
 
-                <input
-                    id="incidentIp"
-                    type="text"
-                    placeholder="192.168.1.254"
-                    autocomplete="off"
-                >
+                    <div class="field-help">
+                        Default ports:
+                        <strong>
+                            80, 443, 3010, 8080, 8443
+                        </strong>
+                        — add or remove ports as required.
+                    </div>
 
-                <div class="field-help">
-                    IP address used as the exfiltration
-                    destination.
                 </div>
 
             </div>
 
+        </div>
 
-            <!-- ============================================
-                 WEB PORTS
-            ============================================= -->
 
-            <div class="form-group form-group-wide">
+        <!-- ==================================================
+             LINUX / SSH
+        =================================================== -->
 
-                <label for="webPorts">
-                    Web / Proxy Ports
-                </label>
+        <div class="config-section">
 
-                <input
-                    id="webPorts"
-                    type="text"
-                    placeholder="80,443,3010,8080,8443"
-                    autocomplete="off"
-                >
+            <div class="config-section-title">
+                Linux / SSH Initial Access
+            </div>
 
-                <div class="field-help">
+            <div class="form-grid config-three-columns">
 
-                    Default ports:
-                    <strong>
-                        80, 443, 3010, 8080, 8443
-                    </strong>
+                <div class="form-group">
 
-                    — add or remove ports as required.
+                    <label for="sshUser">
+                        Linux SSH Username
+                    </label>
+
+                    <input
+                        id="sshUser"
+                        type="text"
+                        placeholder="ubuntu"
+                        autocomplete="username"
+                    >
+
+                    <div class="field-help">
+                        Username used against discovered SSH services.
+                    </div>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="sshPassword">
+                        Linux SSH Password
+                    </label>
+
+                    <input
+                        id="sshPassword"
+                        type="password"
+                        value=""
+                        placeholder="Required"
+                        autocomplete="new-password"
+                    >
+
+                    <div class="field-help">
+                        Password is passed directly to the campaign
+                        and is not stored in campaign state or logs.
+                    </div>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="sshPort">
+                        Linux SSH Port
+                    </label>
+
+                    <input
+                        id="sshPort"
+                        type="number"
+                        min="1"
+                        max="65535"
+                        placeholder="22"
+                    >
+
+                    <div class="field-help">
+                        Default SSH port: 22.
+                    </div>
 
                 </div>
 
             </div>
 
+        </div>
 
-            <!-- ============================================
-                 LINUX / SSH SECTION
-            ============================================= -->
 
-            <div class="form-group form-group-wide">
+        <!-- ==================================================
+             WINDOWS / RDP
+        =================================================== -->
 
-                <div class="field-help">
-                    <strong>Linux / SSH Initial Access</strong>
+        <div class="config-section">
+
+            <div class="config-section-title">
+                Windows / RDP Initial Access
+            </div>
+
+            <div class="form-grid config-three-columns">
+
+                <div class="form-group">
+
+                    <label for="rdpUser">
+                        Windows Username
+                    </label>
+
+                    <input
+                        id="rdpUser"
+                        type="text"
+                        placeholder="Administrator"
+                        autocomplete="username"
+                    >
+
+                    <div class="field-help">
+                        Username used against discovered Windows / RDP services.
+                    </div>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="rdpPassword">
+                        Windows Password
+                    </label>
+
+                    <input
+                        id="rdpPassword"
+                        type="password"
+                        value=""
+                        placeholder="Required"
+                        autocomplete="new-password"
+                    >
+
+                    <div class="field-help">
+                        Password is passed directly to the campaign
+                        and is not stored in campaign state or logs.
+                    </div>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="rdpPort">
+                        Windows RDP Port
+                    </label>
+
+                    <input
+                        id="rdpPort"
+                        type="number"
+                        min="1"
+                        max="65535"
+                        placeholder="3389"
+                    >
+
+                    <div class="field-help">
+                        Default RDP port: 3389.
+                    </div>
+
                 </div>
 
             </div>
 
+        </div>
 
-            <!-- ============================================
-                 SSH USER
-            ============================================= -->
 
-            <div class="form-group">
+        <!-- ==================================================
+             EXFILTRATION
+        =================================================== -->
 
-                <label for="sshUser">
-                    Linux SSH Username
-                </label>
+        <div class="config-section">
 
-                <input
-                    id="sshUser"
-                    type="text"
-                    placeholder="ubuntu"
-                    autocomplete="username"
-                >
-
-                <div class="field-help">
-                    Username used against discovered SSH
-                    services.
-                </div>
-
+            <div class="config-section-title">
+                Exfiltration
             </div>
 
+            <div class="form-grid">
 
-            <!-- ============================================
-                 SSH PASSWORD
-            ============================================= -->
+                <div class="form-group">
 
-            <div class="form-group">
+                    <label for="exfilPort">
+                        Exfiltration Port
+                    </label>
 
-                <label for="sshPassword">
-                    Linux SSH Password
-                </label>
+                    <input
+                        id="exfilPort"
+                        type="number"
+                        min="1024"
+                        max="65535"
+                        placeholder="9090"
+                    >
 
-                <input
-                    id="sshPassword"
-                    type="password"
-                    value=""
-                    placeholder="Required"
-                    autocomplete="new-password"
-                >
+                    <div class="field-help">
+                        Temporary HTTP receiver on IncidentVM.
+                    </div>
 
-                <div class="field-help">
-                    Password is passed directly to the
-                    campaign and is not stored in campaign
-                    state or logs.
-                </div>
-
-            </div>
-
-
-            <!-- ============================================
-                 SSH PORT
-            ============================================= -->
-
-            <div class="form-group">
-
-                <label for="sshPort">
-                    Linux SSH Port
-                </label>
-
-                <input
-                    id="sshPort"
-                    type="number"
-                    min="1"
-                    max="65535"
-                    placeholder="22"
-                >
-
-                <div class="field-help">
-                    Default SSH port: 22.
-                </div>
-
-            </div>
-
-
-            <!-- ============================================
-                 WINDOWS / RDP SECTION
-            ============================================= -->
-
-            <div class="form-group form-group-wide">
-
-                <div class="field-help">
-                    <strong>Windows / RDP Initial Access</strong>
-                </div>
-
-            </div>
-
-
-            <!-- ============================================
-                 RDP USER
-            ============================================= -->
-
-            <div class="form-group">
-
-                <label for="rdpUser">
-                    Windows Username
-                </label>
-
-                <input
-                    id="rdpUser"
-                    type="text"
-                    placeholder="Administrator"
-                    autocomplete="username"
-                >
-
-                <div class="field-help">
-                    Username used against discovered Windows
-                    / RDP services.
-                </div>
-
-            </div>
-
-
-            <!-- ============================================
-                 RDP PASSWORD
-            ============================================= -->
-
-            <div class="form-group">
-
-                <label for="rdpPassword">
-                    Windows Password
-                </label>
-
-                <input
-                    id="rdpPassword"
-                    type="password"
-                    value=""
-                    placeholder="Required"
-                    autocomplete="new-password"
-                >
-
-                <div class="field-help">
-                    Password is passed directly to the
-                    campaign and is not stored in campaign
-                    state or logs.
-                </div>
-
-            </div>
-
-
-            <!-- ============================================
-                 RDP PORT
-            ============================================= -->
-
-            <div class="form-group">
-
-                <label for="rdpPort">
-                    Windows RDP Port
-                </label>
-
-                <input
-                    id="rdpPort"
-                    type="number"
-                    min="1"
-                    max="65535"
-                    placeholder="3389"
-                >
-
-                <div class="field-help">
-                    Default RDP port: 3389.
-                </div>
-
-            </div>
-
-
-            <!-- ============================================
-                 EXFIL PORT
-            ============================================= -->
-
-            <div class="form-group">
-
-                <label for="exfilPort">
-                    Exfiltration Port
-                </label>
-
-                <input
-                    id="exfilPort"
-                    type="number"
-                    min="1024"
-                    max="65535"
-                    placeholder="9090"
-                >
-
-                <div class="field-help">
-                    Temporary HTTP receiver on IncidentVM.
                 </div>
 
             </div>

@@ -358,7 +358,76 @@ input {
     color: #b8cad7;
 }
 
+/* ==========================================================
+   CAMPAIGN CONFIGURATION SECTIONS
+   ========================================================== */
 
+.config-section {
+    margin-top: 30px;
+    padding-top: 4px;
+}
+
+.config-section:first-of-type {
+    margin-top: 8px;
+}
+
+.config-section-title {
+    margin-bottom: 16px;
+    padding-bottom: 9px;
+
+    color: #bfd0dc;
+
+    font-size: 0.82rem;
+    font-weight: 700;
+
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+
+    border-bottom: 1px solid var(--border);
+}
+
+
+/* ----------------------------------------------------------
+   THREE COLUMN CREDENTIAL ROWS
+   ---------------------------------------------------------- */
+
+.config-three-columns {
+    grid-template-columns:
+        repeat(3, minmax(0, 1fr));
+}
+
+
+/* ----------------------------------------------------------
+   SEPARATE CONFIGURATION SECTIONS VISUALLY
+   ---------------------------------------------------------- */
+
+.config-section + .config-section {
+    margin-top: 32px;
+}
+
+
+/* ----------------------------------------------------------
+   RESPONSIVE CONFIGURATION
+   ---------------------------------------------------------- */
+
+@media (max-width: 1200px) {
+
+    .config-three-columns {
+        grid-template-columns:
+            repeat(3, minmax(0, 1fr));
+    }
+
+}
+
+
+@media (max-width: 900px) {
+
+    .config-three-columns {
+        grid-template-columns:
+            1fr;
+    }
+
+}
 /* ==========================================================
    BUTTONS
    ========================================================== */
