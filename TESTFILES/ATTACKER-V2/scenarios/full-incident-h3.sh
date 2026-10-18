@@ -1162,6 +1162,44 @@ phase_delay
 
 
 # ============================================================
+# PHASE 08
+# OPTIONAL WORDLIST AUTHENTICATION
+#
+# Runs after Phase 03.
+# Newly compromised hosts are included in Phases 04-07.
+# ============================================================
+
+if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
+
+    update_phase_state "08" "running"
+
+
+    if ! run_phase \
+        "08" \
+        "Wordlist Authentication - Remaining SSH / RDP Targets" \
+        "$PHASE_08"
+
+    then
+
+        update_phase_state "08" "failed"
+
+        exit 1
+
+    fi
+
+
+    update_phase_state "08" "complete"
+
+else
+
+    update_phase_state "08" "disabled"
+
+fi
+
+
+phase_delay
+
+# ============================================================
 # PHASE 04
 # ============================================================
 
@@ -1260,43 +1298,6 @@ fi
 
 update_phase_state "07" "complete"
 
-
-# ============================================================
-# PHASE 08
-# OPTIONAL WORDLIST AUTHENTICATION
-#
-# Runs only after normal P1-P7.
-# ============================================================
-
-if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
-
-    phase_delay
-
-
-    update_phase_state "08" "running"
-
-
-    if ! run_phase \
-        "08" \
-        "Wordlist Authentication - Remaining SSH / RDP Targets" \
-        "$PHASE_08"
-
-    then
-
-        update_phase_state "08" "failed"
-
-        exit 1
-
-    fi
-
-
-    update_phase_state "08" "complete"
-
-else
-
-    update_phase_state "08" "disabled"
-
-fi
 
 
 # ============================================================
