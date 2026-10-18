@@ -23,7 +23,6 @@ KALI02="./KALI02/KALI02_multi_installer.sh"
 WAZUH="./WAZUH/WAZUH_multi_installer.sh"
 TPOT="./TPOT01/TPOT01_multi_installer.sh"
 IMAGESRV="./IMAGESRV/IMAGESRV_installer.sh"
-INCIDENTVM="./INCIDENTVM/IncidentVM_installer.sh"
 MRNOBODY="./MRNOBODY/mrnobody_installer.sh"
 
 echo "=============================="
@@ -37,18 +36,17 @@ echo "5) Create Vuln-server01 VM"
 echo "6) Create Vuln-server02 VM"
 echo "7) Create KALI01 VM"
 echo "8) Create KALI02 VM"
-echo "11) Create APPSRV01 VM"
-echo "12) Create Client01 VM"
-echo "13) Create WAZUH VM"
-echo "14) Create TPOT01 VM"
-echo "15) Create Guacamole VM"
+echo "9) Create APPSRV01 VM"
+echo "10) Create Client01 VM"
+echo "11) Create WAZUH VM"
+echo "12) Create TPOT01 VM"
+echo "13) Create Guacamole VM"
 echo "80) Create Image Server VM"
 echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
 echo "95) Run ALL in background"
 echo "99) Cleanup all installation"
-echo "666) Create IncidentVM"
-echo "667) Create MrNobody VM"
+echo "666) Create MrNobody VM"
 echo "0) Exit"
 echo "=============================="
 
@@ -92,23 +90,23 @@ case "$CHOICE" in
     echo "Starting KALI02 VM creation.... "
     bash "$KALI02" $LAB 
     ;;
-  11)
+  9)
     echo "Starting APPSRV01 VM creation.... "
     bash "$APPSRV01" $LAB
     ;;
-  12)
+  10)
     echo "Staring Client01 VM creation... "
     bash "$CLIENT01" $LAB
     ;;
-  13)
+  11)
     echo "Starting WAZUH VM creation... "
     bash "$WAZUH" $LAB
     ;;
-  14)
+  12)
     echo "Starting WAZUH VM creation... "
     bash "$TPOT" $LAB
     ;;
-  15)
+  13)
     echo "Starting Guacamole VM creation..."
     bash "$GUACVM02_IP" $LAB
     bash "$GUACVM02" $LAB
@@ -253,10 +251,6 @@ case "$CHOICE" in
      rm -rf /var/lib/vz/template/iso/*
      ;;
   666)
-     echo 'Starting Incident VM creation'
-    bash "$INCIDENTVM" $LAB
-    ;;
-  667)
      echo 'Starting MrNobody VM creation'
     bash "$MRNOBODY" $LAB
     ;;  
