@@ -46,8 +46,8 @@ VULNSRV02="./VULNSRV02/VULNSRV02_multi_installer.sh"
 KALI01="./KALI01/KALI01_multi_installer.sh"
 KALI02="./KALI02/KALI02_multi_installer.sh"
 
-APPSRV01="./APPSRV01/APPSRV01_multi_installer.sh"
-CLIENT01="./CLIENT01/CLIENT01_multi_installer.sh"
+APPSRV01="./APPSRV01/APPSRV01_installer.sh"
+CLIENT01="./CLIENT01/CLIENT01_installer.sh"
 
 WAZUH="./WAZUH/WAZUH_multi_installer.sh"
 TPOT="./TPOT01/TPOT01_multi_installer.sh"
