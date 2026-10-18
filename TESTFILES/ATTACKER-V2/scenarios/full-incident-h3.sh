@@ -5,7 +5,7 @@ set -u
 
 # ============================================================
 # Nordic Manufacturing A/S
-# H3 Incident Campaign V2
+# H3 Incident Campaign V2.2
 #
 # Full Dynamic Incident Campaign
 #
@@ -18,13 +18,9 @@ set -u
 #   P5  Data Staging
 #   P6  Exfiltration
 #   P7  Impact
+#   P8  Optional Wordlist Authentication
 #
-# Optional future extension:
-#
-#   P8  Wordlist attack against remaining SSH/RDP targets
-#
-# P8 is CONFIGURED by this script, but is not executed yet.
-#
+# P8 runs AFTER P1-P7 and only when enabled.
 # ============================================================
 
 
@@ -47,7 +43,7 @@ UPLOAD_DIR="$BASE_DIR/uploads"
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
     echo "[ERROR] Configuration file not found:"
-    echo "$CONFIG_FILE"
+    echo "        $CONFIG_FILE"
     exit 1
 fi
 
@@ -81,7 +77,7 @@ export NORDIC_INCIDENT_IP="${NORDIC_INCIDENT_IP:-}"
 
 
 # ============================================================
-# LINUX / SSH CONFIGURATION
+# LINUX / SSH
 # ============================================================
 
 if [[ -n "${NORDIC_SSH_USERNAME:-}" ]]; then
@@ -105,7 +101,7 @@ SSH_PORT="${NORDIC_SSH_PORT:-$NORDIC_DEFAULT_SSH_PORT}"
 
 
 # ============================================================
-# WINDOWS / RDP CONFIGURATION
+# WINDOWS / RDP
 # ============================================================
 
 RDP_USERNAME="${NORDIC_RDP_USERNAME:-$NORDIC_DEFAULT_RDP_USER}"
@@ -118,29 +114,13 @@ RDP_PORT="${NORDIC_RDP_PORT:-$NORDIC_DEFAULT_RDP_PORT}"
 # ============================================================
 # WORDLIST CONFIGURATION
 #
-# Wordlist mode is configured BEFORE the campaign starts.
-#
-# It will later be used AFTER the normal P1-P7 campaign
-# against remaining SSH/RDP authentication targets that were
-# not successfully compromised using the supplied credentials.
-#
 # CLI:
-#
-#   User selects:
-#       Enable wordlist? y/N
-#
-#   Then supplies an existing local file:
-#       /home/ubuntu/rockme.txt
+#   User points to an existing wordlist.
 #
 # GUI:
+#   Flask will later upload a wordlist and provide its path.
 #
-#   Flask will later provide:
-#
-#       NORDIC_WORDLIST_ENABLED=1
-#       NORDIC_WORDLIST_FILE=/temporary/upload/path
-#
-# Passwords from the wordlist must NEVER be written to logs,
-# campaign state or ground truth.
+# P8 runs only AFTER the normal P1-P7 campaign.
 # ============================================================
 
 WORDLIST_ENABLED="${NORDIC_WORDLIST_ENABLED:-0}"
@@ -150,13 +130,6 @@ WORDLIST_FILE="${NORDIC_WORDLIST_FILE:-}"
 
 # ============================================================
 # INTERACTIVE CLI CONFIGURATION
-#
-# Manual terminal:
-#   Ask for configuration.
-#
-# Flask / GUI:
-#   stdin is not a TTY.
-#   Environment variables are used directly.
 # ============================================================
 
 if [[ -t 0 ]]; then
@@ -165,7 +138,7 @@ if [[ -t 0 ]]; then
     echo "============================================================"
     echo
     echo "        NORDIC MANUFACTURING A/S"
-    echo "        H3 INCIDENT CAMPAIGN V2"
+    echo "        H3 INCIDENT CAMPAIGN V2.2"
     echo
     echo "        CLI CONFIGURATION"
     echo
@@ -248,7 +221,6 @@ if [[ -t 0 ]]; then
     echo "Campaign configuration"
     echo "----------------------"
 
-
     read -r -p "Web ports [$NORDIC_WEB_PORTS]: " INPUT
 
     if [[ -n "$INPUT" ]]; then
@@ -272,11 +244,11 @@ if [[ -t 0 ]]; then
 
     echo "Wordlist attack"
     echo "---------------"
-
     echo
     echo "The wordlist will be used AFTER the normal P1-P7 campaign."
     echo "Only remaining SSH/RDP authentication targets will be tested."
     echo
+
 
     read -r -p \
         "Run wordlist attack against remaining SSH/RDP targets after P1-P7? [y/N]: " \
@@ -298,7 +270,6 @@ if [[ -t 0 ]]; then
 
                 if [[ -z "$WORDLIST_FILE" ]]; then
 
-                    echo
                     echo "[ERROR] A wordlist file is required."
 
                     continue
@@ -308,7 +279,6 @@ if [[ -t 0 ]]; then
 
                 if [[ ! -f "$WORDLIST_FILE" ]]; then
 
-                    echo
                     echo "[ERROR] Wordlist not found:"
                     echo "        $WORDLIST_FILE"
 
@@ -319,7 +289,6 @@ if [[ -t 0 ]]; then
 
                 if [[ ! -r "$WORDLIST_FILE" ]]; then
 
-                    echo
                     echo "[ERROR] Wordlist is not readable:"
                     echo "        $WORDLIST_FILE"
 
@@ -344,7 +313,7 @@ if [[ -t 0 ]]; then
 
 
     # --------------------------------------------------------
-    # Configuration summary
+    # Summary
     # --------------------------------------------------------
 
     echo
@@ -406,6 +375,7 @@ if [[ -t 0 ]]; then
 
             echo
             echo "Campaign cancelled."
+
             exit 0
             ;;
 
@@ -419,29 +389,18 @@ fi
 # ============================================================
 
 export NORDIC_SSH_USERNAME="$SSH_USERNAME"
-
-# Backwards compatibility
 export NORDIC_SSH_USER="$SSH_USERNAME"
-
 export NORDIC_SSH_PASSWORD="$SSH_PASSWORD"
-
 export NORDIC_SSH_PORT="$SSH_PORT"
 
-
 export NORDIC_RDP_USERNAME="$RDP_USERNAME"
-
 export NORDIC_RDP_PASSWORD="$RDP_PASSWORD"
-
 export NORDIC_RDP_PORT="$RDP_PORT"
 
-
 export NORDIC_WEB_PORTS
-
 export NORDIC_EXFIL_PORT
 
-
 export NORDIC_WORDLIST_ENABLED="$WORDLIST_ENABLED"
-
 export NORDIC_WORDLIST_FILE="$WORDLIST_FILE"
 
 
@@ -483,15 +442,12 @@ validate_port "$NORDIC_EXFIL_PORT" "exfiltration"
 
 # ------------------------------------------------------------
 # Wordlist validation
-#
-# This also validates GUI supplied paths.
 # ------------------------------------------------------------
 
 if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
 
     if [[ -z "$NORDIC_WORDLIST_FILE" ]]; then
 
-        echo
         echo "[ERROR] Wordlist mode is enabled but no wordlist file was supplied."
 
         exit 1
@@ -501,7 +457,6 @@ if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
 
     if [[ ! -f "$NORDIC_WORDLIST_FILE" ]]; then
 
-        echo
         echo "[ERROR] Wordlist file not found:"
         echo "        $NORDIC_WORDLIST_FILE"
 
@@ -512,7 +467,6 @@ if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
 
     if [[ ! -r "$NORDIC_WORDLIST_FILE" ]]; then
 
-        echo
         echo "[ERROR] Wordlist file is not readable:"
         echo "        $NORDIC_WORDLIST_FILE"
 
@@ -591,7 +545,7 @@ validate_script() {
 
 
 # ============================================================
-# RANDOM PHASE DELAY
+# RANDOM DELAY
 # ============================================================
 
 phase_delay() {
@@ -699,7 +653,7 @@ echo
 echo "============================================================"
 echo
 echo "        NORDIC MANUFACTURING A/S"
-echo "        H3 INCIDENT CAMPAIGN V2"
+echo "        H3 INCIDENT CAMPAIGN V2.2"
 echo
 echo "============================================================"
 echo
@@ -710,18 +664,15 @@ echo "  $INCIDENT_ID"
 
 echo
 
-
 echo "Campaign:"
 echo "  Dynamic Discovery"
 
 echo
 
-
 echo "Web / Proxy ports:"
 echo "  $NORDIC_WEB_PORTS"
 
 echo
-
 
 echo "Linux / SSH:"
 echo "  User: $NORDIC_SSH_USERNAME"
@@ -729,19 +680,16 @@ echo "  Port: $NORDIC_SSH_PORT"
 
 echo
 
-
 echo "Windows / RDP:"
 echo "  User: $NORDIC_RDP_USERNAME"
 echo "  Port: $NORDIC_RDP_PORT"
 
 echo
 
-
 echo "Exfiltration port:"
 echo "  $NORDIC_EXFIL_PORT"
 
 echo
-
 
 echo "Wordlist attack:"
 
@@ -770,22 +718,14 @@ echo "  P6  Exfiltration"
 echo "  P7  Impact"
 
 if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
-    echo "  P8  Wordlist Attack - configured, implementation pending"
+    echo "  P8  Wordlist Authentication"
 fi
 
 echo
 
 
 # ============================================================
-# IMPORTANT
-#
-# Never print:
-#
-#   Linux password
-#   Windows password
-#   Wordlist contents
-#   Successful wordlist password
-#
+# CAMPAIGN START
 # ============================================================
 
 log "[*] Campaign started."
@@ -816,22 +756,17 @@ ground_truth \
 # ============================================================
 
 PHASE_01="$SCRIPT_DIR/01-discovery.sh"
-
 PHASE_02="$SCRIPT_DIR/02-web.sh"
-
 PHASE_03="$SCRIPT_DIR/03-access.sh"
-
 PHASE_04="$SCRIPT_DIR/04-lateral.sh"
-
 PHASE_05="$SCRIPT_DIR/05-staging.sh"
-
 PHASE_06="$SCRIPT_DIR/06-exfil.sh"
-
 PHASE_07="$SCRIPT_DIR/07-impact.sh"
+PHASE_08="$SCRIPT_DIR/08-wordlist.sh"
 
 
 # ============================================================
-# VALIDATE ALL PHASE FILES BEFORE STARTING
+# VALIDATE NORMAL P1-P7
 # ============================================================
 
 for SCRIPT in \
@@ -858,16 +793,27 @@ do
 done
 
 
+# ------------------------------------------------------------
+# P8 is required only when wordlist mode is enabled.
+# ------------------------------------------------------------
+
+if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
+
+    if ! validate_script "$PHASE_08"; then
+
+        echo
+        echo "Campaign aborted."
+        echo
+
+        exit 1
+
+    fi
+
+fi
+
+
 # ============================================================
 # CLEAN PREVIOUS RUNTIME STATE
-#
-# Logs retained.
-# Uploads retained.
-#
-# Wordlist is NOT removed here.
-#
-# GUI uploaded wordlists will later be placed in a dedicated
-# temporary runtime directory and removed after P8.
 # ============================================================
 
 log "[*] Clearing previous campaign state."
@@ -888,13 +834,9 @@ rm -f \
 # ============================================================
 # CREATE INITIAL CAMPAIGN STATE
 #
-# IMPORTANT:
-#
-# Passwords are NOT stored.
-# Wordlist contents are NOT stored.
-# Wordlist path is NOT stored.
-#
-# Only whether wordlist mode was enabled is stored.
+# Passwords are not stored.
+# Wordlist contents are not stored.
+# Wordlist path is not stored.
 # ============================================================
 
 python3 - \
@@ -987,12 +929,7 @@ data = {
 
 
 with open(output, "w", encoding="utf-8") as f:
-
-    json.dump(
-        data,
-        f,
-        indent=2
-    )
+    json.dump(data, f, indent=2)
 
 PY
 
@@ -1024,7 +961,6 @@ status = sys.argv[3]
 
 
 with open(filename, encoding="utf-8") as f:
-
     data = json.load(f)
 
 
@@ -1040,12 +976,7 @@ data["updated"] = datetime.now(
 
 
 with open(filename, "w", encoding="utf-8") as f:
-
-    json.dump(
-        data,
-        f,
-        indent=2
-    )
+    json.dump(data, f, indent=2)
 
 PY
 
@@ -1066,7 +997,6 @@ if ! run_phase \
 then
 
     update_phase_state "01" "failed"
-
     exit 1
 
 fi
@@ -1090,7 +1020,6 @@ if ! run_phase \
 then
 
     update_phase_state "02" "failed"
-
     exit 1
 
 fi
@@ -1114,7 +1043,6 @@ if ! run_phase \
 then
 
     update_phase_state "03" "failed"
-
     exit 1
 
 fi
@@ -1138,7 +1066,6 @@ if ! run_phase \
 then
 
     update_phase_state "04" "failed"
-
     exit 1
 
 fi
@@ -1162,7 +1089,6 @@ if ! run_phase \
 then
 
     update_phase_state "05" "failed"
-
     exit 1
 
 fi
@@ -1186,7 +1112,6 @@ if ! run_phase \
 then
 
     update_phase_state "06" "failed"
-
     exit 1
 
 fi
@@ -1210,7 +1135,6 @@ if ! run_phase \
 then
 
     update_phase_state "07" "failed"
-
     exit 1
 
 fi
@@ -1219,36 +1143,39 @@ update_phase_state "07" "complete"
 
 
 # ============================================================
-# WORDLIST STATUS
+# PHASE 08
+# OPTIONAL WORDLIST AUTHENTICATION
 #
-# P8 does not exist yet.
-#
-# We deliberately do NOT execute anything here yet.
-#
-# This lets us test the new configuration without changing the
-# working P1-P7 baseline.
+# Runs only after normal P1-P7.
 # ============================================================
 
 if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
 
-    echo
-    echo "============================================================"
-    echo " WORDLIST ATTACK"
-    echo "============================================================"
-    echo
+    phase_delay
 
-    echo "[*] Wordlist mode was enabled."
-    echo "[*] Wordlist file validated successfully."
-    echo "[*] Normal P1-P7 campaign completed."
-    echo
-    echo "[*] Phase 08 implementation is not installed yet."
-    echo "[*] No wordlist authentication attempts were performed."
-    echo
 
-    log "[*] Wordlist phase configured but not yet implemented."
+    update_phase_state "08" "running"
 
-    ground_truth \
-        "WORDLIST_CONFIGURED enabled=1 executed=0"
+
+    if ! run_phase \
+        "08" \
+        "Wordlist Authentication - Remaining SSH / RDP Targets" \
+        "$PHASE_08"
+
+    then
+
+        update_phase_state "08" "failed"
+
+        exit 1
+
+    fi
+
+
+    update_phase_state "08" "complete"
+
+else
+
+    update_phase_state "08" "disabled"
 
 fi
 
@@ -1270,7 +1197,6 @@ filename = sys.argv[1]
 
 
 with open(filename, encoding="utf-8") as f:
-
     data = json.load(f)
 
 
@@ -1282,12 +1208,7 @@ data["completed"] = datetime.now(
 
 
 with open(filename, "w", encoding="utf-8") as f:
-
-    json.dump(
-        data,
-        f,
-        indent=2
-    )
+    json.dump(data, f, indent=2)
 
 PY
 
@@ -1306,7 +1227,7 @@ log "[+] Full incident campaign completed."
 echo
 echo "============================================================"
 echo
-echo "        H3 INCIDENT CAMPAIGN V2 COMPLETE"
+echo "        H3 INCIDENT CAMPAIGN V2.2 COMPLETE"
 echo
 echo "============================================================"
 echo
@@ -1341,7 +1262,14 @@ echo "Wordlist attack:"
 if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
 
     echo "  Enabled"
-    echo "  Phase 08 implementation pending"
+    echo "  Completed"
+
+    if [[ -f "$STATE_DIR/wordlist-results.json" ]]; then
+
+        echo "  Results:"
+        echo "    $STATE_DIR/wordlist-results.json"
+
+    fi
 
 else
 
@@ -1394,7 +1322,17 @@ echo
 echo "  Impact:"
 echo "    $STATE_DIR/impact.json"
 
-echo
 
+if [[ -f "$STATE_DIR/wordlist-results.json" ]]; then
+
+    echo
+
+    echo "  Wordlist:"
+    echo "    $STATE_DIR/wordlist-results.json"
+
+fi
+
+
+echo
 
 exit 0
