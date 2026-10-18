@@ -1,4 +1,5 @@
 #!/bin/bash
+
 set -e
 
 # ============================================================
@@ -61,8 +62,10 @@ MRNOBODY="./MRNOBODY/mrnobody_installer.sh"
 # ============================================================
 
 pause() {
+
     echo
     read -rp "Press ENTER to continue..."
+
 }
 
 
@@ -124,6 +127,7 @@ ENTER   = Continue" \
         echo "Installation cancelled."
 
         exit 0
+
     fi
 }
 
@@ -188,7 +192,6 @@ install_prerequisites() {
 
     bash "$REPO"
 
-
     echo
     echo "[2/2] Installing packages and snippets..."
 
@@ -216,212 +219,270 @@ install_openvswitch() {
 
 
 # ============================================================
-# BASIC INSTALLATION
+# BUILD OPTIONAL TMUX COMMANDS
 # ============================================================
 
-install_basic() {
+build_optional_commands() {
 
-    echo
-    echo "========================================"
-    echo " BASIC CYBERLAB INSTALLATION"
-    echo "========================================"
-    echo
-    echo "Lab: $LAB"
-    echo
-    echo "Installing:"
-    echo
-    echo "  OPNsense"
-    echo "  Guacamole"
-    echo "  Kali01"
-    echo "  VulnSrv01"
-    echo
-    echo "========================================"
-
-
-    # --------------------------------------------------------
-    # Repository / prerequisites
-    # --------------------------------------------------------
-
-    install_prerequisites
-
-
-    # --------------------------------------------------------
-    # Open vSwitch
-    # --------------------------------------------------------
-
-    install_openvswitch
-
-
-    # --------------------------------------------------------
-    # OPNsense
-    # --------------------------------------------------------
-
-    echo
-    echo "========================================"
-    echo " Creating OPNsense"
-    echo "========================================"
-
-    bash "$OPNSENSE" "$LAB"
-
-
-    # --------------------------------------------------------
-    # Guacamole
-    # --------------------------------------------------------
-
-    echo
-    echo "========================================"
-    echo " Creating Guacamole"
-    echo "========================================"
-
-    bash "$GUACVM02" "$LAB"
-
-
-    # --------------------------------------------------------
-    # Kali01
-    # --------------------------------------------------------
-
-    echo
-    echo "========================================"
-    echo " Creating Kali01"
-    echo "========================================"
-
-    bash "$KALI01" "$LAB"
-
-
-    # --------------------------------------------------------
-    # VulnSrv01
-    # --------------------------------------------------------
-
-    echo
-    echo "========================================"
-    echo " Creating VulnSrv01"
-    echo "========================================"
-
-    bash "$VULNSRV01" "$LAB"
-
-
-    echo
-    echo "========================================"
-    echo " BASIC INSTALLATION COMPLETED"
-    echo "========================================"
-}
-
-
-# ============================================================
-# OPTIONAL INSTALLATION
-# ============================================================
-
-install_optional_components() {
+    OPTIONAL_COMMANDS=""
 
     if [ -z "$OPTIONS" ]; then
-
-        echo
-        echo "No optional components selected."
-
         return
     fi
-
-
-    echo
-    echo "========================================"
-    echo " OPTIONAL COMPONENTS"
-    echo "========================================"
-
 
     for COMPONENT in $OPTIONS; do
 
         COMPONENT=$(echo "$COMPONENT" | tr -d '"')
 
-
         case "$COMPONENT" in
-
 
             VULNSRV02)
 
-                echo
-                echo "========================================"
-                echo " Creating VulnSrv02"
-                echo "========================================"
-
-                bash "$VULNSRV02" "$LAB"
+                OPTIONAL_COMMANDS+="
+echo
+echo '========================================'
+echo ' Creating VulnSrv02'
+echo '========================================'
+bash '$VULNSRV02' '$LAB'
+"
 
                 ;;
 
 
             KALI02)
 
-                echo
-                echo "========================================"
-                echo " Creating Kali02"
-                echo "========================================"
-
-                bash "$KALI02" "$LAB"
+                OPTIONAL_COMMANDS+="
+echo
+echo '========================================'
+echo ' Creating Kali02'
+echo '========================================'
+bash '$KALI02' '$LAB'
+"
 
                 ;;
 
 
             APPSRV01)
 
-                echo
-                echo "========================================"
-                echo " Creating AppSrv01"
-                echo "========================================"
-
-                bash "$APPSRV01" "$LAB"
+                OPTIONAL_COMMANDS+="
+echo
+echo '========================================'
+echo ' Creating AppSrv01'
+echo '========================================'
+bash '$APPSRV01' '$LAB'
+"
 
                 ;;
 
 
             CLIENT01)
 
-                echo
-                echo "========================================"
-                echo " Creating Client01"
-                echo "========================================"
-
-                bash "$CLIENT01" "$LAB"
+                OPTIONAL_COMMANDS+="
+echo
+echo '========================================'
+echo ' Creating Client01'
+echo '========================================'
+bash '$CLIENT01' '$LAB'
+"
 
                 ;;
 
 
             WAZUH)
 
-                echo
-                echo "========================================"
-                echo " Creating Wazuh"
-                echo "========================================"
-
-                bash "$WAZUH" "$LAB"
+                OPTIONAL_COMMANDS+="
+echo
+echo '========================================'
+echo ' Creating Wazuh'
+echo '========================================'
+bash '$WAZUH' '$LAB'
+"
 
                 ;;
 
 
             TPOT)
 
-                echo
-                echo "========================================"
-                echo " Creating T-Pot"
-                echo "========================================"
-
-                bash "$TPOT" "$LAB"
+                OPTIONAL_COMMANDS+="
+echo
+echo '========================================'
+echo ' Creating T-Pot'
+echo '========================================'
+bash '$TPOT' '$LAB'
+"
 
                 ;;
 
 
             MRNOBODY)
 
-                echo
-                echo "========================================"
-                echo " Creating MrNobody"
-                echo "========================================"
-
-                bash "$MRNOBODY" "$LAB"
+                OPTIONAL_COMMANDS+="
+echo
+echo '========================================'
+echo ' Creating MrNobody'
+echo '========================================'
+bash '$MRNOBODY' '$LAB'
+"
 
                 ;;
 
         esac
 
     done
+}
+
+
+# ============================================================
+# START BACKGROUND DEPLOYMENT
+# ============================================================
+
+start_tmux_deployment() {
+
+    SESSION="deploy-all"
+    LOGFILE="deploy.log"
+
+
+    # --------------------------------------------------------
+    # Make sure tmux exists
+    # --------------------------------------------------------
+
+    if ! command -v tmux >/dev/null 2>&1; then
+
+        echo
+        echo "tmux not installed."
+        echo "Installing tmux..."
+
+        apt-get update
+        apt-get install -y tmux
+
+    fi
+
+
+    # --------------------------------------------------------
+    # Remove old session
+    # --------------------------------------------------------
+
+    if tmux has-session -t "$SESSION" 2>/dev/null; then
+
+        echo
+        echo "Old tmux session '$SESSION' found."
+        echo "Stopping old session..."
+
+        tmux kill-session -t "$SESSION"
+
+    fi
+
+
+    # --------------------------------------------------------
+    # Build selected optional commands
+    # --------------------------------------------------------
+
+    build_optional_commands
+
+
+    # --------------------------------------------------------
+    # Start tmux
+    # --------------------------------------------------------
+
+    echo
+    echo "========================================"
+    echo " Starting background deployment"
+    echo "========================================"
+    echo
+
+
+    tmux new-session -d -s "$SESSION" bash -c "
+
+set -e
+
+exec > >(tee -a '$LOGFILE') 2>&1
+
+
+echo
+echo '========================================'
+echo ' CyberLab background deployment'
+echo '========================================'
+echo
+
+
+# ============================================================
+# GUACAMOLE
+# ============================================================
+
+echo
+echo '========================================'
+echo ' Creating Guacamole'
+echo '========================================'
+
+bash '$GUACVM02' '$LAB'
+
+
+# ============================================================
+# KALI01
+# ============================================================
+
+echo
+echo '========================================'
+echo ' Creating Kali01'
+echo '========================================'
+
+bash '$KALI01' '$LAB'
+
+
+# ============================================================
+# VULNSRV01
+# ============================================================
+
+echo
+echo '========================================'
+echo ' Creating VulnSrv01'
+echo '========================================'
+
+bash '$VULNSRV01' '$LAB'
+
+
+# ============================================================
+# OPTIONAL COMPONENTS
+# ============================================================
+
+$OPTIONAL_COMMANDS
+
+
+# ============================================================
+# DONE
+# ============================================================
+
+echo
+echo '========================================'
+echo ' CYBERLAB DEPLOYMENT COMPLETED'
+echo '========================================'
+echo
+
+echo 'All selected VMs have been installed.'
+
+"
+
+    echo
+    echo "========================================"
+    echo " Deployment running in background"
+    echo "========================================"
+    echo
+    echo "tmux session:"
+    echo
+    echo "  $SESSION"
+    echo
+    echo "Connect to installation:"
+    echo
+    echo "  tmux attach -t $SESSION"
+    echo
+    echo "Detach without stopping:"
+    echo
+    echo "  CTRL+B then D"
+    echo
+    echo "Follow deployment log:"
+    echo
+    echo "  tail -f $LOGFILE"
+    echo
 }
 
 
@@ -460,7 +521,7 @@ custom_install() {
 
     # ========================================================
     # STEP 2
-    # Configure OPNsense
+    # OPNsense configuration
     # ========================================================
 
     configure_opnsense
@@ -468,7 +529,7 @@ custom_install() {
 
     # ========================================================
     # STEP 3
-    # Configure Guacamole
+    # Guacamole configuration
     # ========================================================
 
     configure_guacamole
@@ -476,7 +537,7 @@ custom_install() {
 
     # ========================================================
     # STEP 4
-    # Show deployment summary
+    # Summary
     # ========================================================
 
     clear
@@ -513,76 +574,62 @@ custom_install() {
 
     fi
 
-
     echo
     echo "========================================"
-    echo
     echo "OPNsense configuration:  DONE"
     echo "Guacamole configuration: DONE"
-    echo
     echo "========================================"
-    echo
-
-
-    # ========================================================
-    # STEP 5
-    # Start automatically
-    # ========================================================
-
-    echo "Starting CyberLab deployment..."
     echo
 
     sleep 3
 
 
     # ========================================================
-    # STEP 6
-    # Basic installation
+    # STEP 5
+    # Repository / prerequisites
     # ========================================================
 
-    install_basic
+    install_prerequisites
+
+
+    # ========================================================
+    # STEP 6
+    # Open vSwitch
+    # ========================================================
+
+    install_openvswitch
 
 
     # ========================================================
     # STEP 7
-    # Optional installation
-    # ========================================================
-
-    install_optional_components
-
-
-    # ========================================================
-    # DONE
+    #
+    # OPNsense MUST run outside tmux.
+    # Wait until OPNsense installer is completely finished.
     # ========================================================
 
     echo
     echo "========================================"
-    echo "       DEPLOYMENT COMPLETED"
+    echo " Installing OPNsense"
     echo "========================================"
     echo
-    echo "Basic:"
-    echo
-    echo "  OPNsense       OK"
-    echo "  Guacamole      OK"
-    echo "  Kali01         OK"
-    echo "  VulnSrv01      OK"
-    echo
 
-    if [ -n "$OPTIONS" ]; then
+    bash "$OPNSENSE" "$LAB"
 
-        echo "Optional:"
-
-        for COMPONENT in $OPTIONS; do
-
-            COMPONENT=$(echo "$COMPONENT" | tr -d '"')
-
-            echo "  $COMPONENT      OK"
-
-        done
-
-    fi
 
     echo
+    echo "========================================"
+    echo " OPNsense installation completed"
+    echo "========================================"
+    echo
+
+
+    # ========================================================
+    # STEP 8
+    #
+    # Everything from Guacamole and forward runs in tmux.
+    # ========================================================
+
+    start_tmux_deployment
 }
 
 
@@ -751,7 +798,7 @@ while true; do
             ;;
 
 
-      80)
+        80)
 
             bash "$IMAGESRV" "99"
 
