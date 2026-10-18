@@ -43,9 +43,9 @@ INTERNET_OPNSENSE_IMG="https://pkg.opnsense.org/releases/${OPNSENSE_VERSION}/OPN
 # Deployment scripts
 ###############################################################################
 
-FULL_INSTALL="${SCRIPT_DIR}/full_install.sh"
+BIG_INSTALL="${SCRIPT_DIR}/big_install.sh"
 MINI_INSTALL="${SCRIPT_DIR}/mini_install.sh"
-MULTI_INSTALL="${SCRIPT_DIR}/multi_install.sh"
+MULTI_INSTALL="${SCRIPT_DIR}/multi_big_install.sh"
 MULTI_INSTALL_MINI="${SCRIPT_DIR}/multi_mini_install.sh"
 TEST_FULL_INSTALL="${SCRIPT_DIR}/test_full_install.sh"
 
@@ -716,9 +716,9 @@ read -r -p "Select deployment type: " choice
 
 case "$choice" in
   1)
-    require_file "$FULL_INSTALL"
-    echo "▶ Standalone Proxmox (Full Lab)"
-    bash "$FULL_INSTALL"
+    require_file "$BIG_INSTALL"
+    echo "▶ Standalone Proxmox (Big Lab)"
+    bash "$BIG_INSTALL"
     ;;
 
   2)
