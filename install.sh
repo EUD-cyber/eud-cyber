@@ -740,7 +740,7 @@ case "$choice" in
     ;;
 
   5)
-    require_file "$NEW_FULL_INSTALL"
+    require_file "$TEST_FULL_INSTALL"
     echo "▶ New test install"
     bash "$TEST_FULL_INSTALL"
     ;;
