@@ -5,6 +5,19 @@ This script is testet with proxmox 9.1, 9.1.1 and 9.2
 
 just git clone this site and run  run install.sh \
 
+When installing you have the install options.
+
+Big install 
+Big install multilab 
+Mini install (not done yet)
+Mini install multillab (not done yet)
+
+big = hardware need x cores, 100 gb memory, 200 gb hdd
+mini = hardware need x cores, x gb memory, x gb hdd
+multilab = ask for x labs and the install the number, vm and network is called labx-
+
+When choosen 90 i the install theres an option to install other vm in the lab, default is guacvm, opnsense, kali01, vulnsrv01, all the vm is on a single lan named lan1 the option vm og on either lan1 or lan2 see it in the option in the install
+
 In the multi lab install it ask how many labs you want to install then it runs the input script x times for input on the guacvm and opnsense ip adresse, and create a labx_lanx network for each lab, then it runs all installation in a tmux session that waits for the other to complete.
 
 Remember when the vm is created and started, the cloud-init goes to work so it can be some time before all things work, to check this use proxmox and login to the vm and type "cloud-init status" if it "running" grap a cup of coffee and wait for it to be "done"
