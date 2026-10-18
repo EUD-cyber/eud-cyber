@@ -30,7 +30,7 @@ cd "$SCRIPT_DIR"
 # Default image sources
 ###############################################################################
 
-INTERNET_LINUX_IMG="https://cloud-images.ubuntu.com/noble/20260725/noble-server-cloudimg-amd64.img"
+INTERNET_LINUX_IMG="https://cloud-images.ubuntu.com/noble/20261017/noble-server-cloudimg-amd64.img"
 INTERNET_WAZUH_IMG="https://packages.wazuh.com/4.x/vm/wazuh-4.14.1.ova"
 INTERNET_KALI_IMG="https://kali.download/cloud-images/kali-2025.4/kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
 
