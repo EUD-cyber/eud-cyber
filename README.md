@@ -1,25 +1,17 @@
 # eud-cyber
 This github if created for the cyber education on danish technical colleges to create a safe and automated lab environment for the students to pratice in, but its free for all to download and play with
 
-This script is testet with proxmox 9.1 and 9.1.1
+This script is testet with proxmox 9.1, 9.1.1 and 9.2
 
 just git clone this site and run  run install.sh \
-then 4 options \
-1 full install, wih options to install singel vm\
-2 mini install requires, 4 cores, 32 gb memory, 500 gb hdd \
-3 install multiple labs full spec on single proxmox \
-4 install multiple labs mini spec on single proxmox
 
 In the multi lab install it ask how many labs you want to install then it runs the input script x times for input on the guacvm and opnsense ip adresse, and create a labx_lanx network for each lab, then it runs all installation in a tmux session that waits for the other to complete.
 
 Remember when the vm is created and started, the cloud-init goes to work so it can be some time before all things work, to check this use proxmox and login to the vm and type "cloud-init status" if it "running" grap a cup of coffee and wait for it to be "done"
 
-<img width="1015" height="572" alt="image" src="https://github.com/user-attachments/assets/dec875ed-7622-49f4-a340-60275a5bd6e7" />
 
-
-When the GUACVM is up and running and the cloud-init is done, just http://ip_address (the ip adresse you gave it on the installation) \
+When the GUACVM is up and running and the cloud-init is done, just https://ip_address (the ip adresse you gave it on the installation) \
 Then theres a guacamole/nat connection to all vm's on either ssh, gui, vnc or rdp, for there you can start labs on the vm's (docker compose) 
-
 
 passwords: 
 
@@ -36,18 +28,6 @@ wazuh \
 user: ubuntu pass: Password1! \
 webuser: admin webpass: Password1?
 
-win2025 \
-user: administrator pass: Password1! 
-
-api on guacamole that pulls status on the docker on different server and can start and stop them from the gui \
-the api is listing on port 5000 on guacvm and the tasks.html uses that for pulling the status and labctl uses it to control the vm from proxmox
-
-
-missing \
-   remove auth from guacamole its only a lab env.\
-   future mode theres gonna be a download all to a local repository and then install from that.\
- 
-  
 Network \
   guacvm \
     vmbri0  static/dhcp \
