@@ -73,7 +73,7 @@ export NORDIC_WEB_PORTS="${NORDIC_WEB_PORTS:-$NORDIC_DEFAULT_WEB_PORTS}"
 
 export NORDIC_EXFIL_PORT="${NORDIC_EXFIL_PORT:-$NORDIC_DEFAULT_EXFIL_PORT}"
 
-export NORDIC_INCIDENT_IP="${NORDIC_INCIDENT_IP:-}"
+export NORDIC_INCIDENT_IP="${NORDIC_INCIDENT_IP:-192.168.1.254}"
 
 
 # ============================================================
@@ -221,6 +221,15 @@ if [[ -t 0 ]]; then
     echo "Campaign configuration"
     echo "----------------------"
 
+    read -r -p "IncidentVM IP [$NORDIC_INCIDENT_IP]: " INPUT
+
+    if [[ -n "$INPUT" ]]; then
+        NORDIC_INCIDENT_IP="$INPUT"
+    fi
+
+
+    echo
+
     read -r -p "Web ports [$NORDIC_WEB_PORTS]: " INPUT
 
     if [[ -n "$INPUT" ]]; then
@@ -332,6 +341,11 @@ if [[ -t 0 ]]; then
     echo "  Username: $RDP_USERNAME"
     echo "  Port:     $RDP_PORT"
 
+    echo "IncidentVM IP:"
+    echo "  $NORDIC_INCIDENT_IP"
+
+    echo
+
     echo
 
     echo "Web ports:"
@@ -397,6 +411,7 @@ export NORDIC_RDP_USERNAME="$RDP_USERNAME"
 export NORDIC_RDP_PASSWORD="$RDP_PASSWORD"
 export NORDIC_RDP_PORT="$RDP_PORT"
 
+export NORDIC_INCIDENT_IP
 export NORDIC_WEB_PORTS
 export NORDIC_EXFIL_PORT
 
@@ -683,6 +698,11 @@ echo
 echo "Windows / RDP:"
 echo "  User: $NORDIC_RDP_USERNAME"
 echo "  Port: $NORDIC_RDP_PORT"
+
+echo
+
+echo "IncidentVM IP:"
+echo "  $NORDIC_INCIDENT_IP"
 
 echo
 
