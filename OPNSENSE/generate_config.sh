@@ -1,14 +1,25 @@
+
 #!/bin/bash
 set -e
 
-mkdir -p $(pwd)/OPNSENSE/iso/conf
+LAB="$1"
+
+if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
+  echo "Usage: $0 <lab-number>"
+  exit 1
+fi
+
+OUTDIR="$(pwd)/OPNSENSE/lab${LAB}/iso/conf"
+OUTFILE="${OUTDIR}/config.xml"
+mkdir -p "$OUTDIR"
+
 
 WAN_IF="vtnet1"
 LAN_IF="vtnet0"
 LAN2_IF="vtnet2"
 OOBM_IF="vtnet3"
 
-HOSTNAME="opnsense"
+HOSTNAME="opnsense-lab${LAB}"
 DOMAIN="local"
 TIMEZONE="Etc/UTC"
 
@@ -127,7 +138,7 @@ else
   exit 1
 fi
 
-cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
+cat > "$OUTFILE" <<EOF
 <?xml version="1.0"?>
 <opnsense>
   <system>
@@ -176,6 +187,7 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
     <nohttpreferercheck>1</nohttpreferercheck>
     <ssl-certref>default</ssl-certref>
     <ssl-ciphers>AES128-GCM-SHA256:ECDHE-RSA-AES128-SHA256</ssl-ciphers>
+    <nodnsrebindcheck>1</nodnsrebindcheck>
     <port>443</port>
    </webgui>
   </system>
@@ -266,4 +278,5 @@ cat > $(pwd)/OPNSENSE/iso/conf/config.xml <<EOF
 EOF
 
 echo
-echo "✔ WAN config generated at /root/opnsense/config.xml"
+echo "✔ OPNsense config generated for lab $LAB"
+echo "  → $OUTFILE"

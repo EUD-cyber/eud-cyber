@@ -1,7 +1,15 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+IFS=$'\n\t'
 
-LOGFILE="$(pwd)/LOGS/VULNSRV02.log"
+LAB="$1"
+
+if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
+  echo "Usage: $0 <lab-number>"
+  exit 1
+fi
+
+LOGFILE="$(pwd)/LOGS/VULNSRV02_lab${LAB}.log"
 
 # Create log file and ensure permissions
 touch "$LOGFILE"
@@ -13,25 +21,25 @@ exec > >(tee -a "$LOGFILE") 2>&1
 echo "===== VULNSRV02 installation started at $(date) ====="
 
 # ===== CONFIG =====
-START_VMID=100
-BASE_NAME="VULN-SRV02"
-IMG_URL="https://cloud-images.ubuntu.com/noble/20251213/noble-server-cloudimg-amd64.img"
+START_VMID=$((LAB * 1000))
+BASE_NAME="lab${LAB}-VULN-SRV02"
+IMG_URL="${LINUX_IMG:-https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
 IMG_NAME="noble-server-cloudimg-amd64.img"
 IMG_PATH="$(pwd)/$IMG_NAME"
-ISO_STORAGE="local"
-DISK_STORAGE="local-lvm"
+ISO_STORAGE="${LOCAL:-local}"
+DISK_STORAGE="${LVM:-local-lvm}"
 MEMORY=4096       # in MB
 CORES=4
 DISK_SIZE="32G"    # the number is in GB
-BRIDGE="lan2"
-BRIDGE1="oobm"
+BRIDGE="lab${LAB}_lan2"
+BRIDGE1="lab${LAB}_oobm"
 IP_ADDR="ip=192.168.2.21/24"
 DNS_SERVER="192.168.2.1"
 IP_GW="gw=192.168.2.1"
 OOBM_IP="ip=172.20.0.21/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
 SRC_USERDATA="$(pwd)/VULNSRV02/VULNSRV02_userdata.yaml"     # source file
-DST_USERDATA="VULNSRV02_userdata.yaml"            # destination filename
+DST_USERDATA="VULNSRV02_userdata.yaml_lab${LAB}"            # destination filename
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
 
@@ -109,13 +117,33 @@ qm set $VMID --ipconfig0 $IP_ADDR,$IP_GW \
   --searchdomain cloud.local \
   --nameserver $DNS_SERVER \
   --ciupgrade \
-  --cicustom "user=local:snippets/VULNSRV02_userdata.yaml"
-
-#Creating first snapshot of the VM 
-qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
+  --cicustom "user=$ISO_STORAGE:snippets/${DST_USERDATA}"
 
 # ===== Start VM =====
 echo "Starting VM $VMID ($VM_NAME)..."
 qm start $VMID
 
 echo "VM $VMID ($VM_NAME) started successfully!"
+
+echo "Waiting for VM to power off..."
+
+while true; do
+  STATUS=$(qm status "$VMID" | awk '{print $2}')
+
+  if [[ "$STATUS" == "stopped" ]]; then
+    echo "VM is powered off."
+    break
+  fi
+
+  sleep 5
+done
+
+echo "Creating snapshot..."
+qm snapshot "$VMID" First_snapshot --description "Clean baseline snapshot for lab reset"
+
+echo "Snapshot created successfully."
+
+echo "Starting VM again..."
+qm start "$VMID"
+
+echo "VM started."

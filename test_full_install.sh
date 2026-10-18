@@ -34,14 +34,14 @@ OPENVSWITCHPRE="./open-vswitch-pre.sh"
 OPENVSWITCH="./open-vswitch.sh"
 OPENVSWITCHLAST="./open-vswitch-last.sh"
 
-OPNSENSE="./OPNSENSE/OPNSENSE_multi_installer.sh"
-OPNSENSECONF="./OPNSENSE/generate_config_multi.sh"
+OPNSENSE="./OPNSENSE/OPNSENSE_installer.sh"
+OPNSENSECONF="./OPNSENSE/generate_config.sh"
 
 GUACVM02="./GUACVM02/GUACVM02_installer.sh"
 GUACVM02_IP="./GUACVM02/GUACVM02_ip.sh"
 
-VULNSRV01="./VULNSRV01/VULNSRV01_multi_installer.sh"
-VULNSRV02="./VULNSRV02/VULNSRV02_multi_installer.sh"
+VULNSRV01="./VULNSRV01/VULNSRV01_installer.sh"
+VULNSRV02="./VULNSRV02/VULNSRV02_installer.sh"
 
 KALI01="./KALI01/KALI01_installer.sh"
 KALI02="./KALI02/KALI02_installer.sh"
@@ -49,8 +49,8 @@ KALI02="./KALI02/KALI02_installer.sh"
 APPSRV01="./APPSRV01/APPSRV01_installer.sh"
 CLIENT01="./CLIENT01/CLIENT01_installer.sh"
 
-WAZUH="./WAZUH/WAZUH_multi_installer.sh"
-TPOT="./TPOT01/TPOT01_multi_installer.sh"
+WAZUH="./WAZUH/WAZUH_installer.sh"
+TPOT="./TPOT01/TPOT01_installer.sh"
 
 IMAGESRV="./IMAGESRV/IMAGESRV_installer.sh"
 

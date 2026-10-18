@@ -1,15 +1,8 @@
+
 #!/bin/bash
-set -euo pipefail
-IFS=$'\n\t'
+set -e
 
-LAB="$1"
-
-if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
-  echo "Usage: $0 <lab-number>"
-  exit 1
-fi
-
-LOGFILE="$(pwd)/LOGS/OPNSENSE_lab${LAB}.log"
+LOGFILE="$(pwd)/LOGS/OPNSENSE.log"
 
 # Create log file and ensure permissions
 touch "$LOGFILE"
@@ -21,82 +14,54 @@ exec > >(tee -a "$LOGFILE") 2>&1
 echo "===== OPNSENSE installation started at $(date) ====="
 
 ### ===== VARIABLES =====
-START_VMID=$((LAB * 1000))
-BASE_NAME="lab${LAB}-opnsense"
+START_VMID=100
+BASE_NAME="opnsense"
 RAM=4096
 CORES=4
 DISK_SIZE="30G"
 
 # Proxmox storage
-DISK_STORAGE="${LVM:-local-lvm}"
-ISO_STORAGE="${LOCAL:-local}"
+DISK_STORAGE="local-lvm"
+ISO_STORAGE="local"
 
 # Bridges
-WAN_BRIDGE="${BRIDGE:-vmbr0}"
-LAN_BRIDGE="lab${LAB}_lan1"
-LAN_BRIDGE1="lab${LAB}_lan2"
-OOBM="lab${LAB}_oobm"
+WAN_BRIDGE="vmbr0"
+LAN_BRIDGE="lan1"
+LAN_BRIDGE1="lan2"
+OOBM="oobm"
 
+OPN_VERSION="25.7"
 
-#gammel image
-#OPN_VERSION="${OPNSENSE_VERSION:-25.7}"
-#IMG_BASE="OPNsense-${OPN_VERSION}-nano-amd64.img"
-#IMG_BZ2="${IMG_BASE}.bz2"
-
-#ny test image 
-
-OPN_VERSION="${OPNSENSE_VERSION:-25.7}"
-DEFAULT_OPNSENSE_URL="https://pkg.opnsense.org/releases/${OPN_VERSION}/OPNsense-${OPN_VERSION}-nano-amd64.img.bz2"
-OPNSENSE_DOWNLOAD_URL="${OPNSENSE_IMG_URL:-$DEFAULT_OPNSENSE_URL}"
-IMG_BZ2="$(basename "$OPNSENSE_DOWNLOAD_URL")"
-IMG_BASE="${IMG_BZ2%.bz2}"
-
-
+IMG_BASE="OPNsense-${OPN_VERSION}-nano-amd64.img"
+IMG_BZ2="${IMG_BASE}.bz2"
 
 IMG_DIR="$(pwd)/OPNSENSE"
 IMG_PATH="${IMG_DIR}/${IMG_BASE}"
 IMG_BZ2_PATH="${IMG_DIR}/${IMG_BZ2}"
 
-ISO_PATH="/var/lib/vz/template/iso/opnsense-lab${LAB}-config.iso"
+ISO_PATH="/var/lib/vz/template/iso/opnsense-config.iso"
 
-
-CONFIG_ISO="$(pwd)/OPNSENSE/lab${LAB}/iso"
-CONFIG_SRC="${CONFIG_ISO}/conf/config.xml"
-
-if [[ ! -f "$CONFIG_SRC" ]]; then
-  echo "❌ Config not found for lab $LAB:"
-  echo "   $CONFIG_SRC"
-  exit 1
-fi
+CONFIG_ISO="$(pwd)/OPNSENSE/iso"
+CONFIG_SRC="$(pwd)/OPNSENSE/iso/conf/config.xml"
 
 ### ===== DOWNLOAD IMG.BZ2 =====
 if [[ ! -f "$IMG_PATH" ]]; then
   if [[ ! -f "$IMG_BZ2_PATH" ]]; then
     echo "Downloading OPNsense nano image..."
-    #wget -O "$IMG_BZ2_PATH" \
-    #  https://pkg.opnsense.org/releases/${OPN_VERSION}/${IMG_BZ2}
-    echo "Downloading OPNsense image from:"
-    echo "  $OPNSENSE_DOWNLOAD_URL"
-
-    wget \
-      --tries=5 \
-      --timeout=60 \
-      --show-progress \
-      -O "$IMG_BZ2_PATH" \
-      "$OPNSENSE_DOWNLOAD_URL"
+    wget -O "$IMG_BZ2_PATH" \
+      https://pkg.opnsense.org/releases/${OPN_VERSION}/${IMG_BZ2}
   fi
 
   echo "Unpacking image..."
   bunzip2 -fk "$IMG_BZ2_PATH"
 fi
 
-
 ## ===== CHECK IF ISO EXITS =====
 if [[ ! -f "$ISO_PATH" ]]; then
 #  echo opnsense-config.iso not found at $ISO_PATH"
-  echo "Generating config ISO for lab $LAB"
-  cd "$CONFIG_ISO"
-  genisoimage -o "$ISO_PATH" -J -r -V "OPNCONF_LAB${LAB}" .
+  echo "generating opnsense-config.iso"
+  cd $CONFIG_ISO
+  genisoimage -o $ISO_PATH -J -r -V OPNCONF .
 fi
 
 
@@ -144,7 +109,7 @@ qm disk resize $VMID scsi0 +$DISK_SIZE
 
 
 # Attach cdrom to vm
-qm set $VMID --ide2 local:iso/opnsense-lab${LAB}-config.iso,media=cdrom
+qm set $VMID --ide2 local:iso/opnsense-config.iso,media=cdrom
 
 #Creating first snapshot of the VM 
 qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
