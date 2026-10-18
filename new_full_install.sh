@@ -22,8 +22,6 @@ KALI01="./KALI01/KALI01_multi_installer.sh"
 KALI02="./KALI02/KALI02_multi_installer.sh"
 WAZUH="./WAZUH/WAZUH_multi_installer.sh"
 TPOT="./TPOT01/TPOT01_multi_installer.sh"
-WIN11="./WIN11/WIN11_installer.sh"
-WIN2025="./WIN2025/WIN2025_multi_installer.sh"
 IMAGESRV="./IMAGESRV/IMAGESRV_installer.sh"
 INCIDENTVM="./INCIDENTVM/IncidentVM_installer.sh"
 MRNOBODY="./MRNOBODY/mrnobody_installer.sh"
@@ -39,8 +37,6 @@ echo "5) Create Vuln-server01 VM"
 echo "6) Create Vuln-server02 VM"
 echo "7) Create KALI01 VM"
 echo "8) Create KALI02 VM"
-echo "9) Create Windows 11 VM"
-echo "10) Create Windows server 2025 VM"
 echo "11) Create APPSRV01 VM"
 echo "12) Create Client01 VM"
 echo "13) Create WAZUH VM"
@@ -95,14 +91,6 @@ case "$CHOICE" in
   8)
     echo "Starting KALI02 VM creation.... "
     bash "$KALI02" $LAB 
-    ;;
-  9)
-    echo "Starting Windows 11 VM creation... "
-    bash "$WIN11" $LAB
-    ;;
- 10)
-    echo "Starting Windows server 2025 VM creation... "
-    bash "$WIN2025" $LAB
     ;;
   11)
     echo "Starting APPSRV01 VM creation.... "
@@ -182,8 +170,6 @@ case "$CHOICE" in
 #    echo "Starting WAZUH VM creation... "
 #    bash "$TPOT" $LAB
 
-   # echo "Starting Windows server 2025 VM creation.... "
-   # bash "$WIN2025" $LAB
     ;;
   95)
   SESSION="deploy-all"
@@ -249,9 +235,6 @@ case "$CHOICE" in
 
 #    echo 'Starting WAZUH VM creation...'
 #    bash "$TPOT" $LAB
-
-#    echo 'Starting Windows server 2025 VM creation'
-#    bash '$WIN2025' $LAB
 
     echo '===== Deployment completed successfully ====='
   "
