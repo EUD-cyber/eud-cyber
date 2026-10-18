@@ -43,11 +43,11 @@ INTERNET_OPNSENSE_IMG="https://pkg.opnsense.org/releases/${OPNSENSE_VERSION}/OPN
 # Deployment scripts
 ###############################################################################
 
-FULL_INSTALL="${SCRIPT_DIR}/new_full_install.sh"
+FULL_INSTALL="${SCRIPT_DIR}/full_install.sh"
 MINI_INSTALL="${SCRIPT_DIR}/mini_install.sh"
 MULTI_INSTALL="${SCRIPT_DIR}/multi_install.sh"
 MULTI_INSTALL_MINI="${SCRIPT_DIR}/multi_mini_install.sh"
-NEW_FULL_INSTALL="${SCRIPT_DIR}/new_full_install.sh"
+TEST_FULL_INSTALL="${SCRIPT_DIR}/test_full_install.sh"
 
 ###############################################################################
 # Helper functions
@@ -742,7 +742,7 @@ case "$choice" in
   5)
     require_file "$NEW_FULL_INSTALL"
     echo "▶ New test install"
-    bash "$NEW_FULL_INSTALL"
+    bash "$TEST_FULL_INSTALL"
     ;;
 
   0)
