@@ -17,7 +17,6 @@ set -e
 #   Client01
 #   Wazuh
 #   T-Pot
-#   PacketFence
 #   MrNobody
 # ============================================================
 
@@ -51,8 +50,6 @@ CLIENT01="./CLIENT01/CLIENT01_multi_installer.sh"
 
 WAZUH="./WAZUH/WAZUH_multi_installer.sh"
 TPOT="./TPOT01/TPOT01_multi_installer.sh"
-
-PACKETFENCE="./PACKETFENCE/PACKETFENCE_installer.sh"
 
 IMAGESRV="./IMAGESRV/IMAGESRV_installer.sh"
 
@@ -116,7 +113,6 @@ ENTER   = Continue" \
         "CLIENT01"    "Ubuntu Client"                 OFF \
         "WAZUH"       "Wazuh SIEM"                    OFF \
         "TPOT"        "T-Pot Honeypot"                OFF \
-        "PACKETFENCE" "PacketFence NAC"               OFF \
         "MRNOBODY"    "MrNobody Attack VM"            OFF \
         3>&1 1>&2 2>&3)
 
@@ -412,18 +408,6 @@ install_optional_components() {
                 ;;
 
 
-            PACKETFENCE)
-
-                echo
-                echo "========================================"
-                echo " Creating PacketFence"
-                echo "========================================"
-
-                bash "$PACKETFENCE" "$LAB"
-
-                ;;
-
-
             MRNOBODY)
 
                 echo
@@ -637,7 +621,6 @@ while true; do
     echo "10) Create Client01 VM"
     echo "11) Create Wazuh VM"
     echo "12) Create T-Pot VM"
-    echo "13) Create PacketFence VM"
     echo
     echo "--------- OTHER ------------------------"
     echo
@@ -768,16 +751,7 @@ while true; do
             ;;
 
 
-        13)
-
-            bash "$PACKETFENCE" "$LAB"
-
-            pause
-
-            ;;
-
-
-        80)
+      80)
 
             bash "$IMAGESRV" "99"
 
