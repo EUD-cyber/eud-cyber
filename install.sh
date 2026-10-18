@@ -43,7 +43,7 @@ INTERNET_OPNSENSE_IMG="https://pkg.opnsense.org/releases/${OPNSENSE_VERSION}/OPN
 # Deployment scripts
 ###############################################################################
 
-FULL_INSTALL="${SCRIPT_DIR}/full_install.sh"
+FULL_INSTALL="${SCRIPT_DIR}/new_full_install.sh"
 MINI_INSTALL="${SCRIPT_DIR}/mini_install.sh"
 MULTI_INSTALL="${SCRIPT_DIR}/multi_install.sh"
 MULTI_INSTALL_MINI="${SCRIPT_DIR}/multi_mini_install.sh"
