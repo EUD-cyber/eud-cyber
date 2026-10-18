@@ -706,7 +706,6 @@ echo "1) Standalone Proxmox (Big Lab)"
 echo "2) Standalone Proxmox (Mini Lab low spec)"
 echo "3) Multilabs Big spec on same Proxmox"
 echo "4) Multilabs mini spec on same Proxmox"
-echo "5) New test install"
 echo "0) Exit"
 echo
 echo "======================================================"
