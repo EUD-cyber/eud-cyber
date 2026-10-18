@@ -29,9 +29,9 @@ set -e
 REPO="./repo.sh"
 PREREQ="./pre_req.sh"
 
-OPENVSWITCHPRE="./open-vswitch-multi-pre.sh"
-OPENVSWITCH="./open-vswitch-multi.sh"
-OPENVSWITCHLAST="./open-vswitch-multi-last.sh"
+OPENVSWITCHPRE="./open-vswitch-pre.sh"
+OPENVSWITCH="./open-vswitch.sh"
+OPENVSWITCHLAST="./open-vswitch-last.sh"
 
 OPNSENSE="./OPNSENSE/OPNSENSE_multi_installer.sh"
 OPNSENSECONF="./OPNSENSE/generate_config_multi.sh"

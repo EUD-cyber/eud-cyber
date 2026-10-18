@@ -1,50 +1,40 @@
 #!/bin/bash
 set -e
 
-### VARIABLES (EDIT THESE) ###
-BRIDGE1="lan1"
-BRIDGE2="lan2"
-BRIDGE3="oobm"
+LAB="$1"
 
-### CHECK ROOT ###
-if [[ $EUID -ne 0 ]]; then
-  echo "Run as root"
+if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
+  echo "Usage: $0 <lab-number>"
   exit 1
 fi
 
-systemctl enable --now openvswitch-switch
+BRIDGE1="lab${LAB}_lan1"
+BRIDGE2="lab${LAB}_lan2"
+BRIDGE3="lab${LAB}_oobm"
 
-echo "Backing up network config..."
-cp /etc/network/interfaces /etc/network/interfaces.bak.$(date +%F_%T)
+# Prevent duplicates
+if grep -q "auto $BRIDGE1" /etc/network/interfaces; then
+  echo "OVS bridges for lab $LAB already exist, skipping."
+  exit 0
+fi
 
-# this downloads the public key so that the app.py can look at the openvswitch config in the guacvm
-wget -qO- https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/SSHKEYS/shared_admin_ed25519.pub >> /root/.ssh/authorized_keys
-
-
-echo "Appending OVS configuration..."
+echo "Appending OVS configuration for lab $LAB..."
 
 cat <<EOF >> /etc/network/interfaces
 
-# ===== Open vSwitch configuration =====
+# ===== Open vSwitch configuration (Lab $LAB) =====
 
 auto $BRIDGE1
-iface $BRIDGE1 inet static
+iface $BRIDGE1 inet manual
     ovs_type OVSBridge
 
 auto $BRIDGE2
-iface $BRIDGE2 inet static
+iface $BRIDGE2 inet manual
     ovs_type OVSBridge
 
 auto $BRIDGE3
-iface $BRIDGE3 inet static
+iface $BRIDGE3 inet manual
     ovs_type OVSBridge
-    address 172.20.0.100/24
 
-# ===== End Open vSwitch configuration =====
+# ===== End Open vSwitch configuration (Lab $LAB) =====
 EOF
-
-echo "Reloading network configuration..."
-ifreload -a
-
-echo "OVS configuration complete."
-ovs-vsctl show
