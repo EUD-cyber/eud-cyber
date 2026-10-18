@@ -19,6 +19,12 @@ set -u
 #   P6  Exfiltration
 #   P7  Impact
 #
+# Optional future extension:
+#
+#   P8  Wordlist attack against remaining SSH/RDP targets
+#
+# P8 is CONFIGURED by this script, but is not executed yet.
+#
 # ============================================================
 
 
@@ -27,6 +33,7 @@ set -u
 # ============================================================
 
 BASE_DIR="/opt/nordic-attack"
+
 CONFIG_FILE="$BASE_DIR/config/defaults.conf"
 SCRIPT_DIR="$BASE_DIR/scripts"
 LOG_DIR="$BASE_DIR/logs"
@@ -63,26 +70,8 @@ export NORDIC_INCIDENT_ID="$INCIDENT_ID"
 
 
 # ============================================================
-# GUI / ENVIRONMENT CONFIGURATION
+# GENERAL CONFIGURATION
 # ============================================================
-#
-# Values supplied by the Web GUI override defaults.conf.
-#
-# When the campaign is launched interactively from a terminal,
-# missing credentials/settings are requested from the user.
-#
-# Passwords must NEVER be written to:
-#
-#   - campaign state
-#   - ground truth
-#   - campaign log
-#
-# ============================================================
-
-
-# ------------------------------------------------------------
-# General configuration
-# ------------------------------------------------------------
 
 export NORDIC_WEB_PORTS="${NORDIC_WEB_PORTS:-$NORDIC_DEFAULT_WEB_PORTS}"
 
@@ -91,41 +80,33 @@ export NORDIC_EXFIL_PORT="${NORDIC_EXFIL_PORT:-$NORDIC_DEFAULT_EXFIL_PORT}"
 export NORDIC_INCIDENT_IP="${NORDIC_INCIDENT_IP:-}"
 
 
-# ------------------------------------------------------------
-# Linux / SSH
-#
-# Backwards compatibility:
-#
-# Older V2 components used:
-#
-#   NORDIC_SSH_USER
-#
-# New standard:
-#
-#   NORDIC_SSH_USERNAME
-#
-# Both are exported for now so existing phase scripts continue
-# working while they are migrated.
-# ------------------------------------------------------------
+# ============================================================
+# LINUX / SSH CONFIGURATION
+# ============================================================
 
 if [[ -n "${NORDIC_SSH_USERNAME:-}" ]]; then
+
     SSH_USERNAME="$NORDIC_SSH_USERNAME"
 
 elif [[ -n "${NORDIC_SSH_USER:-}" ]]; then
+
     SSH_USERNAME="$NORDIC_SSH_USER"
 
 else
+
     SSH_USERNAME="$NORDIC_DEFAULT_SSH_USER"
+
 fi
+
 
 SSH_PASSWORD="${NORDIC_SSH_PASSWORD:-$NORDIC_DEFAULT_SSH_PASSWORD}"
 
 SSH_PORT="${NORDIC_SSH_PORT:-$NORDIC_DEFAULT_SSH_PORT}"
 
 
-# ------------------------------------------------------------
-# Windows / RDP
-# ------------------------------------------------------------
+# ============================================================
+# WINDOWS / RDP CONFIGURATION
+# ============================================================
 
 RDP_USERNAME="${NORDIC_RDP_USERNAME:-$NORDIC_DEFAULT_RDP_USER}"
 
@@ -135,16 +116,47 @@ RDP_PORT="${NORDIC_RDP_PORT:-$NORDIC_DEFAULT_RDP_PORT}"
 
 
 # ============================================================
-# INTERACTIVE CLI CONFIGURATION
+# WORDLIST CONFIGURATION
+#
+# Wordlist mode is configured BEFORE the campaign starts.
+#
+# It will later be used AFTER the normal P1-P7 campaign
+# against remaining SSH/RDP authentication targets that were
+# not successfully compromised using the supplied credentials.
+#
+# CLI:
+#
+#   User selects:
+#       Enable wordlist? y/N
+#
+#   Then supplies an existing local file:
+#       /home/ubuntu/rockme.txt
+#
+# GUI:
+#
+#   Flask will later provide:
+#
+#       NORDIC_WORDLIST_ENABLED=1
+#       NORDIC_WORDLIST_FILE=/temporary/upload/path
+#
+# Passwords from the wordlist must NEVER be written to logs,
+# campaign state or ground truth.
 # ============================================================
+
+WORDLIST_ENABLED="${NORDIC_WORDLIST_ENABLED:-0}"
+
+WORDLIST_FILE="${NORDIC_WORDLIST_FILE:-}"
+
+
+# ============================================================
+# INTERACTIVE CLI CONFIGURATION
 #
-# If stdin is a terminal, the campaign was started manually.
+# Manual terminal:
+#   Ask for configuration.
 #
-# The CLI therefore asks for Linux and Windows credentials.
-#
-# When Flask/Web GUI launches the script, stdin is not a TTY
-# and the values supplied through environment variables are
-# used directly.
+# Flask / GUI:
+#   stdin is not a TTY.
+#   Environment variables are used directly.
 # ============================================================
 
 if [[ -t 0 ]]; then
@@ -162,7 +174,7 @@ if [[ -t 0 ]]; then
 
 
     # --------------------------------------------------------
-    # Linux credentials
+    # Linux
     # --------------------------------------------------------
 
     echo "Linux / SSH"
@@ -196,7 +208,7 @@ if [[ -t 0 ]]; then
 
 
     # --------------------------------------------------------
-    # Windows credentials
+    # Windows
     # --------------------------------------------------------
 
     echo "Windows / RDP"
@@ -230,7 +242,7 @@ if [[ -t 0 ]]; then
 
 
     # --------------------------------------------------------
-    # General configuration
+    # General
     # --------------------------------------------------------
 
     echo "Campaign configuration"
@@ -252,24 +264,138 @@ if [[ -t 0 ]]; then
 
 
     echo
-    echo "Configuration:"
+
+
+    # --------------------------------------------------------
+    # Wordlist
+    # --------------------------------------------------------
+
+    echo "Wordlist attack"
+    echo "---------------"
+
     echo
-    echo "  Linux SSH:"
-    echo "    Username: $SSH_USERNAME"
-    echo "    Port:     $SSH_PORT"
-    echo
-    echo "  Windows RDP:"
-    echo "    Username: $RDP_USERNAME"
-    echo "    Port:     $RDP_PORT"
-    echo
-    echo "  Web ports:"
-    echo "    $NORDIC_WEB_PORTS"
-    echo
-    echo "  Exfiltration port:"
-    echo "    $NORDIC_EXFIL_PORT"
+    echo "The wordlist will be used AFTER the normal P1-P7 campaign."
+    echo "Only remaining SSH/RDP authentication targets will be tested."
     echo
 
+    read -r -p \
+        "Run wordlist attack against remaining SSH/RDP targets after P1-P7? [y/N]: " \
+        INPUT
+
+
+    case "$INPUT" in
+
+        y|Y|yes|YES|Yes)
+
+            WORDLIST_ENABLED=1
+
+            while true; do
+
+                echo
+
+                read -r -p "Wordlist file: " WORDLIST_FILE
+
+
+                if [[ -z "$WORDLIST_FILE" ]]; then
+
+                    echo
+                    echo "[ERROR] A wordlist file is required."
+
+                    continue
+
+                fi
+
+
+                if [[ ! -f "$WORDLIST_FILE" ]]; then
+
+                    echo
+                    echo "[ERROR] Wordlist not found:"
+                    echo "        $WORDLIST_FILE"
+
+                    continue
+
+                fi
+
+
+                if [[ ! -r "$WORDLIST_FILE" ]]; then
+
+                    echo
+                    echo "[ERROR] Wordlist is not readable:"
+                    echo "        $WORDLIST_FILE"
+
+                    continue
+
+                fi
+
+
+                break
+
+            done
+            ;;
+
+
+        *)
+
+            WORDLIST_ENABLED=0
+            WORDLIST_FILE=""
+            ;;
+
+    esac
+
+
+    # --------------------------------------------------------
+    # Configuration summary
+    # --------------------------------------------------------
+
+    echo
+    echo "============================================================"
+    echo " CONFIGURATION"
+    echo "============================================================"
+    echo
+
+    echo "Linux SSH:"
+    echo "  Username: $SSH_USERNAME"
+    echo "  Port:     $SSH_PORT"
+
+    echo
+
+    echo "Windows RDP:"
+    echo "  Username: $RDP_USERNAME"
+    echo "  Port:     $RDP_PORT"
+
+    echo
+
+    echo "Web ports:"
+    echo "  $NORDIC_WEB_PORTS"
+
+    echo
+
+    echo "Exfiltration port:"
+    echo "  $NORDIC_EXFIL_PORT"
+
+    echo
+
+    echo "Wordlist attack:"
+
+    if [[ "$WORDLIST_ENABLED" == "1" ]]; then
+
+        echo "  Enabled: yes"
+        echo "  File:    $WORDLIST_FILE"
+
+    else
+
+        echo "  Enabled: no"
+
+    fi
+
+
+    echo
+    echo "============================================================"
+    echo
+
+
     read -r -p "Start full H3 incident campaign? [y/N]: " CONFIRM
+
 
     case "$CONFIRM" in
 
@@ -277,10 +403,12 @@ if [[ -t 0 ]]; then
             ;;
 
         *)
+
             echo
             echo "Campaign cancelled."
             exit 0
             ;;
+
     esac
 
 fi
@@ -289,26 +417,36 @@ fi
 # ============================================================
 # EXPORT FINAL CONFIGURATION
 # ============================================================
-#
-# Export both the new variable names and the legacy SSH_USER
-# variable until all phase scripts have been migrated.
-# ============================================================
 
 export NORDIC_SSH_USERNAME="$SSH_USERNAME"
+
+# Backwards compatibility
 export NORDIC_SSH_USER="$SSH_USERNAME"
+
 export NORDIC_SSH_PASSWORD="$SSH_PASSWORD"
+
 export NORDIC_SSH_PORT="$SSH_PORT"
 
+
 export NORDIC_RDP_USERNAME="$RDP_USERNAME"
+
 export NORDIC_RDP_PASSWORD="$RDP_PASSWORD"
+
 export NORDIC_RDP_PORT="$RDP_PORT"
 
+
 export NORDIC_WEB_PORTS
+
 export NORDIC_EXFIL_PORT
 
 
+export NORDIC_WORDLIST_ENABLED="$WORDLIST_ENABLED"
+
+export NORDIC_WORDLIST_FILE="$WORDLIST_FILE"
+
+
 # ============================================================
-# VALIDATE PORTS
+# VALIDATION
 # ============================================================
 
 validate_port() {
@@ -316,21 +454,73 @@ validate_port() {
     local PORT="$1"
     local NAME="$2"
 
+
     if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
+
         echo "[ERROR] Invalid $NAME port: $PORT"
+
         exit 1
+
     fi
 
+
     if (( PORT < 1 || PORT > 65535 )); then
+
         echo "[ERROR] Invalid $NAME port: $PORT"
+
         exit 1
+
     fi
 }
 
 
 validate_port "$NORDIC_SSH_PORT" "SSH"
+
 validate_port "$NORDIC_RDP_PORT" "RDP"
+
 validate_port "$NORDIC_EXFIL_PORT" "exfiltration"
+
+
+# ------------------------------------------------------------
+# Wordlist validation
+#
+# This also validates GUI supplied paths.
+# ------------------------------------------------------------
+
+if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
+
+    if [[ -z "$NORDIC_WORDLIST_FILE" ]]; then
+
+        echo
+        echo "[ERROR] Wordlist mode is enabled but no wordlist file was supplied."
+
+        exit 1
+
+    fi
+
+
+    if [[ ! -f "$NORDIC_WORDLIST_FILE" ]]; then
+
+        echo
+        echo "[ERROR] Wordlist file not found:"
+        echo "        $NORDIC_WORDLIST_FILE"
+
+        exit 1
+
+    fi
+
+
+    if [[ ! -r "$NORDIC_WORDLIST_FILE" ]]; then
+
+        echo
+        echo "[ERROR] Wordlist file is not readable:"
+        echo "        $NORDIC_WORDLIST_FILE"
+
+        exit 1
+
+    fi
+
+fi
 
 
 # ============================================================
@@ -368,12 +558,13 @@ ground_truth() {
 
 
 # ============================================================
-# VALIDATE SCRIPT
+# VALIDATE PHASE SCRIPT
 # ============================================================
 
 validate_script() {
 
     local SCRIPT="$1"
+
 
     if [[ ! -f "$SCRIPT" ]]; then
 
@@ -381,6 +572,7 @@ validate_script() {
         log "        $SCRIPT"
 
         return 1
+
     fi
 
 
@@ -390,6 +582,7 @@ validate_script() {
         log "        $SCRIPT"
 
         return 1
+
     fi
 
 
@@ -398,22 +591,27 @@ validate_script() {
 
 
 # ============================================================
-# RANDOM DELAY
+# RANDOM PHASE DELAY
 # ============================================================
 
 phase_delay() {
 
-    local MIN="$NORDIC_PHASE_DELAY_MIN"
-    local MAX="$NORDIC_PHASE_DELAY_MAX"
+    local MIN="${NORDIC_PHASE_DELAY_MIN:-1}"
+    local MAX="${NORDIC_PHASE_DELAY_MAX:-3}"
+
 
     if (( MAX < MIN )); then
         MAX="$MIN"
     fi
 
+
     local DELAY
 
+
     DELAY=$(
+
         python3 - "$MIN" "$MAX" <<'PY'
+
 import random
 import sys
 
@@ -421,8 +619,11 @@ minimum = int(sys.argv[1])
 maximum = int(sys.argv[2])
 
 print(random.randint(minimum, maximum))
+
 PY
+
     )
+
 
     log "[*] Waiting ${DELAY}s before next phase..."
 
@@ -440,6 +641,7 @@ run_phase() {
     local NAME="$2"
     local SCRIPT="$3"
 
+
     echo
     echo "============================================================"
     echo " PHASE $NUMBER"
@@ -447,7 +649,9 @@ run_phase() {
     echo "============================================================"
     echo
 
+
     log "[PHASE $NUMBER] START - $NAME"
+
 
     ground_truth \
         "PHASE_START phase=$NUMBER name=\"$NAME\""
@@ -455,7 +659,6 @@ run_phase() {
 
     "$SCRIPT" 2>&1 | tee -a "$MASTER_LOG"
 
-    # Preserve exit status of phase script rather than tee.
 
     local RESULT=${PIPESTATUS[0]}
 
@@ -470,13 +673,16 @@ run_phase() {
             "PHASE_FAILED phase=$NUMBER exit_code=$RESULT"
 
         return "$RESULT"
+
     fi
 
 
     log "[PHASE $NUMBER] COMPLETE - $NAME"
 
+
     ground_truth \
         "PHASE_COMPLETE phase=$NUMBER"
+
 
     return 0
 }
@@ -488,6 +694,7 @@ run_phase() {
 
 clear 2>/dev/null || true
 
+
 echo
 echo "============================================================"
 echo
@@ -497,20 +704,24 @@ echo
 echo "============================================================"
 echo
 
+
 echo "Incident ID:"
 echo "  $INCIDENT_ID"
 
 echo
+
 
 echo "Campaign:"
 echo "  Dynamic Discovery"
 
 echo
 
+
 echo "Web / Proxy ports:"
 echo "  $NORDIC_WEB_PORTS"
 
 echo
+
 
 echo "Linux / SSH:"
 echo "  User: $NORDIC_SSH_USERNAME"
@@ -518,19 +729,38 @@ echo "  Port: $NORDIC_SSH_PORT"
 
 echo
 
+
 echo "Windows / RDP:"
 echo "  User: $NORDIC_RDP_USERNAME"
 echo "  Port: $NORDIC_RDP_PORT"
 
 echo
 
+
 echo "Exfiltration port:"
 echo "  $NORDIC_EXFIL_PORT"
 
 echo
 
+
+echo "Wordlist attack:"
+
+if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
+
+    echo "  Enabled"
+    echo "  File: $NORDIC_WORDLIST_FILE"
+
+else
+
+    echo "  Disabled"
+
+fi
+
+
+echo
 echo "Attack chain:"
 echo
+
 echo "  P1  Dynamic Discovery"
 echo "  P2  Web Discovery"
 echo "  P3  Initial Access - Linux SSH / Windows RDP"
@@ -539,43 +769,70 @@ echo "  P5  Data Staging"
 echo "  P6  Exfiltration"
 echo "  P7  Impact"
 
+if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
+    echo "  P8  Wordlist Attack - configured, implementation pending"
+fi
+
 echo
 
 
 # ============================================================
 # IMPORTANT
 #
-# Never print Linux or Windows passwords.
+# Never print:
+#
+#   Linux password
+#   Windows password
+#   Wordlist contents
+#   Successful wordlist password
+#
 # ============================================================
 
 log "[*] Campaign started."
+
 log "[*] Incident ID: $INCIDENT_ID"
+
 log "[*] Web ports: $NORDIC_WEB_PORTS"
 
 log "[*] Linux SSH user: $NORDIC_SSH_USERNAME"
+
 log "[*] Linux SSH port: $NORDIC_SSH_PORT"
 
 log "[*] Windows RDP user: $NORDIC_RDP_USERNAME"
+
 log "[*] Windows RDP port: $NORDIC_RDP_PORT"
 
 log "[*] Exfil port: $NORDIC_EXFIL_PORT"
 
+log "[*] Wordlist enabled: $NORDIC_WORDLIST_ENABLED"
+
+
 ground_truth \
-    "CAMPAIGN_START version=2.1"
+    "CAMPAIGN_START version=2.2 wordlist_enabled=$NORDIC_WORDLIST_ENABLED"
+
+
+# ============================================================
+# PHASE FILES
+# ============================================================
+
+PHASE_01="$SCRIPT_DIR/01-discovery.sh"
+
+PHASE_02="$SCRIPT_DIR/02-web.sh"
+
+PHASE_03="$SCRIPT_DIR/03-access.sh"
+
+PHASE_04="$SCRIPT_DIR/04-lateral.sh"
+
+PHASE_05="$SCRIPT_DIR/05-staging.sh"
+
+PHASE_06="$SCRIPT_DIR/06-exfil.sh"
+
+PHASE_07="$SCRIPT_DIR/07-impact.sh"
 
 
 # ============================================================
 # VALIDATE ALL PHASE FILES BEFORE STARTING
 # ============================================================
-
-PHASE_01="$SCRIPT_DIR/01-discovery.sh"
-PHASE_02="$SCRIPT_DIR/02-web.sh"
-PHASE_03="$SCRIPT_DIR/03-access.sh"
-PHASE_04="$SCRIPT_DIR/04-lateral.sh"
-PHASE_05="$SCRIPT_DIR/05-staging.sh"
-PHASE_06="$SCRIPT_DIR/06-exfil.sh"
-PHASE_07="$SCRIPT_DIR/07-impact.sh"
-
 
 for SCRIPT in \
     "$PHASE_01" \
@@ -585,6 +842,7 @@ for SCRIPT in \
     "$PHASE_05" \
     "$PHASE_06" \
     "$PHASE_07"
+
 do
 
     if ! validate_script "$SCRIPT"; then
@@ -594,6 +852,7 @@ do
         echo
 
         exit 1
+
     fi
 
 done
@@ -602,13 +861,17 @@ done
 # ============================================================
 # CLEAN PREVIOUS RUNTIME STATE
 #
-# Logs are retained.
-# Uploads are retained.
+# Logs retained.
+# Uploads retained.
 #
-# Dynamic state from the previous campaign is removed.
+# Wordlist is NOT removed here.
+#
+# GUI uploaded wordlists will later be placed in a dedicated
+# temporary runtime directory and removed after P8.
 # ============================================================
 
 log "[*] Clearing previous campaign state."
+
 
 rm -f \
     "$NORDIC_NETWORK_STATE" \
@@ -618,13 +881,20 @@ rm -f \
     "$NORDIC_CAMPAIGN_STATE" \
     "$STATE_DIR/staged-data.json" \
     "$STATE_DIR/exfiltration.json" \
-    "$STATE_DIR/impact.json"
+    "$STATE_DIR/impact.json" \
+    "$STATE_DIR/wordlist-results.json"
 
 
 # ============================================================
 # CREATE INITIAL CAMPAIGN STATE
 #
-# Credentials/passwords are intentionally NOT stored.
+# IMPORTANT:
+#
+# Passwords are NOT stored.
+# Wordlist contents are NOT stored.
+# Wordlist path is NOT stored.
+#
+# Only whether wordlist mode was enabled is stored.
 # ============================================================
 
 python3 - \
@@ -635,11 +905,14 @@ python3 - \
     "$NORDIC_SSH_PORT" \
     "$NORDIC_RDP_USERNAME" \
     "$NORDIC_RDP_PORT" \
-    "$NORDIC_EXFIL_PORT" <<'PY'
+    "$NORDIC_EXFIL_PORT" \
+    "$NORDIC_WORDLIST_ENABLED" <<'PY'
 
 import json
 import sys
+
 from datetime import datetime, timezone
+
 
 (
     output,
@@ -650,12 +923,18 @@ from datetime import datetime, timezone
     rdp_username,
     rdp_port,
     exfil_port,
+    wordlist_enabled,
 ) = sys.argv[1:]
 
+
 data = {
+
     "incident_id": incident_id,
-    "version": "2.1",
+
+    "version": "2.2",
+
     "campaign": "H3 Incident Campaign V2",
+
     "mode": "dynamic-discovery",
 
     "started": datetime.now(
@@ -683,6 +962,11 @@ data = {
         },
 
         "exfil_port": int(exfil_port),
+
+        "wordlist": {
+            "enabled": wordlist_enabled == "1",
+            "run_after_normal_campaign": True,
+        },
     },
 
     "phases": {
@@ -693,11 +977,22 @@ data = {
         "05": "pending",
         "06": "pending",
         "07": "pending",
+        "08": (
+            "pending"
+            if wordlist_enabled == "1"
+            else "disabled"
+        ),
     },
 }
 
+
 with open(output, "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2)
+
+    json.dump(
+        data,
+        f,
+        indent=2
+    )
 
 PY
 
@@ -711,6 +1006,7 @@ update_phase_state() {
     local PHASE="$1"
     local STATUS="$2"
 
+
     python3 - \
         "$NORDIC_CAMPAIGN_STATE" \
         "$PHASE" \
@@ -718,33 +1014,46 @@ update_phase_state() {
 
 import json
 import sys
+
 from datetime import datetime, timezone
+
 
 filename = sys.argv[1]
 phase = sys.argv[2]
 status = sys.argv[3]
 
+
 with open(filename, encoding="utf-8") as f:
+
     data = json.load(f)
+
 
 data.setdefault(
     "phases",
     {}
 )[phase] = status
 
+
 data["updated"] = datetime.now(
     timezone.utc
 ).isoformat()
 
+
 with open(filename, "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2)
+
+    json.dump(
+        data,
+        f,
+        indent=2
+    )
 
 PY
+
 }
 
 
 # ============================================================
-# EXECUTE PHASE 01
+# PHASE 01
 # ============================================================
 
 update_phase_state "01" "running"
@@ -753,10 +1062,13 @@ if ! run_phase \
     "01" \
     "Dynamic Network Discovery" \
     "$PHASE_01"
+
 then
 
     update_phase_state "01" "failed"
+
     exit 1
+
 fi
 
 update_phase_state "01" "complete"
@@ -765,7 +1077,7 @@ phase_delay
 
 
 # ============================================================
-# EXECUTE PHASE 02
+# PHASE 02
 # ============================================================
 
 update_phase_state "02" "running"
@@ -774,10 +1086,13 @@ if ! run_phase \
     "02" \
     "Web Discovery" \
     "$PHASE_02"
+
 then
 
     update_phase_state "02" "failed"
+
     exit 1
+
 fi
 
 update_phase_state "02" "complete"
@@ -786,7 +1101,7 @@ phase_delay
 
 
 # ============================================================
-# EXECUTE PHASE 03
+# PHASE 03
 # ============================================================
 
 update_phase_state "03" "running"
@@ -795,10 +1110,13 @@ if ! run_phase \
     "03" \
     "Initial Access - Linux SSH / Windows RDP" \
     "$PHASE_03"
+
 then
 
     update_phase_state "03" "failed"
+
     exit 1
+
 fi
 
 update_phase_state "03" "complete"
@@ -807,7 +1125,7 @@ phase_delay
 
 
 # ============================================================
-# EXECUTE PHASE 04
+# PHASE 04
 # ============================================================
 
 update_phase_state "04" "running"
@@ -816,10 +1134,13 @@ if ! run_phase \
     "04" \
     "Internal Discovery / Lateral Activity" \
     "$PHASE_04"
+
 then
 
     update_phase_state "04" "failed"
+
     exit 1
+
 fi
 
 update_phase_state "04" "complete"
@@ -828,7 +1149,7 @@ phase_delay
 
 
 # ============================================================
-# EXECUTE PHASE 05
+# PHASE 05
 # ============================================================
 
 update_phase_state "05" "running"
@@ -837,10 +1158,13 @@ if ! run_phase \
     "05" \
     "Data Staging" \
     "$PHASE_05"
+
 then
 
     update_phase_state "05" "failed"
+
     exit 1
+
 fi
 
 update_phase_state "05" "complete"
@@ -849,7 +1173,7 @@ phase_delay
 
 
 # ============================================================
-# EXECUTE PHASE 06
+# PHASE 06
 # ============================================================
 
 update_phase_state "06" "running"
@@ -858,10 +1182,13 @@ if ! run_phase \
     "06" \
     "Data Exfiltration" \
     "$PHASE_06"
+
 then
 
     update_phase_state "06" "failed"
+
     exit 1
+
 fi
 
 update_phase_state "06" "complete"
@@ -870,7 +1197,7 @@ phase_delay
 
 
 # ============================================================
-# EXECUTE PHASE 07
+# PHASE 07
 # ============================================================
 
 update_phase_state "07" "running"
@@ -879,13 +1206,51 @@ if ! run_phase \
     "07" \
     "Impact / Ransomware Simulation" \
     "$PHASE_07"
+
 then
 
     update_phase_state "07" "failed"
+
     exit 1
+
 fi
 
 update_phase_state "07" "complete"
+
+
+# ============================================================
+# WORDLIST STATUS
+#
+# P8 does not exist yet.
+#
+# We deliberately do NOT execute anything here yet.
+#
+# This lets us test the new configuration without changing the
+# working P1-P7 baseline.
+# ============================================================
+
+if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
+
+    echo
+    echo "============================================================"
+    echo " WORDLIST ATTACK"
+    echo "============================================================"
+    echo
+
+    echo "[*] Wordlist mode was enabled."
+    echo "[*] Wordlist file validated successfully."
+    echo "[*] Normal P1-P7 campaign completed."
+    echo
+    echo "[*] Phase 08 implementation is not installed yet."
+    echo "[*] No wordlist authentication attempts were performed."
+    echo
+
+    log "[*] Wordlist phase configured but not yet implemented."
+
+    ground_truth \
+        "WORDLIST_CONFIGURED enabled=1 executed=0"
+
+fi
 
 
 # ============================================================
@@ -897,12 +1262,17 @@ python3 - \
 
 import json
 import sys
+
 from datetime import datetime, timezone
+
 
 filename = sys.argv[1]
 
+
 with open(filename, encoding="utf-8") as f:
+
     data = json.load(f)
+
 
 data["status"] = "complete"
 
@@ -910,8 +1280,14 @@ data["completed"] = datetime.now(
     timezone.utc
 ).isoformat()
 
+
 with open(filename, "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2)
+
+    json.dump(
+        data,
+        f,
+        indent=2
+    )
 
 PY
 
@@ -935,62 +1311,90 @@ echo
 echo "============================================================"
 echo
 
+
 echo "Incident:"
 echo "  $INCIDENT_ID"
 
 echo
+
 
 echo "State:"
 echo "  $NORDIC_CAMPAIGN_STATE"
 
 echo
 
+
 echo "Ground truth:"
 echo "  $NORDIC_GROUND_TRUTH_LOG"
 
 echo
+
 
 echo "Master log:"
 echo "  $MASTER_LOG"
 
 echo
 
+
+echo "Wordlist attack:"
+
+if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
+
+    echo "  Enabled"
+    echo "  Phase 08 implementation pending"
+
+else
+
+    echo "  Disabled"
+
+fi
+
+
+echo
 echo "Dynamic inventories:"
 echo
+
 
 echo "  Networks:"
 echo "    $NORDIC_NETWORK_STATE"
 
 echo
 
+
 echo "  Discovered hosts:"
 echo "    $NORDIC_DISCOVERED_STATE"
 
 echo
+
 
 echo "  Web targets:"
 echo "    $NORDIC_WEB_STATE"
 
 echo
 
+
 echo "  Compromised hosts:"
 echo "    $NORDIC_COMPROMISED_STATE"
 
 echo
+
 
 echo "  Staged data:"
 echo "    $STATE_DIR/staged-data.json"
 
 echo
 
+
 echo "  Exfiltration:"
 echo "    $STATE_DIR/exfiltration.json"
 
 echo
 
+
 echo "  Impact:"
 echo "    $STATE_DIR/impact.json"
 
 echo
+
 
 exit 0
