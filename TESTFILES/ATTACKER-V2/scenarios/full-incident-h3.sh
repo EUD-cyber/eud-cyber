@@ -2,7 +2,6 @@
 
 set -u
 
-
 # ============================================================
 # Nordic Manufacturing A/S
 # H3 Incident Campaign V2.2
@@ -42,9 +41,12 @@ UPLOAD_DIR="$BASE_DIR/uploads"
 # ============================================================
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
+
     echo "[ERROR] Configuration file not found:"
     echo "        $CONFIG_FILE"
+
     exit 1
+
 fi
 
 # shellcheck source=/dev/null
@@ -94,7 +96,6 @@ else
 
 fi
 
-
 SSH_PASSWORD="${NORDIC_SSH_PASSWORD:-$NORDIC_DEFAULT_SSH_PASSWORD}"
 
 SSH_PORT="${NORDIC_SSH_PORT:-$NORDIC_DEFAULT_SSH_PORT}"
@@ -114,11 +115,16 @@ RDP_PORT="${NORDIC_RDP_PORT:-$NORDIC_DEFAULT_RDP_PORT}"
 # ============================================================
 # WORDLIST CONFIGURATION
 #
-# CLI:
-#   User points to an existing wordlist.
+# Password wordlist:
+#   Standard rockyou-style format.
+#   One password per line.
 #
-# GUI:
-#   Flask will later upload a wordlist and provide its path.
+# Usernames:
+#   Multiple usernames may be supplied as a comma-separated list.
+#
+# Example:
+#
+#   ubuntu,admin,student,Administrator
 #
 # P8 runs only AFTER the normal P1-P7 campaign.
 # ============================================================
@@ -126,6 +132,8 @@ RDP_PORT="${NORDIC_RDP_PORT:-$NORDIC_DEFAULT_RDP_PORT}"
 WORDLIST_ENABLED="${NORDIC_WORDLIST_ENABLED:-0}"
 
 WORDLIST_FILE="${NORDIC_WORDLIST_FILE:-}"
+
+WORDLIST_USERS="${NORDIC_WORDLIST_USERS:-$SSH_USERNAME,$RDP_USERNAME}"
 
 
 # ============================================================
@@ -156,7 +164,9 @@ if [[ -t 0 ]]; then
     read -r -p "Linux username [$SSH_USERNAME]: " INPUT
 
     if [[ -n "$INPUT" ]]; then
+
         SSH_USERNAME="$INPUT"
+
     fi
 
 
@@ -164,7 +174,9 @@ if [[ -t 0 ]]; then
     echo
 
     if [[ -n "$INPUT_PASSWORD" ]]; then
+
         SSH_PASSWORD="$INPUT_PASSWORD"
+
     fi
 
     unset INPUT_PASSWORD
@@ -173,9 +185,10 @@ if [[ -t 0 ]]; then
     read -r -p "Linux SSH port [$SSH_PORT]: " INPUT
 
     if [[ -n "$INPUT" ]]; then
-        SSH_PORT="$INPUT"
-    fi
 
+        SSH_PORT="$INPUT"
+
+    fi
 
     echo
 
@@ -190,7 +203,9 @@ if [[ -t 0 ]]; then
     read -r -p "Windows username [$RDP_USERNAME]: " INPUT
 
     if [[ -n "$INPUT" ]]; then
+
         RDP_USERNAME="$INPUT"
+
     fi
 
 
@@ -198,7 +213,9 @@ if [[ -t 0 ]]; then
     echo
 
     if [[ -n "$INPUT_PASSWORD" ]]; then
+
         RDP_PASSWORD="$INPUT_PASSWORD"
+
     fi
 
     unset INPUT_PASSWORD
@@ -207,9 +224,10 @@ if [[ -t 0 ]]; then
     read -r -p "Windows RDP port [$RDP_PORT]: " INPUT
 
     if [[ -n "$INPUT" ]]; then
-        RDP_PORT="$INPUT"
-    fi
 
+        RDP_PORT="$INPUT"
+
+    fi
 
     echo
 
@@ -224,25 +242,30 @@ if [[ -t 0 ]]; then
     read -r -p "IncidentVM IP [$NORDIC_INCIDENT_IP]: " INPUT
 
     if [[ -n "$INPUT" ]]; then
+
         NORDIC_INCIDENT_IP="$INPUT"
+
     fi
 
-
     echo
+
 
     read -r -p "Web ports [$NORDIC_WEB_PORTS]: " INPUT
 
     if [[ -n "$INPUT" ]]; then
+
         NORDIC_WEB_PORTS="$INPUT"
+
     fi
 
 
     read -r -p "Exfiltration port [$NORDIC_EXFIL_PORT]: " INPUT
 
     if [[ -n "$INPUT" ]]; then
-        NORDIC_EXFIL_PORT="$INPUT"
-    fi
 
+        NORDIC_EXFIL_PORT="$INPUT"
+
+    fi
 
     echo
 
@@ -258,11 +281,9 @@ if [[ -t 0 ]]; then
     echo "Only remaining SSH/RDP authentication targets will be tested."
     echo
 
-
     read -r -p \
         "Run wordlist attack against remaining SSH/RDP targets after P1-P7? [y/N]: " \
         INPUT
-
 
     case "$INPUT" in
 
@@ -270,12 +291,24 @@ if [[ -t 0 ]]; then
 
             WORDLIST_ENABLED=1
 
+            echo
+
+            read -r -p \
+                "Wordlist usernames [$WORDLIST_USERS]: " \
+                INPUT
+
+            if [[ -n "$INPUT" ]]; then
+
+                WORDLIST_USERS="$INPUT"
+
+            fi
+
+
             while true; do
 
                 echo
 
                 read -r -p "Wordlist file: " WORDLIST_FILE
-
 
                 if [[ -z "$WORDLIST_FILE" ]]; then
 
@@ -305,17 +338,19 @@ if [[ -t 0 ]]; then
 
                 fi
 
-
                 break
 
             done
+
             ;;
 
 
         *)
 
             WORDLIST_ENABLED=0
+            WORDLIST_USERS=""
             WORDLIST_FILE=""
+
             ;;
 
     esac
@@ -341,10 +376,10 @@ if [[ -t 0 ]]; then
     echo "  Username: $RDP_USERNAME"
     echo "  Port:     $RDP_PORT"
 
+    echo
+
     echo "IncidentVM IP:"
     echo "  $NORDIC_INCIDENT_IP"
-
-    echo
 
     echo
 
@@ -362,15 +397,15 @@ if [[ -t 0 ]]; then
 
     if [[ "$WORDLIST_ENABLED" == "1" ]]; then
 
-        echo "  Enabled: yes"
-        echo "  File:    $WORDLIST_FILE"
+        echo "  Enabled:   yes"
+        echo "  Usernames: $WORDLIST_USERS"
+        echo "  File:      $WORDLIST_FILE"
 
     else
 
         echo "  Enabled: no"
 
     fi
-
 
     echo
     echo "============================================================"
@@ -379,10 +414,10 @@ if [[ -t 0 ]]; then
 
     read -r -p "Start full H3 incident campaign? [y/N]: " CONFIRM
 
-
     case "$CONFIRM" in
 
         y|Y|yes|YES|Yes)
+
             ;;
 
         *)
@@ -391,6 +426,7 @@ if [[ -t 0 ]]; then
             echo "Campaign cancelled."
 
             exit 0
+
             ;;
 
     esac
@@ -416,6 +452,7 @@ export NORDIC_WEB_PORTS
 export NORDIC_EXFIL_PORT
 
 export NORDIC_WORDLIST_ENABLED="$WORDLIST_ENABLED"
+export NORDIC_WORDLIST_USERS="$WORDLIST_USERS"
 export NORDIC_WORDLIST_FILE="$WORDLIST_FILE"
 
 
@@ -428,7 +465,6 @@ validate_port() {
     local PORT="$1"
     local NAME="$2"
 
-
     if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
 
         echo "[ERROR] Invalid $NAME port: $PORT"
@@ -437,7 +473,6 @@ validate_port() {
 
     fi
 
-
     if (( PORT < 1 || PORT > 65535 )); then
 
         echo "[ERROR] Invalid $NAME port: $PORT"
@@ -445,6 +480,7 @@ validate_port() {
         exit 1
 
     fi
+
 }
 
 
@@ -460,6 +496,15 @@ validate_port "$NORDIC_EXFIL_PORT" "exfiltration"
 # ------------------------------------------------------------
 
 if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
+
+    if [[ -z "$NORDIC_WORDLIST_USERS" ]]; then
+
+        echo "[ERROR] Wordlist mode is enabled but no usernames were supplied."
+
+        exit 1
+
+    fi
+
 
     if [[ -z "$NORDIC_WORDLIST_FILE" ]]; then
 
@@ -490,8 +535,6 @@ if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
     fi
 
 fi
-
-
 # ============================================================
 # MASTER LOG
 # ============================================================
@@ -511,6 +554,7 @@ log() {
         "$(date --iso-8601=seconds)" \
         "$MESSAGE" \
         >> "$MASTER_LOG"
+
 }
 
 
@@ -523,6 +567,7 @@ ground_truth() {
         "$INCIDENT_ID" \
         "$MESSAGE" \
         >> "$NORDIC_GROUND_TRUTH_LOG"
+
 }
 
 
@@ -533,7 +578,6 @@ ground_truth() {
 validate_script() {
 
     local SCRIPT="$1"
-
 
     if [[ ! -f "$SCRIPT" ]]; then
 
@@ -556,6 +600,7 @@ validate_script() {
 
 
     return 0
+
 }
 
 
@@ -568,9 +613,10 @@ phase_delay() {
     local MIN="${NORDIC_PHASE_DELAY_MIN:-1}"
     local MAX="${NORDIC_PHASE_DELAY_MAX:-3}"
 
-
     if (( MAX < MIN )); then
+
         MAX="$MIN"
+
     fi
 
 
@@ -597,6 +643,7 @@ PY
     log "[*] Waiting ${DELAY}s before next phase..."
 
     sleep "$DELAY"
+
 }
 
 
@@ -654,6 +701,7 @@ run_phase() {
 
 
     return 0
+
 }
 
 
@@ -716,6 +764,7 @@ echo "Wordlist attack:"
 if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
 
     echo "  Enabled"
+    echo "  Usernames: $NORDIC_WORDLIST_USERS"
     echo "  File: $NORDIC_WORDLIST_FILE"
 
 else
@@ -738,7 +787,9 @@ echo "  P6  Exfiltration"
 echo "  P7  Impact"
 
 if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
+
     echo "  P8  Wordlist Authentication"
+
 fi
 
 echo
@@ -765,6 +816,12 @@ log "[*] Windows RDP port: $NORDIC_RDP_PORT"
 log "[*] Exfil port: $NORDIC_EXFIL_PORT"
 
 log "[*] Wordlist enabled: $NORDIC_WORDLIST_ENABLED"
+
+if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
+
+    log "[*] Wordlist usernames: $NORDIC_WORDLIST_USERS"
+
+fi
 
 
 ground_truth \
@@ -857,6 +914,7 @@ rm -f \
 # Passwords are not stored.
 # Wordlist contents are not stored.
 # Wordlist path is not stored.
+# Usernames may be stored as campaign metadata.
 # ============================================================
 
 python3 - \
@@ -868,7 +926,8 @@ python3 - \
     "$NORDIC_RDP_USERNAME" \
     "$NORDIC_RDP_PORT" \
     "$NORDIC_EXFIL_PORT" \
-    "$NORDIC_WORDLIST_ENABLED" <<'PY'
+    "$NORDIC_WORDLIST_ENABLED" \
+    "$NORDIC_WORDLIST_USERS" <<'PY'
 
 import json
 import sys
@@ -886,7 +945,19 @@ from datetime import datetime, timezone
     rdp_port,
     exfil_port,
     wordlist_enabled,
+    wordlist_users,
 ) = sys.argv[1:]
+
+
+usernames = []
+
+for username in wordlist_users.split(","):
+
+    username = username.strip()
+
+    if username and username not in usernames:
+
+        usernames.append(username)
 
 
 data = {
@@ -927,11 +998,14 @@ data = {
 
         "wordlist": {
             "enabled": wordlist_enabled == "1",
+            "usernames": usernames,
             "run_after_normal_campaign": True,
         },
+
     },
 
     "phases": {
+
         "01": "pending",
         "02": "pending",
         "03": "pending",
@@ -939,16 +1013,20 @@ data = {
         "05": "pending",
         "06": "pending",
         "07": "pending",
+
         "08": (
             "pending"
             if wordlist_enabled == "1"
             else "disabled"
         ),
+
     },
+
 }
 
 
 with open(output, "w", encoding="utf-8") as f:
+
     json.dump(data, f, indent=2)
 
 PY
@@ -981,6 +1059,7 @@ status = sys.argv[3]
 
 
 with open(filename, encoding="utf-8") as f:
+
     data = json.load(f)
 
 
@@ -996,6 +1075,7 @@ data["updated"] = datetime.now(
 
 
 with open(filename, "w", encoding="utf-8") as f:
+
     json.dump(data, f, indent=2)
 
 PY
@@ -1009,6 +1089,7 @@ PY
 
 update_phase_state "01" "running"
 
+
 if ! run_phase \
     "01" \
     "Dynamic Network Discovery" \
@@ -1017,9 +1098,11 @@ if ! run_phase \
 then
 
     update_phase_state "01" "failed"
+
     exit 1
 
 fi
+
 
 update_phase_state "01" "complete"
 
@@ -1032,6 +1115,7 @@ phase_delay
 
 update_phase_state "02" "running"
 
+
 if ! run_phase \
     "02" \
     "Web Discovery" \
@@ -1040,9 +1124,11 @@ if ! run_phase \
 then
 
     update_phase_state "02" "failed"
+
     exit 1
 
 fi
+
 
 update_phase_state "02" "complete"
 
@@ -1055,6 +1141,7 @@ phase_delay
 
 update_phase_state "03" "running"
 
+
 if ! run_phase \
     "03" \
     "Initial Access - Linux SSH / Windows RDP" \
@@ -1063,9 +1150,11 @@ if ! run_phase \
 then
 
     update_phase_state "03" "failed"
+
     exit 1
 
 fi
+
 
 update_phase_state "03" "complete"
 
@@ -1078,6 +1167,7 @@ phase_delay
 
 update_phase_state "04" "running"
 
+
 if ! run_phase \
     "04" \
     "Internal Discovery / Lateral Activity" \
@@ -1086,20 +1176,21 @@ if ! run_phase \
 then
 
     update_phase_state "04" "failed"
+
     exit 1
 
 fi
 
+
 update_phase_state "04" "complete"
 
 phase_delay
-
-
 # ============================================================
 # PHASE 05
 # ============================================================
 
 update_phase_state "05" "running"
+
 
 if ! run_phase \
     "05" \
@@ -1109,9 +1200,11 @@ if ! run_phase \
 then
 
     update_phase_state "05" "failed"
+
     exit 1
 
 fi
+
 
 update_phase_state "05" "complete"
 
@@ -1124,6 +1217,7 @@ phase_delay
 
 update_phase_state "06" "running"
 
+
 if ! run_phase \
     "06" \
     "Data Exfiltration" \
@@ -1132,9 +1226,11 @@ if ! run_phase \
 then
 
     update_phase_state "06" "failed"
+
     exit 1
 
 fi
+
 
 update_phase_state "06" "complete"
 
@@ -1147,6 +1243,7 @@ phase_delay
 
 update_phase_state "07" "running"
 
+
 if ! run_phase \
     "07" \
     "Impact / Ransomware Simulation" \
@@ -1155,9 +1252,11 @@ if ! run_phase \
 then
 
     update_phase_state "07" "failed"
+
     exit 1
 
 fi
+
 
 update_phase_state "07" "complete"
 
@@ -1217,10 +1316,12 @@ filename = sys.argv[1]
 
 
 with open(filename, encoding="utf-8") as f:
+
     data = json.load(f)
 
 
 data["status"] = "complete"
+
 
 data["completed"] = datetime.now(
     timezone.utc
@@ -1228,6 +1329,7 @@ data["completed"] = datetime.now(
 
 
 with open(filename, "w", encoding="utf-8") as f:
+
     json.dump(data, f, indent=2)
 
 PY
@@ -1282,6 +1384,7 @@ echo "Wordlist attack:"
 if [[ "$NORDIC_WORDLIST_ENABLED" == "1" ]]; then
 
     echo "  Enabled"
+    echo "  Usernames: $NORDIC_WORDLIST_USERS"
     echo "  Completed"
 
     if [[ -f "$STATE_DIR/wordlist-results.json" ]]; then
