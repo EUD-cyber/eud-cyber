@@ -51,6 +51,8 @@ packages:
   - net-tools
   - openssh-client
   - sshpass
+  - freerdp3-x11
+  - python3-winrm
   - qemu-guest-agent
 
 

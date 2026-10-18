@@ -92,13 +92,14 @@
 
         <p class="muted">
             Targets are discovered dynamically from the
-            CyberLab network. Hosts are only considered
+            CyberLab network. Linux hosts are only considered
             compromised when the configured SSH credentials
-            successfully authenticate.
+            successfully authenticate. Windows hosts can be
+            identified and authenticated using the configured
+            Windows / RDP credentials.
         </p>
 
     </section>
-
 
 
     <!-- ====================================================
@@ -136,7 +137,6 @@
                 <input
                     id="incidentIp"
                     type="text"
-                    value="{{ incident_ip }}"
                     placeholder="192.168.1.254"
                     autocomplete="off"
                 >
@@ -147,7 +147,6 @@
                 </div>
 
             </div>
-
 
 
             <!-- ============================================
@@ -163,7 +162,7 @@
                 <input
                     id="webPorts"
                     type="text"
-                    value="{{ default_web_ports }}"
+                    placeholder="80,443,3010,8080,8443"
                     autocomplete="off"
                 >
 
@@ -181,6 +180,18 @@
             </div>
 
 
+            <!-- ============================================
+                 LINUX / SSH SECTION
+            ============================================= -->
+
+            <div class="form-group form-group-wide">
+
+                <div class="field-help">
+                    <strong>Linux / SSH Initial Access</strong>
+                </div>
+
+            </div>
+
 
             <!-- ============================================
                  SSH USER
@@ -189,22 +200,22 @@
             <div class="form-group">
 
                 <label for="sshUser">
-                    SSH Username
+                    Linux SSH Username
                 </label>
 
                 <input
                     id="sshUser"
                     type="text"
-                    value="{{ default_ssh_user }}"
-                    autocomplete="off"
+                    placeholder="ubuntu"
+                    autocomplete="username"
                 >
 
                 <div class="field-help">
-                    Used against discovered SSH services.
+                    Username used against discovered SSH
+                    services.
                 </div>
 
             </div>
-
 
 
             <!-- ============================================
@@ -214,7 +225,7 @@
             <div class="form-group">
 
                 <label for="sshPassword">
-                    SSH Password
+                    Linux SSH Password
                 </label>
 
                 <input
@@ -226,12 +237,12 @@
                 >
 
                 <div class="field-help">
-                    Password is not stored in campaign state
-                    or logs.
+                    Password is passed directly to the
+                    campaign and is not stored in campaign
+                    state or logs.
                 </div>
 
             </div>
-
 
 
             <!-- ============================================
@@ -241,7 +252,7 @@
             <div class="form-group">
 
                 <label for="sshPort">
-                    SSH Port
+                    Linux SSH Port
                 </label>
 
                 <input
@@ -249,11 +260,104 @@
                     type="number"
                     min="1"
                     max="65535"
-                    value="{{ default_ssh_port }}"
+                    placeholder="22"
                 >
+
+                <div class="field-help">
+                    Default SSH port: 22.
+                </div>
 
             </div>
 
+
+            <!-- ============================================
+                 WINDOWS / RDP SECTION
+            ============================================= -->
+
+            <div class="form-group form-group-wide">
+
+                <div class="field-help">
+                    <strong>Windows / RDP Initial Access</strong>
+                </div>
+
+            </div>
+
+
+            <!-- ============================================
+                 RDP USER
+            ============================================= -->
+
+            <div class="form-group">
+
+                <label for="rdpUser">
+                    Windows Username
+                </label>
+
+                <input
+                    id="rdpUser"
+                    type="text"
+                    placeholder="Administrator"
+                    autocomplete="username"
+                >
+
+                <div class="field-help">
+                    Username used against discovered Windows
+                    / RDP services.
+                </div>
+
+            </div>
+
+
+            <!-- ============================================
+                 RDP PASSWORD
+            ============================================= -->
+
+            <div class="form-group">
+
+                <label for="rdpPassword">
+                    Windows Password
+                </label>
+
+                <input
+                    id="rdpPassword"
+                    type="password"
+                    value=""
+                    placeholder="Required"
+                    autocomplete="new-password"
+                >
+
+                <div class="field-help">
+                    Password is passed directly to the
+                    campaign and is not stored in campaign
+                    state or logs.
+                </div>
+
+            </div>
+
+
+            <!-- ============================================
+                 RDP PORT
+            ============================================= -->
+
+            <div class="form-group">
+
+                <label for="rdpPort">
+                    Windows RDP Port
+                </label>
+
+                <input
+                    id="rdpPort"
+                    type="number"
+                    min="1"
+                    max="65535"
+                    placeholder="3389"
+                >
+
+                <div class="field-help">
+                    Default RDP port: 3389.
+                </div>
+
+            </div>
 
 
             <!-- ============================================
@@ -271,7 +375,7 @@
                     type="number"
                     min="1024"
                     max="65535"
-                    value="{{ default_exfil_port }}"
+                    placeholder="9090"
                 >
 
                 <div class="field-help">
@@ -316,7 +420,6 @@
         ></div>
 
     </section>
-
 
 
     <!-- ====================================================
@@ -376,7 +479,6 @@
             </div>
 
 
-
             <div
                 class="phase-card"
                 data-phase="02"
@@ -405,7 +507,6 @@
             </div>
 
 
-
             <div
                 class="phase-card"
                 data-phase="03"
@@ -422,7 +523,7 @@
                     </strong>
 
                     <span>
-                        SSH authentication
+                        Linux SSH / Windows RDP
                     </span>
 
                 </div>
@@ -432,7 +533,6 @@
                 </div>
 
             </div>
-
 
 
             <div
@@ -463,7 +563,6 @@
             </div>
 
 
-
             <div
                 class="phase-card"
                 data-phase="05"
@@ -492,7 +591,6 @@
             </div>
 
 
-
             <div
                 class="phase-card"
                 data-phase="06"
@@ -519,7 +617,6 @@
                 </div>
 
             </div>
-
 
 
             <div
@@ -552,7 +649,6 @@
         </div>
 
     </section>
-
 
 
     <!-- ====================================================
@@ -740,7 +836,6 @@
         </div>
 
     </section>
-
 
 
     <!-- ====================================================

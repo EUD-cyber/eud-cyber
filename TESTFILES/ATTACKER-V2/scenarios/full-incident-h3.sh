@@ -2,6 +2,7 @@
 
 set -u
 
+
 # ============================================================
 # Nordic Manufacturing A/S
 # H3 Incident Campaign V2
@@ -12,7 +13,7 @@ set -u
 #
 #   P1  Dynamic Discovery
 #   P2  Web Discovery
-#   P3  Initial Access
+#   P3  Initial Access - Linux SSH / Windows RDP
 #   P4  Internal Discovery
 #   P5  Data Staging
 #   P6  Exfiltration
@@ -38,16 +39,13 @@ UPLOAD_DIR="$BASE_DIR/uploads"
 # ============================================================
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
-
     echo "[ERROR] Configuration file not found:"
     echo "$CONFIG_FILE"
-
     exit 1
 fi
 
 # shellcheck source=/dev/null
 source "$CONFIG_FILE"
-
 
 mkdir -p \
     "$LOG_DIR" \
@@ -70,19 +68,269 @@ export NORDIC_INCIDENT_ID="$INCIDENT_ID"
 #
 # Values supplied by the Web GUI override defaults.conf.
 #
+# When the campaign is launched interactively from a terminal,
+# missing credentials/settings are requested from the user.
+#
+# Passwords must NEVER be written to:
+#
+#   - campaign state
+#   - ground truth
+#   - campaign log
+#
 # ============================================================
+
+
+# ------------------------------------------------------------
+# General configuration
+# ------------------------------------------------------------
 
 export NORDIC_WEB_PORTS="${NORDIC_WEB_PORTS:-$NORDIC_DEFAULT_WEB_PORTS}"
 
-export NORDIC_SSH_PORT="${NORDIC_SSH_PORT:-$NORDIC_DEFAULT_SSH_PORT}"
-
-export NORDIC_SSH_USER="${NORDIC_SSH_USER:-$NORDIC_DEFAULT_SSH_USER}"
-
-export NORDIC_SSH_PASSWORD="${NORDIC_SSH_PASSWORD:-$NORDIC_DEFAULT_SSH_PASSWORD}"
-
-export NORDIC_EXFIL_PORT="${NORDIC_EXFIL_PORT:-9090}"
+export NORDIC_EXFIL_PORT="${NORDIC_EXFIL_PORT:-$NORDIC_DEFAULT_EXFIL_PORT}"
 
 export NORDIC_INCIDENT_IP="${NORDIC_INCIDENT_IP:-}"
+
+
+# ------------------------------------------------------------
+# Linux / SSH
+#
+# Backwards compatibility:
+#
+# Older V2 components used:
+#
+#   NORDIC_SSH_USER
+#
+# New standard:
+#
+#   NORDIC_SSH_USERNAME
+#
+# Both are exported for now so existing phase scripts continue
+# working while they are migrated.
+# ------------------------------------------------------------
+
+if [[ -n "${NORDIC_SSH_USERNAME:-}" ]]; then
+    SSH_USERNAME="$NORDIC_SSH_USERNAME"
+
+elif [[ -n "${NORDIC_SSH_USER:-}" ]]; then
+    SSH_USERNAME="$NORDIC_SSH_USER"
+
+else
+    SSH_USERNAME="$NORDIC_DEFAULT_SSH_USER"
+fi
+
+SSH_PASSWORD="${NORDIC_SSH_PASSWORD:-$NORDIC_DEFAULT_SSH_PASSWORD}"
+
+SSH_PORT="${NORDIC_SSH_PORT:-$NORDIC_DEFAULT_SSH_PORT}"
+
+
+# ------------------------------------------------------------
+# Windows / RDP
+# ------------------------------------------------------------
+
+RDP_USERNAME="${NORDIC_RDP_USERNAME:-$NORDIC_DEFAULT_RDP_USER}"
+
+RDP_PASSWORD="${NORDIC_RDP_PASSWORD:-$NORDIC_DEFAULT_RDP_PASSWORD}"
+
+RDP_PORT="${NORDIC_RDP_PORT:-$NORDIC_DEFAULT_RDP_PORT}"
+
+
+# ============================================================
+# INTERACTIVE CLI CONFIGURATION
+# ============================================================
+#
+# If stdin is a terminal, the campaign was started manually.
+#
+# The CLI therefore asks for Linux and Windows credentials.
+#
+# When Flask/Web GUI launches the script, stdin is not a TTY
+# and the values supplied through environment variables are
+# used directly.
+# ============================================================
+
+if [[ -t 0 ]]; then
+
+    echo
+    echo "============================================================"
+    echo
+    echo "        NORDIC MANUFACTURING A/S"
+    echo "        H3 INCIDENT CAMPAIGN V2"
+    echo
+    echo "        CLI CONFIGURATION"
+    echo
+    echo "============================================================"
+    echo
+
+
+    # --------------------------------------------------------
+    # Linux credentials
+    # --------------------------------------------------------
+
+    echo "Linux / SSH"
+    echo "-----------"
+
+    read -r -p "Linux username [$SSH_USERNAME]: " INPUT
+
+    if [[ -n "$INPUT" ]]; then
+        SSH_USERNAME="$INPUT"
+    fi
+
+
+    read -r -s -p "Linux password: " INPUT_PASSWORD
+    echo
+
+    if [[ -n "$INPUT_PASSWORD" ]]; then
+        SSH_PASSWORD="$INPUT_PASSWORD"
+    fi
+
+    unset INPUT_PASSWORD
+
+
+    read -r -p "Linux SSH port [$SSH_PORT]: " INPUT
+
+    if [[ -n "$INPUT" ]]; then
+        SSH_PORT="$INPUT"
+    fi
+
+
+    echo
+
+
+    # --------------------------------------------------------
+    # Windows credentials
+    # --------------------------------------------------------
+
+    echo "Windows / RDP"
+    echo "-------------"
+
+    read -r -p "Windows username [$RDP_USERNAME]: " INPUT
+
+    if [[ -n "$INPUT" ]]; then
+        RDP_USERNAME="$INPUT"
+    fi
+
+
+    read -r -s -p "Windows password: " INPUT_PASSWORD
+    echo
+
+    if [[ -n "$INPUT_PASSWORD" ]]; then
+        RDP_PASSWORD="$INPUT_PASSWORD"
+    fi
+
+    unset INPUT_PASSWORD
+
+
+    read -r -p "Windows RDP port [$RDP_PORT]: " INPUT
+
+    if [[ -n "$INPUT" ]]; then
+        RDP_PORT="$INPUT"
+    fi
+
+
+    echo
+
+
+    # --------------------------------------------------------
+    # General configuration
+    # --------------------------------------------------------
+
+    echo "Campaign configuration"
+    echo "----------------------"
+
+
+    read -r -p "Web ports [$NORDIC_WEB_PORTS]: " INPUT
+
+    if [[ -n "$INPUT" ]]; then
+        NORDIC_WEB_PORTS="$INPUT"
+    fi
+
+
+    read -r -p "Exfiltration port [$NORDIC_EXFIL_PORT]: " INPUT
+
+    if [[ -n "$INPUT" ]]; then
+        NORDIC_EXFIL_PORT="$INPUT"
+    fi
+
+
+    echo
+    echo "Configuration:"
+    echo
+    echo "  Linux SSH:"
+    echo "    Username: $SSH_USERNAME"
+    echo "    Port:     $SSH_PORT"
+    echo
+    echo "  Windows RDP:"
+    echo "    Username: $RDP_USERNAME"
+    echo "    Port:     $RDP_PORT"
+    echo
+    echo "  Web ports:"
+    echo "    $NORDIC_WEB_PORTS"
+    echo
+    echo "  Exfiltration port:"
+    echo "    $NORDIC_EXFIL_PORT"
+    echo
+
+    read -r -p "Start full H3 incident campaign? [y/N]: " CONFIRM
+
+    case "$CONFIRM" in
+
+        y|Y|yes|YES|Yes)
+            ;;
+
+        *)
+            echo
+            echo "Campaign cancelled."
+            exit 0
+            ;;
+    esac
+
+fi
+
+
+# ============================================================
+# EXPORT FINAL CONFIGURATION
+# ============================================================
+#
+# Export both the new variable names and the legacy SSH_USER
+# variable until all phase scripts have been migrated.
+# ============================================================
+
+export NORDIC_SSH_USERNAME="$SSH_USERNAME"
+export NORDIC_SSH_USER="$SSH_USERNAME"
+export NORDIC_SSH_PASSWORD="$SSH_PASSWORD"
+export NORDIC_SSH_PORT="$SSH_PORT"
+
+export NORDIC_RDP_USERNAME="$RDP_USERNAME"
+export NORDIC_RDP_PASSWORD="$RDP_PASSWORD"
+export NORDIC_RDP_PORT="$RDP_PORT"
+
+export NORDIC_WEB_PORTS
+export NORDIC_EXFIL_PORT
+
+
+# ============================================================
+# VALIDATE PORTS
+# ============================================================
+
+validate_port() {
+
+    local PORT="$1"
+    local NAME="$2"
+
+    if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
+        echo "[ERROR] Invalid $NAME port: $PORT"
+        exit 1
+    fi
+
+    if (( PORT < 1 || PORT > 65535 )); then
+        echo "[ERROR] Invalid $NAME port: $PORT"
+        exit 1
+    fi
+}
+
+
+validate_port "$NORDIC_SSH_PORT" "SSH"
+validate_port "$NORDIC_RDP_PORT" "RDP"
+validate_port "$NORDIC_EXFIL_PORT" "exfiltration"
 
 
 # ============================================================
@@ -133,8 +381,8 @@ validate_script() {
         log "        $SCRIPT"
 
         return 1
-
     fi
+
 
     if [[ ! -x "$SCRIPT" ]]; then
 
@@ -142,8 +390,8 @@ validate_script() {
         log "        $SCRIPT"
 
         return 1
-
     fi
+
 
     return 0
 }
@@ -162,7 +410,9 @@ phase_delay() {
         MAX="$MIN"
     fi
 
-    local DELAY=$(
+    local DELAY
+
+    DELAY=$(
         python3 - "$MIN" "$MAX" <<'PY'
 import random
 import sys
@@ -213,13 +463,13 @@ run_phase() {
     if [[ $RESULT -ne 0 ]]; then
 
         echo
+
         log "[ERROR] Phase $NUMBER failed with exit code $RESULT"
 
         ground_truth \
             "PHASE_FAILED phase=$NUMBER exit_code=$RESULT"
 
         return "$RESULT"
-
     fi
 
 
@@ -242,9 +492,7 @@ echo
 echo "============================================================"
 echo
 echo "        NORDIC MANUFACTURING A/S"
-echo
 echo "        H3 INCIDENT CAMPAIGN V2"
-echo
 echo
 echo "============================================================"
 echo
@@ -264,9 +512,15 @@ echo "  $NORDIC_WEB_PORTS"
 
 echo
 
-echo "SSH:"
-echo "  User: $NORDIC_SSH_USER"
+echo "Linux / SSH:"
+echo "  User: $NORDIC_SSH_USERNAME"
 echo "  Port: $NORDIC_SSH_PORT"
+
+echo
+
+echo "Windows / RDP:"
+echo "  User: $NORDIC_RDP_USERNAME"
+echo "  Port: $NORDIC_RDP_PORT"
 
 echo
 
@@ -279,29 +533,35 @@ echo "Attack chain:"
 echo
 echo "  P1  Dynamic Discovery"
 echo "  P2  Web Discovery"
-echo "  P3  Initial Access"
-echo "  P4  Internal Discovery"
+echo "  P3  Initial Access - Linux SSH / Windows RDP"
+echo "  P4  Internal Discovery / Lateral Activity"
 echo "  P5  Data Staging"
 echo "  P6  Exfiltration"
 echo "  P7  Impact"
+
 echo
 
 
 # ============================================================
 # IMPORTANT
 #
-# Never print the SSH password.
+# Never print Linux or Windows passwords.
 # ============================================================
 
 log "[*] Campaign started."
 log "[*] Incident ID: $INCIDENT_ID"
 log "[*] Web ports: $NORDIC_WEB_PORTS"
-log "[*] SSH user: $NORDIC_SSH_USER"
-log "[*] SSH port: $NORDIC_SSH_PORT"
+
+log "[*] Linux SSH user: $NORDIC_SSH_USERNAME"
+log "[*] Linux SSH port: $NORDIC_SSH_PORT"
+
+log "[*] Windows RDP user: $NORDIC_RDP_USERNAME"
+log "[*] Windows RDP port: $NORDIC_RDP_PORT"
+
 log "[*] Exfil port: $NORDIC_EXFIL_PORT"
 
 ground_truth \
-    "CAMPAIGN_START version=2.0"
+    "CAMPAIGN_START version=2.1"
 
 
 # ============================================================
@@ -363,14 +623,18 @@ rm -f \
 
 # ============================================================
 # CREATE INITIAL CAMPAIGN STATE
+#
+# Credentials/passwords are intentionally NOT stored.
 # ============================================================
 
 python3 - \
     "$NORDIC_CAMPAIGN_STATE" \
     "$INCIDENT_ID" \
     "$NORDIC_WEB_PORTS" \
-    "$NORDIC_SSH_USER" \
+    "$NORDIC_SSH_USERNAME" \
     "$NORDIC_SSH_PORT" \
+    "$NORDIC_RDP_USERNAME" \
+    "$NORDIC_RDP_PORT" \
     "$NORDIC_EXFIL_PORT" <<'PY'
 
 import json
@@ -381,14 +645,16 @@ from datetime import datetime, timezone
     output,
     incident_id,
     web_ports,
-    ssh_user,
+    ssh_username,
     ssh_port,
+    rdp_username,
+    rdp_port,
     exfil_port,
 ) = sys.argv[1:]
 
 data = {
     "incident_id": incident_id,
-    "version": "2.0",
+    "version": "2.1",
     "campaign": "H3 Incident Campaign V2",
     "mode": "dynamic-discovery",
 
@@ -399,13 +665,23 @@ data = {
     "status": "running",
 
     "configuration": {
+
         "web_ports": [
             int(x.strip())
             for x in web_ports.split(",")
             if x.strip()
         ],
-        "ssh_user": ssh_user,
-        "ssh_port": int(ssh_port),
+
+        "linux": {
+            "ssh_username": ssh_username,
+            "ssh_port": int(ssh_port),
+        },
+
+        "windows": {
+            "rdp_username": rdp_username,
+            "rdp_port": int(rdp_port),
+        },
+
         "exfil_port": int(exfil_port),
     },
 
@@ -517,7 +793,7 @@ update_phase_state "03" "running"
 
 if ! run_phase \
     "03" \
-    "Initial Access / SSH" \
+    "Initial Access - Linux SSH / Windows RDP" \
     "$PHASE_03"
 then
 
@@ -681,24 +957,37 @@ echo
 
 echo "Dynamic inventories:"
 echo
+
 echo "  Networks:"
 echo "    $NORDIC_NETWORK_STATE"
+
 echo
+
 echo "  Discovered hosts:"
 echo "    $NORDIC_DISCOVERED_STATE"
+
 echo
+
 echo "  Web targets:"
 echo "    $NORDIC_WEB_STATE"
+
 echo
+
 echo "  Compromised hosts:"
 echo "    $NORDIC_COMPROMISED_STATE"
+
 echo
+
 echo "  Staged data:"
 echo "    $STATE_DIR/staged-data.json"
+
 echo
+
 echo "  Exfiltration:"
 echo "    $STATE_DIR/exfiltration.json"
+
 echo
+
 echo "  Impact:"
 echo "    $STATE_DIR/impact.json"
 

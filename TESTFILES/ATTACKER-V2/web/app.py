@@ -200,9 +200,8 @@ def determine_incident_ip():
             if ip.is_private:
                 candidates.append(address)
 
-        #
         # Prefer production/lab networks over OOBM.
-        #
+
         for address in candidates:
             if not address.startswith("172.20."):
                 return address
@@ -233,27 +232,52 @@ def default_configuration():
         "incident_ip": determine_incident_ip(),
 
         "web_ports": defaults.get(
-            "NORDIC_WEB_PORTS",
+            "NORDIC_DEFAULT_WEB_PORTS",
             "80,443,3010,8080,8443",
         ),
 
+        # ----------------------------------------------------
+        # Linux / SSH
+        # ----------------------------------------------------
+
         "ssh_port": defaults.get(
-            "NORDIC_SSH_PORT",
+            "NORDIC_DEFAULT_SSH_PORT",
             "22",
         ),
 
         "ssh_username": defaults.get(
-            "NORDIC_SSH_USERNAME",
+            "NORDIC_DEFAULT_SSH_USER",
             "ubuntu",
         ),
 
-        #
         # Password is deliberately never returned.
-        #
+
         "ssh_password": "",
 
+        # ----------------------------------------------------
+        # Windows / RDP
+        # ----------------------------------------------------
+
+        "rdp_port": defaults.get(
+            "NORDIC_DEFAULT_RDP_PORT",
+            "3389",
+        ),
+
+        "rdp_username": defaults.get(
+            "NORDIC_DEFAULT_RDP_USER",
+            "Administrator",
+        ),
+
+        # Password is deliberately never returned.
+
+        "rdp_password": "",
+
+        # ----------------------------------------------------
+        # Exfiltration
+        # ----------------------------------------------------
+
         "exfil_port": defaults.get(
-            "NORDIC_EXFIL_PORT",
+            "NORDIC_DEFAULT_EXFIL_PORT",
             "9090",
         ),
 
@@ -283,7 +307,7 @@ def health():
         {
             "status": "ok",
             "service": "Nordic Incident Control V2",
-            "version": "2",
+            "version": "2.1",
         }
     )
 
@@ -395,6 +419,12 @@ def api_start():
             silent=True
         ) or {}
 
+        defaults = read_defaults()
+
+        # ----------------------------------------------------
+        # General
+        # ----------------------------------------------------
+
         incident_ip = str(
             data.get(
                 "incident_ip",
@@ -404,20 +434,43 @@ def api_start():
 
         web_ports = data.get(
             "web_ports",
-            "80,443,3010,8080,8443",
+            defaults.get(
+                "NORDIC_DEFAULT_WEB_PORTS",
+                "80,443,3010,8080,8443",
+            ),
         )
+
+        exfil_port = str(
+            data.get(
+                "exfil_port",
+                defaults.get(
+                    "NORDIC_DEFAULT_EXFIL_PORT",
+                    "9090",
+                ),
+            )
+        ).strip()
+
+        # ----------------------------------------------------
+        # Linux / SSH
+        # ----------------------------------------------------
 
         ssh_port = str(
             data.get(
                 "ssh_port",
-                "22",
+                defaults.get(
+                    "NORDIC_DEFAULT_SSH_PORT",
+                    "22",
+                ),
             )
         ).strip()
 
         ssh_username = str(
             data.get(
                 "ssh_username",
-                "",
+                defaults.get(
+                    "NORDIC_DEFAULT_SSH_USER",
+                    "ubuntu",
+                ),
             )
         ).strip()
 
@@ -428,17 +481,41 @@ def api_start():
             )
         )
 
-        exfil_port = str(
+        # ----------------------------------------------------
+        # Windows / RDP
+        # ----------------------------------------------------
+
+        rdp_port = str(
             data.get(
-                "exfil_port",
-                "9090",
+                "rdp_port",
+                defaults.get(
+                    "NORDIC_DEFAULT_RDP_PORT",
+                    "3389",
+                ),
             )
         ).strip()
 
+        rdp_username = str(
+            data.get(
+                "rdp_username",
+                defaults.get(
+                    "NORDIC_DEFAULT_RDP_USER",
+                    "Administrator",
+                ),
+            )
+        ).strip()
 
-        # ----------------------------------------------------
+        rdp_password = str(
+            data.get(
+                "rdp_password",
+                "",
+            )
+        )
+
+
+        # ====================================================
         # VALIDATION
-        # ----------------------------------------------------
+        # ====================================================
 
         try:
             ipaddress.ip_address(
@@ -452,6 +529,7 @@ def api_start():
                 }
             ), 400
 
+
         try:
             web_ports = normalize_ports(
                 web_ports
@@ -464,6 +542,11 @@ def api_start():
                 }
             ), 400
 
+
+        # ----------------------------------------------------
+        # Linux validation
+        # ----------------------------------------------------
+
         if not valid_port(
             ssh_port
         ):
@@ -473,6 +556,62 @@ def api_start():
                     "message": "Invalid SSH port.",
                 }
             ), 400
+
+
+        if not ssh_username:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": "Linux SSH username is required.",
+                }
+            ), 400
+
+
+        if not ssh_password:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": "Linux SSH password is required.",
+                }
+            ), 400
+
+
+        # ----------------------------------------------------
+        # Windows validation
+        # ----------------------------------------------------
+
+        if not valid_port(
+            rdp_port
+        ):
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": "Invalid RDP port.",
+                }
+            ), 400
+
+
+        if not rdp_username:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": "Windows RDP username is required.",
+                }
+            ), 400
+
+
+        if not rdp_password:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": "Windows RDP password is required.",
+                }
+            ), 400
+
+
+        # ----------------------------------------------------
+        # Exfiltration validation
+        # ----------------------------------------------------
 
         if not valid_port(
             exfil_port
@@ -484,21 +623,10 @@ def api_start():
                 }
             ), 400
 
-        if not ssh_username:
-            return jsonify(
-                {
-                    "status": "error",
-                    "message": "SSH username is required.",
-                }
-            ), 400
 
-        if not ssh_password:
-            return jsonify(
-                {
-                    "status": "error",
-                    "message": "SSH password is required.",
-                }
-            ), 400
+        # ----------------------------------------------------
+        # Scenario
+        # ----------------------------------------------------
 
         if not SCENARIO.exists():
             return jsonify(
@@ -512,25 +640,40 @@ def api_start():
             ), 500
 
 
-        # ----------------------------------------------------
+        # ====================================================
         # ENVIRONMENT
-        # ----------------------------------------------------
+        # ====================================================
 
         env = os.environ.copy()
 
         env["NORDIC_INCIDENT_IP"] = incident_ip
         env["NORDIC_WEB_PORTS"] = web_ports
 
+        # Linux / SSH
+
         env["NORDIC_SSH_PORT"] = ssh_port
         env["NORDIC_SSH_USERNAME"] = ssh_username
+
+        # Legacy compatibility for older phase scripts.
+
+        env["NORDIC_SSH_USER"] = ssh_username
+
         env["NORDIC_SSH_PASSWORD"] = ssh_password
+
+        # Windows / RDP
+
+        env["NORDIC_RDP_PORT"] = rdp_port
+        env["NORDIC_RDP_USERNAME"] = rdp_username
+        env["NORDIC_RDP_PASSWORD"] = rdp_password
+
+        # Exfiltration
 
         env["NORDIC_EXFIL_PORT"] = exfil_port
 
 
-        # ----------------------------------------------------
+        # ====================================================
         # PREPARE DIRECTORIES
-        # ----------------------------------------------------
+        # ====================================================
 
         STATE_DIR.mkdir(
             parents=True,
@@ -543,9 +686,9 @@ def api_start():
         )
 
 
-        # ----------------------------------------------------
+        # ====================================================
         # START CAMPAIGN
-        # ----------------------------------------------------
+        # ====================================================
 
         try:
             log_handle = CAMPAIGN_LOG.open(
@@ -557,8 +700,12 @@ def api_start():
                 "\n"
                 "================================================\n"
                 "Campaign requested from Web GUI\n"
+                "Linux + Windows credentials supplied\n"
                 "================================================\n"
             )
+
+            # IMPORTANT:
+            # Never write credential values to this log.
 
             log_handle.flush()
 
@@ -585,6 +732,7 @@ def api_start():
                     ),
                 }
             ), 500
+
 
         return jsonify(
             {
@@ -699,14 +847,14 @@ if __name__ == "__main__":
     defaults = read_defaults()
 
     host = defaults.get(
-        "NORDIC_FLASK_HOST",
+        "NORDIC_WEB_HOST",
         "127.0.0.1",
     )
 
     try:
         port = int(
             defaults.get(
-                "NORDIC_FLASK_PORT",
+                "NORDIC_WEB_PORT",
                 "8082",
             )
         )

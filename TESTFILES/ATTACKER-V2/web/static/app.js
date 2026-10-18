@@ -163,6 +163,11 @@ async function loadConfiguration() {
                 "/api/config"
             );
 
+
+        // --------------------------------------------------
+        // General
+        // --------------------------------------------------
+
         const incidentIp =
             document.getElementById(
                 "incidentIp"
@@ -172,6 +177,16 @@ async function loadConfiguration() {
             document.getElementById(
                 "webPorts"
             );
+
+        const exfilPort =
+            document.getElementById(
+                "exfilPort"
+            );
+
+
+        // --------------------------------------------------
+        // Linux / SSH
+        // --------------------------------------------------
 
         const sshUser =
             document.getElementById(
@@ -183,11 +198,25 @@ async function loadConfiguration() {
                 "sshPort"
             );
 
-        const exfilPort =
+
+        // --------------------------------------------------
+        // Windows / RDP
+        // --------------------------------------------------
+
+        const rdpUser =
             document.getElementById(
-                "exfilPort"
+                "rdpUser"
             );
 
+        const rdpPort =
+            document.getElementById(
+                "rdpPort"
+            );
+
+
+        // --------------------------------------------------
+        // Populate general defaults
+        // --------------------------------------------------
 
         if (incidentIp) {
 
@@ -205,6 +234,18 @@ async function loadConfiguration() {
         }
 
 
+        if (exfilPort) {
+
+            exfilPort.value =
+                config.exfil_port ||
+                "9090";
+        }
+
+
+        // --------------------------------------------------
+        // Populate Linux defaults
+        // --------------------------------------------------
+
         if (sshUser) {
 
             sshUser.value =
@@ -221,11 +262,23 @@ async function loadConfiguration() {
         }
 
 
-        if (exfilPort) {
+        // --------------------------------------------------
+        // Populate Windows defaults
+        // --------------------------------------------------
 
-            exfilPort.value =
-                config.exfil_port ||
-                "9090";
+        if (rdpUser) {
+
+            rdpUser.value =
+                config.rdp_username ||
+                "Administrator";
+        }
+
+
+        if (rdpPort) {
+
+            rdpPort.value =
+                config.rdp_port ||
+                "3389";
         }
 
     }
@@ -419,11 +472,6 @@ async function refreshStatus() {
                 "/api/status"
             );
 
-        /*
-         * Support both the current Flask response
-         * (process_running) and campaign-state responses
-         * containing running.
-         */
         const running =
             Boolean(
                 data.process_running ??
@@ -545,6 +593,10 @@ async function startCampaign() {
     hideMessage();
 
 
+    // ------------------------------------------------------
+    // General
+    // ------------------------------------------------------
+
     const incidentIp =
         document
             .getElementById(
@@ -562,6 +614,20 @@ async function startCampaign() {
             ?.value
             .trim() || "";
 
+
+    const exfilPort =
+        Number(
+            document
+                .getElementById(
+                    "exfilPort"
+                )
+                ?.value
+        );
+
+
+    // ------------------------------------------------------
+    // Linux / SSH
+    // ------------------------------------------------------
 
     const sshUser =
         document
@@ -590,18 +656,39 @@ async function startCampaign() {
         );
 
 
-    const exfilPort =
+    // ------------------------------------------------------
+    // Windows / RDP
+    // ------------------------------------------------------
+
+    const rdpUser =
+        document
+            .getElementById(
+                "rdpUser"
+            )
+            ?.value
+            .trim() || "";
+
+
+    const rdpPassword =
+        document
+            .getElementById(
+                "rdpPassword"
+            )
+            ?.value || "";
+
+
+    const rdpPort =
         Number(
             document
                 .getElementById(
-                    "exfilPort"
+                    "rdpPort"
                 )
                 ?.value
         );
 
 
     // ------------------------------------------------------
-    // CLIENT VALIDATION
+    // CLIENT VALIDATION - GENERAL
     // ------------------------------------------------------
 
     if (!incidentIp) {
@@ -626,10 +713,14 @@ async function startCampaign() {
     }
 
 
+    // ------------------------------------------------------
+    // CLIENT VALIDATION - LINUX
+    // ------------------------------------------------------
+
     if (!sshUser) {
 
         showMessage(
-            "SSH username is required.",
+            "Linux SSH username is required.",
             "error"
         );
 
@@ -640,7 +731,7 @@ async function startCampaign() {
     if (!sshPassword) {
 
         showMessage(
-            "SSH password is required.",
+            "Linux SSH password is required.",
             "error"
         );
 
@@ -655,13 +746,58 @@ async function startCampaign() {
     ) {
 
         showMessage(
-            "Valid SSH port is required.",
+            "Valid Linux SSH port is required.",
             "error"
         );
 
         return;
     }
 
+
+    // ------------------------------------------------------
+    // CLIENT VALIDATION - WINDOWS
+    // ------------------------------------------------------
+
+    if (!rdpUser) {
+
+        showMessage(
+            "Windows username is required.",
+            "error"
+        );
+
+        return;
+    }
+
+
+    if (!rdpPassword) {
+
+        showMessage(
+            "Windows password is required.",
+            "error"
+        );
+
+        return;
+    }
+
+
+    if (
+        !Number.isInteger(rdpPort) ||
+        rdpPort < 1 ||
+        rdpPort > 65535
+    ) {
+
+        showMessage(
+            "Valid Windows RDP port is required.",
+            "error"
+        );
+
+        return;
+    }
+
+
+    // ------------------------------------------------------
+    // CLIENT VALIDATION - EXFIL
+    // ------------------------------------------------------
 
     if (
         !Number.isInteger(exfilPort) ||
@@ -686,7 +822,9 @@ async function startCampaign() {
         window.confirm(
             "Start the full H3 Incident Campaign?\n\n" +
             "The campaign will dynamically discover hosts " +
-            "and execute all seven simulation phases."
+            "and execute all seven simulation phases.\n\n" +
+            "Linux targets will use SSH credentials.\n" +
+            "Windows targets will use RDP credentials."
         );
 
 
@@ -720,6 +858,8 @@ async function startCampaign() {
                     web_ports:
                         webPorts,
 
+                    // Linux / SSH
+
                     ssh_username:
                         sshUser,
 
@@ -729,6 +869,19 @@ async function startCampaign() {
                     ssh_port:
                         String(sshPort),
 
+                    // Windows / RDP
+
+                    rdp_username:
+                        rdpUser,
+
+                    rdp_password:
+                        rdpPassword,
+
+                    rdp_port:
+                        String(rdpPort),
+
+                    // Exfiltration
+
                     exfil_port:
                         String(exfilPort)
                 }
@@ -736,18 +889,30 @@ async function startCampaign() {
 
 
         // --------------------------------------------------
-        // Remove password immediately after successful
+        // Remove passwords immediately after successful
         // submission.
         // --------------------------------------------------
 
-        const passwordField =
+        const sshPasswordField =
             document.getElementById(
                 "sshPassword"
             );
 
-        if (passwordField) {
+        if (sshPasswordField) {
 
-            passwordField.value =
+            sshPasswordField.value =
+                "";
+        }
+
+
+        const rdpPasswordField =
+            document.getElementById(
+                "rdpPassword"
+            );
+
+        if (rdpPasswordField) {
+
+            rdpPasswordField.value =
                 "";
         }
 
@@ -925,11 +1090,6 @@ async function refreshInventory() {
                 "/api/inventory"
             );
 
-
-        /*
-         * Support both aggregate inventory responses and
-         * the direct discovered-hosts response.
-         */
 
         const networks =
             data.networks?.networks
