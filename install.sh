@@ -47,7 +47,6 @@ BIG_INSTALL="${SCRIPT_DIR}/big_install.sh"
 MINI_INSTALL="${SCRIPT_DIR}/mini_install.sh"
 MULTI_INSTALL="${SCRIPT_DIR}/multi_big_install.sh"
 MULTI_INSTALL_MINI="${SCRIPT_DIR}/multi_mini_install.sh"
-TEST_FULL_INSTALL="${SCRIPT_DIR}/test_full_install.sh"
 
 ###############################################################################
 # Helper functions
@@ -737,12 +736,6 @@ case "$choice" in
     require_file "$MULTI_INSTALL_MINI"
     echo "▶ Multilabs mini spec on same Proxmox"
     bash "$MULTI_INSTALL_MINI"
-    ;;
-
-  5)
-    require_file "$TEST_FULL_INSTALL"
-    echo "▶ New test install"
-    bash "$TEST_FULL_INSTALL"
     ;;
 
   0)
