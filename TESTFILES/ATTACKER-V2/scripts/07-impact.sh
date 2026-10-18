@@ -154,7 +154,7 @@ fi
 #
 # Format:
 #
-# IP|PLATFORM|ACCESS|PORT|USER
+# IP|PLATFORM|ACCESS|PORT|USER|PASSWORD
 #
 # Old SSH-only state remains supported.
 # ============================================================
@@ -212,9 +212,13 @@ for host in data.get("hosts", []):
             or host.get("ssh_user")
             or "ubuntu"
         )
-
+        password = (
+            host.get("ssh_password")
+            or host.get("password")
+            or ""
+        )
         print(
-            f"{ip}|linux|ssh|{port}|{user}"
+           f"{ip}|linux|ssh|{port}|{user}|{password}"
         )
 
 
@@ -230,9 +234,13 @@ for host in data.get("hosts", []):
             or host.get("rdp_user")
             or "Administrator"
         )
-
+        password = (
+            host.get("rdp_password")
+            or host.get("password")
+            or ""
+        )
         print(
-            f"{ip}|windows|rdp|{port}|{user}"
+           f"{ip}|windows|rdp|{port}|{user}|{password}"
         )
 
 PY
@@ -331,8 +339,19 @@ for RECORD in "${COMPROMISED[@]}"; do
         ACCESS \
         ACCESS_PORT \
         ACCESS_USER \
+        ACCESS_PASSWORD \
         <<< "$RECORD"
 
+    if [[ -z "$ACCESS_PASSWORD" ]]; then
+
+        if [[ "$PLATFORM" == "linux" ]]; then
+            ACCESS_PASSWORD="$SSH_PASSWORD"
+
+        elif [[ "$PLATFORM" == "windows" ]]; then
+            ACCESS_PASSWORD="$RDP_PASSWORD"
+        fi
+
+    fi
 
     echo
     echo "------------------------------------------------------------"
@@ -340,7 +359,6 @@ for RECORD in "${COMPROMISED[@]}"; do
     echo " Platform:         $PLATFORM"
     echo "------------------------------------------------------------"
     echo
-
 
     log "[*] Starting impact simulation on $HOST ($PLATFORM)"
 
@@ -355,7 +373,7 @@ for RECORD in "${COMPROMISED[@]}"; do
     if [[ "$PLATFORM" == "linux" ]]; then
 
 
-        if [[ -z "$SSH_PASSWORD" ]]; then
+        if [[ -z "$ACCESS_PASSWORD" ]]; then
 
             FAILED_COUNT=$(( FAILED_COUNT + 1 ))
 
@@ -369,7 +387,7 @@ for RECORD in "${COMPROMISED[@]}"; do
 
 
         REMOTE_RESULT="$(
-            sshpass -p "$SSH_PASSWORD" \
+            sshpass -p "$ACCESS_PASSWORD" \
                 ssh \
                     -p "$ACCESS_PORT" \
                     -o StrictHostKeyChecking=no \
@@ -609,7 +627,7 @@ REMOTE
     elif [[ "$PLATFORM" == "windows" ]]; then
 
 
-        if [[ -z "$RDP_PASSWORD" ]]; then
+        if [[ -z "$ACCESS_PASSWORD" ]]; then
 
             FAILED_COUNT=$(( FAILED_COUNT + 1 ))
 
@@ -679,7 +697,7 @@ REMOTE
         # ----------------------------------------------------
 
         WINDOWS_RESULT="$(
-            NORDIC_WINRM_PASSWORD="$RDP_PASSWORD" \
+            NORDIC_WINRM_PASSWORD="$ACCESS_PASSWORD" \
             python3 - \
                 "$HOST" \
                 "$WINRM_PORT" \
