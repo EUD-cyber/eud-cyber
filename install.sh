@@ -703,9 +703,9 @@ echo "ISO storage:  ${LOCAL}"
 echo "Disk storage: ${LVM}"
 echo "Bridge:       ${BRIDGE}"
 echo
-echo "1) Standalone Proxmox (Full Lab)"
+echo "1) Standalone Proxmox (Big Lab)"
 echo "2) Standalone Proxmox (Mini Lab low spec)"
-echo "3) Multilabs full spec on same Proxmox"
+echo "3) Multilabs Big spec on same Proxmox"
 echo "4) Multilabs mini spec on same Proxmox"
 echo "5) New test install"
 echo "0) Exit"
@@ -729,7 +729,7 @@ case "$choice" in
 
   3)
     require_file "$MULTI_INSTALL"
-    echo "▶ Multilabs full spec on same Proxmox"
+    echo "▶ Multilabs Big spec on same Proxmox"
     bash "$MULTI_INSTALL"
     ;;
 
