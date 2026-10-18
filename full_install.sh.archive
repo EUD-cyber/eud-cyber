@@ -4,7 +4,9 @@ set -e
 LAB="1"
 REPO="./repo.sh"
 GUACVM_IP="./GUACVM/GUACVM_ip_multi.sh"
+GUACVM02_IP="./GUACVM02/GUACVM02_ip.sh"
 GUACVM="./GUACVM/GUACVM_multi_installer.sh"
+GUACVM02="./GUACVM02/GUACVM02_installer.sh"
 OPENVSWITCHPRE="./open-vswitch-multi-pre.sh"
 OPENVSWITCH="./open-vswitch-multi.sh"
 OPENVSWITCHLAST="./open-vswitch-multi-last.sh"
@@ -20,8 +22,8 @@ KALI01="./KALI01/KALI01_multi_installer.sh"
 KALI02="./KALI02/KALI02_multi_installer.sh"
 WAZUH="./WAZUH/WAZUH_multi_installer.sh"
 TPOT="./TPOT01/TPOT01_multi_installer.sh"
-WIN11="./WIN11/WIN11_installer.sh"
-WIN2025="./WIN2025/WIN2025_multi_installer.sh"
+IMAGESRV="./IMAGESRV/IMAGESRV_installer.sh"
+MRNOBODY="./MRNOBODY/mrnobody_installer.sh"
 
 echo "=============================="
 echo " Proxmox Deployment Menu"
@@ -34,16 +36,17 @@ echo "5) Create Vuln-server01 VM"
 echo "6) Create Vuln-server02 VM"
 echo "7) Create KALI01 VM"
 echo "8) Create KALI02 VM"
-echo "9) Create Windows 11 VM"
-echo "10) Create Windows server 2025 VM"
-echo "11) Create APPSRV01 VM"
-echo "12) Create Client01 VM"
-echo "13) Create WAZUH VM"
-echo "14) Create TPOT01 VM"
+echo "9) Create APPSRV01 VM"
+echo "10) Create Client01 VM"
+echo "11) Create WAZUH VM"
+echo "12) Create TPOT01 VM"
+echo "13) Create Guacamole VM"
+echo "80) Create Image Server VM"
 echo "89) Change proxmox repo to no-enterprise"
 echo "90) Run ALL"
 echo "95) Run ALL in background"
 echo "99) Cleanup all installation"
+echo "666) Create MrNobody VM"
 echo "0) Exit"
 echo "=============================="
 
@@ -88,28 +91,29 @@ case "$CHOICE" in
     bash "$KALI02" $LAB 
     ;;
   9)
-    echo "Starting Windows 11 VM creation... "
-    bash "$WIN11" $LAB
-    ;;
- 10)
-    echo "Starting Windows server 2025 VM creation... "
-    bash "$WIN2025" $LAB
-    ;;
-  11)
     echo "Starting APPSRV01 VM creation.... "
     bash "$APPSRV01" $LAB
     ;;
-  12)
+  10)
     echo "Staring Client01 VM creation... "
     bash "$CLIENT01" $LAB
     ;;
-  13)
+  11)
     echo "Starting WAZUH VM creation... "
     bash "$WAZUH" $LAB
     ;;
-  14)
+  12)
     echo "Starting WAZUH VM creation... "
     bash "$TPOT" $LAB
+    ;;
+  13)
+    echo "Starting Guacamole VM creation..."
+    bash "$GUACVM02_IP" $LAB
+    bash "$GUACVM02" $LAB
+    ;;
+  80)
+    echo "Starting Image Server VM creation..."
+    bash "$IMAGESRV" "99"
     ;;
   89)
     echo "Change proxmox repo to no-enterprise"
@@ -126,7 +130,7 @@ case "$CHOICE" in
 
     echo "IP settings on Guacamole and Opnsense"
     bash "$OPNSENSECONF" $LAB
-    bash "$GUACVM_IP" $LAB
+    bash "$GUACVM_IP02" $LAB
 
     echo "Starting Open vSwitch installation and configuration"
     #bash "$OPENVSWITCH" $LAB
@@ -138,7 +142,7 @@ case "$CHOICE" in
     bash "$OPNSENSE" $LAB
 
     echo "Starting Guacamole VM creation..."
-    bash "$GUACVM" $LAB
+    bash "$GUACVM02" $LAB
 
     echo "Staring Client01 VM creation..."
     bash "$CLIENT01" $LAB
@@ -161,11 +165,9 @@ case "$CHOICE" in
     echo "Starting Wazuh VM creation... "
     bash "$WAZUH" $LAB
 
-    echo "Starting WAZUH VM creation... "
-    bash "$TPOT" $LAB
+#    echo "Starting WAZUH VM creation... "
+#    bash "$TPOT" $LAB
 
-    echo "Starting Windows server 2025 VM creation.... "
-    bash "$WIN2025" $LAB
     ;;
   95)
   SESSION="deploy-all"
@@ -183,7 +185,7 @@ case "$CHOICE" in
 
   echo "===== Phase 1: Interactive configuration ====="
   bash "$OPNSENSECONF" $LAB || exit 1
-  bash "$GUACVM_IP" $LAB || exit 1
+  bash "$GUACVM02_IP" $LAB || exit 1
 
   echo "===== Phase 2: Run OPNsense installer (expect, outside tmux) ====="
   bash "$OPNSENSE" $LAB || exit 1
@@ -206,7 +208,7 @@ case "$CHOICE" in
     exec > >(tee -a deploy.log) 2>&1
 
     echo 'Starting Guacamole VM creation'
-    bash '$GUACVM' $LAB
+    bash '$GUACVM02' $LAB
 
     echo 'Starting Client01 VM creation'
     bash '$CLIENT01' $LAB
@@ -229,11 +231,8 @@ case "$CHOICE" in
     echo 'Starting Wazuh VM creation'
     bash '$WAZUH' $LAB
 
-    echo 'Starting WAZUH VM creation...'
-    bash "$TPOT" $LAB
-
-#    echo 'Starting Windows server 2025 VM creation'
-#    bash '$WIN2025' $LAB
+#    echo 'Starting WAZUH VM creation...'
+#    bash "$TPOT" $LAB
 
     echo '===== Deployment completed successfully ====='
   "
@@ -251,6 +250,10 @@ case "$CHOICE" in
      rm -rf /var/lib/vz/snippets/*
      rm -rf /var/lib/vz/template/iso/*
      ;;
+  666)
+     echo 'Starting MrNobody VM creation'
+    bash "$MRNOBODY" $LAB
+    ;;  
   0)
     echo "Exiting."
     exit 0
