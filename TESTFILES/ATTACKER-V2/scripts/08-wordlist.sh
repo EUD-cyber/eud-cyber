@@ -1062,26 +1062,26 @@ elif isinstance(original, dict):
 
     merged_output = original
 
-
     if isinstance(
         original.get("hosts"),
         list
     ):
-
         merged_output["hosts"] = existing_hosts
-
 
     elif isinstance(
         original.get("compromised_hosts"),
         list
     ):
-
         merged_output["compromised_hosts"] = existing_hosts
 
-
     else:
-
         merged_output["hosts"] = existing_hosts
+
+    merged_output["count"] = len(existing_hosts)
+
+else:
+
+    merged_output = existing_hosts
 
 
 else:
