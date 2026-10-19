@@ -251,6 +251,33 @@ for host in data.get("hosts", []):
             f"{ip}|windows|rdp|{port}|{user}|{password}"
         )
 
+    # --------------------------------------------------------
+    # FreeBSD / OPNsense
+    # --------------------------------------------------------
+
+    elif platform == "freebsd":
+
+        port = host.get(
+            "ssh_port",
+            22
+        )
+
+        user = (
+            host.get("ssh_username")
+            or host.get("ssh_user")
+            or "root"
+        )
+
+        password = (
+            host.get("ssh_password")
+            or host.get("password")
+            or ""
+        )
+
+        print(
+            f"{ip}|freebsd|ssh|{port}|{user}|{password}"
+        )
+
 PY
 
 )
@@ -332,6 +359,7 @@ SKIPPED_COUNT=0
 
 LINUX_STAGED=0
 WINDOWS_STAGED=0
+FREEBSD_SKIPPED=0
 
 
 # ============================================================
@@ -903,6 +931,20 @@ PY
 
         fi
 
+        elif [[ "$PLATFORM" == "freebsd" ]]; then
+
+            # FreeBSD / OPNsense
+            FREEBSD_SKIPPED=$(( FREEBSD_SKIPPED + 1 ))
+            SKIPPED_COUNT=$(( SKIPPED_COUNT + 1 ))
+
+            log "[SKIPPED] FreeBSD host $HOST is authenticated, but Linux staging payload is not applicable."
+
+            ground_truth \
+                "STAGING_SKIPPED host=$HOST platform=freebsd reason=unsupported_payload"
+
+            continue
+
+
 
     # ========================================================
     # UNKNOWN PLATFORM
@@ -1057,6 +1099,11 @@ echo "  $WINDOWS_STAGED"
 
 echo
 
+echo "FreeBSD skipped:"
+echo "  $FREEBSD_SKIPPED"
+
+echo
+
 echo "Failed:"
 echo "  $FAILED_COUNT"
 
@@ -1079,7 +1126,6 @@ echo
 
 
 ground_truth \
-    "PHASE_COMPLETE compromised=${#COMPROMISED[@]} staged=$STAGED_COUNT linux_staged=$LINUX_STAGED windows_staged=$WINDOWS_STAGED failed=$FAILED_COUNT skipped=$SKIPPED_COUNT"
-
+    "PHASE_COMPLETE compromised=${#COMPROMISED[@]} staged=$STAGED_COUNT linux_staged=$LINUX_STAGED windows_staged=$WINDOWS_STAGED freebsd_skipped=$FREEBSD_SKIPPED failed=$FAILED_COUNT skipped=$SKIPPED_COUNT"
 
 exit 0
