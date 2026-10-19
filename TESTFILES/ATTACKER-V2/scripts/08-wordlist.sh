@@ -20,7 +20,9 @@ set -u
 #   - Password wordlist is standard one-password-per-line format.
 #   - Each username is tested against the password wordlist.
 #   - Testing stops on first successful credential per host.
-#   - Passwords are NEVER written to logs/state.
+#   - Successful credentials are stored in compromised-hosts.json.
+#   - Passwords are NOT written to normal campaign logs.
+#   - wordlist-results.json does NOT contain passwords.
 #   - Wordlist contents are NEVER written to logs/state.
 #   - Successful username and attempt count may be recorded.
 #   - Successful hosts are merged into compromised-hosts.json.
@@ -834,11 +836,12 @@ while IFS= read -r TARGET; do
                             "WORDLIST_SUCCESS ip=$TARGET service=rdp username=$USERNAME attempts=$RDP_ATTEMPTS"
 
 
-                        printf '%s|windows|rdp|%s|%s|||%s\n' \
+                        printf '%s|windows|rdp|%s|%s|||%s|%s\n' \
                             "$TARGET" \
                             "$RDP_PORT" \
                             "$USERNAME" \
                             "$RDP_ATTEMPTS" \
+                            "$PASSWORD" \
                             >> "$SUCCESS_FILE"
 
 
@@ -880,10 +883,10 @@ done < "$TARGET_FILE"
 #
 # SUCCESS FILE:
 #
-# IP|PLATFORM|ACCESS|PORT|USER|HOSTNAME|OS|ATTEMPTS
+# IP|PLATFORM|ACCESS|PORT|USER|HOSTNAME|OS|ATTEMPTS|PASSWORD
 #
-# Password is deliberately absent.
-# ============================================================
+# Password is used to update compromised-hosts.json.
+# It is not included in wordlist-results.json.
 
 python3 - \
     "$COMPROMISED_STATE" \
@@ -1059,19 +1062,17 @@ with open(
         if access == "ssh":
 
             host["ssh_port"] = int(port)
-
             host["ssh_user"] = username
-
             host["ssh_username"] = username
+            host["ssh_password"] = password
 
 
         elif access == "rdp":
 
             host["rdp_port"] = int(port)
-
             host["rdp_user"] = username
-
             host["rdp_username"] = username
+            host["rdp_password"] = password
 
 
         existing_hosts.append(host)
