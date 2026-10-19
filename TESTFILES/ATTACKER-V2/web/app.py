@@ -416,23 +416,23 @@ def api_start():
                 }
             ), 409
 
-# ----------------------------------------------------
-# Request data
-#
-# JSON is retained for backwards compatibility.
-# multipart/form-data is used by the GUI when a
-# wordlist file is uploaded.
-# ----------------------------------------------------
+        # ----------------------------------------------------
+        # Request data
+        #
+        # JSON is retained for backwards compatibility.
+        # multipart/form-data is used by the GUI when a
+        # wordlist file is uploaded.
+        # ----------------------------------------------------
 
-if request.is_json:
+        if request.is_json:
 
-    data = request.get_json(
-        silent=True
-    ) or {}
+            data = request.get_json(
+                silent=True
+            ) or {}
 
-else:
+        else:
 
-    data = request.form.to_dict()
+            data = request.form.to_dict()
 
         defaults = read_defaults()
 
