@@ -243,6 +243,33 @@ for host in data.get("hosts", []):
            f"{ip}|windows|rdp|{port}|{user}|{password}"
         )
 
+    # --------------------------------------------------------
+    # FreeBSD / OPNsense
+    # --------------------------------------------------------
+
+    elif platform == "freebsd":
+
+        port = host.get(
+            "ssh_port",
+            22
+        )
+
+        user = (
+            host.get("ssh_username")
+            or host.get("ssh_user")
+            or "root"
+        )
+
+        password = (
+            host.get("ssh_password")
+            or host.get("password")
+            or ""
+        )
+
+        print(
+            f"{ip}|freebsd|ssh|{port}|{user}|{password}"
+        )
+
 PY
 
 )
@@ -325,6 +352,7 @@ SKIPPED_COUNT=0
 
 LINUX_SUCCESS=0
 WINDOWS_SUCCESS=0
+FREEBSD_SKIPPED=0
 
 
 # ============================================================
@@ -1089,6 +1117,22 @@ PY
 
         fi
 
+
+    # ========================================================
+    # FREEBSD / OPNsense
+    # ========================================================
+
+    elif [[ "$PLATFORM" == "freebsd" ]]; then
+
+        FREEBSD_SKIPPED=$(( FREEBSD_SKIPPED + 1 ))
+        SKIPPED_COUNT=$(( SKIPPED_COUNT + 1 ))
+
+        log "[SKIPPED] FreeBSD host $HOST is authenticated, but impact simulation payload is not applicable."
+
+        ground_truth \
+            "IMPACT_SKIPPED host=$HOST platform=freebsd reason=unsupported_payload"
+
+        continue
 
     # ========================================================
     # UNKNOWN PLATFORM
