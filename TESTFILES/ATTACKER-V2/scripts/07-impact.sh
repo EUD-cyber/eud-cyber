@@ -1269,6 +1269,11 @@ echo "  $WINDOWS_SUCCESS"
 
 echo
 
+echo "FreeBSD skipped:"
+echo "  $FREEBSD_SKIPPED"
+
+echo
+
 echo "Failed:"
 echo "  $FAILED_COUNT"
 
@@ -1291,7 +1296,6 @@ echo
 
 
 ground_truth \
-    "PHASE_COMPLETE impacted=$SUCCESS_COUNT linux_impacted=$LINUX_SUCCESS windows_impacted=$WINDOWS_SUCCESS failed=$FAILED_COUNT skipped=$SKIPPED_COUNT"
-
+    "PHASE_COMPLETE impacted=$SUCCESS_COUNT linux_impacted=$LINUX_SUCCESS windows_impacted=$WINDOWS_SUCCESS freebsd_skipped=$FREEBSD_SKIPPED failed=$FAILED_COUNT skipped=$SKIPPED_COUNT"
 
 exit 0
