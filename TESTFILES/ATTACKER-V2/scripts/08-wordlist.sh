@@ -708,18 +708,21 @@ while IFS= read -r TARGET; do
                     )
 
 
-                    PLATFORM="linux"
-
+                    PLATFORM="unix"
 
                     case "${OS_NAME,,}" in
-
-                        *windows*|*microsoft*)
-
-                            PLATFORM="windows"
+                        linux*)
+                            PLATFORM="linux"
                             ;;
 
-                    esac
+                        freebsd*)
+                            PLATFORM="freebsd"
+                            ;;
 
+                        *windows*|*microsoft*)
+                            PLATFORM="windows"
+                            ;;
+                    esac
 
                     log "[SUCCESS][SSH] $TARGET username=$USERNAME authenticated on attempt $SSH_ATTEMPTS."
 
