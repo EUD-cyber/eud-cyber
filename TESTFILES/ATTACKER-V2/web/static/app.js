@@ -931,43 +931,105 @@ async function startCampaign() {
 
     try {
 
+        const formData =
+        new FormData();
+
+
+        // --------------------------------------------------
+        // General
+        // --------------------------------------------------
+
+        formData.append(
+            "incident_ip",
+            incidentIp
+        );
+
+        formData.append(
+            "web_ports",
+            webPorts
+        );
+
+
+        // --------------------------------------------------
+        // Linux / SSH
+        // --------------------------------------------------
+
+        formData.append(
+            "ssh_username",
+            sshUser
+        );
+
+        formData.append(
+            "ssh_password",
+            sshPassword
+        );
+
+        formData.append(
+            "ssh_port",
+            String(sshPort)
+        );
+
+
+        // --------------------------------------------------
+        // Windows / RDP
+        // --------------------------------------------------
+
+        formData.append(
+            "rdp_username",
+            rdpUser
+        );
+
+        formData.append(
+            "rdp_password",
+            rdpPassword
+        );
+
+        formData.append(
+            "rdp_port",
+            String(rdpPort)
+        );
+
+
+        // --------------------------------------------------
+        // Wordlist Authentication
+        // --------------------------------------------------
+
+        formData.append(
+            "wordlist_enabled",
+            wordlistEnabled ? "1" : "0"
+        );
+
+        formData.append(
+            "wordlist_users",
+            wordlistUsers
+        );
+
+        if (
+            wordlistEnabled &&
+            wordlistFile
+        ) {
+
+            formData.append(
+                "wordlist_file",
+                wordlistFile
+            );
+        }
+
+
+        // --------------------------------------------------
+        // Exfiltration
+        // --------------------------------------------------
+
+        formData.append(
+            "exfil_port",
+            String(exfilPort)
+        );
+
+
         const result =
-            await apiPost(
+            await apiPostForm(
                 "/api/start",
-                {
-                    incident_ip:
-                        incidentIp,
-
-                    web_ports:
-                        webPorts,
-
-                    // Linux / SSH
-
-                    ssh_username:
-                        sshUser,
-
-                    ssh_password:
-                        sshPassword,
-
-                    ssh_port:
-                        String(sshPort),
-
-                    // Windows / RDP
-
-                    rdp_username:
-                        rdpUser,
-
-                    rdp_password:
-                        rdpPassword,
-
-                    rdp_port:
-                        String(rdpPort),
-
-                    // Exfiltration
-
-                    exfil_port:
-                        String(exfilPort)
-                }
+                formData
             );
 
 
@@ -1639,6 +1701,51 @@ function startPolling() {
 // ==========================================================
 // EVENT HANDLERS
 // ==========================================================
+
+const wordlistEnabledField =
+    document.getElementById(
+        "wordlistEnabled"
+    );
+
+const wordlistUsersField =
+    document.getElementById(
+        "wordlistUsers"
+    );
+
+const wordlistFileField =
+    document.getElementById(
+        "wordlistFile"
+    );
+
+
+function updateWordlistFields() {
+
+    const enabled =
+        wordlistEnabledField?.checked === true;
+
+    if (wordlistUsersField) {
+
+        wordlistUsersField.disabled =
+            !enabled;
+    }
+
+    if (wordlistFileField) {
+
+        wordlistFileField.disabled =
+            !enabled;
+    }
+}
+
+
+if (wordlistEnabledField) {
+
+    wordlistEnabledField.addEventListener(
+        "change",
+        updateWordlistFields
+    );
+
+    updateWordlistFields();
+}
 
 if (startButton) {
 
