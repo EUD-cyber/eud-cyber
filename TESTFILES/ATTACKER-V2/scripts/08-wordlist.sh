@@ -888,7 +888,7 @@ done < "$TARGET_FILE"
 # Password is used to update compromised-hosts.json.
 # It is not included in wordlist-results.json.
 
-python3 - \
+if ! python3 - \
     "$COMPROMISED_STATE" \
     "$SUCCESS_FILE" \
     "$WORDLIST_STATE" \
@@ -987,7 +987,7 @@ with open(
             continue
 
 
-        parts = raw.split("|")
+       parts = raw.split("|")
 
         while len(parts) < 9:
             parts.append("")
@@ -1057,11 +1057,6 @@ if isinstance(original, list):
 
     merged_output = existing_hosts
 
-
-if isinstance(original, list):
-
-    merged_output = existing_hosts
-
 elif isinstance(original, dict):
 
     merged_output = original
@@ -1082,11 +1077,6 @@ elif isinstance(original, dict):
         merged_output["hosts"] = existing_hosts
 
     merged_output["count"] = len(existing_hosts)
-
-else:
-
-    merged_output = existing_hosts
-
 
 else:
 
@@ -1187,6 +1177,10 @@ with open(
         indent=2
     )
 PY
+then
+    log "[ERROR] Failed to merge Phase 08 compromises into compromised-hosts.json."
+    exit 1
+fi
 
 
 # ============================================================
