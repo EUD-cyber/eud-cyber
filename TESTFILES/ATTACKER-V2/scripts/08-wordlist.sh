@@ -1058,6 +1058,10 @@ if isinstance(original, list):
     merged_output = existing_hosts
 
 
+if isinstance(original, list):
+
+    merged_output = existing_hosts
+
 elif isinstance(original, dict):
 
     merged_output = original
