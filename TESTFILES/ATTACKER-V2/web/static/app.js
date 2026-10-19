@@ -710,6 +710,33 @@ async function startCampaign() {
                 ?.value
         );
 
+    // ------------------------------------------------------
+    // Wordlist Authentication
+    // ------------------------------------------------------
+
+    const wordlistEnabled =
+        document
+            .getElementById(
+                "wordlistEnabled"
+            )
+            ?.checked === true;
+
+
+    const wordlistUsers =
+        document
+            .getElementById(
+                "wordlistUsers"
+            )
+            ?.value
+            .trim() || "";
+
+
+    const wordlistFile =
+        document
+            .getElementById(
+                "wordlistFile"
+            )
+            ?.files?.[0] || null;
 
     // ------------------------------------------------------
     // CLIENT VALIDATION - GENERAL
