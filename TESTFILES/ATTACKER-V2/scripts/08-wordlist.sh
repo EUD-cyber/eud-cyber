@@ -990,95 +990,62 @@ with open(
         parts = raw.split("|")
 
         while len(parts) < 9:
-                parts.append("")
+            parts.append("")
 
-            (
-                ip,
-                platform,
-                access,
-                port,
-                username,
-                hostname,
-                os_name,
-                attempts,
-                password,
-            ) = parts[:9]
-
+        (
+            ip,
+            platform,
+            access,
+            port,
+            username,
+            hostname,
+            os_name,
+            attempts,
+            password,
+        ) = parts[:9]
 
         if ip in existing_by_ip:
             continue
 
-
-       host = {
-
-                "ip": ip,
-
-                "platform": platform,
-
-                "access": access,
-
-                "primary_access": access,
-
-                "authenticated": True,
-
-                "compromised": True,
-
-                "credential_method": "wordlist",
-
-                "username": username,
-
-                "password": password,
-
-                "wordlist_attempts": int(
-                    attempts or 0
-                ),
-
-                "hostname": hostname,
-
-                "os": os_name,
-
-                "access_methods": {
-
-                    access: {
-
-                        "authenticated": True,
-
-                        "port": int(port),
-
-                        "username": username,
-
-                        "password": password,
-
-                        "method": "wordlist",
-
-                        "attempts": int(
-                            attempts or 0
-                        ),
-                    }
-                },
-            }
-
+        host = {
+            "ip": ip,
+            "platform": platform,
+            "access": access,
+            "primary_access": access,
+            "authenticated": True,
+            "compromised": True,
+            "credential_method": "wordlist",
+            "username": username,
+            "password": password,
+            "wordlist_attempts": int(attempts or 0),
+            "hostname": hostname,
+            "os": os_name,
+            "access_methods": {
+                access: {
+                    "authenticated": True,
+                    "port": int(port),
+                    "username": username,
+                    "password": password,
+                    "method": "wordlist",
+                    "attempts": int(attempts or 0),
+                }
+            },
+        }
 
         if access == "ssh":
-
             host["ssh_port"] = int(port)
             host["ssh_user"] = username
             host["ssh_username"] = username
             host["ssh_password"] = password
 
-
         elif access == "rdp":
-
             host["rdp_port"] = int(port)
             host["rdp_user"] = username
             host["rdp_username"] = username
             host["rdp_password"] = password
 
-
         existing_hosts.append(host)
-
         existing_by_ip[ip] = host
-
         new_hosts.append(host)
 
 
