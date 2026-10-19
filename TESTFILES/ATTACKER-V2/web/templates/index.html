@@ -86,8 +86,8 @@
         <p>
             Full incident simulation:
             Recon → Web Discovery → Initial Access →
-            Internal Discovery → Data Staging →
-            Exfiltration → Impact
+            Wordlist Authentication → Internal Discovery →
+            Data Staging → Exfiltration → Impact
         </p>
 
         <p class="muted">
@@ -337,7 +337,81 @@
             </div>
 
         </div>
+        <!-- ==================================================
+            WORDLIST AUTHENTICATION
+        =================================================== -->
 
+        <div class="config-section">
+
+            <div class="config-section-title">
+                Wordlist Authentication
+            </div>
+
+            <div class="form-grid config-three-columns">
+
+                <div class="form-group">
+
+                    <label class="checkbox-label" for="wordlistEnabled">
+                        <input
+                            id="wordlistEnabled"
+                            type="checkbox"
+                        >
+                        Enable Wordlist Authentication
+                    </label>
+
+                    <div class="field-help">
+                        Run Phase 08 against remaining SSH / RDP targets
+                        after Initial Access.
+                    </div>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="wordlistUsers">
+                        Candidate Usernames
+                    </label>
+
+                    <input
+                        id="wordlistUsers"
+                        type="text"
+                        placeholder="ubuntu,root"
+                        autocomplete="off"
+                        disabled
+                    >
+
+                    <div class="field-help">
+                        Comma-separated usernames, for example:
+                        <strong>ubuntu,root</strong>.
+                    </div>
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="wordlistFile">
+                        Password Wordlist
+                    </label>
+
+                    <input
+                        id="wordlistFile"
+                        type="file"
+                        accept=".txt,text/plain"
+                        disabled
+                    >
+
+                    <div class="field-help">
+                        One password per line. The uploaded file is used
+                        only for the current campaign.
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
 
         <!-- ==================================================
              EXFILTRATION
@@ -523,6 +597,32 @@
 
             </div>
 
+            <div
+                class="phase-card"
+                data-phase="08"
+            >
+
+                <div class="phase-number">
+                    08
+                </div>
+
+                <div class="phase-info">
+
+                    <strong>
+                        Wordlist Authentication
+                    </strong>
+
+                    <span>
+                        Remaining SSH / RDP targets
+                    </span>
+
+                </div>
+
+                <div class="phase-status">
+                    PENDING
+                </div>
+
+            </div>
 
             <div
                 class="phase-card"
