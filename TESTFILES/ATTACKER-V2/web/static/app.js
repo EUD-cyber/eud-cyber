@@ -898,14 +898,18 @@ async function startCampaign() {
     // ------------------------------------------------------
 
     const confirmed =
-        window.confirm(
-            "Start the full H3 Incident Campaign?\n\n" +
-            "The campaign will dynamically discover hosts " +
-            "and execute all seven simulation phases.\n\n" +
-            "Linux targets will use SSH credentials.\n" +
-            "Windows targets will use RDP credentials."
-        );
-
+    window.confirm(
+        "Start the full H3 Incident Campaign?\n\n" +
+        "The campaign will dynamically discover hosts " +
+        "and execute the configured simulation phases.\n\n" +
+        "Linux targets will use SSH credentials.\n" +
+        "Windows targets will use RDP credentials.\n" +
+        (
+            wordlistEnabled
+                ? "Wordlist authentication is ENABLED."
+                : "Wordlist authentication is DISABLED."
+        )
+    );
 
     if (!confirmed) {
         return;
