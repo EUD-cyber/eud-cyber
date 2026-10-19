@@ -112,6 +112,30 @@ async function apiPost(url, data = {}) {
     return result;
 }
 
+async function apiPostForm(url, formData) {
+
+    const response = await fetch(
+        url,
+        {
+            method: "POST",
+            body: formData
+        }
+    );
+
+    const result =
+        await response.json();
+
+    if (!response.ok) {
+
+        throw new Error(
+            result.message ||
+            result.error ||
+            `HTTP ${response.status}`
+        );
+    }
+
+    return result;
+}
 
 // ==========================================================
 // MESSAGES
