@@ -321,6 +321,32 @@ for host in data.get("hosts", []):
         print(
           f"{ip}|windows|rdp|{port}|{user}|{password}"
         )
+    # --------------------------------------------------------
+    # FreeBSD / OPNsense
+    # --------------------------------------------------------
+
+    elif platform == "freebsd":
+
+        port = host.get(
+            "ssh_port",
+            22
+        )
+
+        user = (
+            host.get("ssh_username")
+            or host.get("ssh_user")
+            or "root"
+        )
+
+        password = (
+            host.get("ssh_password")
+            or host.get("password")
+            or ""
+        )
+
+        print(
+            f"{ip}|freebsd|ssh|{port}|{user}|{password}"
+        )
 PY
 
 )
@@ -370,7 +396,7 @@ SKIPPED_SOURCES=0
 
 LINUX_SOURCES=0
 WINDOWS_SOURCES=0
-
+FREEBSD_SOURCES=0
 
 # ============================================================
 # PROCESS COMPROMISED SOURCES
@@ -855,6 +881,21 @@ PY
 
         SUCCESSFUL_SOURCES=$(( SUCCESSFUL_SOURCES + 1 ))
 
+    # ========================================================
+    # FREEBSD / OPNsense SOURCE
+    # ========================================================
+
+    elif [[ "$PLATFORM" == "freebsd" ]]; then
+
+        FREEBSD_SOURCES=$(( FREEBSD_SOURCES + 1 ))
+        SKIPPED_SOURCES=$(( SKIPPED_SOURCES + 1 ))
+
+        log "[SKIPPED] FreeBSD host $SOURCE is authenticated, but Linux discovery payload is not applicable."
+
+        ground_truth \
+            "INTERNAL_DISCOVERY_SKIPPED source=$SOURCE platform=freebsd reason=unsupported_payload"
+
+        continue
 
     # ========================================================
     # UNKNOWN PLATFORM
@@ -918,6 +959,11 @@ echo "  $WINDOWS_SOURCES"
 
 echo
 
+echo "FreeBSD source hosts:"
+echo "  $FREEBSD_SOURCES"
+
+echo
+
 echo "Successful source hosts:"
 echo "  $SUCCESSFUL_SOURCES"
 
@@ -955,7 +1001,6 @@ echo
 
 
 ground_truth \
-    "PHASE_COMPLETE sources=${#COMPROMISED[@]} linux_sources=$LINUX_SOURCES windows_sources=$WINDOWS_SOURCES successful_sources=$SUCCESSFUL_SOURCES failed_sources=$FAILED_SOURCES skipped_sources=$SKIPPED_SOURCES relationships=$TOTAL_RELATIONSHIPS"
-
+    "PHASE_COMPLETE sources=${#COMPROMISED[@]} linux_sources=$LINUX_SOURCES windows_sources=$WINDOWS_SOURCES freebsd_sources=$FREEBSD_SOURCES successful_sources=$SUCCESSFUL_SOURCES failed_sources=$FAILED_SOURCES skipped_sources=$SKIPPED_SOURCES relationships=$TOTAL_RELATIONSHIPS"
 
 exit 0
