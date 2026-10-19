@@ -846,6 +846,34 @@ async function startCampaign() {
     }
 
 
+        // ------------------------------------------------------
+    // CLIENT VALIDATION - WORDLIST
+    // ------------------------------------------------------
+
+    if (wordlistEnabled) {
+
+        if (!wordlistUsers) {
+
+            showMessage(
+                "At least one wordlist username is required.",
+                "error"
+            );
+
+            return;
+        }
+
+
+        if (!wordlistFile) {
+
+            showMessage(
+                "A password wordlist file is required.",
+                "error"
+            );
+
+            return;
+        }
+    }
+
     // ------------------------------------------------------
     // CLIENT VALIDATION - EXFIL
     // ------------------------------------------------------
