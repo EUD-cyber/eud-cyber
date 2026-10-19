@@ -986,8 +986,7 @@ with open(
         if not raw:
             continue
 
-
-       parts = raw.split("|")
+        parts = raw.split("|")
 
         while len(parts) < 9:
             parts.append("")
