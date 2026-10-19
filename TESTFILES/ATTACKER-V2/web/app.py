@@ -19,6 +19,7 @@ BASE_DIR = Path("/opt/nordic-attack")
 CONFIG_FILE = BASE_DIR / "config" / "defaults.conf"
 STATE_DIR = BASE_DIR / "state"
 LOG_DIR = BASE_DIR / "logs"
+UPLOAD_DIR = BASE_DIR / "runtime" / "uploads"
 
 SCENARIO = BASE_DIR / "scenarios" / "full-incident-h3.sh"
 
@@ -415,9 +416,23 @@ def api_start():
                 }
             ), 409
 
-        data = request.get_json(
-            silent=True
-        ) or {}
+# ----------------------------------------------------
+# Request data
+#
+# JSON is retained for backwards compatibility.
+# multipart/form-data is used by the GUI when a
+# wordlist file is uploaded.
+# ----------------------------------------------------
+
+if request.is_json:
+
+    data = request.get_json(
+        silent=True
+    ) or {}
+
+else:
+
+    data = request.form.to_dict()
 
         defaults = read_defaults()
 
@@ -512,6 +527,40 @@ def api_start():
             )
         )
 
+
+        # ----------------------------------------------------
+        # Wordlist Authentication
+        # ----------------------------------------------------
+
+        wordlist_enabled_raw = str(
+            data.get(
+                "wordlist_enabled",
+                "0",
+            )
+        ).strip().lower()
+
+        wordlist_enabled = (
+            wordlist_enabled_raw
+            in (
+                "1",
+                "true",
+                "yes",
+                "on",
+            )
+        )
+
+        wordlist_users = str(
+            data.get(
+                "wordlist_users",
+                "",
+            )
+        ).strip()
+
+        wordlist_upload = (
+            request.files.get("wordlist_file")
+            if not request.is_json
+            else None
+        )
 
         # ====================================================
         # VALIDATION
@@ -608,6 +657,38 @@ def api_start():
                 }
             ), 400
 
+        # ----------------------------------------------------
+        # Wordlist validation
+        # ----------------------------------------------------
+
+        if wordlist_enabled:
+
+            if not wordlist_users:
+
+                return jsonify(
+                    {
+                        "status": "error",
+                        "message": (
+                            "At least one wordlist username "
+                            "is required."
+                        ),
+                    }
+                ), 400
+
+            if (
+                wordlist_upload is None
+                or not wordlist_upload.filename
+            ):
+
+                return jsonify(
+                    {
+                        "status": "error",
+                        "message": (
+                            "A password wordlist file "
+                            "is required."
+                        ),
+                    }
+                ), 400
 
         # ----------------------------------------------------
         # Exfiltration validation
@@ -639,6 +720,78 @@ def api_start():
                 }
             ), 500
 
+        # ====================================================
+        # WORDLIST UPLOAD
+        # ====================================================
+
+        wordlist_path = None
+
+        if wordlist_enabled:
+
+            UPLOAD_DIR.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+
+            wordlist_path = (
+                UPLOAD_DIR /
+                f"wordlist-{os.getpid()}-{threading.get_ident()}.txt"
+            )
+
+            try:
+
+                wordlist_upload.save(
+                    str(wordlist_path)
+                )
+
+            except Exception as exc:
+
+                return jsonify(
+                    {
+                        "status": "error",
+                        "message": (
+                            "Unable to save wordlist: "
+                            f"{exc}"
+                        ),
+                    }
+                ), 500
+
+            try:
+
+                if (
+                    not wordlist_path.exists()
+                    or wordlist_path.stat().st_size == 0
+                ):
+
+                    wordlist_path.unlink(
+                        missing_ok=True
+                    )
+
+                    return jsonify(
+                        {
+                            "status": "error",
+                            "message": (
+                                "Uploaded wordlist is empty."
+                            ),
+                        }
+                    ), 400
+
+            except OSError as exc:
+
+                wordlist_path.unlink(
+                    missing_ok=True
+                )
+
+                return jsonify(
+                    {
+                        "status": "error",
+                        "message": (
+                            "Unable to validate wordlist: "
+                            f"{exc}"
+                        ),
+                    }
+                ), 500
+
 
         # ====================================================
         # ENVIRONMENT
@@ -665,6 +818,31 @@ def api_start():
         env["NORDIC_RDP_PORT"] = rdp_port
         env["NORDIC_RDP_USERNAME"] = rdp_username
         env["NORDIC_RDP_PASSWORD"] = rdp_password
+
+        # Wordlist Authentication
+
+        env["NORDIC_WORDLIST_ENABLED"] = (
+            "1"
+            if wordlist_enabled
+            else "0"
+        )
+
+        env["NORDIC_WORDLIST_USERS"] = (
+            wordlist_users
+        )
+
+        if wordlist_path is not None:
+
+            env["NORDIC_WORDLIST_FILE"] = (
+                str(wordlist_path)
+            )
+
+        else:
+
+            env.pop(
+                "NORDIC_WORDLIST_FILE",
+                None,
+            )
 
         # Exfiltration
 
@@ -701,6 +879,8 @@ def api_start():
                 "================================================\n"
                 "Campaign requested from Web GUI\n"
                 "Linux + Windows credentials supplied\n"
+                f"Wordlist authentication: "
+                f"{'ENABLED' if wordlist_enabled else 'DISABLED'}\n"
                 "================================================\n"
             )
 
