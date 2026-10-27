@@ -218,6 +218,10 @@ write_files:
           "scripts/07-impact.sh" \
           "$INSTALL_DIR/scripts/07-impact.sh"
 
+        download_file \
+          "scripts/08-wordlist.sh" \
+          "$INSTALL_DIR/scripts/08-wordlist.sh"
+
 
       # ------------------------------------------------------
       # ORCHESTRATOR
