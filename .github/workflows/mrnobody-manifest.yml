@@ -28,6 +28,8 @@ jobs:
       - name: Check for manifest changes
         id: changes
         run: |
+          git add -N TESTFILES/ATTACKER-V2/update-manifest.txt
+
           if git diff --quiet -- TESTFILES/ATTACKER-V2/update-manifest.txt; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
