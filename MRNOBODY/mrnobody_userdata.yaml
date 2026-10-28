@@ -144,14 +144,18 @@ write_files:
       rm -rf "$INSTALL_DIR"
 
       mkdir -p \
-          "$INSTALL_DIR/config" \
-          "$INSTALL_DIR/scripts" \
-          "$INSTALL_DIR/scenarios" \
-          "$INSTALL_DIR/logs" \
-          "$INSTALL_DIR/state" \
-          "$INSTALL_DIR/uploads" \
-          "$INSTALL_DIR/web/templates" \
-          "$INSTALL_DIR/web/static"
+        "$INSTALL_DIR/config" \
+        "$INSTALL_DIR/nginx" \
+        "$INSTALL_DIR/scripts" \
+        "$INSTALL_DIR/scenarios" \
+        "$INSTALL_DIR/systemd" \
+        "$INSTALL_DIR/logs" \
+        "$INSTALL_DIR/state" \
+        "$INSTALL_DIR/runtime" \
+        "$INSTALL_DIR/reports" \
+        "$INSTALL_DIR/uploads" \
+        "$INSTALL_DIR/web/templates" \
+        "$INSTALL_DIR/web/static"
 
 
       # ======================================================
@@ -218,9 +222,13 @@ write_files:
           "scripts/07-impact.sh" \
           "$INSTALL_DIR/scripts/07-impact.sh"
 
-        download_file \
+      download_file \
           "scripts/08-wordlist.sh" \
           "$INSTALL_DIR/scripts/08-wordlist.sh"
+
+      download_file \
+          "scripts/update.sh" \
+          "$INSTALL_DIR/scripts/update.sh"
 
 
       # ------------------------------------------------------
@@ -261,8 +269,12 @@ write_files:
       mkdir -p /etc/nginx/sites-enabled
 
       download_file \
-          "nginx/nordic-incident.conf" \
-          "/etc/nginx/sites-available/nordic-incident.conf"
+        "nginx/nordic-incident.conf" \
+        "$INSTALL_DIR/nginx/nordic-incident.conf"
+
+      install -m 0644 \
+        "$INSTALL_DIR/nginx/nordic-incident.conf" \
+        /etc/nginx/sites-available/nordic-incident.conf
 
 
       # ------------------------------------------------------
@@ -270,8 +282,12 @@ write_files:
       # ------------------------------------------------------
 
       download_file \
-          "systemd/nordic-incident-web.service" \
-          "/etc/systemd/system/nordic-incident-web.service"
+        "systemd/nordic-incident-web.service" \
+        "$INSTALL_DIR/systemd/nordic-incident-web.service"
+
+      install -m 0644 \
+        "$INSTALL_DIR/systemd/nordic-incident-web.service" \
+        /etc/systemd/system/nordic-incident-web.service
 
 
       # ======================================================
