@@ -319,6 +319,9 @@ write_files:
           "${INSTALL_DIR}/scripts/"*.sh
 
       chmod 755 \
+        "${INSTALL_DIR}/scripts/mrnobody"
+
+      chmod 755 \
           "${INSTALL_DIR}/scenarios/"*.sh
 
       chmod 644 \
