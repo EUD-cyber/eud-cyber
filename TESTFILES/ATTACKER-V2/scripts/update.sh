@@ -264,9 +264,16 @@ done < <(
 )
 
 #
+#
 # Validate MrNobody CLI.
 #
 if [[ -f "${DOWNLOAD_DIR}/scripts/mrnobody" ]]; then
+
+    #
+    # Normalize possible Windows CRLF line endings.
+    #
+    sed -i 's/\r$//' \
+        "${DOWNLOAD_DIR}/scripts/mrnobody"
 
     printf 'BASH     %s\n' "scripts/mrnobody"
 
