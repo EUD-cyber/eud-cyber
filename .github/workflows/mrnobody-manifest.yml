@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "TESTFILES/ATTACKER-V2/**"
+      - ".github/workflows/mrnobody-manifest.yml"
 
 permissions:
   contents: write
