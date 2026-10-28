@@ -1,0 +1,45 @@
+name: MrNobody - Build Update Manifest
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "TESTFILES/ATTACKER-V2/**"
+      - "!TESTFILES/ATTACKER-V2/update-manifest.txt"
+
+permissions:
+  contents: write
+
+jobs:
+  build-manifest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Make manifest builder executable
+        run: chmod +x TESTFILES/ATTACKER-V2/tools/build-manifest.sh
+
+      - name: Build MrNobody update manifest
+        run: TESTFILES/ATTACKER-V2/tools/build-manifest.sh
+
+      - name: Check for manifest changes
+        id: changes
+        run: |
+          if git diff --quiet -- TESTFILES/ATTACKER-V2/update-manifest.txt; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit updated manifest
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add TESTFILES/ATTACKER-V2/update-manifest.txt
+          git commit -m "Update MrNobody manifest [skip ci]"
+          git push
