@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - "TESTFILES/ATTACKER-V2/**"
-      - "!TESTFILES/ATTACKER-V2/update-manifest.txt"
 
 permissions:
   contents: write
@@ -41,5 +40,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add TESTFILES/ATTACKER-V2/update-manifest.txt
-          git commit -m "Update MrNobody manifest [skip ci]"
+          git commit -m "Update MrNobody manifest"
           git push
