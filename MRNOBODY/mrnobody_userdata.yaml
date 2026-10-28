@@ -308,6 +308,8 @@ write_files:
       sed -i 's/\r$//' \
           "${INSTALL_DIR}/config/defaults.conf"
 
+      sed -i 's/\r$//' \
+          "${INSTALL_DIR}/scripts/mrnobody"
 
       # ======================================================
       # PERMISSIONS
@@ -371,6 +373,12 @@ write_files:
           bash -n "$script"
       done
 
+      echo "  Checking: ${INSTALL_DIR}/scripts/mrnobody"
+      bash -n "${INSTALL_DIR}/scripts/mrnobody"
+
+      install -m 0755 \
+            "${INSTALL_DIR}/scripts/mrnobody" \
+            /usr/local/bin/mrnobody
 
       # ======================================================
       # TLS
