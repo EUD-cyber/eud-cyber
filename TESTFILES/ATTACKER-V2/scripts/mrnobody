@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+BASE_DIR="${NORDIC_BASE_DIR:-/opt/nordic-attack}"
+
+UPDATE_SCRIPT="${BASE_DIR}/scripts/update.sh"
+SCENARIO_SCRIPT="${BASE_DIR}/scenarios/full-incident-h3.sh"
+
+usage() {
+    cat <<'EOF'
+MrNobody CLI
+
+Usage:
+  mrnobody update
+  mrnobody status
+  mrnobody help
+
+Commands:
+  update   Check GitHub and update MrNobody
+  status   Show basic MrNobody service status
+  help     Show this help
+EOF
+}
+
+cmd_update() {
+    if [[ ! -x "$UPDATE_SCRIPT" ]]; then
+        echo "ERROR: Update script not found or not executable:"
+        echo "       $UPDATE_SCRIPT"
+        exit 1
+    fi
+
+    exec "$UPDATE_SCRIPT"
+}
+
+cmd_status() {
+    echo "========================================"
+    echo " MrNobody Status"
+    echo "========================================"
+    echo
+
+    echo "Installation:"
+    echo "  $BASE_DIR"
+    echo
+
+    echo "Web service:"
+    if systemctl is-active --quiet nordic-incident-web.service; then
+        echo "  ACTIVE"
+    else
+        echo "  INACTIVE"
+    fi
+
+    echo
+    echo "nginx:"
+    if systemctl is-active --quiet nginx; then
+        echo "  ACTIVE"
+    else
+        echo "  INACTIVE"
+    fi
+
+    echo
+    echo "HTTPS health:"
+
+    if curl \
+        --insecure \
+        --fail \
+        --silent \
+        --max-time 5 \
+        https://127.0.0.1/api/health \
+        >/dev/null 2>&1
+    then
+        echo "  HEALTHY"
+    else
+        echo "  UNAVAILABLE"
+    fi
+
+    echo
+}
+
+COMMAND="${1:-help}"
+
+case "$COMMAND" in
+
+    update)
+        cmd_update
+        ;;
+
+    status)
+        cmd_status
+        ;;
+
+    help|-h|--help)
+        usage
+        ;;
+
+    *)
+        echo "Unknown command: $COMMAND"
+        echo
+        usage
+        exit 1
+        ;;
+
+esac
