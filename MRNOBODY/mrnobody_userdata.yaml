@@ -230,6 +230,9 @@ write_files:
           "scripts/update.sh" \
           "$INSTALL_DIR/scripts/update.sh"
 
+      download_file \
+          "scripts/mrnobody" \
+          "$INSTALL_DIR/scripts/mrnobody"
 
       # ------------------------------------------------------
       # ORCHESTRATOR
