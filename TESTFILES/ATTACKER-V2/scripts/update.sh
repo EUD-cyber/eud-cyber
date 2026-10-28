@@ -30,6 +30,7 @@ FAILED=0
 NGINX_CHANGED=0
 SYSTEMD_CHANGED=0
 WEB_CHANGED=0
+CLI_CHANGED=0
 
 UPDATE_STARTED=0
 
@@ -263,6 +264,18 @@ done < <(
 )
 
 #
+# Validate MrNobody CLI.
+#
+if [[ -f "${DOWNLOAD_DIR}/scripts/mrnobody" ]]; then
+
+    printf 'BASH     %s\n' "scripts/mrnobody"
+
+    bash -n "${DOWNLOAD_DIR}/scripts/mrnobody" || \
+        die "Shell validation failed: scripts/mrnobody"
+
+fi
+
+#
 # Python
 #
 while IFS= read -r -d '' FILE; do
@@ -333,6 +346,18 @@ fi
 
 
 # ============================================================
+# DETECT CLI UPDATE
+# ============================================================
+
+if [[ -f "${DOWNLOAD_DIR}/scripts/mrnobody" ]]; then
+
+    log
+    log "MrNobody CLI update detected."
+
+    CLI_CHANGED=1
+fi
+
+# ============================================================
 # CREATE BACKUP
 # ============================================================
 
@@ -393,6 +418,21 @@ if (( SYSTEMD_CHANGED == 1 )); then
     fi
 fi
 
+
+#
+# Backup active MrNobody CLI.
+#
+if (( CLI_CHANGED == 1 )); then
+
+    if [[ -f /usr/local/bin/mrnobody ]]; then
+
+        mkdir -p "${BACKUP_DIR}/system/cli"
+
+        cp -a \
+            /usr/local/bin/mrnobody \
+            "${BACKUP_DIR}/system/cli/mrnobody"
+    fi
+fi
 
 # ============================================================
 # ROLLBACK FUNCTION
@@ -476,6 +516,31 @@ rollback() {
             /etc/systemd/system/nordic-incident-web.service
     fi
 
+    #
+    # Restore MrNobody CLI.
+    #
+    if (( CLI_CHANGED == 1 )); then
+
+        if [[ -f "${BACKUP_DIR}/system/cli/mrnobody" ]]; then
+
+            cp -a \
+                "${BACKUP_DIR}/system/cli/mrnobody" \
+                /usr/local/bin/mrnobody
+
+            chmod 0755 \
+                /usr/local/bin/mrnobody
+
+        else
+
+            #
+            # CLI did not exist before this update.
+            #
+            rm -f \
+                /usr/local/bin/mrnobody
+
+        fi
+    fi
+
     systemctl daemon-reload \
         >/dev/null 2>&1 || true
 
@@ -525,7 +590,7 @@ while IFS= read -r -d '' TEMP_FILE; do
     #
     case "$RELATIVE_PATH" in
 
-        scripts/*.sh|scenarios/*.sh)
+        scripts/*.sh|scripts/mrnobody|scenarios/*.sh)
 
             chmod 0755 "$TARGET_FILE" \
                 || rollback $?
@@ -541,6 +606,24 @@ done < <(
         -type f \
         -print0
 )
+
+
+# ============================================================
+# ACTIVATE MRNOBODY CLI UPDATE
+# ============================================================
+
+if (( CLI_CHANGED == 1 )); then
+
+    log
+    log "Installing MrNobody CLI..."
+
+    install \
+        -m 0755 \
+        "${INSTALL_DIR}/scripts/mrnobody" \
+        /usr/local/bin/mrnobody \
+        || rollback $?
+
+fi
 
 
 # ============================================================
@@ -560,6 +643,7 @@ if (( SYSTEMD_CHANGED == 1 )); then
 
     systemctl daemon-reload \
         || rollback $?
+
 fi
 
 
