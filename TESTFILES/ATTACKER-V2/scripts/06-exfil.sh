@@ -189,6 +189,14 @@ elif [[ "$RUN_MODE" == "standalone" ]]; then
 
         echo "[ERROR] Standalone mode requires --target"
         exit 1
+
+    fi
+
+    if [[ -z "$MANUAL_FILE" ]]; then
+
+        echo "[ERROR] Standalone mode requires --file"
+        exit 1
+
     fi
 
 else
