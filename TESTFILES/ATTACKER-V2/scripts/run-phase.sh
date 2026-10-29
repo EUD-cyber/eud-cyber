@@ -507,9 +507,14 @@ run_attack() {
     export MRNOBODY_SUBNET="$SUBNET"
 
     if [[ -n "$AUTO_DISCOVERY" ]]; then
-        export MRNOBODY_AUTO="$AUTO_DISCOVERY"
-    fi
 
+        export MRNOBODY_AUTO="1"
+
+    elif [[ -n "$SUBNET" ]]; then
+
+        export MRNOBODY_AUTO="0"
+
+    fi
     export MRNOBODY_ATTACK_ID="$id"
     export MRNOBODY_ATTACK_NAME="$name"
     export MRNOBODY_ATTACK_ALIAS="$alias"
