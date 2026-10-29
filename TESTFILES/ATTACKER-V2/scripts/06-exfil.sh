@@ -1250,6 +1250,7 @@ PY
                 printf '%s\n' "$WINDOWS_RESULT" |
                 awk '/^NORDIC_RECEIVED / {print $2}' |
                 tail -n 1
+                tr -d '\r'
             )"
 
 
