@@ -1156,9 +1156,20 @@ try {{
         -TimeoutSec 30
 
 
-    Write-Output (
-        $Response.Content.Trim()
-    )
+    if ($Response.Content -is [byte[]]) {
+
+    $ResponseText = [System.Text.Encoding]::UTF8.GetString(
+        $Response.Content
+        )
+
+    }
+    else {
+
+        $ResponseText = [string]$Response.Content
+
+    }
+
+    Write-Output $ResponseText.Trim()
 
 }}
 catch {{
