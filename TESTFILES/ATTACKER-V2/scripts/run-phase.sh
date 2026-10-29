@@ -48,6 +48,7 @@ FULL_CAMPAIGN="${SCENARIO_DIR}/full-incident-h3.sh"
 
 COMMAND="${1:-list}"
 
+SOURCE=""
 TARGET=""
 PORT=""
 PROTOCOL=""
@@ -428,7 +429,7 @@ run_attack() {
     #
     # Determine mode.
     #
-    if [[ -n "$TARGET" ]]; then
+    if [[ -n "$SOURCE" || -n "$TARGET" ]]; then
 
         MODE="standalone"
 
@@ -477,6 +478,7 @@ run_attack() {
     #
     export MRNOBODY_RUN_MODE="$MODE"
 
+    export MRNOBODY_SOURCE="$SOURCE"
     export MRNOBODY_TARGET="$TARGET"
     export MRNOBODY_PORT="$PORT"
     export MRNOBODY_PROTOCOL="$PROTOCOL"
@@ -540,7 +542,8 @@ Examples:
   run-phase.sh lateral
 
   run-phase.sh 04 \
-    --target 192.168.1.20 \
+    --source 192.168.1.20 \
+    --target 192.168.1.30 \
     --port 22 \
     --protocol ssh \
     --user ubuntu \
@@ -548,6 +551,7 @@ Examples:
 
 Options:
 
+  --source <host>
   --target <host>
   --port <port>
   --protocol <protocol>
@@ -556,10 +560,10 @@ Options:
   --dry-run
   --help
 
-Without --target:
+Without --source or --target:
   Campaign mode is used.
 
-With --target:
+With --source or --target:
   Standalone mode is used.
 
 EOF
@@ -624,6 +628,15 @@ case "$COMMAND" in
         while (( $# > 0 )); do
 
             case "$1" in
+
+                --source)
+
+                    [[ $# -ge 2 ]] || \
+                        die "--source requires a value"
+
+                    SOURCE="$2"
+                    shift 2
+                    ;;
 
                 --target)
 
