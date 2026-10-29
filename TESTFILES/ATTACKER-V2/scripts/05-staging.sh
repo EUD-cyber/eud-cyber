@@ -149,9 +149,11 @@ done
 # WINDOWS WINRM SUPPORT
 # ============================================================
 
+PYTHON_BIN="/opt/nordic-attack/venv/bin/python"
+
 PYWINRM_AVAILABLE=0
 
-if python3 -c "import winrm" >/dev/null 2>&1; then
+if "$PYTHON_BIN" -c "import winrm" >/dev/null 2>&1; then
     PYWINRM_AVAILABLE=1
 fi
 
@@ -829,7 +831,7 @@ REMOTE_EOF
 
         WINDOWS_RESULT="$(
             NORDIC_WINRM_PASSWORD="$ACCESS_PASSWORD" \
-            python3 - \
+           "$PYTHON_BIN" - \
                 "$HOST" \
                 "$WINRM_PORT" \
                 "$WINRM_SCHEME" \
