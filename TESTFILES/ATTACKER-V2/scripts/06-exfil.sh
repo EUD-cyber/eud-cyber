@@ -286,9 +286,14 @@ fi
 # Old Linux-only staged-data.json is also supported.
 # ============================================================
 
-mapfile -t STAGED_HOSTS < <(
 
-    python3 - "$STAGING_STATE" "$COMPROMISED_STATE" <<'PY'
+STAGED_HOSTS=()
+
+if [[ "$RUN_MODE" == "campaign" ]]; then
+
+    mapfile -t STAGED_HOSTS < <(
+
+        python3 - "$STAGING_STATE" "$COMPROMISED_STATE" <<'PY'
 import json
 import sys
 
@@ -326,14 +331,8 @@ for host in data.get("hosts", []):
         ""
     ).lower()
 
-
-    # --------------------------------------------------------
-    # Backwards compatibility
-    # --------------------------------------------------------
-
     if not platform:
         platform = "linux"
-
 
     if platform == "linux":
 
@@ -358,7 +357,6 @@ for host in data.get("hosts", []):
 
         access = "ssh"
 
-
     elif platform == "windows":
 
         port = host.get(
@@ -382,10 +380,8 @@ for host in data.get("hosts", []):
 
         access = "winrm"
 
-
     else:
         continue
-
 
     print(
         "{}|{}|{}|{}|{}|{}|{}|{}|{}".format(
@@ -403,7 +399,44 @@ for host in data.get("hosts", []):
 
 PY
 
-)
+    )
+
+elif [[ "$RUN_MODE" == "standalone" ]]; then
+
+    case "${MANUAL_PROTOCOL,,}" in
+
+        ssh|"")
+            PLATFORM="linux"
+            ACCESS="ssh"
+            ACCESS_PORT="${MANUAL_PORT:-22}"
+            ACCESS_USER="${MANUAL_USERNAME:-ubuntu}"
+            ;;
+
+        winrm|winrm-http)
+            PLATFORM="windows"
+            ACCESS="winrm"
+            ACCESS_PORT="${MANUAL_PORT:-5985}"
+            ACCESS_USER="${MANUAL_USERNAME:-Administrator}"
+            ;;
+
+        winrm-https)
+            PLATFORM="windows"
+            ACCESS="winrm"
+            ACCESS_PORT="${MANUAL_PORT:-5986}"
+            ACCESS_USER="${MANUAL_USERNAME:-Administrator}"
+            ;;
+
+        *)
+            echo "[ERROR] Unsupported standalone protocol: $MANUAL_PROTOCOL"
+            exit 1
+            ;;
+    esac
+
+    STAGED_HOSTS=(
+        "${MANUAL_TARGET}|${PLATFORM}|${ACCESS}|${ACCESS_PORT}|${ACCESS_USER}|${MANUAL_PASSWORD}|${MANUAL_FILE}|0|"
+    )
+
+fi
 
 
 # ============================================================
