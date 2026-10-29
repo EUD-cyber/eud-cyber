@@ -477,15 +477,27 @@ for RECORD in "${COMPROMISED[@]}"; do
 
     if [[ -z "$ACCESS_PASSWORD" ]]; then
 
-        if [[ "$PLATFORM" == "linux" ]]; then
-            ACCESS_PASSWORD="$SSH_PASSWORD"
+    if [[ "$RUN_MODE" == "standalone" ]]; then
 
-        elif [[ "$PLATFORM" == "windows" ]]; then
-            ACCESS_PASSWORD="$RDP_PASSWORD"
-        fi
+        FAILED_COUNT=$(( FAILED_COUNT + 1 ))
+
+        log "[WARNING] Password unavailable for standalone target $HOST"
+
+        ground_truth \
+            "STAGING_FAILED host=$HOST platform=$PLATFORM reason=missing_credentials"
+
+        continue
 
     fi
 
+    if [[ "$PLATFORM" == "linux" ]]; then
+        ACCESS_PASSWORD="$SSH_PASSWORD"
+
+    elif [[ "$PLATFORM" == "windows" ]]; then
+        ACCESS_PASSWORD="$RDP_PASSWORD"
+    fi
+
+fi
 
     echo
     echo "------------------------------------------------------------"
