@@ -19,6 +19,7 @@ BASE_DIR = Path("/opt/nordic-attack")
 CONFIG_FILE = BASE_DIR / "config" / "defaults.conf"
 STATE_DIR = BASE_DIR / "state"
 LOG_DIR = BASE_DIR / "logs"
+SCRIPT_DIR = BASE_DIR / "scripts"
 UPLOAD_DIR = BASE_DIR / "runtime" / "uploads"
 
 SCENARIO = BASE_DIR / "scenarios" / "full-incident-h3.sh"
@@ -98,6 +99,65 @@ def read_json(path, default):
     except Exception:
         return default
 
+def read_attack_metadata(path):
+    """
+    Read ATTACK_* and MITRE_* metadata from a phase script.
+    """
+
+    metadata_keys = {
+        "ATTACK_ID",
+        "ATTACK_NAME",
+        "ATTACK_ALIAS",
+        "ATTACK_STANDALONE",
+        "ATTACK_PARAMETERS",
+        "ATTACK_CAMPAIGN_STATE",
+        "MITRE_TACTIC",
+        "MITRE_TECHNIQUES",
+    }
+
+    result = {}
+
+    try:
+        with path.open(
+            "r",
+            encoding="utf-8",
+            errors="replace"
+        ) as handle:
+
+            for raw_line in handle:
+
+                line = raw_line.strip()
+
+                if not line.startswith("#"):
+                    continue
+
+                line = line.lstrip("#").strip()
+
+                if "=" not in line:
+                    continue
+
+                key, value = line.split("=", 1)
+
+                key = key.strip()
+
+                if key not in metadata_keys:
+                    continue
+
+                value = value.strip()
+
+                if (
+                    len(value) >= 2
+                    and value[0] == value[-1]
+                    and value[0] in ("'", '"')
+                ):
+                    value = value[1:-1]
+
+                result[key] = value
+
+    except Exception:
+        return {}
+
+    return result
 
 def tail_file(path, lines=300):
     if not path.exists():
@@ -321,6 +381,115 @@ def health():
 def api_config():
     return jsonify(default_configuration())
 
+# ============================================================
+# ROUTES - PHASES
+# ============================================================
+
+@app.route("/api/phases")
+def api_phases():
+
+    phases = []
+
+    if not SCRIPT_DIR.exists():
+        return jsonify(
+            {
+                "count": 0,
+                "phases": [],
+            }
+        )
+
+    for path in sorted(
+        SCRIPT_DIR.glob("[0-9][0-9]-*.sh")
+    ):
+
+        metadata = read_attack_metadata(path)
+
+        if not metadata:
+            continue
+
+        phase_id = metadata.get(
+            "ATTACK_ID",
+            path.name.split("-", 1)[0],
+        )
+
+        name = metadata.get(
+            "ATTACK_NAME",
+            path.stem,
+        )
+
+        alias = metadata.get(
+            "ATTACK_ALIAS",
+            path.stem.split("-", 1)[-1],
+        )
+
+        standalone_raw = metadata.get(
+            "ATTACK_STANDALONE",
+            "false",
+        ).strip().lower()
+
+        standalone = standalone_raw in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+
+        parameters = [
+            value.strip()
+            for value in metadata.get(
+                "ATTACK_PARAMETERS",
+                "",
+            ).split(",")
+            if value.strip()
+        ]
+
+        campaign_state = [
+            value.strip()
+            for value in metadata.get(
+                "ATTACK_CAMPAIGN_STATE",
+                "",
+            ).split(",")
+            if value.strip()
+        ]
+
+        techniques = [
+            value.strip()
+            for value in metadata.get(
+                "MITRE_TECHNIQUES",
+                "",
+            ).split(",")
+            if value.strip()
+        ]
+
+        phases.append(
+            {
+                "id": phase_id,
+                "name": name,
+                "alias": alias,
+                "script": path.name,
+                "standalone": standalone,
+                "parameters": parameters,
+                "campaign_state": campaign_state,
+                "mitre": {
+                    "tactic": metadata.get(
+                        "MITRE_TACTIC",
+                        "",
+                    ),
+                    "techniques": techniques,
+                },
+            }
+        )
+
+    phases.sort(
+        key=lambda item: int(item["id"])
+    )
+
+    return jsonify(
+        {
+            "count": len(phases),
+            "phases": phases,
+        }
+    )
 
 # ============================================================
 # ROUTES - STATUS
