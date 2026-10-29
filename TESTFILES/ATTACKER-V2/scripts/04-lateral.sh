@@ -420,12 +420,6 @@ elif [[ "$RUN_MODE" == "standalone" ]]; then
             ACCESS_PORT="${MANUAL_PORT:-5986}"
             ;;
 
-        rdp)
-            PLATFORM="windows"
-            ACCESS="rdp"
-            ACCESS_PORT="${MANUAL_PORT:-3389}"
-            ;;
-
         *)
             echo "[ERROR] Unsupported standalone protocol: $MANUAL_PROTOCOL"
             exit 1
