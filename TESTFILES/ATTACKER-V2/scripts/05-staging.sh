@@ -23,6 +23,19 @@ set -u
 # No real user/business data is collected.
 # ============================================================
 
+# ============================================================
+# ATTACK METADATA
+# ============================================================
+
+ATTACK_ID="05"
+ATTACK_NAME="Data Staging"
+ATTACK_ALIAS="staging"
+ATTACK_STANDALONE="true"
+ATTACK_PARAMETERS="target,port,protocol,username,password"
+ATTACK_CAMPAIGN_STATE="compromised-hosts"
+
+ATTACK_MITRE_TACTIC="Collection"
+ATTACK_MITRE_TECHNIQUES="T1074"
 
 # ============================================================
 # PATHS / CONFIG
@@ -53,6 +66,18 @@ INCIDENT_ID="${NORDIC_INCIDENT_ID:-H3-$(date +%Y%m%d-%H%M%S)}"
 SSH_PASSWORD="${NORDIC_SSH_PASSWORD:-$NORDIC_DEFAULT_SSH_PASSWORD}"
 
 RDP_PASSWORD="${NORDIC_RDP_PASSWORD:-$NORDIC_DEFAULT_RDP_PASSWORD}"
+
+# ============================================================
+# EXECUTION MODE
+# ============================================================
+
+RUN_MODE="${MRNOBODY_RUN_MODE:-campaign}"
+
+MANUAL_TARGET="${MRNOBODY_TARGET:-}"
+MANUAL_PORT="${MRNOBODY_PORT:-}"
+MANUAL_PROTOCOL="${MRNOBODY_PROTOCOL:-}"
+MANUAL_USERNAME="${MRNOBODY_USERNAME:-}"
+MANUAL_PASSWORD="${MRNOBODY_PASSWORD:-}"
 
 WINRM_HTTP_PORT="${NORDIC_WINRM_HTTP_PORT:-${NORDIC_DEFAULT_WINRM_HTTP_PORT:-5985}}"
 WINRM_HTTPS_PORT="${NORDIC_WINRM_HTTPS_PORT:-${NORDIC_DEFAULT_WINRM_HTTPS_PORT:-5986}}"
@@ -136,14 +161,31 @@ fi
 # VALIDATION
 # ============================================================
 
-if [[ ! -f "$COMPROMISED_STATE" ]]; then
+if [[ "$RUN_MODE" == "campaign" ]]; then
 
-    echo "[ERROR] Missing compromised host inventory:"
-    echo "$COMPROMISED_STATE"
-    echo
-    echo "Run Phase 03 first."
+    if [[ ! -f "$COMPROMISED_STATE" ]]; then
 
+        echo "[ERROR] Missing compromised host inventory:"
+        echo "$COMPROMISED_STATE"
+        echo
+        echo "Run Phase 03 first."
+
+        exit 1
+    fi
+
+elif [[ "$RUN_MODE" == "standalone" ]]; then
+
+    if [[ -z "$MANUAL_TARGET" ]]; then
+
+        echo "[ERROR] Standalone mode requires --target"
+        exit 1
+    fi
+
+else
+
+    echo "[ERROR] Unknown run mode: $RUN_MODE"
     exit 1
+
 fi
 
 
