@@ -44,6 +44,9 @@ const inventoryTable =
 const phaseGrid =
     document.getElementById("phaseGrid");
 
+const phaseDetail =
+    document.getElementById("phaseDetail");
+
 // ==========================================================
 // POLLING
 // ==========================================================
@@ -501,8 +504,32 @@ function renderPhases(phases) {
         card.appendChild(info);
         card.appendChild(status);
 
+        card.addEventListener(
+            "click",
+            () => {
+
+                document
+                    .querySelectorAll(
+                        ".phase-card"
+                    )
+                    .forEach(item => {
+                        item.classList.remove(
+                            "phase-selected"
+                        );
+                    });
+
+                card.classList.add(
+                    "phase-selected"
+                );
+
+                renderPhaseDetail(
+                    phase
+                );
+            }
+        );
+
         phaseGrid.appendChild(card);
-    });
+            });
 }
 
 
@@ -541,6 +568,211 @@ async function loadPhases() {
             </div>
         `;
     }
+}
+
+function phaseFieldLabel(parameter) {
+
+    const labels = {
+        auto: "Automatic Discovery",
+        subnet: "Subnet",
+        source: "Source Host",
+        target: "Target Host",
+        port: "Port",
+        protocol: "Protocol",
+        username: "Username",
+        password: "Password",
+        file: "File",
+    };
+
+    return labels[parameter] || parameter;
+}
+
+
+function phaseFieldPlaceholder(parameter) {
+
+    const placeholders = {
+        subnet: "192.168.1.0/24",
+        source: "192.168.1.20",
+        target: "192.168.1.20",
+        port: "22",
+        protocol: "ssh",
+        username: "ubuntu",
+        password: "Password",
+    };
+
+    return placeholders[parameter] || "";
+}
+
+
+function renderPhaseDetail(phase) {
+
+    if (!phaseDetail) {
+        return;
+    }
+
+    phaseDetail.innerHTML = "";
+
+    phaseDetail.classList.remove(
+        "hidden"
+    );
+
+
+    const header =
+        document.createElement("div");
+
+    header.className =
+        "panel-header";
+
+
+    const title =
+        document.createElement("h2");
+
+    title.textContent =
+        `P${phase.id} · ${phase.name}`;
+
+
+    const mitre =
+        document.createElement("span");
+
+    mitre.className =
+        "panel-tag";
+
+    const techniques =
+        Array.isArray(
+            phase.mitre?.techniques
+        )
+            ? phase.mitre.techniques.join(", ")
+            : "";
+
+    mitre.textContent =
+        techniques
+            ? `${phase.mitre?.tactic || "MITRE"} · ${techniques}`
+            : phase.mitre?.tactic || "No MITRE mapping";
+
+
+    header.appendChild(title);
+    header.appendChild(mitre);
+
+    phaseDetail.appendChild(header);
+
+
+    const form =
+        document.createElement("div");
+
+    form.className =
+        "form-grid";
+
+
+    const parameters =
+        Array.isArray(
+            phase.parameters
+        )
+            ? phase.parameters
+            : [];
+
+
+    parameters.forEach(parameter => {
+
+        const group =
+            document.createElement("div");
+
+        group.className =
+            "form-group";
+
+
+        const label =
+            document.createElement("label");
+
+        label.textContent =
+            phaseFieldLabel(parameter);
+
+
+        let input;
+
+
+        if (parameter === "auto") {
+
+            input =
+                document.createElement("input");
+
+            input.type =
+                "checkbox";
+
+        } else {
+
+            input =
+                document.createElement("input");
+
+            input.type =
+                parameter === "password"
+                    ? "password"
+                    : parameter === "file"
+                        ? "file"
+                        : parameter === "port"
+                            ? "number"
+                            : "text";
+
+            input.placeholder =
+                phaseFieldPlaceholder(
+                    parameter
+                );
+        }
+
+
+        input.dataset.parameter =
+            parameter;
+
+        input.id =
+            `phase-${phase.id}-${parameter}`;
+
+
+        group.appendChild(label);
+        group.appendChild(input);
+
+        form.appendChild(group);
+    });
+
+
+    phaseDetail.appendChild(form);
+
+
+    const controls =
+        document.createElement("div");
+
+    controls.className =
+        "campaign-controls";
+
+
+    const runButton =
+        document.createElement("button");
+
+    runButton.type =
+        "button";
+
+    runButton.className =
+        "button button-start";
+
+    runButton.textContent =
+        `RUN P${phase.id}`;
+
+
+    const dryRunButton =
+        document.createElement("button");
+
+    dryRunButton.type =
+        "button";
+
+    dryRunButton.className =
+        "button button-small";
+
+    dryRunButton.textContent =
+        "DRY RUN";
+
+
+    controls.appendChild(runButton);
+    controls.appendChild(dryRunButton);
+
+    phaseDetail.appendChild(controls);
 }
 
 // ==========================================================
