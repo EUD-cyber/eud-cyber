@@ -26,6 +26,19 @@ set -u
 #
 # ============================================================
 
+# ============================================================
+# MRNOBODY ATTACK METADATA
+# ============================================================
+
+# ATTACK_ID="02"
+# ATTACK_NAME="Web Discovery"
+# ATTACK_ALIAS="web"
+# ATTACK_STANDALONE="true"
+# ATTACK_PARAMETERS="target,port"
+# ATTACK_CAMPAIGN_STATE="discovered-hosts"
+
+# MITRE_TACTIC="Discovery"
+# MITRE_TECHNIQUES="T1046"
 
 # ============================================================
 # PATHS / CONFIG
@@ -61,6 +74,25 @@ WEB_STATE="$NORDIC_WEB_STATE"
 
 WEB_PORTS="${NORDIC_WEB_PORTS:-$NORDIC_DEFAULT_WEB_PORTS}"
 
+# ============================================================
+# EXECUTION MODE
+# ============================================================
+
+RUN_MODE="${MRNOBODY_RUN_MODE:-campaign}"
+
+MANUAL_TARGET="${MRNOBODY_TARGET:-}"
+MANUAL_PORT="${MRNOBODY_PORT:-}"
+
+# ============================================================
+# STANDALONE PORT OVERRIDE
+# ============================================================
+
+if [[ "$RUN_MODE" == "standalone" ]] &&
+   [[ -n "$MANUAL_PORT" ]]; then
+
+    WEB_PORTS="$MANUAL_PORT"
+
+fi
 
 # ============================================================
 # FUNCTIONS
@@ -119,14 +151,31 @@ done
 # VALIDATE INPUT
 # ============================================================
 
-if [[ ! -f "$DISCOVERED_STATE" ]]; then
+if [[ "$RUN_MODE" == "campaign" ]]; then
 
-    echo "[ERROR] Phase 01 inventory not found:"
-    echo "$DISCOVERED_STATE"
-    echo
-    echo "Run Phase 01 first."
+    if [[ ! -f "$DISCOVERED_STATE" ]]; then
 
+        echo "[ERROR] Phase 01 inventory not found:"
+        echo "$DISCOVERED_STATE"
+        echo
+        echo "Run Phase 01 first."
+
+        exit 1
+    fi
+
+elif [[ "$RUN_MODE" == "standalone" ]]; then
+
+    if [[ -z "$MANUAL_TARGET" ]]; then
+
+        echo "[ERROR] Standalone mode requires --target"
+        exit 1
+    fi
+
+else
+
+    echo "[ERROR] Unknown run mode: $RUN_MODE"
     exit 1
+
 fi
 
 
@@ -209,11 +258,15 @@ echo
 
 
 # ============================================================
-# LOAD DISCOVERED HOSTS
+# LOAD HOSTS
 # ============================================================
 
-mapfile -t HOSTS < <(
-    python3 - "$DISCOVERED_STATE" <<'PY'
+HOSTS=()
+
+if [[ "$RUN_MODE" == "campaign" ]]; then
+
+    mapfile -t HOSTS < <(
+        python3 - "$DISCOVERED_STATE" <<'PY'
 import json
 import sys
 
@@ -226,7 +279,15 @@ for host in data.get("hosts", []):
     if ip:
         print(ip)
 PY
-)
+    )
+
+elif [[ "$RUN_MODE" == "standalone" ]]; then
+
+    HOSTS=(
+        "$MANUAL_TARGET"
+    )
+
+fi
 
 
 if [[ ${#HOSTS[@]} -eq 0 ]]; then
@@ -258,7 +319,15 @@ PY
 fi
 
 
-log "[*] Hosts supplied by Phase 01: ${#HOSTS[@]}"
+if [[ "$RUN_MODE" == "campaign" ]]; then
+
+    log "[*] Hosts supplied by Phase 01: ${#HOSTS[@]}"
+
+else
+
+    log "[*] Standalone target: ${HOSTS[0]}"
+
+fi
 
 echo
 
@@ -562,16 +631,16 @@ rm -f "$TMP_RESULTS"
 # Add detected web services to the central inventory.
 # ============================================================
 
-python3 - \
-    "$DISCOVERED_STATE" \
-    "$WEB_STATE" <<'PY'
+if [[ -f "$DISCOVERED_STATE" ]]; then
 
+    python3 - \
+        "$DISCOVERED_STATE" \
+        "$WEB_STATE" <<'PY'
 import json
 import sys
 
 inventory_file = sys.argv[1]
 web_file = sys.argv[2]
-
 
 with open(inventory_file, "r", encoding="utf-8") as f:
     inventory = json.load(f)
@@ -579,19 +648,15 @@ with open(inventory_file, "r", encoding="utf-8") as f:
 with open(web_file, "r", encoding="utf-8") as f:
     web = json.load(f)
 
-
 targets_by_ip = {}
 
 for target in web.get("targets", []):
-
     targets_by_ip.setdefault(
         target["ip"],
         []
     ).append(target)
 
-
 for host in inventory.get("hosts", []):
-
     ip = host.get("ip")
 
     targets = targets_by_ip.get(ip, [])
@@ -605,12 +670,16 @@ for host in inventory.get("hosts", []):
 
     services["web"] = targets
 
-
 with open(inventory_file, "w", encoding="utf-8") as f:
     json.dump(inventory, f, indent=2)
 
 PY
 
+else
+
+    log "[INFO] No discovered-hosts inventory to update."
+
+fi
 
 # ============================================================
 # SUMMARY
