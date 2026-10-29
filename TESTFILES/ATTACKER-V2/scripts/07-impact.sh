@@ -869,246 +869,61 @@ safe_incident = (
 
 
 powershell = rf'''
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference="Stop"
+$id='{safe_incident}'
+$root="C:\NordicIncident\$id\impact"
+$data="$root\company-data"
 
-$IncidentId = '{safe_incident}'
+$dirs=@("Finance","HR","Production","Webshop","Management")
 
-$ImpactDir = Join-Path `
-    "C:\NordicIncident" `
-    $IncidentId
-
-$ImpactDir = Join-Path `
-    $ImpactDir `
-    "impact"
-
-$DataDir = Join-Path `
-    $ImpactDir `
-    "company-data"
-
-
-# ============================================================
-# CREATE ISOLATED DIRECTORY TREE
-# ============================================================
-
-$Directories = @(
-    "Finance",
-    "HR",
-    "Production",
-    "Webshop",
-    "Management"
-)
-
-
-foreach ($Directory in $Directories) {{
-
-    New-Item `
-        -ItemType Directory `
-        -Path (
-            Join-Path `
-                $DataDir `
-                $Directory
-        ) `
-        -Force `
-        | Out-Null
+foreach($d in $dirs){{
+    New-Item -ItemType Directory -Path "$data\$d" -Force | Out-Null
 }}
 
+"Invoice,Customer,Amount`nINV-1001,Customer01,12500`nINV-1002,Customer02,8700" |
+    Set-Content "$data\Finance\invoices.csv"
 
-# ============================================================
-# SYNTHETIC COMPANY FILES
-# ============================================================
+"EmployeeID,Department,Status`nEMP-1001,Production,Active`nEMP-1002,IT,Active" |
+    Set-Content "$data\HR\employees.csv"
 
-@"
-Invoice,Customer,Amount
-INV-2026-1001,Nordic Customer 01,12500
-INV-2026-1002,Nordic Customer 02,8700
-INV-2026-1003,Nordic Customer 03,19300
-"@ |
-Set-Content `
-    -LiteralPath (
-        Join-Path `
-            $DataDir `
-            "Finance\invoices.csv"
-    ) `
-    -Encoding UTF8
+"Nordic Manufacturing`nProduction Schedule`nLine 1: Running`nLine 2: Running" |
+    Set-Content "$data\Production\production-plan.txt"
 
+"OrderID,Status`nORD-5001,Processing`nORD-5002,Ready" |
+    Set-Content "$data\Webshop\orders.csv"
 
-@"
-EmployeeID,Department,Status
-EMP-1001,Production,Active
-EMP-1002,IT,Active
-EMP-1003,Sales,Active
-"@ |
-Set-Content `
-    -LiteralPath (
-        Join-Path `
-            $DataDir `
-            "HR\employees.csv"
-    ) `
-    -Encoding UTF8
-
-
-@"
-Nordic Manufacturing
-Production Schedule
-
-Line 1: Running
-Line 2: Running
-Line 3: Maintenance scheduled
-"@ |
-Set-Content `
-    -LiteralPath (
-        Join-Path `
-            $DataDir `
-            "Production\production-plan.txt"
-    ) `
-    -Encoding UTF8
-
-
-@"
-OrderID,Status
-ORD-5001,Processing
-ORD-5002,Ready
-ORD-5003,Processing
-"@ |
-Set-Content `
-    -LiteralPath (
-        Join-Path `
-            $DataDir `
-            "Webshop\orders.csv"
-    ) `
-    -Encoding UTF8
-
-
-@"
-NORDIC MANUFACTURING A/S
-
-CONFIDENTIAL
-
-Synthetic H3 CyberLab training document.
-"@ |
-Set-Content `
-    -LiteralPath (
-        Join-Path `
-            $DataDir `
-            "Management\business-plan.txt"
-    ) `
-    -Encoding UTF8
-
+"NORDIC MANUFACTURING A/S`nCONFIDENTIAL`nSynthetic H3 CyberLab training document." |
+    Set-Content "$data\Management\business-plan.txt"
 
 1..10 | ForEach-Object {{
-
-    $Document = Join-Path `
-        $DataDir `
-        (
-            "Management\document-" +
-            $_ +
-            ".txt"
-        )
-
-
-    (
-        "Nordic Manufacturing synthetic training document " +
-        $_
-    ) |
-    Set-Content `
-        -LiteralPath $Document `
-        -Encoding UTF8
+    "Nordic Manufacturing synthetic training document $_" |
+        Set-Content "$data\Management\document-$_.txt"
 }}
 
+$files=@(Get-ChildItem $data -File -Recurse)
+$before=$files.Count
 
-# ============================================================
-# COUNT BEFORE IMPACT
-# ============================================================
-
-$Files = @(
-    Get-ChildItem `
-        -LiteralPath $DataDir `
-        -File `
-        -Recurse
-)
-
-
-$Before = $Files.Count
-
-
-# ============================================================
-# CONTROLLED IMPACT
-#
-# Rename ONLY the files we just enumerated underneath DataDir.
-#
-# No encryption is performed.
-# ============================================================
-
-foreach ($File in $Files) {{
-
-    Rename-Item `
-        -LiteralPath $File.FullName `
-        -NewName (
-            $File.Name +
-            ".locked"
-        )
+foreach($f in $files){{
+    Rename-Item $f.FullName ($f.Name+".locked")
 }}
-
-
-# ============================================================
-# RECOVERY NOTE
-# ============================================================
-
-$RecoveryNote = Join-Path `
-    $ImpactDir `
-    "README_RECOVER_FILES.txt"
-
 
 @"
-============================================================
 YOUR FILES ARE UNAVAILABLE
-============================================================
 
 Nordic Manufacturing A/S
 H3 CyberLab Incident Simulation
 
-Incident:
-$IncidentId
+Incident: $id
 
-Multiple company files are currently unavailable.
-
-This is a CONTROLLED TRAINING SIMULATION.
-
+CONTROLLED TRAINING SIMULATION
 No real encryption has been performed.
-No real user data has been modified.
+"@ | Set-Content "$root\README_RECOVER_FILES.txt"
 
-Contact the Incident Response Team.
-
-============================================================
-"@ |
-Set-Content `
-    -LiteralPath $RecoveryNote `
-    -Encoding UTF8
-
-
-# ============================================================
-# RESULT
-# ============================================================
-
-$Locked = @(
-    Get-ChildItem `
-        -LiteralPath $DataDir `
-        -File `
-        -Recurse `
-        -Filter "*.locked"
+$locked=@(
+    Get-ChildItem $data -File -Recurse -Filter "*.locked"
 ).Count
 
-
-Write-Output (
-    "NORDIC_IMPACT_OK|" +
-    $ImpactDir +
-    "|" +
-    $Before +
-    "|" +
-    $Locked +
-    "|" +
-    $env:COMPUTERNAME
-)
+Write-Output "NORDIC_IMPACT_OK|$root|$before|$locked|$env:COMPUTERNAME"
 '''
 
 
