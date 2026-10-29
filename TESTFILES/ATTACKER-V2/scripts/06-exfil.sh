@@ -914,11 +914,11 @@ REMOTE
 
 
             RECEIVED_SIZE="$(
-                printf '%s\n' "$REMOTE_RESULT" |
+                printf '%s\n' "$WINDOWS_RESULT" |
                 awk '/^NORDIC_RECEIVED / {print $2}' |
-                tail -n 1
+                tail -n 1 |
+                tr -d '\r'
             )"
-
 
             SUCCESS_COUNT=$(( SUCCESS_COUNT + 1 ))
             LINUX_SUCCESS=$(( LINUX_SUCCESS + 1 ))
@@ -1340,7 +1340,7 @@ with open(
 
     for line in f:
 
-        line = line.rstrip("\n")
+        line = line.rstrip("\r\n")
 
         if not line:
             continue
