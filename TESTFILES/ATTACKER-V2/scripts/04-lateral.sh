@@ -214,31 +214,55 @@ fi
 # VALIDATION
 # ============================================================
 
-if [[ ! -f "$DISCOVERED_STATE" ]]; then
+if [[ "$RUN_MODE" == "campaign" ]]; then
 
-    echo "[ERROR] Missing discovered host inventory."
-    echo "Run Phase 01 first."
+    if [[ ! -f "$DISCOVERED_STATE" ]]; then
+        echo "[ERROR] Missing discovered host inventory."
+        echo "Run Phase 01 first."
+        exit 1
+    fi
 
+    if [[ ! -f "$COMPROMISED_STATE" ]]; then
+        echo "[ERROR] Missing compromised host inventory."
+        echo "Run Phase 03 first."
+        exit 1
+    fi
+
+elif [[ "$RUN_MODE" == "standalone" ]]; then
+
+    if [[ -z "$MANUAL_SOURCE" ]]; then
+        echo "[ERROR] Standalone mode requires --source"
+        exit 1
+    fi
+
+    if [[ -z "$MANUAL_TARGET" ]]; then
+        echo "[ERROR] Standalone mode requires --target"
+        exit 1
+    fi
+
+else
+
+    echo "[ERROR] Unknown execution mode: $RUN_MODE"
     exit 1
+
 fi
 
-
-if [[ ! -f "$COMPROMISED_STATE" ]]; then
-
-    echo "[ERROR] Missing compromised host inventory."
-    echo "Run Phase 03 first."
-
-    exit 1
-fi
-
-
 # ============================================================
-# LOAD TARGETS
+# LOAD TARGETS / SOURCES
 # ============================================================
 
-mapfile -t TARGETS < <(
+TARGETS=()
+COMPROMISED=()
 
-    python3 - "$DISCOVERED_STATE" <<'PY'
+if [[ "$RUN_MODE" == "campaign" ]]; then
+
+    # --------------------------------------------------------
+    # Campaign targets from Phase 01
+    # --------------------------------------------------------
+
+    mapfile -t TARGETS < <(
+
+        python3 - "$DISCOVERED_STATE" <<'PY'
 import json
 import sys
 
@@ -252,23 +276,20 @@ for host in data.get("hosts", []):
         print(ip)
 PY
 
-)
+    )
 
 
-# ============================================================
-# LOAD COMPROMISED HOSTS
-#
-# Format:
-#
-#   IP|PLATFORM|ACCESS|PORT|USER|PASSWORD
-#
-# Backwards compatible:
-#   Old SSH-only compromised state is interpreted as Linux.
-# ============================================================
+    # --------------------------------------------------------
+    # Campaign compromised sources from Phase 03
+    #
+    # Format:
+    #
+    #   IP|PLATFORM|ACCESS|PORT|USER|PASSWORD
+    # --------------------------------------------------------
 
-mapfile -t COMPROMISED < <(
+    mapfile -t COMPROMISED < <(
 
-    python3 - "$COMPROMISED_STATE" <<'PY'
+        python3 - "$COMPROMISED_STATE" <<'PY'
 import json
 import sys
 
@@ -285,22 +306,11 @@ for host in data.get("hosts", []):
     platform = host.get("platform", "").lower()
     access = host.get("access", "").lower()
 
-
-    # --------------------------------------------------------
-    # Old V2 state compatibility
-    # --------------------------------------------------------
-
     if not platform:
-
         if access == "rdp":
             platform = "windows"
         else:
             platform = "linux"
-
-
-    # --------------------------------------------------------
-    # Linux
-    # --------------------------------------------------------
 
     if platform == "linux":
 
@@ -314,19 +324,16 @@ for host in data.get("hosts", []):
             or host.get("ssh_user")
             or "ubuntu"
         )
+
         password = (
             host.get("ssh_password")
             or host.get("password")
             or ""
         )
+
         print(
-           f"{ip}|linux|ssh|{port}|{user}|{password}"
+            f"{ip}|linux|ssh|{port}|{user}|{password}"
         )
-
-
-    # --------------------------------------------------------
-    # Windows
-    # --------------------------------------------------------
 
     elif platform == "windows":
 
@@ -340,17 +347,16 @@ for host in data.get("hosts", []):
             or host.get("rdp_user")
             or "Administrator"
         )
+
         password = (
             host.get("rdp_password")
             or host.get("password")
             or ""
         )
+
         print(
-          f"{ip}|windows|rdp|{port}|{user}|{password}"
+            f"{ip}|windows|rdp|{port}|{user}|{password}"
         )
-    # --------------------------------------------------------
-    # FreeBSD / OPNsense
-    # --------------------------------------------------------
 
     elif platform == "freebsd":
 
@@ -376,8 +382,86 @@ for host in data.get("hosts", []):
         )
 PY
 
-)
+    )
 
+
+elif [[ "$RUN_MODE" == "standalone" ]]; then
+
+    # --------------------------------------------------------
+    # Standalone target
+    # --------------------------------------------------------
+
+    TARGETS=(
+        "$MANUAL_TARGET"
+    )
+
+
+    # --------------------------------------------------------
+    # Determine source platform/access from protocol
+    # --------------------------------------------------------
+
+    case "${MANUAL_PROTOCOL,,}" in
+
+        ssh|"")
+            PLATFORM="linux"
+            ACCESS="ssh"
+            ACCESS_PORT="${MANUAL_PORT:-22}"
+            ;;
+
+        winrm|winrm-http)
+            PLATFORM="windows"
+            ACCESS="winrm"
+            ACCESS_PORT="${MANUAL_PORT:-5985}"
+            ;;
+
+        winrm-https)
+            PLATFORM="windows"
+            ACCESS="winrm"
+            ACCESS_PORT="${MANUAL_PORT:-5986}"
+            ;;
+
+        rdp)
+            PLATFORM="windows"
+            ACCESS="rdp"
+            ACCESS_PORT="${MANUAL_PORT:-3389}"
+            ;;
+
+        *)
+            echo "[ERROR] Unsupported standalone protocol: $MANUAL_PROTOCOL"
+            exit 1
+            ;;
+
+    esac
+
+
+    # --------------------------------------------------------
+    # Default username when not supplied
+    # --------------------------------------------------------
+
+    if [[ -n "$MANUAL_USERNAME" ]]; then
+
+        ACCESS_USER="$MANUAL_USERNAME"
+
+    elif [[ "$PLATFORM" == "windows" ]]; then
+
+        ACCESS_USER="Administrator"
+
+    else
+
+        ACCESS_USER="ubuntu"
+
+    fi
+
+
+    # --------------------------------------------------------
+    # Build source record
+    # --------------------------------------------------------
+
+    COMPROMISED=(
+        "${MANUAL_SOURCE}|${PLATFORM}|${ACCESS}|${ACCESS_PORT}|${ACCESS_USER}|${MANUAL_PASSWORD}"
+    )
+
+fi
 
 # ============================================================
 # BANNER
@@ -640,35 +724,64 @@ REMOTE_EOF
         WINRM_TRANSPORT=""
         WINRM_SCHEME=""
 
+        if [[ "$RUN_MODE" == "standalone" && "$ACCESS" == "winrm" ]]; then
 
-        if tcp_open "$SOURCE" "$WINRM_HTTP_PORT"; then
-
-            WINRM_PORT="$WINRM_HTTP_PORT"
+            WINRM_PORT="$ACCESS_PORT"
             WINRM_TRANSPORT="ntlm"
-            WINRM_SCHEME="http"
 
-            log "[+] WinRM HTTP available: $SOURCE:$WINRM_PORT"
+            if [[ "${MANUAL_PROTOCOL,,}" == "winrm-https" ]]; then
+                WINRM_SCHEME="https"
+            else
+                WINRM_SCHEME="http"
+            fi
 
+            if tcp_open "$SOURCE" "$WINRM_PORT"; then
 
-        elif tcp_open "$SOURCE" "$WINRM_HTTPS_PORT"; then
+                log "[+] WinRM available: $SOURCE:$WINRM_PORT"
 
-            WINRM_PORT="$WINRM_HTTPS_PORT"
-            WINRM_TRANSPORT="ntlm"
-            WINRM_SCHEME="https"
+            else
 
-            log "[+] WinRM HTTPS available: $SOURCE:$WINRM_PORT"
+                SKIPPED_SOURCES=$(( SKIPPED_SOURCES + 1 ))
 
-        else
+                log "[SKIPPED] Windows host $SOURCE has no reachable WinRM service on port $WINRM_PORT."
 
-            SKIPPED_SOURCES=$(( SKIPPED_SOURCES + 1 ))
+                ground_truth \
+                    "INTERNAL_DISCOVERY_SKIPPED source=$SOURCE platform=windows reason=winrm_unavailable"
 
-            log "[SKIPPED] Windows host $SOURCE has no reachable WinRM service."
+                continue
+            fi
 
-            ground_truth \
-                "INTERNAL_DISCOVERY_SKIPPED source=$SOURCE platform=windows reason=winrm_unavailable"
+            else
 
-            continue
-        fi
+                if tcp_open "$SOURCE" "$WINRM_HTTP_PORT"; then
+
+                    WINRM_PORT="$WINRM_HTTP_PORT"
+                    WINRM_TRANSPORT="ntlm"
+                    WINRM_SCHEME="http"
+
+                    log "[+] WinRM HTTP available: $SOURCE:$WINRM_PORT"
+
+                elif tcp_open "$SOURCE" "$WINRM_HTTPS_PORT"; then
+
+                    WINRM_PORT="$WINRM_HTTPS_PORT"
+                    WINRM_TRANSPORT="ntlm"
+                    WINRM_SCHEME="https"
+
+                    log "[+] WinRM HTTPS available: $SOURCE:$WINRM_PORT"
+
+                else
+
+                    SKIPPED_SOURCES=$(( SKIPPED_SOURCES + 1 ))
+
+                    log "[SKIPPED] Windows host $SOURCE has no reachable WinRM service."
+
+                    ground_truth \
+                        "INTERNAL_DISCOVERY_SKIPPED source=$SOURCE platform=windows reason=winrm_unavailable"
+
+                    continue
+                fi
+
+            fi
 
 
         if [[ $PYWINRM_AVAILABLE -ne 1 ]]; then
