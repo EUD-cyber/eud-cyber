@@ -29,7 +29,6 @@ CAMPAIGN_STATE = STATE_DIR / "campaign.json"
 INVENTORY_STATE = STATE_DIR / "discovered-hosts.json"
 
 CAMPAIGN_LOG = LOG_DIR / "campaign.log"
-PHASE_LOG = LOG_DIR / "phase.log"
 
 # ============================================================
 # FLASK
@@ -752,7 +751,7 @@ def api_run_phase(phase_id):
 
     try:
 
-        log_handle = PHASE_LOG.open(
+        log_handle = CAMPAIGN_LOG.open(
             "a",
             encoding="utf-8",
         )
