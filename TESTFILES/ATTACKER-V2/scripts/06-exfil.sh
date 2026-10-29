@@ -1324,6 +1324,11 @@ with open(
             continue
 
 
+        parts = line.split("|", 6)
+
+        while len(parts) < 7:
+            parts.append("")
+
         (
             source,
             platform,
@@ -1332,7 +1337,7 @@ with open(
             port,
             size,
             sha256,
-        ) = line.split("|", 6)
+        ) = parts
 
 
         transfers.append(
