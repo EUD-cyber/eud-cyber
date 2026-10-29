@@ -47,6 +47,9 @@ const phaseGrid =
 const phaseDetail =
     document.getElementById("phaseDetail");
 
+const updateButton =
+    document.getElementById("updateButton");
+
 // ==========================================================
 // POLLING
 // ==========================================================
@@ -2250,6 +2253,67 @@ function startPolling() {
     }
 }
 
+async function runUpdate() {
+
+    const confirmed =
+        window.confirm(
+            "Run MrNobody update?"
+        );
+
+    if (!confirmed) {
+        return;
+    }
+
+    if (updateButton) {
+        updateButton.disabled = true;
+    }
+
+    showMessage(
+        "Starting MrNobody update...",
+        "info"
+    );
+
+    try {
+
+        const result =
+            await apiPost(
+                "/api/update"
+            );
+
+        showMessage(
+            result.message ||
+            "MrNobody update started.",
+            "success"
+        );
+
+        await refreshLog();
+
+        setTimeout(
+            async () => {
+                await loadPhases();
+                await refreshLog();
+
+                if (updateButton) {
+                    updateButton.disabled = false;
+                }
+            },
+            3000
+        );
+
+    }
+
+    catch (error) {
+
+        showMessage(
+            error.message,
+            "error"
+        );
+
+        if (updateButton) {
+            updateButton.disabled = false;
+        }
+    }
+}
 
 // ==========================================================
 // EVENT HANDLERS
@@ -2289,6 +2353,13 @@ function updateWordlistFields() {
     }
 }
 
+if (updateButton) {
+
+    updateButton.addEventListener(
+        "click",
+        runUpdate
+    );
+}
 
 if (wordlistEnabledField) {
 
