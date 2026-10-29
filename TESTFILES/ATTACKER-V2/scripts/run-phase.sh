@@ -432,17 +432,16 @@ run_attack() {
     #
     # Determine mode.
     #
-    if [[ -n "$SOURCE" || -n "$TARGET" ]]; then
+    if  [[ -n "$SOURCE" ]] ||
+        [[ -n "$TARGET" ]] ||
+        [[ -n "$SUBNET" ]] ||
+        [[ -n "$AUTO_DISCOVERY" ]]; then
 
-        MODE="standalone"
-
-        if [[ "$standalone" == "false" ]]; then
-            die "Attack '$name' does not support standalone execution"
-        fi
+        RUN_MODE="standalone"
 
     else
 
-        MODE="campaign"
+        RUN_MODE="campaign"
 
     fi
 
