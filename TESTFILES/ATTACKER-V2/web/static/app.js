@@ -773,6 +773,185 @@ function renderPhaseDetail(phase) {
     controls.appendChild(dryRunButton);
 
     phaseDetail.appendChild(controls);
+
+
+    runButton.addEventListener(
+        "click",
+        () => {
+            runStandalonePhase(
+                phase,
+                false
+            );
+        }
+    );
+
+
+    dryRunButton.addEventListener(
+        "click",
+        () => {
+            runStandalonePhase(
+                phase,
+                true
+            );
+        }
+    );
+    }
+
+// ==========================================================
+// RUN STANDALONE PHASE
+// ==========================================================
+
+async function runStandalonePhase(
+    phase,
+    dryRun = false
+) {
+
+    if (!phase) {
+        return;
+    }
+
+
+    const data = {
+        dry_run: dryRun,
+    };
+
+
+    const parameters =
+        Array.isArray(
+            phase.parameters
+        )
+            ? phase.parameters
+            : [];
+
+
+    for (const parameter of parameters) {
+
+        const input =
+            document.getElementById(
+                `phase-${phase.id}-${parameter}`
+            );
+
+        if (!input) {
+            continue;
+        }
+
+
+        // --------------------------------------------------
+        // Boolean parameters
+        // --------------------------------------------------
+
+        if (parameter === "auto") {
+
+            data.auto =
+                input.checked === true;
+
+            continue;
+        }
+
+
+        // --------------------------------------------------
+        // File parameters
+        // --------------------------------------------------
+
+        if (parameter === "file") {
+
+            if (
+                input.files &&
+                input.files.length > 0
+            ) {
+
+                showMessage(
+                    "File upload for standalone phases " +
+                    "will be added in the next step.",
+                    "info"
+                );
+
+                return;
+            }
+
+            continue;
+        }
+
+
+        // --------------------------------------------------
+        // Normal parameters
+        // --------------------------------------------------
+
+        const value =
+            String(
+                input.value || ""
+            ).trim();
+
+        if (value) {
+
+            data[parameter] =
+                value;
+        }
+    }
+
+
+    const action =
+        dryRun
+            ? "dry run"
+            : "run";
+
+
+    if (!dryRun) {
+
+        const confirmed =
+            window.confirm(
+                `Run P${phase.id} · ${phase.name}?`
+            );
+
+        if (!confirmed) {
+            return;
+        }
+    }
+
+
+    showMessage(
+        `${dryRun ? "Dry running" : "Starting"} ` +
+        `P${phase.id} · ${phase.name}...`,
+        "info"
+    );
+
+
+    try {
+
+        const result =
+            await apiPost(
+                `/api/phase/${phase.id}/run`,
+                data
+            );
+
+
+        showMessage(
+            result.message ||
+            `Phase ${phase.id} started.`,
+            "success"
+        );
+
+
+        console.log(
+            "Phase execution:",
+            result
+        );
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Phase execution error:",
+            error
+        );
+
+
+        showMessage(
+            error.message,
+            "error"
+        );
+    }
 }
 
 // ==========================================================
