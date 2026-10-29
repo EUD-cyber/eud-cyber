@@ -203,9 +203,11 @@ done
 #   channel for PowerShell.
 # ============================================================
 
+PYTHON_BIN="/opt/nordic-attack/venv/bin/python"
+
 PYWINRM_AVAILABLE=0
 
-if python3 -c "import winrm" >/dev/null 2>&1; then
+if "$PYTHON_BIN" -c "import winrm" >/dev/null 2>&1; then
     PYWINRM_AVAILABLE=1
 fi
 
@@ -827,7 +829,7 @@ print(json.dumps(targets))
         WINDOWS_OUTPUT="$(
             NORDIC_WINRM_PASSWORD="$ACCESS_PASSWORD" \
             NORDIC_TARGET_JSON="$TARGET_JSON" \
-            python3 - \
+            "$PYTHON_BIN" - \
                 "$SOURCE" \
                 "$WINRM_PORT" \
                 "$WINRM_SCHEME" \
