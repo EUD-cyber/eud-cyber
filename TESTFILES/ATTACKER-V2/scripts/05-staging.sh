@@ -196,16 +196,6 @@ fi
 #
 # IP|PLATFORM|ACCESS|PORT|USER|PASSWORD
 #
-# Old SSH-only state remains supported.
-# ============================================================
-
-# ============================================================
-# LOAD COMPROMISED HOSTS
-#
-# Format:
-#
-# IP|PLATFORM|ACCESS|PORT|USER|PASSWORD
-#
 # Campaign:
 #   Loaded from compromised host inventory.
 #
