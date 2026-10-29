@@ -20,6 +20,7 @@ CONFIG_FILE = BASE_DIR / "config" / "defaults.conf"
 STATE_DIR = BASE_DIR / "state"
 LOG_DIR = BASE_DIR / "logs"
 SCRIPT_DIR = BASE_DIR / "scripts"
+PHASE_RUNNER = SCRIPT_DIR / "run-phase.sh"
 UPLOAD_DIR = BASE_DIR / "runtime" / "uploads"
 
 SCENARIO = BASE_DIR / "scenarios" / "full-incident-h3.sh"
@@ -28,7 +29,7 @@ CAMPAIGN_STATE = STATE_DIR / "campaign.json"
 INVENTORY_STATE = STATE_DIR / "discovered-hosts.json"
 
 CAMPAIGN_LOG = LOG_DIR / "campaign.log"
-
+PHASE_LOG = LOG_DIR / "phase.log"
 
 # ============================================================
 # FLASK
@@ -488,6 +489,322 @@ def api_phases():
         {
             "count": len(phases),
             "phases": phases,
+        }
+    )
+
+# ============================================================
+# ROUTES - RUN PHASE
+# ============================================================
+
+@app.route(
+    "/api/phase/<phase_id>/run",
+    methods=["POST"],
+)
+def api_run_phase(phase_id):
+
+    # --------------------------------------------------------
+    # Validate phase ID
+    # --------------------------------------------------------
+
+    if (
+        len(phase_id) != 2
+        or not phase_id.isdigit()
+    ):
+        return jsonify(
+            {
+                "status": "error",
+                "message": "Invalid phase ID.",
+            }
+        ), 400
+
+
+    # --------------------------------------------------------
+    # Locate phase script
+    # --------------------------------------------------------
+
+    matches = list(
+        SCRIPT_DIR.glob(
+            f"{phase_id}-*.sh"
+        )
+    )
+
+    if len(matches) != 1:
+        return jsonify(
+            {
+                "status": "error",
+                "message": (
+                    f"Phase {phase_id} was not found."
+                ),
+            }
+        ), 404
+
+    phase_script = matches[0]
+
+    metadata = read_attack_metadata(
+        phase_script
+    )
+
+    if not metadata:
+        return jsonify(
+            {
+                "status": "error",
+                "message": (
+                    f"Phase {phase_id} has no valid metadata."
+                ),
+            }
+        ), 400
+
+
+    # --------------------------------------------------------
+    # Only standalone phases can be executed here
+    # --------------------------------------------------------
+
+    standalone = (
+        metadata
+        .get(
+            "ATTACK_STANDALONE",
+            "false",
+        )
+        .strip()
+        .lower()
+        in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+    )
+
+    if not standalone:
+        return jsonify(
+            {
+                "status": "error",
+                "message": (
+                    f"Phase {phase_id} does not support "
+                    "standalone execution."
+                ),
+            }
+        ), 400
+
+
+    # --------------------------------------------------------
+    # Request data
+    # --------------------------------------------------------
+
+    if request.is_json:
+
+        data = request.get_json(
+            silent=True
+        ) or {}
+
+    else:
+
+        data = request.form.to_dict()
+
+
+    # --------------------------------------------------------
+    # Dry run
+    # --------------------------------------------------------
+
+    dry_run_raw = str(
+        data.get(
+            "dry_run",
+            "0",
+        )
+    ).strip().lower()
+
+    dry_run = dry_run_raw in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
+
+
+    # --------------------------------------------------------
+    # Allowed parameters come directly from metadata
+    # --------------------------------------------------------
+
+    allowed_parameters = [
+        value.strip()
+        for value in metadata.get(
+            "ATTACK_PARAMETERS",
+            "",
+        ).split(",")
+        if value.strip()
+    ]
+
+
+    # --------------------------------------------------------
+    # Build runner command
+    # --------------------------------------------------------
+
+    if not PHASE_RUNNER.exists():
+        return jsonify(
+            {
+                "status": "error",
+                "message": "Phase runner is missing.",
+            }
+        ), 500
+
+
+    command = [
+        "/usr/bin/env",
+        "bash",
+        str(PHASE_RUNNER),
+        phase_id,
+    ]
+
+
+    parameter_flags = {
+        "source": "--source",
+        "target": "--target",
+        "subnet": "--subnet",
+        "port": "--port",
+        "protocol": "--protocol",
+        "username": "--user",
+        "password": "--password",
+        "file": "--file",
+    }
+
+
+    # --------------------------------------------------------
+    # Boolean --auto
+    # --------------------------------------------------------
+
+    if "auto" in allowed_parameters:
+
+        auto_raw = str(
+            data.get(
+                "auto",
+                "0",
+            )
+        ).strip().lower()
+
+        if auto_raw in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        ):
+            command.append(
+                "--auto"
+            )
+
+
+    # --------------------------------------------------------
+    # Normal parameters
+    # --------------------------------------------------------
+
+    for parameter in allowed_parameters:
+
+        if parameter == "auto":
+            continue
+
+        flag = parameter_flags.get(
+            parameter
+        )
+
+        if not flag:
+            continue
+
+        value = str(
+            data.get(
+                parameter,
+                "",
+            )
+        ).strip()
+
+        if not value:
+            continue
+
+        command.extend(
+            [
+                flag,
+                value,
+            ]
+        )
+
+
+    # --------------------------------------------------------
+    # Dry run flag
+    # --------------------------------------------------------
+
+    if dry_run:
+        command.append(
+            "--dry-run"
+        )
+
+
+    # --------------------------------------------------------
+    # Prepare log directory
+    # --------------------------------------------------------
+
+    LOG_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+
+    # --------------------------------------------------------
+    # Start phase
+    # --------------------------------------------------------
+
+    try:
+
+        log_handle = PHASE_LOG.open(
+            "a",
+            encoding="utf-8",
+        )
+
+        log_handle.write(
+            "\n"
+            "================================================\n"
+            f"Phase {phase_id} requested from Web GUI\n"
+            f"Name: {metadata.get('ATTACK_NAME', phase_script.name)}\n"
+            f"Dry run: {'YES' if dry_run else 'NO'}\n"
+            "================================================\n"
+        )
+
+        # Never log command arguments because they may
+        # contain passwords.
+
+        log_handle.flush()
+
+        process = subprocess.Popen(
+            command,
+            cwd=str(BASE_DIR),
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+
+    except Exception as exc:
+
+        return jsonify(
+            {
+                "status": "error",
+                "message": (
+                    f"Unable to start phase {phase_id}: "
+                    f"{exc}"
+                ),
+            }
+        ), 500
+
+
+    return jsonify(
+        {
+            "status": "started",
+            "phase": phase_id,
+            "name": metadata.get(
+                "ATTACK_NAME",
+                phase_script.name,
+            ),
+            "dry_run": dry_run,
+            "pid": process.pid,
+            "message": (
+                f"Phase {phase_id} started."
+            ),
         }
     )
 
