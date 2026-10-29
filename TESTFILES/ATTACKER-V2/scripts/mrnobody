@@ -5,7 +5,12 @@ set -euo pipefail
 BASE_DIR="${NORDIC_BASE_DIR:-/opt/nordic-attack}"
 
 UPDATE_SCRIPT="${BASE_DIR}/scripts/update.sh"
-SCENARIO_SCRIPT="${BASE_DIR}/scenarios/full-incident-h3.sh"
+RUNNER_SCRIPT="${BASE_DIR}/scripts/run-phase.sh"
+
+
+# ============================================================
+# HELP
+# ============================================================
 
 usage() {
     cat <<'EOF'
@@ -14,26 +19,93 @@ MrNobody CLI
 Usage:
   mrnobody update
   mrnobody status
+  mrnobody phases
+  mrnobody run all
+  mrnobody run <attack>
+  mrnobody run <attack> [options]
   mrnobody help
 
 Commands:
-  update   Check GitHub and update MrNobody
-  status   Show basic MrNobody service status
-  help     Show this help
+
+  update
+      Check GitHub and update MrNobody.
+
+  status
+      Show MrNobody service and health status.
+
+  phases
+      List all installed attacks/phases.
+
+  run all
+      Run the full incident campaign.
+
+  run <attack>
+      Run a single attack.
+
+      Attack may be:
+        ID
+        alias
+
+Examples:
+
+  mrnobody phases
+
+  mrnobody run all
+
+  mrnobody run 04
+
+  mrnobody run lateral
+
+  mrnobody run 04 \
+    --target 192.168.1.20 \
+    --port 22 \
+    --protocol ssh \
+    --user ubuntu \
+    --password password
+
+Standalone options:
+
+  --target <host>
+  --port <port>
+  --protocol <protocol>
+  --user <username>
+  --password <password>
+  --dry-run
+
+Without --target:
+  Campaign mode is used.
+
+With --target:
+  Standalone mode is used.
+
 EOF
 }
 
+
+# ============================================================
+# UPDATE
+# ============================================================
+
 cmd_update() {
+
     if [[ ! -x "$UPDATE_SCRIPT" ]]; then
+
         echo "ERROR: Update script not found or not executable:"
         echo "       $UPDATE_SCRIPT"
+
         exit 1
     fi
 
     exec "$UPDATE_SCRIPT"
 }
 
+
+# ============================================================
+# STATUS
+# ============================================================
+
 cmd_status() {
+
     echo "========================================"
     echo " MrNobody Status"
     echo "========================================"
@@ -44,6 +116,7 @@ cmd_status() {
     echo
 
     echo "Web service:"
+
     if systemctl is-active --quiet nordic-incident-web.service; then
         echo "  ACTIVE"
     else
@@ -52,6 +125,7 @@ cmd_status() {
 
     echo
     echo "nginx:"
+
     if systemctl is-active --quiet nginx; then
         echo "  ACTIVE"
     else
@@ -77,26 +151,104 @@ cmd_status() {
     echo
 }
 
+
+# ============================================================
+# PHASES
+# ============================================================
+
+cmd_phases() {
+
+    if [[ ! -x "$RUNNER_SCRIPT" ]]; then
+
+        echo "ERROR: Attack runner not found or not executable:"
+        echo "       $RUNNER_SCRIPT"
+
+        exit 1
+    fi
+
+    exec "$RUNNER_SCRIPT" list
+}
+
+
+# ============================================================
+# RUN
+# ============================================================
+
+cmd_run() {
+
+    if [[ ! -x "$RUNNER_SCRIPT" ]]; then
+
+        echo "ERROR: Attack runner not found or not executable:"
+        echo "       $RUNNER_SCRIPT"
+
+        exit 1
+    fi
+
+    if (( $# == 0 )); then
+
+        echo "ERROR: Missing attack."
+        echo
+        echo "Examples:"
+        echo "  mrnobody run all"
+        echo "  mrnobody run 04"
+        echo "  mrnobody run lateral"
+        echo
+
+        exit 1
+    fi
+
+    exec "$RUNNER_SCRIPT" "$@"
+}
+
+
+# ============================================================
+# COMMAND PARSING
+# ============================================================
+
 COMMAND="${1:-help}"
 
 case "$COMMAND" in
 
     update)
-        cmd_update
+
+        shift || true
+
+        cmd_update "$@"
         ;;
 
     status)
-        cmd_status
+
+        shift || true
+
+        cmd_status "$@"
+        ;;
+
+    phases|phase|attacks)
+
+        shift || true
+
+        cmd_phases "$@"
+        ;;
+
+    run)
+
+        shift || true
+
+        cmd_run "$@"
         ;;
 
     help|-h|--help)
+
         usage
         ;;
 
     *)
+
         echo "Unknown command: $COMMAND"
         echo
+
         usage
+
         exit 1
         ;;
 
