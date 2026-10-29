@@ -462,6 +462,10 @@ run_attack() {
             echo "Password:    not-set"
         fi
 
+        if [[ -n "$FILE" ]]; then
+            echo "File:        $FILE"
+        fi
+
         if [[ -n "$parameters" ]]; then
             echo "Parameters:  $parameters"
         fi
@@ -485,6 +489,7 @@ run_attack() {
     export MRNOBODY_PROTOCOL="$PROTOCOL"
     export MRNOBODY_USERNAME="$USERNAME"
     export MRNOBODY_PASSWORD="$PASSWORD"
+    export MRNOBODY_FILE="$FILE"
 
     export MRNOBODY_ATTACK_ID="$id"
     export MRNOBODY_ATTACK_NAME="$name"
@@ -558,6 +563,7 @@ Options:
   --protocol <protocol>
   --user <username>
   --password <password>
+  --file <path>
   --dry-run
   --help
 
@@ -683,7 +689,7 @@ case "$COMMAND" in
                     PASSWORD="$2"
                     shift 2
                     ;;
-                    
+
                 --file)
 
                     [[ $# -ge 2 ]] || \
