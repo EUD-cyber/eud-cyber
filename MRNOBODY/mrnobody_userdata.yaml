@@ -52,7 +52,6 @@ packages:
   - openssh-client
   - sshpass
   - freerdp3-x11
-  - python3-winrm
   - qemu-guest-agent
 
 
@@ -350,6 +349,37 @@ write_files:
 
       chmod 644 \
           /etc/systemd/system/nordic-incident-web.service
+
+      # ======================================================
+      # PYTHON VENV / WINRM CLIENT
+      # ======================================================
+
+      log "Preparing Python virtual environment for WinRM..."
+
+      python3 -m venv \
+          "${INSTALL_DIR}/venv"
+
+      "${INSTALL_DIR}/venv/bin/pip" \
+          install \
+          --upgrade pip
+
+      "${INSTALL_DIR}/venv/bin/pip" \
+          install \
+          pywinrm \
+          requests-ntlm
+
+      log "Validating WinRM Python environment..."
+
+      "${INSTALL_DIR}/venv/bin/python" - <<'PY'
+import winrm
+import requests_ntlm
+import spnego
+
+print("WinRM Python environment OK")
+print("winrm:", winrm.__file__)
+print("requests_ntlm:", requests_ntlm.__file__)
+print("spnego:", spnego.__file__)
+PY
 
 
       # ======================================================
