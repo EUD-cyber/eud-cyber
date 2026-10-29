@@ -445,9 +445,21 @@ run_attack() {
 
     fi
 
-    echo "Mode:        $MODE"
+    echo "Mode:        $RUN_MODE"
 
-    if [[ "$MODE" == "standalone" ]]; then
+        if [[ "$id" == "01" ]]; then
+
+        if [[ -n "$AUTO_DISCOVERY" ]]; then
+            echo "Auto:        enabled"
+        else
+            echo "Auto:        default"
+        fi
+
+        echo "Subnet:      ${SUBNET:--}"
+
+    fi
+
+    if [[ "$RUN_MODE" == "standalone" ]]; then
 
         echo "Target:      ${TARGET:-not-set}"
         echo "Port:        ${PORT:-automatic}"
@@ -482,7 +494,7 @@ run_attack() {
     # Individual attack scripts will gradually be converted
     # to consume these variables.
     #
-    export MRNOBODY_RUN_MODE="$MODE"
+    export MRNOBODY_RUN_MODE="$RUN_MODE"
 
     export MRNOBODY_SOURCE="$SOURCE"
     export MRNOBODY_TARGET="$TARGET"
@@ -576,10 +588,10 @@ Options:
   --auto
   --subnet <cidr[,cidr...]>
 
-Without --source or --target:
+Without standalone parameters:
   Campaign mode is used.
 
-With --source or --target:
+With --source, --target, --subnet or --auto:
   Standalone mode is used.
 
 EOF
