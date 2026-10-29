@@ -14,7 +14,7 @@
 #   - Scan public/WAN networks
 #   - Scan explicitly excluded networks
 #   - Scan ignored interfaces
-#   - Perform service discovery
+#   - Perform service | awk '/Status: Up/ {print $2}'
 #
 # Output:
 #   state/networks.json
@@ -634,15 +634,16 @@ while IFS='|' read -r network interface; do
 
     done < <(
 
-        nmap \
-            -sn \
-            -n \
-            "$network" \
-            -oG - \
-            2>/dev/null \
+        timeout 20s \
+            nmap \
+                -sn \
+                -n \
+                "$network" \
+                -oG - \
+                2>/dev/null \
         | awk '/Status: Up/ {print $2}'
 
-    )
+            )
 
 
 done < "$NETWORK_TMP"
