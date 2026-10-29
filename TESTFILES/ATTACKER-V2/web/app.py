@@ -21,6 +21,7 @@ STATE_DIR = BASE_DIR / "state"
 LOG_DIR = BASE_DIR / "logs"
 SCRIPT_DIR = BASE_DIR / "scripts"
 PHASE_RUNNER = SCRIPT_DIR / "run-phase.sh"
+UPDATE_SCRIPT = SCRIPT_DIR / "update.sh"
 UPLOAD_DIR = BASE_DIR / "runtime" / "uploads"
 
 SCENARIO = BASE_DIR / "scenarios" / "full-incident-h3.sh"
@@ -876,6 +877,79 @@ def api_log():
         }
     )
 
+# ============================================================
+# ROUTES - UPDATE
+# ============================================================
+
+@app.route(
+    "/api/update",
+    methods=["POST"],
+)
+def api_update():
+
+    if not UPDATE_SCRIPT.exists():
+        return jsonify(
+            {
+                "status": "error",
+                "message": "Update script is missing.",
+            }
+        ), 500
+
+
+    LOG_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+
+    try:
+
+        log_handle = CAMPAIGN_LOG.open(
+            "a",
+            encoding="utf-8",
+        )
+
+        log_handle.write(
+            "\n"
+            "================================================\n"
+            "MrNobody update requested from Web GUI\n"
+            "================================================\n"
+        )
+
+        log_handle.flush()
+
+
+        process = subprocess.Popen(
+            [
+                "/usr/bin/env",
+                "bash",
+                str(UPDATE_SCRIPT),
+            ],
+            cwd=str(BASE_DIR),
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+
+    except Exception as exc:
+
+        return jsonify(
+            {
+                "status": "error",
+                "message": (
+                    f"Unable to start update: {exc}"
+                ),
+            }
+        ), 500
+
+
+    return jsonify(
+        {
+            "status": "started",
+            "pid": process.pid,
+            "message": "MrNobody update started.",
+        }
+    )
 
 # ============================================================
 # ROUTES - START CAMPAIGN
