@@ -30,7 +30,7 @@
 # ATTACK_NAME="Discovery"
 # ATTACK_ALIAS="discovery"
 # ATTACK_STANDALONE="true"
-# ATTACK_PARAMETERS="subnet"
+# ATTACK_PARAMETERS="auto,subnet"
 # ATTACK_CAMPAIGN_STATE="networks,discovered-hosts"
 
 # MITRE_TACTIC="Discovery"
