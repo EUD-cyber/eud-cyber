@@ -41,6 +41,8 @@ const campaignLog =
 const inventoryTable =
     document.getElementById("inventoryTable");
 
+const phaseGrid =
+    document.getElementById("phaseGrid");
 
 // ==========================================================
 // POLLING
@@ -400,6 +402,146 @@ function setSystemStatus(status) {
     }
 }
 
+// ==========================================================
+// PHASE DISCOVERY
+// ==========================================================
+
+function renderPhases(phases) {
+
+    if (!phaseGrid) {
+        return;
+    }
+
+    phaseGrid.innerHTML = "";
+
+    if (!Array.isArray(phases) || phases.length === 0) {
+
+        phaseGrid.innerHTML = `
+            <div class="phase-card">
+                <div class="phase-info">
+                    <strong>No phases available</strong>
+                    <span>No attack metadata was discovered.</span>
+                </div>
+            </div>
+        `;
+
+        return;
+    }
+
+
+    phases.forEach(phase => {
+
+        const card =
+            document.createElement("div");
+
+        card.className =
+            "phase-card";
+
+        card.dataset.phase =
+            phase.id;
+
+
+        const number =
+            document.createElement("div");
+
+        number.className =
+            "phase-number";
+
+        number.textContent =
+            phase.id;
+
+
+        const info =
+            document.createElement("div");
+
+        info.className =
+            "phase-info";
+
+
+        const name =
+            document.createElement("strong");
+
+        name.textContent =
+            phase.name;
+
+
+        const details =
+            document.createElement("span");
+
+        const tactic =
+            phase.mitre?.tactic || "No MITRE tactic";
+
+        const techniques =
+            Array.isArray(
+                phase.mitre?.techniques
+            )
+                ? phase.mitre.techniques.join(", ")
+                : "";
+
+        details.textContent =
+            techniques
+                ? `${tactic} · ${techniques}`
+                : tactic;
+
+
+        const status =
+            document.createElement("div");
+
+        status.className =
+            "phase-status";
+
+        status.textContent =
+            "PENDING";
+
+
+        info.appendChild(name);
+        info.appendChild(details);
+
+        card.appendChild(number);
+        card.appendChild(info);
+        card.appendChild(status);
+
+        phaseGrid.appendChild(card);
+    });
+}
+
+
+async function loadPhases() {
+
+    if (!phaseGrid) {
+        return;
+    }
+
+    try {
+
+        const data =
+            await apiGet(
+                "/api/phases"
+            );
+
+        renderPhases(
+            data.phases || []
+        );
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Phase discovery error:",
+            error
+        );
+
+        phaseGrid.innerHTML = `
+            <div class="phase-card">
+                <div class="phase-info">
+                    <strong>Unable to load phases</strong>
+                    <span>Check /api/phases</span>
+                </div>
+            </div>
+        `;
+    }
+}
 
 // ==========================================================
 // PHASE STATUS
@@ -1803,6 +1945,7 @@ async function initialize() {
          */
 
         await loadConfiguration();
+        await loadPhases();
 
         await refreshStatus();
         await refreshInventory();

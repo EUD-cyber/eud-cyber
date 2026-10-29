@@ -54,14 +54,22 @@
 
     <div class="header-right">
 
-        <div
-            id="systemStatus"
-            class="status-badge status-idle"
-        >
-            IDLE
-        </div>
+    <button
+        id="updateButton"
+        class="button button-small"
+        type="button"
+    >
+        UPDATE
+    </button>
 
+    <div
+        id="systemStatus"
+        class="status-badge status-idle"
+    >
+        IDLE
     </div>
+
+</div>
 
 </header>
 
@@ -508,234 +516,25 @@
 
 
         <!-- ================================================
-             PHASES
-        ================================================= -->
-
-        <div class="phase-grid">
-
-
-            <div
-                class="phase-card"
-                data-phase="01"
-            >
-
-                <div class="phase-number">
-                    01
-                </div>
-
-                <div class="phase-info">
-
-                    <strong>
-                        Dynamic Discovery
-                    </strong>
-
-                    <span>
-                        Networks & hosts
-                    </span>
-
-                </div>
-
-                <div class="phase-status">
-                    PENDING
-                </div>
-
-            </div>
-
-
-            <div
-                class="phase-card"
-                data-phase="02"
-            >
-
-                <div class="phase-number">
-                    02
-                </div>
-
-                <div class="phase-info">
-
-                    <strong>
-                        Web Discovery
-                    </strong>
-
-                    <span>
-                        HTTP / HTTPS services
-                    </span>
-
-                </div>
-
-                <div class="phase-status">
-                    PENDING
-                </div>
-
-            </div>
-
-
-            <div
-                class="phase-card"
-                data-phase="03"
-            >
-
-                <div class="phase-number">
-                    03
-                </div>
-
-                <div class="phase-info">
-
-                    <strong>
-                        Initial Access
-                    </strong>
-
-                    <span>
-                        Linux SSH / Windows RDP
-                    </span>
-
-                </div>
-
-                <div class="phase-status">
-                    PENDING
-                </div>
-
-            </div>
-
-            <div
-                class="phase-card"
-                data-phase="08"
-            >
-
-                <div class="phase-number">
-                    08
-                </div>
-
-                <div class="phase-info">
-
-                    <strong>
-                        Wordlist Authentication
-                    </strong>
-
-                    <span>
-                        Remaining SSH / RDP targets
-                    </span>
-
-                </div>
-
-                <div class="phase-status">
-                    PENDING
-                </div>
-
-            </div>
-
-            <div
-                class="phase-card"
-                data-phase="04"
-            >
-
-                <div class="phase-number">
-                    04
-                </div>
-
-                <div class="phase-info">
-
-                    <strong>
-                        Internal Discovery
-                    </strong>
-
-                    <span>
-                        East-west activity
-                    </span>
-
-                </div>
-
-                <div class="phase-status">
-                    PENDING
-                </div>
-
-            </div>
-
-
-            <div
-                class="phase-card"
-                data-phase="05"
-            >
-
-                <div class="phase-number">
-                    05
-                </div>
-
-                <div class="phase-info">
-
-                    <strong>
-                        Data Staging
-                    </strong>
-
-                    <span>
-                        Synthetic company data
-                    </span>
-
-                </div>
-
-                <div class="phase-status">
-                    PENDING
-                </div>
-
-            </div>
-
-
-            <div
-                class="phase-card"
-                data-phase="06"
-            >
-
-                <div class="phase-number">
-                    06
-                </div>
-
-                <div class="phase-info">
-
-                    <strong>
-                        Exfiltration
-                    </strong>
-
-                    <span>
-                        Outbound data transfer
-                    </span>
-
-                </div>
-
-                <div class="phase-status">
-                    PENDING
-                </div>
-
-            </div>
-
-
-            <div
-                class="phase-card"
-                data-phase="07"
-            >
-
-                <div class="phase-number">
-                    07
-                </div>
-
-                <div class="phase-info">
-
-                    <strong>
-                        Impact
-                    </strong>
-
-                    <span>
-                        Ransomware simulation
-                    </span>
-
-                </div>
-
-                <div class="phase-status">
-                    PENDING
-                </div>
-
-            </div>
-
+     PHASES
+================================================= -->
+
+<div
+    id="phaseGrid"
+    class="phase-grid"
+>
+    <div class="phase-card">
+        <div class="phase-info">
+            <strong>
+                Loading phases...
+            </strong>
+
+            <span>
+                Reading attack metadata
+            </span>
         </div>
+    </div>
+</div>
 
     </section>
 
