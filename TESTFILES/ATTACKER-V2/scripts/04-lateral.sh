@@ -40,6 +40,20 @@ set -u
 # PATHS / CONFIG
 # ============================================================
 
+# ============================================================
+# MRNOBODY ATTACK METADATA
+# ============================================================
+
+# ATTACK_ID="04"
+# ATTACK_NAME="Internal Discovery"
+# ATTACK_ALIAS="lateral"
+# ATTACK_STANDALONE="true"
+# ATTACK_PARAMETERS="source,target,port,protocol,username,password"
+# ATTACK_CAMPAIGN_STATE="discovered-hosts,compromised-hosts"
+
+# MITRE_TACTIC="Discovery"
+# MITRE_TECHNIQUES="T1082,T1016,T1018"
+
 BASE_DIR="/opt/nordic-attack"
 CONFIG_FILE="$BASE_DIR/config/defaults.conf"
 
@@ -62,6 +76,19 @@ mkdir -p \
 
 INCIDENT_ID="${NORDIC_INCIDENT_ID:-H3-$(date +%Y%m%d-%H%M%S)}"
 
+
+# ============================================================
+# EXECUTION MODE
+# ============================================================
+
+RUN_MODE="${MRNOBODY_RUN_MODE:-campaign}"
+
+MANUAL_SOURCE="${MRNOBODY_SOURCE:-}"
+MANUAL_TARGET="${MRNOBODY_TARGET:-}"
+MANUAL_PORT="${MRNOBODY_PORT:-}"
+MANUAL_PROTOCOL="${MRNOBODY_PROTOCOL:-}"
+MANUAL_USERNAME="${MRNOBODY_USERNAME:-}"
+MANUAL_PASSWORD="${MRNOBODY_PASSWORD:-}"
 
 # ------------------------------------------------------------
 # Linux
