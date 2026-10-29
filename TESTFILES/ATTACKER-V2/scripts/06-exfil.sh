@@ -700,18 +700,44 @@ trap cleanup EXIT
 sleep 1
 
 
-if ! kill -0 "$RECEIVER_PID" 2>/dev/null; then
+RECEIVER_READY=0
 
-    echo "[ERROR] Exfiltration receiver failed to start."
+for _ in {1..20}; do
+
+    if ! kill -0 "$RECEIVER_PID" 2>/dev/null; then
+        break
+    fi
+
+    if tcp_open "$INCIDENT_IP" "$EXFIL_PORT"; then
+        RECEIVER_READY=1
+        break
+    fi
+
+    sleep 0.25
+
+done
+
+
+if [[ $RECEIVER_READY -ne 1 ]]; then
+
+    echo "[ERROR] Exfiltration receiver failed to become ready."
+    echo
+    echo "Receiver:"
+    echo "  $INCIDENT_IP:$EXFIL_PORT"
     echo
     echo "Receiver log:"
-    echo "$RECEIVER_LOG"
+    echo "  $RECEIVER_LOG"
+
+    if [[ -s "$RECEIVER_LOG" ]]; then
+        echo
+        cat "$RECEIVER_LOG"
+    fi
 
     exit 1
 fi
 
 
-log "[+] Exfiltration receiver started."
+log "[+] Exfiltration receiver ready on $INCIDENT_IP:$EXFIL_PORT."
 
 
 # ============================================================
