@@ -718,6 +718,24 @@ for _ in {1..20}; do
 done
 
 
+RECEIVER_READY=0
+
+for _ in {1..40}; do
+
+    if ! kill -0 "$RECEIVER_PID" 2>/dev/null; then
+        break
+    fi
+
+    if ss -lntH | awk '{print $4}' | grep -qE "(^|:)${EXFIL_PORT}$"; then
+        RECEIVER_READY=1
+        break
+    fi
+
+    sleep 0.25
+
+done
+
+
 if [[ $RECEIVER_READY -ne 1 ]]; then
 
     echo "[ERROR] Exfiltration receiver failed to become ready."
