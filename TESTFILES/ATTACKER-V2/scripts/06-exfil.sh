@@ -1156,18 +1156,18 @@ try {{
         -TimeoutSec 30
 
 
-    if ($Response.Content -is [byte[]]) {
+    if ($Response.Content -is [byte[]]) {{
 
     $ResponseText = [System.Text.Encoding]::UTF8.GetString(
         $Response.Content
         )
 
-    }
-    else {
+    }}
+    else {{
 
         $ResponseText = [string]$Response.Content
 
-    }
+    }}
 
     Write-Output $ResponseText.Trim()
 
