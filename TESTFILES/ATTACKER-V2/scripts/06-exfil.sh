@@ -702,24 +702,6 @@ sleep 1
 
 RECEIVER_READY=0
 
-for _ in {1..20}; do
-
-    if ! kill -0 "$RECEIVER_PID" 2>/dev/null; then
-        break
-    fi
-
-    if tcp_open "$INCIDENT_IP" "$EXFIL_PORT"; then
-        RECEIVER_READY=1
-        break
-    fi
-
-    sleep 0.25
-
-done
-
-
-RECEIVER_READY=0
-
 for _ in {1..40}; do
 
     if ! kill -0 "$RECEIVER_PID" 2>/dev/null; then
@@ -914,7 +896,7 @@ REMOTE
 
 
             RECEIVED_SIZE="$(
-                printf '%s\n' "$WINDOWS_RESULT" |
+                printf '%s\n' "$REMOTE_RESULT" |
                 awk '/^NORDIC_RECEIVED / {print $2}' |
                 tail -n 1
             )"
@@ -1248,7 +1230,7 @@ PY
 
 
             RECEIVED_SIZE="$(
-                printf '%s\n' "$REMOTE_RESULT" |
+                printf '%s\n' "$WINDOWS_RESULT" |
                 awk '/^NORDIC_RECEIVED / {print $2}' |
                 tail -n 1
             )"
