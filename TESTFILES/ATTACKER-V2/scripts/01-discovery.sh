@@ -22,6 +22,20 @@
 #
 # ============================================================
 
+# ============================================================
+# MRNOBODY ATTACK METADATA
+# ============================================================
+
+# ATTACK_ID="01"
+# ATTACK_NAME="Discovery"
+# ATTACK_ALIAS="discovery"
+# ATTACK_STANDALONE="true"
+# ATTACK_PARAMETERS="subnet"
+# ATTACK_CAMPAIGN_STATE="networks,discovered-hosts"
+
+# MITRE_TACTIC="Discovery"
+# MITRE_TECHNIQUES="T1018,T1049"
+
 set -u
 
 
@@ -51,6 +65,19 @@ INCIDENT_ID="${NORDIC_INCIDENT_ID:-H3-$(date +%Y%m%d-%H%M%S)}"
 
 export NORDIC_INCIDENT_ID="$INCIDENT_ID"
 
+# ============================================================
+# DISCOVERY INPUT
+# ============================================================
+
+AUTO_DISCOVERY="${MRNOBODY_AUTO:-1}"
+MANUAL_SUBNETS="${MRNOBODY_SUBNET:-}"
+
+# ============================================================
+# EXECUTION MODE
+# ============================================================
+
+RUN_MODE="${MRNOBODY_RUN_MODE:-campaign}"
+MANUAL_SUBNETS="${MRNOBODY_SUBNET:-}"
 
 # ============================================================
 # LOGGING
@@ -294,134 +321,152 @@ done < <(
 # DISCOVER CONNECTED NETWORKS
 # ============================================================
 
-while read -r line; do
+if [[ "$AUTO_DISCOVERY" == "1" ]]; then
 
-    [[ -z "$line" ]] && continue
+    while read -r line; do
 
+        [[ -z "$line" ]] && continue
 
-    interface="$(awk '{print $2}' <<< "$line")"
+        interface="$(awk '{print $2}' <<< "$line")"
+        address="$(awk '{print $4}' <<< "$line")"
 
-    address="$(awk '{print $4}' <<< "$line")"
-
-
-    # --------------------------------------------------------
-    # Ignore configured interfaces
-    # --------------------------------------------------------
-
-    if interface_is_ignored "$interface"; then
-
-        log "[SKIP] Interface ignored: $interface"
-
-        continue
-    fi
-
-
-    # --------------------------------------------------------
-    # Canonical network
-    # --------------------------------------------------------
-
-    network="$(canonical_network "$address" 2>/dev/null || true)"
-
-    if [[ -z "$network" ]]; then
-
-        log "[SKIP] Unable to determine network for $address"
-
-        continue
-    fi
-
-
-    # --------------------------------------------------------
-    # RFC1918 only
-    # --------------------------------------------------------
-
-    if [[ "${NORDIC_DISCOVERY_PRIVATE_ONLY:-1}" == "1" ]]; then
-
-        if ! is_private_network "$network"; then
-
-            log "[SKIP] Non-private network: $network ($interface)"
-
-            ground_truth \
-                "Skipped non-private network=$network interface=$interface"
-
+        if interface_is_ignored "$interface"; then
+            log "[SKIP] Interface ignored: $interface"
             continue
         fi
 
-    fi
+        network="$(canonical_network "$address" 2>/dev/null || true)"
 
+        if [[ -z "$network" ]]; then
+            log "[SKIP] Unable to determine network for $address"
+            continue
+        fi
 
-    # --------------------------------------------------------
-    # Prefix safety
-    #
-    # Example:
-    #
-    # Minimum prefix = 16
-    #
-    # /24 -> allowed
-    # /20 -> allowed
-    # /16 -> allowed
-    # /8  -> rejected
-    # --------------------------------------------------------
+        if [[ "${NORDIC_DISCOVERY_PRIVATE_ONLY:-1}" == "1" ]]; then
 
-    prefix="$(network_prefix "$network")"
+            if ! is_private_network "$network"; then
+                log "[SKIP] Non-private network: $network ($interface)"
+                ground_truth \
+                    "Skipped non-private network=$network interface=$interface"
+                continue
+            fi
 
-    if (( prefix < NORDIC_DISCOVERY_MIN_PREFIX )); then
+        fi
 
-        log "[SKIP] Network too large: $network"
+        prefix="$(network_prefix "$network")"
+
+        if (( prefix < NORDIC_DISCOVERY_MIN_PREFIX )); then
+            log "[SKIP] Network too large: $network"
+            ground_truth \
+                "Skipped oversized network=$network interface=$interface"
+            continue
+        fi
+
+        if network_is_excluded "$network"; then
+            log "[SKIP] Excluded network: $network ($interface)"
+            ground_truth \
+                "Excluded network=$network interface=$interface"
+            continue
+        fi
+
+        if grep -Fqx \
+            "${network}|${interface}" \
+            "$NETWORK_TMP"; then
+            continue
+        fi
+
+        printf '%s|%s\n' \
+            "$network" \
+            "$interface" \
+            >> "$NETWORK_TMP"
+
+        log "[NETWORK] $network via $interface"
 
         ground_truth \
-            "Skipped oversized network=$network interface=$interface"
+            "Discovery network=$network interface=$interface"
 
-        continue
-    fi
+    done < <(
+        ip -o -4 addr show scope global
+    )
 
+else
 
-    # --------------------------------------------------------
-    # EXCLUDED NETWORKS
-    #
-    # Example:
-    #
-    # 172.20.0.0/24 -> OOBM -> SKIP
-    # --------------------------------------------------------
+    log "[INFO] Automatic interface discovery disabled."
 
-    if network_is_excluded "$network"; then
+fi
 
-        log "[SKIP] Excluded network: $network ($interface)"
+# ============================================================
+# ADD MANUAL SUBNETS
+# ============================================================
+
+if [[ -n "$MANUAL_SUBNETS" ]]; then
+
+    IFS=',' read -ra SUBNET_LIST <<< "$MANUAL_SUBNETS"
+
+    for entry in "${SUBNET_LIST[@]}"; do
+
+        entry="$(trim "$entry")"
+
+        [[ -z "$entry" ]] && continue
+
+        network="$(canonical_network "$entry" 2>/dev/null || true)"
+
+        if [[ -z "$network" ]]; then
+            log "[WARN] Invalid manual subnet ignored: $entry"
+            ground_truth \
+                "Invalid manual subnet=$entry"
+            continue
+        fi
+
+        if [[ "${NORDIC_DISCOVERY_PRIVATE_ONLY:-1}" == "1" ]]; then
+
+            if ! is_private_network "$network"; then
+                log "[SKIP] Non-private manual subnet: $network"
+                ground_truth \
+                    "Skipped non-private manual network=$network"
+                continue
+            fi
+
+        fi
+
+        prefix="$(network_prefix "$network")"
+
+        if (( prefix < NORDIC_DISCOVERY_MIN_PREFIX )); then
+            log "[SKIP] Manual subnet too large: $network"
+            ground_truth \
+                "Skipped oversized manual network=$network"
+            continue
+        fi
+
+        if network_is_excluded "$network"; then
+            log "[SKIP] Excluded manual subnet: $network"
+            ground_truth \
+                "Excluded manual network=$network"
+            continue
+        fi
+
+        # ----------------------------------------------------
+        # Avoid duplicate networks already found by auto mode
+        # ----------------------------------------------------
+
+        if grep -q "^${network}|" "$NETWORK_TMP"; then
+            log "[INFO] Manual subnet already present: $network"
+            continue
+        fi
+
+        printf '%s|%s\n' \
+            "$network" \
+            "manual" \
+            >> "$NETWORK_TMP"
+
+        log "[NETWORK] $network via manual"
 
         ground_truth \
-            "Excluded network=$network interface=$interface"
+            "Discovery manual network=$network"
 
-        continue
-    fi
+    done
 
-
-    # --------------------------------------------------------
-    # Duplicate check
-    # --------------------------------------------------------
-
-    if grep -Fqx \
-        "${network}|${interface}" \
-        "$NETWORK_TMP"; then
-
-        continue
-    fi
-
-
-    printf '%s|%s\n' \
-        "$network" \
-        "$interface" \
-        >> "$NETWORK_TMP"
-
-
-    log "[NETWORK] $network via $interface"
-
-    ground_truth \
-        "Discovery network=$network interface=$interface"
-
-
-done < <(
-    ip -o -4 addr show scope global
-)
-
+fi
 
 # ============================================================
 # VERIFY NETWORKS
