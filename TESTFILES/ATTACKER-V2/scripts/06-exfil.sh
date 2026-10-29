@@ -917,8 +917,9 @@ REMOTE
                 printf '%s\n' "$WINDOWS_RESULT" |
                 awk '/^NORDIC_RECEIVED / {print $2}' |
                 tail -n 1 |
-                tr -d '\r'
             )"
+
+            RECEIVED_SIZE="${RECEIVED_SIZE//$'\r'/}"
 
             SUCCESS_COUNT=$(( SUCCESS_COUNT + 1 ))
             LINUX_SUCCESS=$(( LINUX_SUCCESS + 1 ))
@@ -1250,9 +1251,9 @@ PY
                 printf '%s\n' "$WINDOWS_RESULT" |
                 awk '/^NORDIC_RECEIVED / {print $2}' |
                 tail -n 1
-                tr -d '\r'
             )"
 
+            RECEIVED_SIZE="${RECEIVED_SIZE//$'\r'/}"
 
             SUCCESS_COUNT=$(( SUCCESS_COUNT + 1 ))
             WINDOWS_SUCCESS=$(( WINDOWS_SUCCESS + 1 ))
