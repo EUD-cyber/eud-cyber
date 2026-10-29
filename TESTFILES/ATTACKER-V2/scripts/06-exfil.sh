@@ -19,6 +19,19 @@ set -u
 # Phase 05 is transferred.
 # ============================================================
 
+# ============================================================
+# MRNOBODY ATTACK METADATA
+# ============================================================
+
+# ATTACK_ID="06"
+# ATTACK_NAME="Exfiltration"
+# ATTACK_ALIAS="exfil"
+# ATTACK_STANDALONE="true"
+# ATTACK_PARAMETERS="target,port,protocol,username,password"
+# ATTACK_CAMPAIGN_STATE="staged-data,compromised-hosts"
+
+# MITRE_TACTIC="Exfiltration"
+# MITRE_TECHNIQUES="T1041"
 
 # ============================================================
 # PATHS / CONFIG
@@ -123,9 +136,11 @@ done
 # WINDOWS WINRM SUPPORT
 # ============================================================
 
+PYTHON_BIN="/opt/nordic-attack/venv/bin/python"
+
 PYWINRM_AVAILABLE=0
 
-if python3 -c "import winrm" >/dev/null 2>&1; then
+if "$PYTHON_BIN" -c "import winrm" >/dev/null 2>&1; then
     PYWINRM_AVAILABLE=1
 fi
 
@@ -910,7 +925,7 @@ REMOTE
 
         WINDOWS_RESULT="$(
             NORDIC_WINRM_PASSWORD="$ACCESS_PASSWORD" \
-            python3 - \
+            "$PYTHON_BIN" - \
                 "$HOST" \
                 "$WINRM_PORT" \
                 "$WINRM_SCHEME" \
