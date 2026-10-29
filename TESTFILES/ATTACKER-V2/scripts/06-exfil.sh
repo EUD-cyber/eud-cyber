@@ -27,7 +27,7 @@ set -u
 # ATTACK_NAME="Exfiltration"
 # ATTACK_ALIAS="exfil"
 # ATTACK_STANDALONE="true"
-# ATTACK_PARAMETERS="target,port,protocol,username,password"
+# ATTACK_PARAMETERS="target,port,protocol,username,password,file"
 # ATTACK_CAMPAIGN_STATE="staged-data,compromised-hosts"
 
 # MITRE_TACTIC="Exfiltration"
@@ -75,7 +75,7 @@ MANUAL_PORT="${MRNOBODY_PORT:-}"
 MANUAL_PROTOCOL="${MRNOBODY_PROTOCOL:-}"
 MANUAL_USERNAME="${MRNOBODY_USERNAME:-}"
 MANUAL_PASSWORD="${MRNOBODY_PASSWORD:-}"
-
+MANUAL_FILE="${MRNOBODY_FILE:-}"
 WINRM_HTTP_PORT="${NORDIC_WINRM_HTTP_PORT:-${NORDIC_DEFAULT_WINRM_HTTP_PORT:-5985}}"
 WINRM_HTTPS_PORT="${NORDIC_WINRM_HTTPS_PORT:-${NORDIC_DEFAULT_WINRM_HTTPS_PORT:-5986}}"
 
@@ -213,8 +213,10 @@ fi
 # DETERMINE INCIDENTVM IP
 # ============================================================
 
-FIRST_TARGET="$(
-    python3 - "$STAGING_STATE" <<'PY'
+if [[ "$RUN_MODE" == "campaign" ]]; then
+
+    FIRST_TARGET="$(
+        python3 - "$STAGING_STATE" <<'PY'
 import json
 import sys
 
@@ -226,7 +228,13 @@ hosts = data.get("hosts", [])
 if hosts:
     print(hosts[0].get("ip", ""))
 PY
-)"
+    )"
+
+else
+
+    FIRST_TARGET="$MANUAL_TARGET"
+
+fi
 
 
 INCIDENT_IP="${NORDIC_INCIDENT_IP:-}"
