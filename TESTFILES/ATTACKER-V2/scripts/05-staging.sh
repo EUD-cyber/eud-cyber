@@ -27,15 +27,14 @@ set -u
 # ATTACK METADATA
 # ============================================================
 
-ATTACK_ID="05"
-ATTACK_NAME="Data Staging"
-ATTACK_ALIAS="staging"
-ATTACK_STANDALONE="true"
-ATTACK_PARAMETERS="target,port,protocol,username,password"
-ATTACK_CAMPAIGN_STATE="compromised-hosts"
-
-ATTACK_MITRE_TACTIC="Collection"
-ATTACK_MITRE_TECHNIQUES="T1074"
+# ATTACK_ID="05"
+# ATTACK_NAME="Data Staging"
+# ATTACK_ALIAS="staging"
+# ATTACK_STANDALONE="true"
+# ATTACK_PARAMETERS="target,port,protocol,username,password"
+# ATTACK_CAMPAIGN_STATE="compromised-hosts"
+# MITRE_TACTIC="Collection"
+# MITRE_TECHNIQUES="T1074"
 
 # ============================================================
 # PATHS / CONFIG
