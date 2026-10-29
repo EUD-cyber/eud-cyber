@@ -1361,6 +1361,19 @@ with open(
             sha256,
         ) = parts
 
+        port = port.strip()
+        size = size.strip()
+        sha256 = sha256.strip()
+
+        if not port:
+            raise ValueError(
+                f"Missing port in exfiltration record: {line!r}"
+            )
+
+        if not size:
+            raise ValueError(
+                f"Missing size in exfiltration record: {line!r}"
+            )
 
         transfers.append(
             {
