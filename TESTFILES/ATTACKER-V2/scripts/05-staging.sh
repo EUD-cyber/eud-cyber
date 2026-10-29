@@ -199,15 +199,32 @@ fi
 # Old SSH-only state remains supported.
 # ============================================================
 
-mapfile -t COMPROMISED < <(
+# ============================================================
+# LOAD COMPROMISED HOSTS
+#
+# Format:
+#
+# IP|PLATFORM|ACCESS|PORT|USER|PASSWORD
+#
+# Campaign:
+#   Loaded from compromised host inventory.
+#
+# Standalone:
+#   Built from MRNOBODY_* parameters.
+# ============================================================
 
-    python3 - "$COMPROMISED_STATE" <<'PY'
+COMPROMISED=()
+
+if [[ "$RUN_MODE" == "campaign" ]]; then
+
+    mapfile -t COMPROMISED < <(
+
+        python3 - "$COMPROMISED_STATE" <<'PY'
 import json
 import sys
 
 with open(sys.argv[1], encoding="utf-8") as f:
     data = json.load(f)
-
 
 for host in data.get("hosts", []):
 
@@ -229,7 +246,6 @@ for host in data.get("hosts", []):
         ""
     ).lower()
 
-
     # --------------------------------------------------------
     # Backwards compatibility
     # --------------------------------------------------------
@@ -240,7 +256,6 @@ for host in data.get("hosts", []):
             platform = "windows"
         else:
             platform = "linux"
-
 
     # --------------------------------------------------------
     # Linux
@@ -258,15 +273,16 @@ for host in data.get("hosts", []):
             or host.get("ssh_user")
             or "ubuntu"
         )
+
         password = (
             host.get("ssh_password")
             or host.get("password")
             or ""
         )
+
         print(
             f"{ip}|linux|ssh|{port}|{user}|{password}"
         )
-
 
     # --------------------------------------------------------
     # Windows
@@ -284,11 +300,13 @@ for host in data.get("hosts", []):
             or host.get("rdp_user")
             or "Administrator"
         )
+
         password = (
             host.get("rdp_password")
             or host.get("password")
             or ""
         )
+
         print(
             f"{ip}|windows|rdp|{port}|{user}|{password}"
         )
@@ -322,7 +340,45 @@ for host in data.get("hosts", []):
 
 PY
 
-)
+    )
+
+elif [[ "$RUN_MODE" == "standalone" ]]; then
+
+    case "${MANUAL_PROTOCOL,,}" in
+
+        ssh|"")
+            PLATFORM="linux"
+            ACCESS="ssh"
+            ACCESS_PORT="${MANUAL_PORT:-22}"
+            ACCESS_USER="${MANUAL_USERNAME:-ubuntu}"
+            ;;
+
+        winrm|winrm-http)
+            PLATFORM="windows"
+            ACCESS="winrm"
+            ACCESS_PORT="${MANUAL_PORT:-5985}"
+            ACCESS_USER="${MANUAL_USERNAME:-Administrator}"
+            ;;
+
+        winrm-https)
+            PLATFORM="windows"
+            ACCESS="winrm"
+            ACCESS_PORT="${MANUAL_PORT:-5986}"
+            ACCESS_USER="${MANUAL_USERNAME:-Administrator}"
+            ;;
+
+        *)
+            echo "[ERROR] Unsupported standalone protocol: ${MANUAL_PROTOCOL}"
+            exit 1
+            ;;
+
+    esac
+
+    COMPROMISED=(
+        "${MANUAL_TARGET}|${PLATFORM}|${ACCESS}|${ACCESS_PORT}|${ACCESS_USER}|${MANUAL_PASSWORD}"
+    )
+
+fi
 
 
 # ============================================================
@@ -666,36 +722,88 @@ REMOTE_EOF
         fi
 
 
-        # ----------------------------------------------------
+                # ----------------------------------------------------
         # Determine WinRM transport
         # ----------------------------------------------------
 
         WINRM_PORT=""
         WINRM_SCHEME=""
 
+        if [[ "$RUN_MODE" == "standalone" ]]; then
 
-        if tcp_open "$HOST" "$WINRM_HTTP_PORT"; then
+            if [[ "$ACCESS" != "winrm" ]]; then
 
-            WINRM_PORT="$WINRM_HTTP_PORT"
-            WINRM_SCHEME="http"
+                SKIPPED_COUNT=$(( SKIPPED_COUNT + 1 ))
 
+                log "[SKIPPED] Unsupported Windows access method for staging on $HOST: $ACCESS"
 
-        elif tcp_open "$HOST" "$WINRM_HTTPS_PORT"; then
+                ground_truth \
+                    "STAGING_SKIPPED host=$HOST platform=windows reason=unsupported_access access=$ACCESS"
 
-            WINRM_PORT="$WINRM_HTTPS_PORT"
-            WINRM_SCHEME="https"
+                continue
+            fi
 
+            WINRM_PORT="$ACCESS_PORT"
+
+            case "${MANUAL_PROTOCOL,,}" in
+
+                winrm-https)
+                    WINRM_SCHEME="https"
+                    ;;
+
+                winrm|winrm-http)
+                    WINRM_SCHEME="http"
+                    ;;
+
+                *)
+                    SKIPPED_COUNT=$(( SKIPPED_COUNT + 1 ))
+
+                    log "[SKIPPED] Unsupported WinRM protocol for $HOST: ${MANUAL_PROTOCOL}"
+
+                    ground_truth \
+                        "STAGING_SKIPPED host=$HOST platform=windows reason=unsupported_protocol protocol=${MANUAL_PROTOCOL}"
+
+                    continue
+                    ;;
+
+            esac
+
+            if ! tcp_open "$HOST" "$WINRM_PORT"; then
+
+                SKIPPED_COUNT=$(( SKIPPED_COUNT + 1 ))
+
+                log "[SKIPPED] No reachable WinRM service on $HOST port $WINRM_PORT"
+
+                ground_truth \
+                    "STAGING_SKIPPED host=$HOST platform=windows reason=winrm_unavailable port=$WINRM_PORT"
+
+                continue
+            fi
 
         else
 
-            SKIPPED_COUNT=$(( SKIPPED_COUNT + 1 ))
+            if tcp_open "$HOST" "$WINRM_HTTP_PORT"; then
 
-            log "[SKIPPED] No reachable WinRM service on $HOST"
+                WINRM_PORT="$WINRM_HTTP_PORT"
+                WINRM_SCHEME="http"
 
-            ground_truth \
-                "STAGING_SKIPPED host=$HOST platform=windows reason=winrm_unavailable"
+            elif tcp_open "$HOST" "$WINRM_HTTPS_PORT"; then
 
-            continue
+                WINRM_PORT="$WINRM_HTTPS_PORT"
+                WINRM_SCHEME="https"
+
+            else
+
+                SKIPPED_COUNT=$(( SKIPPED_COUNT + 1 ))
+
+                log "[SKIPPED] No reachable WinRM service on $HOST"
+
+                ground_truth \
+                    "STAGING_SKIPPED host=$HOST platform=windows reason=winrm_unavailable"
+
+                continue
+            fi
+
         fi
 
 
