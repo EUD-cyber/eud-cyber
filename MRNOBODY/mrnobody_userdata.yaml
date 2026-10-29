@@ -234,6 +234,10 @@ write_files:
           "scripts/mrnobody" \
           "$INSTALL_DIR/scripts/mrnobody"
 
+      download_file \
+        "scripts/run-phase.sh" \
+        "$INSTALL_DIR/scripts/run-phase.sh"
+
       # ------------------------------------------------------
       # ORCHESTRATOR
       # ------------------------------------------------------
