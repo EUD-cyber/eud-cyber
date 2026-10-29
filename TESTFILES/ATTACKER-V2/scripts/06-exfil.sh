@@ -1296,9 +1296,6 @@ done
 # CREATE exfiltration.json
 # ============================================================
 
-echo "[DEBUG] TMP_RESULTS:"
-sed -n 'l' "$TMP_RESULTS"
-echo
 
 python3 - \
     "$TMP_RESULTS" \
