@@ -54,6 +54,7 @@ PORT=""
 PROTOCOL=""
 USERNAME=""
 PASSWORD=""
+FILE=""
 
 DRY_RUN=0
 
@@ -680,6 +681,15 @@ case "$COMMAND" in
                         die "--password requires a value"
 
                     PASSWORD="$2"
+                    shift 2
+                    ;;
+                    
+                --file)
+
+                    [[ $# -ge 2 ]] || \
+                        die "--file requires a value"
+
+                    FILE="$2"
                     shift 2
                     ;;
 
