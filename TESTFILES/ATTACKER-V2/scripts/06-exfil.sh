@@ -916,7 +916,7 @@ REMOTE
             RECEIVED_SIZE="$(
                 printf '%s\n' "$WINDOWS_RESULT" |
                 awk '/^NORDIC_RECEIVED / {print $2}' |
-                tail -n 1 |
+                tail -n 1
             )"
 
             RECEIVED_SIZE="${RECEIVED_SIZE//$'\r'/}"
@@ -1248,7 +1248,7 @@ PY
 
 
             RECEIVED_SIZE="$(
-                printf '%s\n' "$WINDOWS_RESULT" |
+                printf '%s\n' "$REMOTE_RESULT" |
                 awk '/^NORDIC_RECEIVED / {print $2}' |
                 tail -n 1
             )"
