@@ -79,7 +79,7 @@ MANUAL_PASSWORD="${MRNOBODY_PASSWORD:-}"
 WINRM_HTTP_PORT="${NORDIC_WINRM_HTTP_PORT:-${NORDIC_DEFAULT_WINRM_HTTP_PORT:-5985}}"
 WINRM_HTTPS_PORT="${NORDIC_WINRM_HTTPS_PORT:-${NORDIC_DEFAULT_WINRM_HTTPS_PORT:-5986}}"
 
-STAGING_STATE="$NORDIC_STATE_DIR/staged-data.json"
+STAGING_STATE="${NORDIC_STAGING_STATE:-$NORDIC_STATE_DIR/staged-data.json}"
 EXFIL_STATE="$NORDIC_STATE_DIR/exfiltration.json"
 COMPROMISED_STATE="$NORDIC_COMPROMISED_STATE"
 
@@ -161,24 +161,41 @@ fi
 # VALIDATION
 # ============================================================
 
-if [[ ! -f "$STAGING_STATE" ]]; then
+if [[ "$RUN_MODE" == "campaign" ]]; then
 
-    echo "[ERROR] Missing staging inventory:"
-    echo "$STAGING_STATE"
-    echo
-    echo "Run Phase 05 first."
+    if [[ ! -f "$STAGING_STATE" ]]; then
 
+        echo "[ERROR] Missing staging inventory:"
+        echo "$STAGING_STATE"
+        echo
+        echo "Run Phase 05 first."
+
+        exit 1
+    fi
+
+    if [[ ! -f "$COMPROMISED_STATE" ]]; then
+
+        echo "[ERROR] Missing compromised host inventory:"
+        echo "$COMPROMISED_STATE"
+        echo
+        echo "Run Phase 03 first."
+
+        exit 1
+    fi
+
+elif [[ "$RUN_MODE" == "standalone" ]]; then
+
+    if [[ -z "$MANUAL_TARGET" ]]; then
+
+        echo "[ERROR] Standalone mode requires --target"
+        exit 1
+    fi
+
+else
+
+    echo "[ERROR] Unknown run mode: $RUN_MODE"
     exit 1
-fi
 
-if [[ ! -f "$COMPROMISED_STATE" ]]; then
-
-    echo "[ERROR] Missing compromised host inventory:"
-    echo "$COMPROMISED_STATE"
-    echo
-    echo "Run Phase 03 first."
-
-    exit 1
 fi
 
 if ! [[ "$EXFIL_PORT" =~ ^[0-9]+$ ]] ||
