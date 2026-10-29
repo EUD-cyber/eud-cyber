@@ -30,6 +30,19 @@ set -u
 # Passwords are NEVER written to logs or state.
 # ============================================================
 
+# ============================================================
+# MRNOBODY ATTACK METADATA
+# ============================================================
+
+# ATTACK_ID="03"
+# ATTACK_NAME="Initial Access"
+# ATTACK_ALIAS="access"
+# ATTACK_STANDALONE="true"
+# ATTACK_PARAMETERS="target,port,protocol,username,password"
+# ATTACK_CAMPAIGN_STATE="discovered-hosts"
+
+# MITRE_TACTIC="Initial Access"
+# MITRE_TECHNIQUES="T1078"
 
 # ============================================================
 # PATHS / CONFIG
@@ -77,6 +90,17 @@ COMPROMISED_STATE="$NORDIC_COMPROMISED_STATE"
 
 LOG_FILE="$NORDIC_LOG_DIR/${INCIDENT_ID}-03-access.log"
 
+# ============================================================
+# EXECUTION MODE
+# ============================================================
+
+RUN_MODE="${MRNOBODY_RUN_MODE:-campaign}"
+
+MANUAL_TARGET="${MRNOBODY_TARGET:-}"
+MANUAL_PORT="${MRNOBODY_PORT:-}"
+MANUAL_PROTOCOL="${MRNOBODY_PROTOCOL:-}"
+MANUAL_USERNAME="${MRNOBODY_USERNAME:-}"
+MANUAL_PASSWORD="${MRNOBODY_PASSWORD:-}"
 
 # ============================================================
 # FUNCTIONS
@@ -155,48 +179,112 @@ fi
 # VALIDATION
 # ============================================================
 
-if [[ ! -f "$DISCOVERED_STATE" ]]; then
-    echo "[ERROR] Phase 01 inventory not found:"
-    echo "$DISCOVERED_STATE"
-    echo
-    echo "Run Phase 01 first."
+if [[ "$RUN_MODE" == "campaign" ]]; then
+
+    if [[ ! -f "$DISCOVERED_STATE" ]]; then
+        echo "[ERROR] Phase 01 inventory not found:"
+        echo "$DISCOVERED_STATE"
+        echo
+        echo "Run Phase 01 first."
+        exit 1
+    fi
+
+elif [[ "$RUN_MODE" == "standalone" ]]; then
+
+    if [[ -z "$MANUAL_TARGET" ]]; then
+        echo "[ERROR] Standalone mode requires --target"
+        exit 1
+    fi
+
+else
+
+    echo "[ERROR] Unknown run mode: $RUN_MODE"
     exit 1
+
 fi
 
 
-if [[ -z "$SSH_USER" ]]; then
-    echo "[ERROR] Linux SSH username is missing."
-    exit 1
+# ============================================================
+# ACCESS CONFIGURATION / VALIDATION
+# ============================================================
+
+TEST_SSH=1
+TEST_RDP=1
+
+if [[ "$RUN_MODE" == "standalone" ]]; then
+
+    case "${MANUAL_PROTOCOL,,}" in
+
+        ssh)
+            TEST_SSH=1
+            TEST_RDP=0
+
+            SSH_USER="${MANUAL_USERNAME:-$SSH_USER}"
+            SSH_PASSWORD="${MANUAL_PASSWORD:-$SSH_PASSWORD}"
+            SSH_PORT="${MANUAL_PORT:-$SSH_PORT}"
+            ;;
+
+        rdp)
+            TEST_SSH=0
+            TEST_RDP=1
+
+            RDP_USER="${MANUAL_USERNAME:-$RDP_USER}"
+            RDP_PASSWORD="${MANUAL_PASSWORD:-$RDP_PASSWORD}"
+            RDP_PORT="${MANUAL_PORT:-$RDP_PORT}"
+            ;;
+
+        "")
+            echo "[ERROR] Standalone mode requires --protocol ssh or rdp"
+            exit 1
+            ;;
+
+        *)
+            echo "[ERROR] Unsupported standalone protocol: $MANUAL_PROTOCOL"
+            exit 1
+            ;;
+
+    esac
+
 fi
 
 
-if [[ -z "$SSH_PASSWORD" ]]; then
-    echo "[ERROR] Linux SSH password is missing."
-    exit 1
+if [[ "$TEST_SSH" -eq 1 ]]; then
+
+    if [[ -z "$SSH_USER" ]]; then
+        echo "[ERROR] Linux SSH username is missing."
+        exit 1
+    fi
+
+    if [[ -z "$SSH_PASSWORD" ]]; then
+        echo "[ERROR] Linux SSH password is missing."
+        exit 1
+    fi
+
+    if ! valid_port "$SSH_PORT"; then
+        echo "[ERROR] Invalid SSH port: $SSH_PORT"
+        exit 1
+    fi
+
 fi
 
 
-if ! valid_port "$SSH_PORT"; then
-    echo "[ERROR] Invalid SSH port: $SSH_PORT"
-    exit 1
-fi
+if [[ "$TEST_RDP" -eq 1 ]]; then
 
+    if [[ -z "$RDP_USER" ]]; then
+        echo "[ERROR] Windows RDP username is missing."
+        exit 1
+    fi
 
-if [[ -z "$RDP_USER" ]]; then
-    echo "[ERROR] Windows RDP username is missing."
-    exit 1
-fi
+    if [[ -z "$RDP_PASSWORD" ]]; then
+        echo "[ERROR] Windows RDP password is missing."
+        exit 1
+    fi
 
+    if ! valid_port "$RDP_PORT"; then
+        echo "[ERROR] Invalid RDP port: $RDP_PORT"
+        exit 1
+    fi
 
-if [[ -z "$RDP_PASSWORD" ]]; then
-    echo "[ERROR] Windows RDP password is missing."
-    exit 1
-fi
-
-
-if ! valid_port "$RDP_PORT"; then
-    echo "[ERROR] Invalid RDP port: $RDP_PORT"
-    exit 1
 fi
 
 
@@ -235,11 +323,15 @@ echo
 
 
 # ============================================================
-# LOAD DISCOVERED HOSTS
+# LOAD HOSTS
 # ============================================================
 
-mapfile -t HOSTS < <(
-    python3 - "$DISCOVERED_STATE" <<'PY'
+HOSTS=()
+
+if [[ "$RUN_MODE" == "campaign" ]]; then
+
+    mapfile -t HOSTS < <(
+        python3 - "$DISCOVERED_STATE" <<'PY'
 import json
 import sys
 
@@ -248,14 +340,25 @@ with open(sys.argv[1], "r", encoding="utf-8") as f:
 
 for host in data.get("hosts", []):
     ip = host.get("ip")
+
     if ip:
         print(ip)
 PY
-)
+    )
 
-log "[*] Hosts supplied by Phase 01: ${#HOSTS[@]}"
+    log "[*] Hosts supplied by Phase 01: ${#HOSTS[@]}"
+
+else
+
+    HOSTS=(
+        "$MANUAL_TARGET"
+    )
+
+    log "[*] Standalone target: ${HOSTS[0]}"
+
+fi
+
 echo
-
 
 # ============================================================
 # TEMPORARY RESULTS
@@ -299,7 +402,8 @@ for HOST in "${HOSTS[@]}"; do
     # SSH
     # ========================================================
 
-    if tcp_open "$HOST" "$SSH_PORT"; then
+    if [[ "$TEST_SSH" -eq 1 ]] &&
+        tcp_open "$HOST" "$SSH_PORT"; then
 
         SSH_FOUND=$(( SSH_FOUND + 1 ))
 
@@ -409,18 +513,18 @@ for HOST in "${HOSTS[@]}"; do
 
         fi
 
-    else
+    elif [[ "$TEST_SSH" -eq 1 ]]; then
 
-        log "[-] SSH port closed/unreachable: $HOST:$SSH_PORT"
+    log "[-] SSH port closed/unreachable: $HOST:$SSH_PORT"
 
     fi
-
 
     # ========================================================
     # WINDOWS / RDP
     # ========================================================
 
-    if tcp_open "$HOST" "$RDP_PORT"; then
+    if [[ "$TEST_RDP" -eq 1 ]] &&
+        tcp_open "$HOST" "$RDP_PORT"; then
 
         RDP_FOUND=$(( RDP_FOUND + 1 ))
 
@@ -494,9 +598,9 @@ for HOST in "${HOSTS[@]}"; do
 
         fi
 
-    else
+    elif [[ "$TEST_RDP" -eq 1 ]]; then
 
-        log "[-] RDP port closed/unreachable: $HOST:$RDP_PORT"
+    log "[-] RDP port closed/unreachable: $HOST:$RDP_PORT"
 
     fi
 
@@ -704,10 +808,11 @@ rm -f "$TMP_RESULTS"
 # UPDATE CENTRAL INVENTORY
 # ============================================================
 
-python3 - \
-    "$DISCOVERED_STATE" \
-    "$COMPROMISED_STATE" <<'PY'
+if [[ -f "$DISCOVERED_STATE" ]]; then
 
+    python3 - \
+        "$DISCOVERED_STATE" \
+        "$COMPROMISED_STATE" <<'PY'
 import json
 import sys
 
@@ -814,6 +919,11 @@ with open(inventory_file, "w", encoding="utf-8") as f:
 
 PY
 
+else
+
+    log "[INFO] No discovered-hosts inventory to update."
+
+fi
 
 # ============================================================
 # FINAL COMPROMISED INVENTORY
