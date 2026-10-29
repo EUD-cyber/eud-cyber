@@ -55,6 +55,8 @@ PROTOCOL=""
 USERNAME=""
 PASSWORD=""
 FILE=""
+SUBNET=""
+AUTO_DISCOVERY=""
 
 DRY_RUN=0
 
@@ -491,6 +493,12 @@ run_attack() {
     export MRNOBODY_PASSWORD="$PASSWORD"
     export MRNOBODY_FILE="$FILE"
 
+    export MRNOBODY_SUBNET="$SUBNET"
+
+    if [[ -n "$AUTO_DISCOVERY" ]]; then
+        export MRNOBODY_AUTO="$AUTO_DISCOVERY"
+    fi
+
     export MRNOBODY_ATTACK_ID="$id"
     export MRNOBODY_ATTACK_NAME="$name"
     export MRNOBODY_ATTACK_ALIAS="$alias"
@@ -566,6 +574,8 @@ Options:
   --file <path>
   --dry-run
   --help
+  --auto
+  --subnet <cidr[,cidr...]>
 
 Without --source or --target:
   Campaign mode is used.
@@ -652,6 +662,19 @@ case "$COMMAND" in
 
                     TARGET="$2"
                     shift 2
+                    ;;
+
+                --subnet)
+                    [[ $# -ge 2 ]] || \
+                        die "--subnet requires a value"
+
+                    SUBNET="$2"
+                    shift 2
+                    ;;
+
+                --auto)
+                    AUTO_DISCOVERY="1"
+                    shift
                     ;;
 
                 --port)
