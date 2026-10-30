@@ -23,8 +23,7 @@
 
 
 <body>
-<!-- update test 2 -->
-<!-- MrNobody update test -->
+
 <!-- ========================================================
      HEADER
 ========================================================= -->
@@ -238,7 +237,102 @@
     </section>
 
 
+    
     <!-- ====================================================
+         INCIDENT STATUS
+    ===================================================== -->
+
+    <section class="panel">
+
+        <div class="panel-header">
+
+            <h2>
+                Incident Status
+            </h2>
+
+            <span
+                id="incidentId"
+                class="incident-id"
+            >
+                No active incident
+            </span>
+
+        </div>
+
+
+    </section>
+
+
+    
+
+    <!-- ====================================================
+         CAMPAIGN LOG
+    ===================================================== -->
+
+    <section class="panel">
+
+        <div class="panel-header">
+
+            <h2>
+                Logs
+            </h2>
+
+            <button
+                id="refreshLogButton"
+                class="button button-small"
+                type="button"
+            >
+                REFRESH
+            </button>
+
+        </div>
+
+
+        <pre id="campaignLog" class="campaign-log">Waiting for campaign...</pre>
+
+        </section>
+
+
+        </section>
+
+
+        <!-- =================================================
+             CAMPAIGNS PAGE
+        ================================================== -->
+
+        <section
+            id="page-campaigns"
+            class="app-page"
+        >
+
+            <section class="panel intro-panel">
+
+                <div class="panel-header">
+
+                    <h2>
+                        Campaigns
+                    </h2>
+
+                    <span class="panel-tag">
+                        H3 Incident Campaign
+                    </span>
+
+                </div>
+
+                <p>
+                    Configure and execute the full incident simulation.
+                </p>
+
+                <p class="muted">
+                    Recon → Web Discovery → Initial Access →
+                    Wordlist Authentication → Internal Discovery →
+                    Data Staging → Exfiltration → Impact
+                </p>
+
+            </section>
+
+
+            <!-- ====================================================
          CONFIGURATION
     ===================================================== -->
 
@@ -621,58 +715,158 @@
     </section>
 
 
-    <!-- ====================================================
-         INCIDENT STATUS
-    ===================================================== -->
+</section>
+
+
+
+                 
+        <!-- =================================================
+             PHASES PAGE
+        ================================================== -->
+
+        <section
+    id="page-phases"
+    class="app-page"
+>
+
+    <section class="panel intro-panel">
+
+        <div class="panel-header">
+
+            <h2>
+                Attack Phases
+            </h2>
+
+            <span class="panel-tag">
+                Dynamic Metadata
+            </span>
+
+        </div>
+
+        <p>
+            Execute individual attack phases against selected targets.
+        </p>
+
+        <p class="muted">
+            Phase definitions, parameters and MITRE mappings are loaded
+            dynamically from the attack scripts.
+        </p>
+
+    </section>
+
 
     <section class="panel">
 
         <div class="panel-header">
 
             <h2>
-                Incident Status
+                Available Phases
             </h2>
 
-            <span
-                id="incidentId"
-                class="incident-id"
-            >
-                No active incident
+            <span class="panel-tag">
+                P01 → P08
             </span>
 
         </div>
 
 
-        <!-- ================================================
-     PHASES
-================================================= -->
+        <div
+            id="phaseGrid"
+            class="phase-grid"
+        >
+            <div class="phase-card">
 
-<div
-    id="phaseGrid"
-    class="phase-grid"
->
-    <div class="phase-card">
-        <div class="phase-info">
-            <strong>
-                Loading phases...
-            </strong>
+                <div class="phase-info">
 
-            <span>
-                Reading attack metadata
-            </span>
+                    <strong>
+                        Loading phases...
+                    </strong>
+
+                    <span>
+                        Reading attack metadata
+                    </span>
+
+                </div>
+
+            </div>
         </div>
-    </div>
-</div>
 
-<div
-    id="phaseDetail"
-    class="phase-detail hidden"
-></div>
+
+        <div
+            id="phaseDetail"
+            class="phase-detail hidden"
+        ></div>
 
     </section>
 
+</section>
 
-    <!-- ====================================================
+            
+
+        <!-- =================================================
+             SCENARIOS PAGE
+        ================================================== -->
+
+        <section
+            id="page-scenarios"
+            class="app-page"
+        >
+
+            <section class="panel">
+
+                <div class="panel-header">
+
+                    <h2>
+                        Scenarios
+                    </h2>
+
+                </div>
+
+                <p class="muted">
+                    Scenario library will be added here.
+                </p>
+
+            </section>
+
+        </section>
+
+
+        <!-- =================================================
+             INVENTORY PAGE
+        ================================================== -->
+
+        <section
+            id="page-inventory"
+            class="app-page"
+        >
+
+            <section class="panel intro-panel">
+
+                <div class="panel-header">
+
+                    <h2>
+                        Inventory / State
+                    </h2>
+
+                    <span class="panel-tag">
+                        Live CyberLab State
+                    </span>
+
+                </div>
+
+                <p>
+                    Discovered systems and current incident state.
+                </p>
+
+                <p class="muted">
+                    Hosts are populated dynamically from discovery,
+                    access, exfiltration and impact phases.
+                </p>
+
+            </section>
+
+
+   <!-- ====================================================
          DYNAMIC INVENTORY
     ===================================================== -->
 
@@ -859,155 +1053,8 @@
     </section>
 
 
-    <!-- ====================================================
-         CAMPAIGN LOG
-    ===================================================== -->
+</section>
 
-    <section class="panel">
-
-        <div class="panel-header">
-
-            <h2>
-                Logs
-            </h2>
-
-            <button
-                id="refreshLogButton"
-                class="button button-small"
-                type="button"
-            >
-                REFRESH
-            </button>
-
-        </div>
-
-
-        <pre id="campaignLog" class="campaign-log">Waiting for campaign...</pre>
-
-        </section>
-
-
-        </section>
-
-
-        <!-- =================================================
-             CAMPAIGNS PAGE
-        ================================================== -->
-
-        <section
-            id="page-campaigns"
-            class="app-page"
-        >
-
-            <section class="panel">
-
-                <div class="panel-header">
-
-                    <h2>
-                        Campaigns
-                    </h2>
-
-                    <span class="panel-tag">
-                        Campaign Library
-                    </span>
-
-                </div>
-
-                <p class="muted">
-                    Campaign management will be moved here.
-                </p>
-
-            </section>
-
-        </section>
-
-
-        <!-- =================================================
-             PHASES PAGE
-        ================================================== -->
-
-        <section
-            id="page-phases"
-            class="app-page"
-        >
-
-            <section class="panel">
-
-                <div class="panel-header">
-
-                    <h2>
-                        Phases
-                    </h2>
-
-                    <span class="panel-tag">
-                        Dynamic Attack Phases
-                    </span>
-
-                </div>
-
-                <p class="muted">
-                    Individual phase execution will be moved here.
-                </p>
-
-            </section>
-
-        </section>
-
-
-        <!-- =================================================
-             SCENARIOS PAGE
-        ================================================== -->
-
-        <section
-            id="page-scenarios"
-            class="app-page"
-        >
-
-            <section class="panel">
-
-                <div class="panel-header">
-
-                    <h2>
-                        Scenarios
-                    </h2>
-
-                </div>
-
-                <p class="muted">
-                    Scenario library will be added here.
-                </p>
-
-            </section>
-
-        </section>
-
-
-        <!-- =================================================
-             INVENTORY PAGE
-        ================================================== -->
-
-        <section
-            id="page-inventory"
-            class="app-page"
-        >
-
-            <section class="panel">
-
-                <div class="panel-header">
-
-                    <h2>
-                        Inventory / State
-                    </h2>
-
-                </div>
-
-                <p class="muted">
-                    Host inventory and state information will be moved here.
-                </p>
-
-            </section>
-
-        </section>
 
 
         <!-- =================================================
