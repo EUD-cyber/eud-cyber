@@ -2392,6 +2392,28 @@ function initializeNavigation() {
     });
 }
 
+function initializeDashboardActions() {
+
+    const actionButtons =
+        document.querySelectorAll(
+            "[data-page-link]"
+        );
+
+
+    actionButtons.forEach(button => {
+
+        button.addEventListener(
+            "click",
+            () => {
+
+                showPage(
+                    button.dataset.pageLink
+                );
+            }
+        );
+    });
+}
+
 // ==========================================================
 // EVENT HANDLERS
 // ==========================================================
@@ -2495,6 +2517,7 @@ async function initialize() {
     );
 
     initializeNavigation();
+    initializeDashboardActions();
 
     try {
 
