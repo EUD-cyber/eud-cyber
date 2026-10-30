@@ -2316,6 +2316,83 @@ async function runUpdate() {
 }
 
 // ==========================================================
+// PAGE NAVIGATION
+// ==========================================================
+
+function showPage(pageName) {
+
+    if (!pageName) {
+        return;
+    }
+
+
+    const pages =
+        document.querySelectorAll(
+            ".app-page"
+        );
+
+
+    pages.forEach(page => {
+
+        page.classList.remove(
+            "app-page-active"
+        );
+    });
+
+
+    const targetPage =
+        document.getElementById(
+            `page-${pageName}`
+        );
+
+
+    if (targetPage) {
+
+        targetPage.classList.add(
+            "app-page-active"
+        );
+    }
+
+
+    const navItems =
+        document.querySelectorAll(
+            ".nav-item"
+        );
+
+
+    navItems.forEach(item => {
+
+        item.classList.toggle(
+            "nav-active",
+            item.dataset.page === pageName
+        );
+    });
+}
+
+
+function initializeNavigation() {
+
+    const navItems =
+        document.querySelectorAll(
+            ".nav-item"
+        );
+
+
+    navItems.forEach(item => {
+
+        item.addEventListener(
+            "click",
+            () => {
+
+                showPage(
+                    item.dataset.page
+                );
+            }
+        );
+    });
+}
+
+// ==========================================================
 // EVENT HANDLERS
 // ==========================================================
 
@@ -2417,6 +2494,7 @@ async function initialize() {
         "idle"
     );
 
+    initializeNavigation();
 
     try {
 
