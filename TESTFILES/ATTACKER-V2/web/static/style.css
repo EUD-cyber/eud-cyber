@@ -1636,3 +1636,194 @@ footer {
             16px;
     }
 }
+
+/* ==========================================================
+   DASHBOARD KPI
+   ========================================================== */
+
+.dashboard-kpi-grid {
+    display: grid;
+
+    grid-template-columns:
+        repeat(5, minmax(150px, 1fr));
+
+    gap: 14px;
+}
+
+
+.dashboard-kpi-card {
+    min-height: 105px;
+
+    display: flex;
+
+    flex-direction: column;
+
+    justify-content: space-between;
+
+    padding: 18px;
+
+    background:
+        linear-gradient(
+            145deg,
+            rgba(8, 24, 30, 0.98),
+            rgba(6, 18, 24, 0.98)
+        );
+
+    border:
+        1px solid rgba(32, 201, 151, 0.20);
+
+    border-radius:
+        9px;
+
+    transition:
+        transform 0.15s ease,
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+
+.dashboard-kpi-card:hover {
+    transform:
+        translateY(-2px);
+
+    border-color:
+        rgba(32, 201, 151, 0.50);
+
+    box-shadow:
+        0 0 22px
+        rgba(32, 201, 151, 0.06);
+}
+
+
+.dashboard-kpi-label {
+    color:
+        var(--text-muted);
+
+    font-size:
+        0.7rem;
+
+    font-weight:
+        700;
+
+    letter-spacing:
+        0.08em;
+
+    text-transform:
+        uppercase;
+}
+
+
+.dashboard-kpi-value {
+    margin-top:
+        16px;
+
+    color:
+        var(--accent);
+
+    font-family:
+        "Cascadia Code",
+        Consolas,
+        monospace;
+
+    font-size:
+        1.25rem;
+
+    font-weight:
+        750;
+
+    letter-spacing:
+        0.04em;
+}
+
+
+.dashboard-good {
+    color:
+        var(--green);
+}
+
+
+/* ==========================================================
+   DASHBOARD QUICK ACTIONS
+   ========================================================== */
+
+.dashboard-actions {
+    display:
+        grid;
+
+    grid-template-columns:
+        repeat(4, minmax(160px, 1fr));
+
+    gap:
+        14px;
+}
+
+
+.dashboard-action {
+    min-height:
+        58px;
+
+    width:
+        100%;
+
+    font-family:
+        "Cascadia Code",
+        Consolas,
+        monospace;
+
+    letter-spacing:
+        0.07em;
+}
+
+
+.dashboard-action:not(.button-start) {
+    color:
+        var(--accent);
+
+    background:
+        rgba(32, 201, 151, 0.035);
+
+    border-color:
+        rgba(32, 201, 151, 0.32);
+}
+
+
+.dashboard-action:not(.button-start):hover {
+    background:
+        rgba(32, 201, 151, 0.09);
+
+    border-color:
+        var(--accent);
+
+    box-shadow:
+        0 0 18px
+        rgba(32, 201, 151, 0.07);
+}
+
+
+/* ==========================================================
+   DASHBOARD RESPONSIVE
+   ========================================================== */
+
+@media (max-width: 1250px) {
+
+    .dashboard-kpi-grid {
+        grid-template-columns:
+            repeat(3, 1fr);
+    }
+
+
+    .dashboard-actions {
+        grid-template-columns:
+            repeat(2, 1fr);
+    }
+}
+
+
+@media (max-width: 760px) {
+
+    .dashboard-kpi-grid,
+    .dashboard-actions {
+        grid-template-columns:
+            1fr;
+    }
+}
