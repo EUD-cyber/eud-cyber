@@ -1827,3 +1827,15 @@ footer {
             1fr;
     }
 }
+
+.dashboard-running {
+    color: var(--blue);
+}
+
+.dashboard-warning {
+    color: var(--yellow);
+}
+
+.dashboard-danger {
+    color: var(--red);
+}

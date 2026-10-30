@@ -549,9 +549,24 @@ async function loadPhases() {
                 "/api/phases"
             );
 
+        const phases =
+            data.phases || [];
+
         renderPhases(
-            data.phases || []
+            phases
         );
+
+
+const dashboardPhaseCount =
+    document.getElementById(
+        "dashboardPhaseCount"
+    );
+
+if (dashboardPhaseCount) {
+
+    dashboardPhaseCount.textContent =
+        phases.length;
+}
 
     }
 
@@ -1062,6 +1077,69 @@ async function refreshStatus() {
             data.status
         );
 
+const dashboardCampaignStatus =
+    document.getElementById(
+        "dashboardCampaignStatus"
+    );
+
+if (dashboardCampaignStatus) {
+
+    dashboardCampaignStatus.textContent =
+        String(
+            data.status || "idle"
+        ).toUpperCase();
+
+
+    dashboardCampaignStatus.classList.remove(
+        "dashboard-good",
+        "dashboard-running",
+        "dashboard-warning",
+        "dashboard-danger"
+    );
+
+
+    switch (
+        String(
+            data.status || "idle"
+        ).toLowerCase()
+    ) {
+
+        case "running":
+
+            dashboardCampaignStatus.classList.add(
+                "dashboard-running"
+            );
+
+            break;
+
+
+        case "complete":
+
+            dashboardCampaignStatus.classList.add(
+                "dashboard-good"
+            );
+
+            break;
+
+
+        case "failed":
+
+            dashboardCampaignStatus.classList.add(
+                "dashboard-danger"
+            );
+
+            break;
+
+
+        case "stopped":
+
+            dashboardCampaignStatus.classList.add(
+                "dashboard-warning"
+            );
+
+            break;
+    }
+}
 
         // --------------------------------------------------
         // INCIDENT ID
@@ -2553,3 +2631,4 @@ document.addEventListener(
     "DOMContentLoaded",
     initialize
 );
+
