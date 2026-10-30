@@ -75,11 +75,139 @@
 
 
 <!-- ========================================================
-     MAIN
+     APPLICATION LAYOUT
 ========================================================= -->
 
-<main class="main-container">
+<div class="app-layout">
 
+    <!-- ====================================================
+         SIDEBAR
+    ===================================================== -->
+
+    <aside class="sidebar">
+
+        <div class="sidebar-brand">
+
+            <div class="sidebar-logo">
+                MN
+            </div>
+
+            <div>
+                <div class="sidebar-title">
+                    MrNobody
+                </div>
+
+                <div class="sidebar-subtitle">
+                    H3 Incident Platform
+                </div>
+            </div>
+
+        </div>
+
+
+        <nav class="sidebar-nav">
+
+            <button
+                class="nav-item nav-active"
+                type="button"
+                data-page="dashboard"
+            >
+                <span class="nav-icon">⌂</span>
+                <span>Dashboard</span>
+            </button>
+
+
+            <button
+                class="nav-item"
+                type="button"
+                data-page="campaigns"
+            >
+                <span class="nav-icon">▱</span>
+                <span>Campaigns</span>
+            </button>
+
+
+            <button
+                class="nav-item"
+                type="button"
+                data-page="phases"
+            >
+                <span class="nav-icon">◆</span>
+                <span>Phases</span>
+            </button>
+
+
+            <button
+                class="nav-item"
+                type="button"
+                data-page="scenarios"
+            >
+                <span class="nav-icon">⬡</span>
+                <span>Scenarios</span>
+            </button>
+
+
+            <button
+                class="nav-item"
+                type="button"
+                data-page="inventory"
+            >
+                <span class="nav-icon">▤</span>
+                <span>Inventory / State</span>
+            </button>
+
+
+            <button
+                class="nav-item"
+                type="button"
+                data-page="reports"
+            >
+                <span class="nav-icon">▥</span>
+                <span>Reports</span>
+            </button>
+
+
+            <button
+                class="nav-item"
+                type="button"
+                data-page="system"
+            >
+                <span class="nav-icon">⚙</span>
+                <span>System</span>
+            </button>
+
+        </nav>
+
+
+        <div class="sidebar-footer">
+
+            <div>
+                SEE MORE.
+            </div>
+
+            <div>
+                LEAVE NO TRACE.
+            </div>
+
+            <div class="sidebar-signature">
+                — MRNOBODY
+            </div>
+
+        </div>
+
+    </aside>
+
+
+    <!-- ====================================================
+         PAGE CONTENT
+    ===================================================== -->
+
+    <main class="main-container">
+
+        <section
+            id="page-dashboard"
+            class="app-page app-page-active"
+        >
 
     <!-- ====================================================
          CAMPAIGN DESCRIPTION
@@ -756,10 +884,190 @@
 
         <pre id="campaignLog" class="campaign-log">Waiting for campaign...</pre>
 
-    </section>
+        </section>
 
 
-</main>
+        </section>
+
+
+        <!-- =================================================
+             CAMPAIGNS PAGE
+        ================================================== -->
+
+        <section
+            id="page-campaigns"
+            class="app-page"
+        >
+
+            <section class="panel">
+
+                <div class="panel-header">
+
+                    <h2>
+                        Campaigns
+                    </h2>
+
+                    <span class="panel-tag">
+                        Campaign Library
+                    </span>
+
+                </div>
+
+                <p class="muted">
+                    Campaign management will be moved here.
+                </p>
+
+            </section>
+
+        </section>
+
+
+        <!-- =================================================
+             PHASES PAGE
+        ================================================== -->
+
+        <section
+            id="page-phases"
+            class="app-page"
+        >
+
+            <section class="panel">
+
+                <div class="panel-header">
+
+                    <h2>
+                        Phases
+                    </h2>
+
+                    <span class="panel-tag">
+                        Dynamic Attack Phases
+                    </span>
+
+                </div>
+
+                <p class="muted">
+                    Individual phase execution will be moved here.
+                </p>
+
+            </section>
+
+        </section>
+
+
+        <!-- =================================================
+             SCENARIOS PAGE
+        ================================================== -->
+
+        <section
+            id="page-scenarios"
+            class="app-page"
+        >
+
+            <section class="panel">
+
+                <div class="panel-header">
+
+                    <h2>
+                        Scenarios
+                    </h2>
+
+                </div>
+
+                <p class="muted">
+                    Scenario library will be added here.
+                </p>
+
+            </section>
+
+        </section>
+
+
+        <!-- =================================================
+             INVENTORY PAGE
+        ================================================== -->
+
+        <section
+            id="page-inventory"
+            class="app-page"
+        >
+
+            <section class="panel">
+
+                <div class="panel-header">
+
+                    <h2>
+                        Inventory / State
+                    </h2>
+
+                </div>
+
+                <p class="muted">
+                    Host inventory and state information will be moved here.
+                </p>
+
+            </section>
+
+        </section>
+
+
+        <!-- =================================================
+             REPORTS PAGE
+        ================================================== -->
+
+        <section
+            id="page-reports"
+            class="app-page"
+        >
+
+            <section class="panel">
+
+                <div class="panel-header">
+
+                    <h2>
+                        Reports
+                    </h2>
+
+                </div>
+
+                <p class="muted">
+                    Incident reports and evidence will be available here.
+                </p>
+
+            </section>
+
+        </section>
+
+
+        <!-- =================================================
+             SYSTEM PAGE
+        ================================================== -->
+
+        <section
+            id="page-system"
+            class="app-page"
+        >
+
+            <section class="panel">
+
+                <div class="panel-header">
+
+                    <h2>
+                        System
+                    </h2>
+
+                </div>
+
+                <p class="muted">
+                    Update, health and system information will be available here.
+                </p>
+
+            </section>
+
+        </section>
+
+    </main>
+
+</div>
 
 
 <!-- ========================================================
