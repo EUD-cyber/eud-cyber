@@ -61,7 +61,7 @@ packages:
 
 write_files:
 
-  - path: /usr/local/sbin/install-nordic-incident-v2
+  - path: /usr/local/sbin/install-mrnobody
     owner: root:root
     permissions: '0755'
     content: |
@@ -76,7 +76,7 @@ write_files:
 
       BASE_URL="https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/TESTFILES/ATTACKER-V2"
       INSTALL_DIR="/opt/nordic-attack"
-      LOG_FILE="/var/log/nordic-incident-install.log"
+      LOG_FILE="/var/log/mrnobody-install.log"
 
       TLS_DIR="/etc/nordic-incident/tls"
       CERT_FILE="${TLS_DIR}/incident.crt"
@@ -117,7 +117,6 @@ write_files:
 
       echo
       echo "================================================"
-      echo " Nordic Manufacturing A/S"
       echo " MrNobody Incident Platform"
       echo " Installation"
       echo "================================================"
@@ -436,7 +435,7 @@ PY
               -days 3650 \
               -keyout "$KEY_FILE" \
               -out "$CERT_FILE" \
-              -subj "/C=DK/O=Nordic Manufacturing A/S/OU=MrNobody Incident Platform/CN=incidentvm"
+              -subj "/C=DK/O=MrNobody Incident Platform/CN=incidentvm"
 
       else
 
@@ -588,7 +587,6 @@ PY
       log "Writing installation marker..."
 
       {
-          echo "Nordic Manufacturing A/S"
           echo "MrNobody Incident Platform"
           echo
           echo "Installation completed:"
@@ -682,12 +680,12 @@ runcmd:
   # Installation log
   # ----------------------------------------------------------
 
-  - touch /var/log/nordic-incident-install.log
+  - touch /var/log/mrnobody-install.log
 
-  - echo "==============================================" >> /var/log/nordic-incident-install.log
-  - echo "Nordic IncidentVM V2 cloud-init starting" >> /var/log/nordic-incident-install.log
-  - date >> /var/log/nordic-incident-install.log
-  - echo "==============================================" >> /var/log/nordic-incident-install.log
+  - echo "==============================================" >> /var/log/mrnobody-install.log
+  - echo "MrNobody Incident Platform cloud-init starting" >> /var/log/mrnobody-install.log
+  - date >> /var/log/mrnobody-install.log
+  - echo "==============================================" >> /var/log/mrnobody-install.log
 
 
   # ----------------------------------------------------------
@@ -701,18 +699,18 @@ runcmd:
   # Run complete V2 installer
   # ----------------------------------------------------------
 
-  - /usr/local/sbin/install-nordic-incident-v2
+  - /usr/local/sbin/install-mrnobody
 
 
   # ----------------------------------------------------------
   # Final cloud-init marker
   # ----------------------------------------------------------
 
-  - echo "" >> /var/log/nordic-incident-install.log
-  - echo "==============================================" >> /var/log/nordic-incident-install.log
-  - echo "Nordic IncidentVM V2 cloud-init completed" >> /var/log/nordic-incident-install.log
-  - date >> /var/log/nordic-incident-install.log
-  - echo "==============================================" >> /var/log/nordic-incident-install.log
+  - echo "" >> /var/log/mrnobody-install.log
+  - echo "==============================================" >> /var/log/mrnobody-install.log
+  - echo "MrNobody Incident Platform cloud-init completed" >> /var/log/mrnobody-install.log
+  - date >> /var/log/mrnobody-install.log
+  - echo "==============================================" >> /var/log/mrnobody-install.log
 
 
 # ============================================================
@@ -721,6 +719,6 @@ runcmd:
 
 power_state:
   mode: poweroff
-  message: "Nordic IncidentVM V2 installation completed - powering off"
+  message: "MrNobody Incident Platform installation completed - powering off"
   timeout: 30
   condition: true
