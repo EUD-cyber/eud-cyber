@@ -1,3 +1,5 @@
+> Historical audit of PR #37. The V2 default scenario and health branding were subsequently decoupled; see [the current H3 decoupling audit](mrnobody-h3-decoupling.md). The retained references listed below describe that earlier revision.
+
 # Live output and MrNobody naming cleanup
 
 The Campaigns, Scenarios, Phases and System pages each show the existing shared `/api/log` output. One two-second poll updates visible panels; opening another page refreshes its output immediately. Hidden panels retain their content and scroll position. Manual refresh is available on each page. Output is rendered as text. A reader scrolling through older output keeps their position, and failed polls preserve the last output and display a retry message. Phase starts, campaign actions, updates and navigation refresh the panels immediately. The log is explicitly labelled as shared because the existing backend already combines these operations in `campaign.log`.

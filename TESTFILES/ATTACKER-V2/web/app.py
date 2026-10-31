@@ -463,7 +463,7 @@ def health():
     return jsonify(
         {
             "status": "ok",
-            "service": "Nordic Incident Control V2",
+            "service": "MrNobody Incident Platform",
             "version": "2.1",
         }
     )
@@ -1133,14 +1133,14 @@ def api_scenarios():
 
 @app.route(
     "/api/start",
-    defaults={"scenario_id": "full-incident-h3"},
+    defaults={"scenario_id": "full-incident"},
     methods=["POST"],
 )
 @app.route(
     "/api/scenario/<scenario_id>/start",
     methods=["POST"],
 )
-def api_start(scenario_id="full-incident-h3"):
+def api_start(scenario_id="full-incident"):
     global campaign_process
 
     with campaign_lock:

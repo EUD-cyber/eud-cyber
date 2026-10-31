@@ -39,7 +39,7 @@ BASE_DIR="${NORDIC_BASE_DIR:-/opt/nordic-attack}"
 SCRIPT_DIR="${BASE_DIR}/scripts"
 SCENARIO_DIR="${BASE_DIR}/scenarios"
 
-FULL_CAMPAIGN="${SCENARIO_DIR}/full-incident-h3.sh"
+FULL_CAMPAIGN="${SCENARIO_DIR}/full-incident.sh"
 
 
 # ============================================================

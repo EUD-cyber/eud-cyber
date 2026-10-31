@@ -822,7 +822,7 @@ function configureScenario(scenario) {
     if (startButton) {
         startButton.textContent = scenario
             ? `START ${scenario.name}`
-            : "START FULL H3 INCIDENT";
+            : "START FULL INCIDENT";
     }
 
     let resetButton = document.getElementById("resetScenarioButton");
@@ -831,7 +831,7 @@ function configureScenario(scenario) {
         resetButton.id = "resetScenarioButton";
         resetButton.type = "button";
         resetButton.className = "button button-small";
-        resetButton.textContent = "USE DEFAULT H3 SCENARIO";
+        resetButton.textContent = "USE DEFAULT SCENARIO";
         resetButton.addEventListener("click", () => {
             configureScenario(null);
         });
@@ -845,7 +845,7 @@ function configureScenario(scenario) {
     showMessage(
         scenario
             ? `Configure ${scenario.name}, then press START to run it.`
-            : "Full H3 Incident selected. Review the configuration before starting.",
+            : "Full Incident selected. Review the configuration before starting.",
         "info"
     );
 }
@@ -1848,7 +1848,7 @@ async function startCampaign() {
     window.confirm(
         (scenario
             ? `Start ${scenario.name}?\n\n`
-            : "Start the Full H3 Incident scenario?\n\n") +
+            : "Start the Full Incident scenario?\n\n") +
         "The campaign will dynamically discover hosts " +
         "and execute the configured simulation phases.\n\n" +
         "Linux targets will use SSH credentials.\n" +

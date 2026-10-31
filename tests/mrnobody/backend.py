@@ -35,6 +35,8 @@ with patch.dict(sys.modules, {"flask": fake_flask}):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
+assert module.health()["service"] == "MrNobody Incident Platform"
+
 with tempfile.TemporaryDirectory(dir=source.parent.parent.resolve()) as temporary:
     root = Path(temporary)
     module.BASE_DIR = root
@@ -44,7 +46,7 @@ with tempfile.TemporaryDirectory(dir=source.parent.parent.resolve()) as temporar
     module.LOG_DIR = root / "logs"
     module.CAMPAIGN_LOG = root / "logs" / "campaign.log"
     module.CONFIG_FILE = root / "missing.conf"
-    for filename, scenario_id in [("full-incident-h3", "full-incident-h3"), ("different-filename", "custom")]:
+    for filename, scenario_id in [("full-incident", "full-incident"), ("different-filename", "custom")]:
         (module.SCENARIO_DIR / (filename + ".sh")).write_text(
             '# SCENARIO_ID="' + scenario_id + '"\n# SCENARIO_NAME="Test ' + scenario_id + '"\n',
             encoding="utf-8",
@@ -53,7 +55,7 @@ with tempfile.TemporaryDirectory(dir=source.parent.parent.resolve()) as temporar
     assert module.find_scenario("fallback")["path"].name == "fallback.sh"
     assert module.find_scenario("../outside") is None
     assert module.api_scenarios()["count"] == 3
-    assert routes["/api/start"][1]["defaults"] == {"scenario_id": "full-incident-h3"}
+    assert routes["/api/start"][1]["defaults"] == {"scenario_id": "full-incident"}
     assert routes["/api/start"][0] is routes["/api/scenario/<scenario_id>/start"][0]
     payload = {"incident_ip": "192.168.1.254", "ssh_password": "ssh-test-secret",
                "rdp_password": "rdp-test-secret"}
@@ -63,9 +65,9 @@ with tempfile.TemporaryDirectory(dir=source.parent.parent.resolve()) as temporar
     ) as launch:
         launch.return_value.pid = 123
         launch.return_value.poll.return_value = None
-        for scenario_id, filename in [("full-incident-h3", "full-incident-h3"), ("custom", "different-filename")]:
+        for scenario_id, filename in [("full-incident", "full-incident"), ("custom", "different-filename")]:
             module.campaign_process = None
-            result = module.api_start() if scenario_id == "full-incident-h3" else module.api_start(scenario_id)
+            result = module.api_start() if scenario_id == "full-incident" else module.api_start(scenario_id)
             assert result["scenario_id"] == scenario_id
             assert result["pid"] == 123
             args, kwargs = launch.call_args

@@ -62,7 +62,7 @@ async function main() {
     assert.equal(elements.get("sshPassword").value, "");
     assert.equal(elements.get("rdpPassword").value, "");
     elements.get("resetScenarioButton").listeners.click();
-    assert.equal(elements.get("startButton").textContent, "START FULL H3 INCIDENT");
+    assert.equal(elements.get("startButton").textContent, "START FULL INCIDENT");
     await vm.runInContext("startCampaign()", context);
     assert.equal(context.submissions.length, 1); // Shared validation rejects missing passwords.
     elements.get("sshPassword").value = "ssh-test";

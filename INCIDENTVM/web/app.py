@@ -387,7 +387,7 @@ def health():
     return jsonify({
         "status": "ok",
         "service":
-            "Nordic Incident Control"
+            "MrNobody Incident Platform"
     })
 
 

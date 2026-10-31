@@ -77,7 +77,7 @@ assert 'IMPACT_DIR="/tmp/nordic-impact-${INCIDENT_ID}"' in impact
 assert '$root="C:\\NordicIncident\\$id\\impact"' in impact
 assert '"$INCIDENT_ID" <<\'PY\'' in impact
 assert 'LOG_FILE="$NORDIC_LOG_DIR/${INCIDENT_ID}-07-impact.log"' in impact
-scenario = (PLATFORM / 'scenarios/full-incident-h3.sh').read_text(encoding='utf8')
+scenario = (PLATFORM / 'scenarios/full-incident.sh').read_text(encoding='utf8')
 assert 'export NORDIC_INCIDENT_ID="$INCIDENT_ID"' in scenario
 assert 'MASTER_LOG="$LOG_DIR/${INCIDENT_ID}-campaign.log"' in scenario
 assert '"incident_id": incident_id' in scenario
