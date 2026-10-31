@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 
+# SCENARIO_ID="full-incident-h3"
+# SCENARIO_NAME="Full H3 Incident"
+# SCENARIO_DESCRIPTION="Complete H3 incident simulation from discovery through impact."
+# SCENARIO_PHASES="01,02,03,08,04,05,06,07"
+
 set -u
 
 # ============================================================

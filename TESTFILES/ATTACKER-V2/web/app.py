@@ -24,7 +24,9 @@ PHASE_RUNNER = SCRIPT_DIR / "run-phase.sh"
 UPDATE_SCRIPT = SCRIPT_DIR / "update.sh"
 UPLOAD_DIR = BASE_DIR / "runtime" / "uploads"
 
-SCENARIO = BASE_DIR / "scenarios" / "full-incident-h3.sh"
+SCENARIO_DIR = BASE_DIR / "scenarios"
+
+SCENARIO = SCENARIO_DIR / "full-incident-h3.sh"
 
 CAMPAIGN_STATE = STATE_DIR / "campaign.json"
 INVENTORY_STATE = STATE_DIR / "discovered-hosts.json"
@@ -156,6 +158,67 @@ def read_attack_metadata(path):
                 result[key] = value
 
     except Exception:
+        return {}
+
+    return result
+
+def read_scenario_metadata(path):
+    """
+    Read SCENARIO_* metadata from a scenario script.
+    """
+
+    metadata_keys = {
+        "SCENARIO_ID",
+        "SCENARIO_NAME",
+        "SCENARIO_DESCRIPTION",
+        "SCENARIO_PHASES",
+    }
+
+    result = {}
+
+    try:
+
+        with path.open(
+            "r",
+            encoding="utf-8",
+            errors="replace",
+        ) as handle:
+
+            for raw_line in handle:
+
+                line = raw_line.strip()
+
+                if not line.startswith("#"):
+                    continue
+
+                line = line.lstrip("#").strip()
+
+                if "=" not in line:
+                    continue
+
+                key, value = line.split(
+                    "=",
+                    1,
+                )
+
+                key = key.strip()
+
+                if key not in metadata_keys:
+                    continue
+
+                value = value.strip()
+
+                if (
+                    len(value) >= 2
+                    and value[0] == value[-1]
+                    and value[0] in ("'", '"')
+                ):
+                    value = value[1:-1]
+
+                result[key] = value
+
+    except Exception:
+
         return {}
 
     return result
@@ -517,6 +580,85 @@ def api_run_phase(phase_id):
             }
         ), 400
 
+    # ============================================================
+# ROUTES - SCENARIOS
+# ============================================================
+
+@app.route(
+    "/api/scenarios",
+    methods=["GET"],
+)
+def api_scenarios():
+
+    scenarios = []
+
+    if not SCENARIO_DIR.exists():
+
+        return jsonify(
+            {
+                "count": 0,
+                "scenarios": [],
+            }
+        )
+
+
+    for path in sorted(
+        SCENARIO_DIR.glob("*.sh")
+    ):
+
+        metadata = read_scenario_metadata(
+            path
+        )
+
+
+        scenario_id = metadata.get(
+            "SCENARIO_ID",
+            path.stem,
+        )
+
+
+        name = metadata.get(
+            "SCENARIO_NAME",
+            path.stem.replace(
+                "-",
+                " ",
+            ).title(),
+        )
+
+
+        description = metadata.get(
+            "SCENARIO_DESCRIPTION",
+            "",
+        )
+
+
+        phases = [
+            value.strip()
+            for value in metadata.get(
+                "SCENARIO_PHASES",
+                "",
+            ).split(",")
+            if value.strip()
+        ]
+
+
+        scenarios.append(
+            {
+                "id": scenario_id,
+                "name": name,
+                "description": description,
+                "script": path.name,
+                "phases": phases,
+            }
+        )
+
+
+    return jsonify(
+        {
+            "count": len(scenarios),
+            "scenarios": scenarios,
+        }
+    )
 
     # --------------------------------------------------------
     # Locate phase script
