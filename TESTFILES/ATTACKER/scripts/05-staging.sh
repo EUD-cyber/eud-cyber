@@ -169,7 +169,7 @@ Planned projects:
 - SIEM expansion
 - Improved backup procedures
 
-This is synthetic data created for the H3 incident exercise.
+This is synthetic data created for the MrNobody Incident Platform training exercise.
 EOF
 
 echo "[REMOTE] Synthetic company data prepared."

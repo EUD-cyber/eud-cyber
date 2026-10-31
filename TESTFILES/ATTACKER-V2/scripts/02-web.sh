@@ -4,7 +4,7 @@ set -u
 
 # ============================================================
 # Nordic Manufacturing A/S
-# H3 Incident Campaign V2
+# MrNobody Incident Platform
 #
 # Phase 02 - Dynamic Web Discovery / Web Attack
 #
@@ -65,7 +65,7 @@ mkdir -p \
 # CAMPAIGN
 # ============================================================
 
-INCIDENT_ID="${NORDIC_INCIDENT_ID:-H3-$(date +%Y%m%d-%H%M%S)}"
+INCIDENT_ID="${NORDIC_INCIDENT_ID:-MRN-$(date +%Y%m%d-%H%M%S)}"
 
 LOG_FILE="$NORDIC_LOG_DIR/${INCIDENT_ID}-02-web.log"
 
@@ -246,7 +246,7 @@ fi
 echo
 echo "============================================================"
 echo " NORDIC MANUFACTURING"
-echo " H3 INCIDENT CAMPAIGN V2"
+echo " MrNobody Incident Platform"
 echo " PHASE 02 - WEB DISCOVERY"
 echo "============================================================"
 echo

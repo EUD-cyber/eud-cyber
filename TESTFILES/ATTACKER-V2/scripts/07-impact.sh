@@ -5,7 +5,7 @@ set -u
 
 # ============================================================
 # Nordic Manufacturing A/S
-# H3 Incident Campaign V2
+# MrNobody Incident Platform
 #
 # Phase 07 - Impact / Ransomware Simulation
 #
@@ -64,7 +64,7 @@ mkdir -p \
 # CAMPAIGN CONFIGURATION
 # ============================================================
 
-INCIDENT_ID="${NORDIC_INCIDENT_ID:-H3-$(date +%Y%m%d-%H%M%S)}"
+INCIDENT_ID="${NORDIC_INCIDENT_ID:-MRN-$(date +%Y%m%d-%H%M%S)}"
 
 SSH_PASSWORD="${NORDIC_SSH_PASSWORD:-$NORDIC_DEFAULT_SSH_PASSWORD}"
 
@@ -366,7 +366,7 @@ fi
 echo
 echo "============================================================"
 echo " NORDIC MANUFACTURING"
-echo " H3 INCIDENT CAMPAIGN V2"
+echo " MrNobody Incident Platform"
 echo " PHASE 07 - IMPACT / RANSOMWARE SIMULATION"
 echo "============================================================"
 echo
@@ -571,7 +571,7 @@ NORDIC MANUFACTURING A/S
 
 CONFIDENTIAL
 
-Synthetic H3 CyberLab training document.
+Synthetic MrNobody Incident Platform training document.
 EOF
 
 
@@ -625,7 +625,7 @@ YOUR FILES ARE UNAVAILABLE
 ============================================================
 
 Nordic Manufacturing A/S
-H3 CyberLab Incident Simulation
+MrNobody Incident Platform
 
 Incident:
 $INCIDENT_ID
@@ -892,7 +892,7 @@ foreach($d in $dirs){{
 "OrderID,Status`nORD-5001,Processing`nORD-5002,Ready" |
     Set-Content "$data\Webshop\orders.csv"
 
-"NORDIC MANUFACTURING A/S`nCONFIDENTIAL`nSynthetic H3 CyberLab training document." |
+"NORDIC MANUFACTURING A/S`nCONFIDENTIAL`nSynthetic MrNobody Incident Platform training document." |
     Set-Content "$data\Management\business-plan.txt"
 
 1..10 | ForEach-Object {{
@@ -911,7 +911,7 @@ foreach($f in $files){{
 YOUR FILES ARE UNAVAILABLE
 
 Nordic Manufacturing A/S
-H3 CyberLab Incident Simulation
+MrNobody Incident Platform
 
 Incident: $id
 

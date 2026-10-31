@@ -1,12 +1,12 @@
 # ============================================================
 # Nordic Manufacturing A/S
-# H3 Incident Campaign V2
+# MrNobody Incident Platform
 #
 # Flask Web Control Service
 # ============================================================
 # MrNobody systemd update test
 [Unit]
-Description=Nordic Manufacturing H3 Incident Control V2
+Description=MrNobody Incident Platform
 After=network-online.target
 Wants=network-online.target
 

@@ -9,7 +9,7 @@ set -u
 
 # ============================================================
 # Nordic Manufacturing A/S
-# H3 Incident Campaign V2.2
+# MrNobody Incident Platform
 #
 # Full Dynamic Incident Campaign
 #
@@ -67,7 +67,7 @@ mkdir -p \
 # INCIDENT ID
 # ============================================================
 
-INCIDENT_ID="${NORDIC_INCIDENT_ID:-H3-$(date +%Y%m%d-%H%M%S)}"
+INCIDENT_ID="${NORDIC_INCIDENT_ID:-MRN-$(date +%Y%m%d-%H%M%S)}"
 
 export NORDIC_INCIDENT_ID="$INCIDENT_ID"
 
@@ -151,7 +151,7 @@ if [[ -t 0 ]]; then
     echo "============================================================"
     echo
     echo "        NORDIC MANUFACTURING A/S"
-    echo "        H3 INCIDENT CAMPAIGN V2.2"
+    echo "        MrNobody Incident Platform"
     echo
     echo "        CLI CONFIGURATION"
     echo
@@ -721,7 +721,7 @@ echo
 echo "============================================================"
 echo
 echo "        NORDIC MANUFACTURING A/S"
-echo "        H3 INCIDENT CAMPAIGN V2.2"
+echo "        MrNobody Incident Platform"
 echo
 echo "============================================================"
 echo
@@ -971,7 +971,7 @@ data = {
 
     "version": "2.2",
 
-    "campaign": "H3 Incident Campaign V2",
+    "campaign": "MrNobody Incident Platform",
 
     "mode": "dynamic-discovery",
 
@@ -1355,7 +1355,7 @@ log "[+] Full incident campaign completed."
 echo
 echo "============================================================"
 echo
-echo "        H3 INCIDENT CAMPAIGN V2.2 COMPLETE"
+echo "        MrNobody Incident Platform COMPLETE"
 echo
 echo "============================================================"
 echo

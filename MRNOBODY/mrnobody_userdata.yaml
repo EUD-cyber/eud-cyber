@@ -118,7 +118,7 @@ write_files:
       echo
       echo "================================================"
       echo " Nordic Manufacturing A/S"
-      echo " H3 Incident Campaign V2"
+      echo " MrNobody Incident Platform"
       echo " Installation"
       echo "================================================"
       echo
@@ -436,7 +436,7 @@ PY
               -days 3650 \
               -keyout "$KEY_FILE" \
               -out "$CERT_FILE" \
-              -subj "/C=DK/O=Nordic Manufacturing A/S/OU=H3 Cyber Security/CN=incidentvm"
+              -subj "/C=DK/O=Nordic Manufacturing A/S/OU=MrNobody Incident Platform/CN=incidentvm"
 
       else
 
@@ -589,7 +589,7 @@ PY
 
       {
           echo "Nordic Manufacturing A/S"
-          echo "H3 Incident Campaign V2"
+          echo "MrNobody Incident Platform"
           echo
           echo "Installation completed:"
           date

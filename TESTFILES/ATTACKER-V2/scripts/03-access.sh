@@ -4,7 +4,7 @@ set -u
 
 # ============================================================
 # Nordic Manufacturing A/S
-# H3 Incident Campaign V2
+# MrNobody Incident Platform
 #
 # Phase 03 - Initial Access
 #
@@ -69,7 +69,7 @@ mkdir -p \
 # CAMPAIGN CONFIGURATION
 # ============================================================
 
-INCIDENT_ID="${NORDIC_INCIDENT_ID:-H3-$(date +%Y%m%d-%H%M%S)}"
+INCIDENT_ID="${NORDIC_INCIDENT_ID:-MRN-$(date +%Y%m%d-%H%M%S)}"
 
 # Linux / SSH
 SSH_USER="${NORDIC_SSH_USERNAME:-${NORDIC_SSH_USER:-${NORDIC_DEFAULT_SSH_USER:-ubuntu}}}"
@@ -295,7 +295,7 @@ fi
 echo
 echo "============================================================"
 echo " NORDIC MANUFACTURING"
-echo " H3 INCIDENT CAMPAIGN V2"
+echo " MrNobody Incident Platform"
 echo " PHASE 03 - INITIAL ACCESS"
 echo "============================================================"
 echo
@@ -759,7 +759,7 @@ for ip, host in merged.items():
             #
             # An authenticated SSH service without a Windows
             # indicator remains a Linux source for the current
-            # H3 lab architecture.
+            # lab architecture.
             host["platform"] = "linux"
 
         host["access"] = "ssh"

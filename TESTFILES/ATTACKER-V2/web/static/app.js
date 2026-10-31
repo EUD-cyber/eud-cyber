@@ -3,7 +3,7 @@
 /*
 ============================================================
  Nordic Manufacturing A/S
- H3 Incident Campaign V2
+ MrNobody Incident Platform
 
  Web GUI Controller
 ============================================================
@@ -1258,6 +1258,8 @@ async function runStandalonePhase(
         );
 
 
+        await refreshLog();
+
         console.log(
             "Phase execution:",
             result
@@ -1525,7 +1527,7 @@ if (dashboardCampaignStatus) {
             ) {
 
                 showMessage(
-                    "H3 Incident Campaign completed.",
+                    "MrNobody Incident Platform campaign completed.",
                     "success"
                 );
             }
@@ -1846,7 +1848,7 @@ async function startCampaign() {
     window.confirm(
         (scenario
             ? `Start ${scenario.name}?\n\n`
-            : "Start the full H3 Incident Campaign?\n\n") +
+            : "Start the Full H3 Incident scenario?\n\n") +
         "The campaign will dynamically discover hosts " +
         "and execute the configured simulation phases.\n\n" +
         "Linux targets will use SSH credentials.\n" +
@@ -2033,7 +2035,7 @@ async function startCampaign() {
         showMessage(
             result.incident_id
                 ? `Campaign ${result.incident_id} started.`
-                : (result.message || "H3 Incident Campaign V2 started."),
+                : (result.message || "MrNobody Incident Platform started."),
             "success"
         );
 
@@ -2553,59 +2555,33 @@ function addStatusCell(
 // CAMPAIGN LOG
 // ==========================================================
 
+// One shared request updates visible panels; navigation refreshes newly opened pages.
+// Hidden panels keep their content and scroll position. The backend
+// streams campaign, standalone phase and update output into the same log.
+let logRefreshInFlight = false;
+
 async function refreshLog() {
-
+    if (logRefreshInFlight) return;
+    logRefreshInFlight = true;
     try {
-
-        const data =
-            await apiGet(
-                "/api/log"
-            );
-
-
-        if (!data.log) {
-
-            if (campaignLog) {
-
-                campaignLog.textContent =
-                    "Waiting for campaign...";
-            }
-
-            return;
-        }
-
-
-        if (!campaignLog) {
-            return;
-        }
-
-
-        const wasNearBottom =
-            (
-                campaignLog.scrollHeight -
-                campaignLog.scrollTop -
-                campaignLog.clientHeight
-            ) < 100;
-
-
-        campaignLog.textContent =
-            data.log;
-
-
-        if (wasNearBottom) {
-
-            campaignLog.scrollTop =
-                campaignLog.scrollHeight;
-        }
-
-    }
-
-    catch (error) {
-
-        console.error(
-            "Log error:",
-            error
-        );
+        const data = await apiGet("/api/log");
+        document.querySelectorAll("[data-live-log]").forEach(panel => {
+            if (panel.clientHeight === 0) return;
+            const wasNearBottom =
+                panel.scrollHeight - panel.scrollTop - panel.clientHeight < 100;
+            panel.textContent = data.log || "Waiting for output...";
+            if (wasNearBottom) panel.scrollTop = panel.scrollHeight;
+        });
+        document.querySelectorAll("[data-log-status]").forEach(status => {
+            status.textContent = "Live · refreshes every 2 seconds";
+        });
+    } catch (error) {
+        document.querySelectorAll("[data-log-status]").forEach(status => {
+            status.textContent = "Unable to refresh output. Retrying automatically; you can also press REFRESH.";
+        });
+        console.error("Log error:", error);
+    } finally {
+        logRefreshInFlight = false;
     }
 }
 
@@ -2713,6 +2689,8 @@ async function runUpdate() {
 // ==========================================================
 
 function showPage(pageName) {
+
+    if (pageName) refreshLog();
 
     if (!pageName) {
         return;
@@ -2889,6 +2867,10 @@ if (refreshInventoryButton) {
     );
 }
 
+
+document.querySelectorAll("[data-refresh-log]").forEach(button => {
+    button.addEventListener("click", refreshLog);
+});
 
 if (refreshLogButton) {
 

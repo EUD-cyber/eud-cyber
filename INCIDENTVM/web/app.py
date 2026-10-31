@@ -56,7 +56,7 @@ campaigns = {}
 # HELPERS
 # ============================================================
 
-def create_incident_id(prefix="H3"):
+def create_incident_id(prefix="MRN"):
 
     return datetime.now().strftime(
         f"{prefix}-%Y%m%d-%H%M%S"
@@ -498,7 +498,7 @@ def run_phase(phase):
 
 
 # ============================================================
-# START FULL H3 CAMPAIGN
+# START DEFAULT SCENARIO CAMPAIGN
 # ============================================================
 
 @app.route(
@@ -537,7 +537,7 @@ def start_h3_campaign():
         return jsonify({
             "success": False,
             "message":
-                "H3 campaign script not found.",
+                "Campaign script not found.",
             "script":
                 CAMPAIGN_SCRIPT
         }), 404
@@ -550,7 +550,7 @@ def start_h3_campaign():
         return jsonify({
             "success": False,
             "message":
-                "H3 campaign script is not executable.",
+                "Campaign script is not executable.",
             "script":
                 CAMPAIGN_SCRIPT
         }), 500
@@ -572,7 +572,7 @@ def start_h3_campaign():
             return jsonify({
                 "success": False,
                 "message":
-                    "An H3 campaign is already running.",
+                    "A campaign is already running.",
                 "incident_id":
                     existing_id,
                 "pid":
@@ -584,7 +584,7 @@ def start_h3_campaign():
     # --------------------------------------------------------
 
     iid = create_incident_id(
-        "H3"
+        "MRN"
     )
 
     # --------------------------------------------------------
@@ -711,7 +711,7 @@ def campaign_status(
 ):
 
     if not re.fullmatch(
-        r"H3-[0-9]{8}-[0-9]{6}",
+        r"(?:MRN|H3)-[0-9]{8}-[0-9]{6}",
         incident_id
     ):
 
@@ -814,7 +814,7 @@ def campaign_log(
     # --------------------------------------------------------
 
     if not re.fullmatch(
-        r"H3-[0-9]{8}-[0-9]{6}",
+        r"(?:MRN|H3)-[0-9]{8}-[0-9]{6}",
         incident_id
     ):
 
