@@ -370,15 +370,15 @@ write_files:
       log "Validating WinRM Python environment..."
 
       "${INSTALL_DIR}/venv/bin/python" - <<'PY'
-import winrm
-import requests_ntlm
-import spnego
+        import winrm
+        import requests_ntlm
+        import spnego
 
-print("WinRM Python environment OK")
-print("winrm:", winrm.__file__)
-print("requests_ntlm:", requests_ntlm.__file__)
-print("spnego:", spnego.__file__)
-PY
+        print("WinRM Python environment OK")
+        print("winrm:", winrm.__file__)
+        print("requests_ntlm:", requests_ntlm.__file__)
+        print("spnego:", spnego.__file__)
+        PY
 
 
       # ======================================================
