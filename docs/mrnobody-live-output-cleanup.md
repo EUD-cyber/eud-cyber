@@ -16,6 +16,8 @@ The older `INCIDENTVM` generator and older CLI campaign also generate MRN IDs. T
 - `tests/mrnobody/*`: H3 fixtures verify routing and historical compatibility.
 - HTML `<h3>` elements elsewhere in the repository are heading markup.
 
+The legacy `TESTFILES/ATTACKER/attackctl` had CRLF line endings that made `bash -n` fail at its `case` statement. They are normalized to LF; its menu/routing behavior and H3 scenario label remain unchanged.
+
 ## Validation
 
 `python tests/mrnobody/backend.py`, `python tests/mrnobody/runtime.py`, `node tests/mrnobody/scenarios.cjs` and `node tests/mrnobody/logs.cjs` run isolated checks. Process launches and frontend submissions are replaced with test doubles. Tests cover default/custom scenario routing, credential handling, historical log reads, ID generation and validation, output placement, refresh behavior, scroll preservation, failed polls, recovery, text rendering, and distributed manifest hashes.
@@ -23,6 +25,8 @@ The older `INCIDENTVM` generator and older CLI campaign also generate MRN IDs. T
 The PR validation workflow also checks Python/JS syntax and runs `bash -n` on scripts. `runtime.py --bash` evaluates only extracted single-line ID assignments against empty, MRN and H3 fixtures. It never sources scripts or launches a campaign. No end-to-end campaign is run as part of this change.
 
 ## Exact changed files
+
+- `TESTFILES/ATTACKER/attackctl`
 
 - `.github/workflows/mrnobody-validation.yml`
 - `INCIDENTVM/web/app.py`
