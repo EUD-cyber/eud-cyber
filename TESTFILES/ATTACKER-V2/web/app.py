@@ -26,8 +26,6 @@ UPLOAD_DIR = BASE_DIR / "runtime" / "uploads"
 
 SCENARIO_DIR = BASE_DIR / "scenarios"
 
-SCENARIO = SCENARIO_DIR / "full-incident-h3.sh"
-
 CAMPAIGN_STATE = STATE_DIR / "campaign.json"
 INVENTORY_STATE = STATE_DIR / "discovered-hosts.json"
 
@@ -238,10 +236,7 @@ def find_scenario(
         "*.sh"
     ):
 
-        metadata =
-            read_scenario_metadata(
-                path
-            )
+        metadata = read_scenario_metadata(path)
 
 
         current_id = metadata.get(
@@ -616,86 +611,6 @@ def api_run_phase(phase_id):
                 "message": "Invalid phase ID.",
             }
         ), 400
-
-    # ============================================================
-# ROUTES - SCENARIOS
-# ============================================================
-
-@app.route(
-    "/api/scenarios",
-    methods=["GET"],
-)
-def api_scenarios():
-
-    scenarios = []
-
-    if not SCENARIO_DIR.exists():
-
-        return jsonify(
-            {
-                "count": 0,
-                "scenarios": [],
-            }
-        )
-
-
-    for path in sorted(
-        SCENARIO_DIR.glob("*.sh")
-    ):
-
-        metadata = read_scenario_metadata(
-            path
-        )
-
-
-        scenario_id = metadata.get(
-            "SCENARIO_ID",
-            path.stem,
-        )
-
-
-        name = metadata.get(
-            "SCENARIO_NAME",
-            path.stem.replace(
-                "-",
-                " ",
-            ).title(),
-        )
-
-
-        description = metadata.get(
-            "SCENARIO_DESCRIPTION",
-            "",
-        )
-
-
-        phases = [
-            value.strip()
-            for value in metadata.get(
-                "SCENARIO_PHASES",
-                "",
-            ).split(",")
-            if value.strip()
-        ]
-
-
-        scenarios.append(
-            {
-                "id": scenario_id,
-                "name": name,
-                "description": description,
-                "script": path.name,
-                "phases": phases,
-            }
-        )
-
-
-    return jsonify(
-        {
-            "count": len(scenarios),
-            "scenarios": scenarios,
-        }
-    )
 
     # --------------------------------------------------------
     # Locate phase script
@@ -1131,14 +1046,101 @@ def api_update():
     )
 
 # ============================================================
+# ROUTES - SCENARIOS
+# ============================================================
+
+@app.route(
+    "/api/scenarios",
+    methods=["GET"],
+)
+def api_scenarios():
+
+    scenarios = []
+
+    if not SCENARIO_DIR.exists():
+
+        return jsonify(
+            {
+                "count": 0,
+                "scenarios": [],
+            }
+        )
+
+
+    for path in sorted(
+        SCENARIO_DIR.glob("*.sh")
+    ):
+
+        metadata = read_scenario_metadata(
+            path
+        )
+
+
+        scenario_id = metadata.get(
+            "SCENARIO_ID",
+            path.stem,
+        )
+
+
+        name = metadata.get(
+            "SCENARIO_NAME",
+            path.stem.replace(
+                "-",
+                " ",
+            ).title(),
+        )
+
+
+        description = metadata.get(
+            "SCENARIO_DESCRIPTION",
+            "",
+        )
+
+
+        phases = [
+            value.strip()
+            for value in metadata.get(
+                "SCENARIO_PHASES",
+                "",
+            ).split(",")
+            if value.strip()
+        ]
+
+
+        scenarios.append(
+            {
+                "id": scenario_id,
+                "name": name,
+                "description": description,
+                "script": path.name,
+                "phases": phases,
+            }
+        )
+
+
+    return jsonify(
+        {
+            "count": len(scenarios),
+            "scenarios": scenarios,
+        }
+    )
+
+
+
+# ============================================================
 # ROUTES - START CAMPAIGN
 # ============================================================
 
 @app.route(
     "/api/start",
+    defaults={"scenario_id": "full-incident-h3"},
     methods=["POST"],
 )
-def api_start():
+@app.route(
+    "/api/scenario/<scenario_id>/start",
+    methods=["POST"],
+)
+def api_start(scenario_id="full-incident-h3"):
     global campaign_process
 
     with campaign_lock:
@@ -1153,6 +1155,22 @@ def api_start():
                     "message": "Campaign is already running.",
                 }
             ), 409
+
+        scenario = find_scenario(scenario_id)
+
+        if scenario is None:
+            return jsonify(
+                {
+                    "status": "error",
+                    "message": f"Scenario '{scenario_id}' was not found.",
+                }
+            ), 404
+
+        scenario_path = scenario["path"]
+        scenario_name = scenario["metadata"].get(
+            "SCENARIO_NAME",
+            scenario_id,
+        )
 
         # ----------------------------------------------------
         # Request data
@@ -1443,21 +1461,6 @@ def api_start():
             ), 400
 
 
-        # ----------------------------------------------------
-        # Scenario
-        # ----------------------------------------------------
-
-        if not SCENARIO.exists():
-            return jsonify(
-                {
-                    "status": "error",
-                    "message": (
-                        "Campaign orchestrator is missing: "
-                        f"{SCENARIO}"
-                    ),
-                }
-            ), 500
-
         # ====================================================
         # WORDLIST UPLOAD
         # ====================================================
@@ -1616,6 +1619,7 @@ def api_start():
                 "\n"
                 "================================================\n"
                 "Campaign requested from Web GUI\n"
+                f"Scenario: {scenario_name} ({scenario_id})\n"
                 "Linux + Windows credentials supplied\n"
                 f"Wordlist authentication: "
                 f"{'ENABLED' if wordlist_enabled else 'DISABLED'}\n"
@@ -1631,7 +1635,7 @@ def api_start():
                 [
                     "/usr/bin/env",
                     "bash",
-                    str(SCENARIO),
+                    str(scenario_path),
                 ],
                 cwd=str(BASE_DIR),
                 env=env,
@@ -1656,7 +1660,9 @@ def api_start():
             {
                 "status": "started",
                 "pid": campaign_process.pid,
-                "message": "H3 Incident Campaign V2 started.",
+                "scenario_id": scenario_id,
+                "scenario_name": scenario_name,
+                "message": f"{scenario_name} started.",
             }
         )
 
