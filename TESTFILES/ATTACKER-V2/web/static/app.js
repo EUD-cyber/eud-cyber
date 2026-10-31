@@ -557,6 +557,267 @@ async function loadPhases() {
         );
 
 
+// ==========================================================
+// SCENARIOS
+// ==========================================================
+
+function renderScenarios(scenarios) {
+
+    const scenarioGrid =
+        document.getElementById(
+            "scenarioGrid"
+        );
+
+    const scenarioDetail =
+        document.getElementById(
+            "scenarioDetail"
+        );
+
+
+    if (!scenarioGrid) {
+        return;
+    }
+
+
+    scenarioGrid.innerHTML = "";
+
+
+    if (
+        !Array.isArray(scenarios) ||
+        scenarios.length === 0
+    ) {
+
+        scenarioGrid.innerHTML = `
+            <div class="phase-card">
+                <div class="phase-info">
+                    <strong>No scenarios available</strong>
+                    <span>No scenario definitions were discovered.</span>
+                </div>
+            </div>
+        `;
+
+        return;
+    }
+
+
+    scenarios.forEach(scenario => {
+
+        const card =
+            document.createElement(
+                "div"
+            );
+
+        card.className =
+            "phase-card";
+
+
+        const info =
+            document.createElement(
+                "div"
+            );
+
+        info.className =
+            "phase-info";
+
+
+        const name =
+            document.createElement(
+                "strong"
+            );
+
+        name.textContent =
+            scenario.name;
+
+
+        const description =
+            document.createElement(
+                "span"
+            );
+
+        description.textContent =
+            scenario.description ||
+            scenario.script;
+
+
+        info.appendChild(
+            name
+        );
+
+        info.appendChild(
+            description
+        );
+
+
+        const status =
+            document.createElement(
+                "div"
+            );
+
+        status.className =
+            "phase-status";
+
+        status.textContent =
+            `${scenario.phases?.length || 0} PHASES`;
+
+
+        card.appendChild(
+            info
+        );
+
+        card.appendChild(
+            status
+        );
+
+
+        card.addEventListener(
+            "click",
+            () => {
+
+                document
+                    .querySelectorAll(
+                        "#scenarioGrid .phase-card"
+                    )
+                    .forEach(item => {
+
+                        item.classList.remove(
+                            "phase-selected"
+                        );
+                    });
+
+
+                card.classList.add(
+                    "phase-selected"
+                );
+
+
+                renderScenarioDetail(
+                    scenario
+                );
+            }
+        );
+
+
+        scenarioGrid.appendChild(
+            card
+        );
+    });
+
+
+    if (
+        scenarios.length === 1 &&
+        scenarioDetail
+    ) {
+
+        renderScenarioDetail(
+            scenarios[0]
+        );
+    }
+}
+
+
+function renderScenarioDetail(
+    scenario
+) {
+
+    const scenarioDetail =
+        document.getElementById(
+            "scenarioDetail"
+        );
+
+
+    if (!scenarioDetail) {
+        return;
+    }
+
+
+    const phases =
+        Array.isArray(
+            scenario.phases
+        )
+            ? scenario.phases
+            : [];
+
+
+    scenarioDetail.innerHTML = `
+        <div class="panel-header">
+
+            <h2>
+                ${scenario.name}
+            </h2>
+
+            <span class="panel-tag">
+                ${scenario.id}
+            </span>
+
+        </div>
+
+        <p>
+            ${scenario.description || ""}
+        </p>
+
+        <p class="muted">
+            Script:
+            <strong>${scenario.script}</strong>
+        </p>
+
+        <p class="muted">
+            Phase order:
+            <strong>
+                ${phases.length
+                    ? phases.map(
+                        phase => `P${phase}`
+                    ).join(" → ")
+                    : "No phases defined"}
+            </strong>
+        </p>
+    `;
+}
+
+
+async function loadScenarios() {
+
+    try {
+
+        const data =
+            await apiGet(
+                "/api/scenarios"
+            );
+
+
+        renderScenarios(
+            data.scenarios || []
+        );
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Scenario discovery error:",
+            error
+        );
+
+
+        const scenarioGrid =
+            document.getElementById(
+                "scenarioGrid"
+            );
+
+
+        if (scenarioGrid) {
+
+            scenarioGrid.innerHTML = `
+                <div class="phase-card">
+                    <div class="phase-info">
+                        <strong>Unable to load scenarios</strong>
+                        <span>Check /api/scenarios</span>
+                    </div>
+                </div>
+            `;
+        }
+    }
+}
+
 const dashboardPhaseCount =
     document.getElementById(
         "dashboardPhaseCount"
@@ -2607,6 +2868,7 @@ async function initialize() {
 
         await loadConfiguration();
         await loadPhases();
+        await loadScenarios();
 
         await refreshStatus();
         await refreshInventory();
