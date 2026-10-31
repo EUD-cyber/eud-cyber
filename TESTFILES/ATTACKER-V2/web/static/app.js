@@ -2555,7 +2555,8 @@ function addStatusCell(
 // CAMPAIGN LOG
 // ==========================================================
 
-// One shared request updates every panel, including hidden pages. The backend
+// One shared request updates visible panels; navigation refreshes newly opened pages.
+// Hidden panels keep their content and scroll position. The backend
 // streams campaign, standalone phase and update output into the same log.
 let logRefreshInFlight = false;
 
@@ -2565,6 +2566,7 @@ async function refreshLog() {
     try {
         const data = await apiGet("/api/log");
         document.querySelectorAll("[data-live-log]").forEach(panel => {
+            if (panel.clientHeight === 0) return;
             const wasNearBottom =
                 panel.scrollHeight - panel.scrollTop - panel.clientHeight < 100;
             panel.textContent = data.log || "Waiting for output...";

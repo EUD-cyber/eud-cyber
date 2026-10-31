@@ -50,6 +50,13 @@ async function main() {
     await context.refreshLog();
     assert(panels.every(p => p.textContent === 'Waiting for output...'));
     assert(statuses.every(s => s.textContent.includes('Live')));
+    panels[2].clientHeight = 0; // Hidden pages keep their content/scroll position.
+    context.apiGet = async () => ({log:'new live output'});
+    await context.refreshLog();
+    assert.equal(panels[2].textContent, 'Waiting for output...');
+    panels[2].clientHeight = 100;
+    await context.refreshLog();
+    assert.equal(panels[2].textContent, 'new live output');
     // Every page switch immediately refreshes the shared output.
     await context.showPage('system');
     console.log('Live log tests passed: shared fetch, manual refresh, polling, scrolling, errors, recovery, text-only rendering.');
