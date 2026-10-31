@@ -2,7 +2,7 @@
 
 # ============================================================
 # Nordic Manufacturing A/S
-# H3 Incident Campaign V2
+# MrNobody Incident Platform
 #
 # Phase 01 - Dynamic Network Discovery
 #
@@ -61,7 +61,7 @@ mkdir -p \
     "$NORDIC_LOG_DIR"
 
 
-INCIDENT_ID="${NORDIC_INCIDENT_ID:-H3-$(date +%Y%m%d-%H%M%S)}"
+INCIDENT_ID="${NORDIC_INCIDENT_ID:-MRN-$(date +%Y%m%d-%H%M%S)}"
 
 export NORDIC_INCIDENT_ID="$INCIDENT_ID"
 

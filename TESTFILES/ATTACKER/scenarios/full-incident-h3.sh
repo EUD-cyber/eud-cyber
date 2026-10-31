@@ -4,7 +4,7 @@ set -u
 
 # ============================================================
 # Nordic Manufacturing A/S
-# H3 Full Incident Campaign
+# MrNobody Incident Platform
 #
 # Supports multiple compromised Linux hosts:
 #
@@ -49,7 +49,7 @@ banner() {
     echo
     echo "============================================================"
     echo " Nordic Manufacturing A/S"
-    echo " H3 FULL INCIDENT CAMPAIGN"
+    echo " MrNobody Incident Platform"
     echo "============================================================"
     echo
 }
@@ -239,7 +239,7 @@ else
     echo
 
     DEFAULT_INCIDENT_ID=$(
-        date +"H3-%Y%m%d-%H%M%S"
+        date +"MRN-%Y%m%d-%H%M%S"
     )
 
     read -r -p \
@@ -509,7 +509,7 @@ fi
 {
 
     echo "============================================================"
-    echo "NORDIC MANUFACTURING H3 INCIDENT"
+    echo "MrNobody Incident Platform"
     echo "============================================================"
 
     echo

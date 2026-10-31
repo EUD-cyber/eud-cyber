@@ -4,7 +4,7 @@ set -u
 
 # ============================================================
 # Nordic Manufacturing A/S
-# H3 Incident Campaign V2.2
+# MrNobody Incident Platform
 #
 # PHASE 08 - MULTI-USER WORDLIST AUTHENTICATION
 #
@@ -68,7 +68,7 @@ fi
 source "$CONFIG_FILE"
 
 
-INCIDENT_ID="${NORDIC_INCIDENT_ID:-H3-$(date +%Y%m%d-%H%M%S)}"
+INCIDENT_ID="${NORDIC_INCIDENT_ID:-MRN-$(date +%Y%m%d-%H%M%S)}"
 
 DISCOVERED_STATE="${NORDIC_DISCOVERED_STATE:-$STATE_DIR/discovered-hosts.json}"
 COMPROMISED_STATE="${NORDIC_COMPROMISED_STATE:-$STATE_DIR/compromised-hosts.json}"
@@ -187,7 +187,7 @@ echo
 echo "============================================================"
 echo
 echo " NORDIC MANUFACTURING"
-echo " H3 INCIDENT CAMPAIGN V2.2"
+echo " MrNobody Incident Platform"
 echo " PHASE 08 - MULTI-USER WORDLIST AUTHENTICATION"
 echo
 echo "============================================================"

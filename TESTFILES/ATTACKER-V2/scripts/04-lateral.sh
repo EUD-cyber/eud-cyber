@@ -5,7 +5,7 @@ set -u
 
 # ============================================================
 # Nordic Manufacturing A/S
-# H3 Incident Campaign V2
+# MrNobody Incident Platform
 #
 # Phase 04 - Internal Discovery / Lateral Activity
 #
@@ -74,7 +74,7 @@ mkdir -p \
 # CONFIGURATION
 # ============================================================
 
-INCIDENT_ID="${NORDIC_INCIDENT_ID:-H3-$(date +%Y%m%d-%H%M%S)}"
+INCIDENT_ID="${NORDIC_INCIDENT_ID:-MRN-$(date +%Y%m%d-%H%M%S)}"
 
 
 # ============================================================
@@ -466,7 +466,7 @@ fi
 echo
 echo "============================================================"
 echo " NORDIC MANUFACTURING"
-echo " H3 INCIDENT CAMPAIGN V2"
+echo " MrNobody Incident Platform"
 echo " PHASE 04 - INTERNAL DISCOVERY"
 echo "============================================================"
 echo

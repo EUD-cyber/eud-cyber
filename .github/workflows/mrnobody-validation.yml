@@ -1,0 +1,36 @@
+name: MrNobody - Validate platform cleanup
+on:
+  pull_request:
+    paths:
+      - 'TESTFILES/ATTACKER-V2/**'
+      - 'TESTFILES/ATTACKER/**'
+      - 'INCIDENTVM/**'
+      - 'MRNOBODY/**'
+      - 'tests/mrnobody/**'
+      - '.github/workflows/mrnobody-validation.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check Python, JavaScript and Bash syntax without executing campaigns
+        run: |
+          python -m compileall -q TESTFILES/ATTACKER-V2/web INCIDENTVM/web TESTFILES/ATTACKER/sink.py tests/mrnobody
+          node --check TESTFILES/ATTACKER-V2/web/static/app.js
+          find TESTFILES/ATTACKER-V2 TESTFILES/ATTACKER MRNOBODY INCIDENTVM -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
+          bash -n TESTFILES/ATTACKER-V2/scripts/mrnobody
+          bash -n TESTFILES/ATTACKER/attackctl
+      - name: Check routing, live output, incident IDs and historical compatibility with isolated fixtures
+        run: |
+          python tests/mrnobody/backend.py
+          python tests/mrnobody/runtime.py --bash
+          node tests/mrnobody/scenarios.cjs
+          node tests/mrnobody/logs.cjs
