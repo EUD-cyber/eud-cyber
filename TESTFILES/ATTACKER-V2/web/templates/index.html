@@ -53,15 +53,7 @@
 
     <div class="header-right">
 
-    <button
-        id="updateButton"
-        class="button button-small"
-        type="button"
-    >
-        UPDATE
-    </button>
-
-    <div
+   <div
         id="systemStatus"
         class="status-badge status-idle"
     >
@@ -963,27 +955,107 @@
         ================================================== -->
 
         <section
-            id="page-scenarios"
-            class="app-page"
+    id="page-scenarios"
+    class="app-page"
+>
+
+    <section class="panel intro-panel">
+
+        <div class="panel-header">
+
+            <h2>
+                Scenarios
+            </h2>
+
+            <span class="panel-tag">
+                Scenario Library
+            </span>
+
+        </div>
+
+        <p>
+            Browse and execute complete incident scenarios.
+        </p>
+
+        <p class="muted">
+            Scenarios will be discovered dynamically from the
+            installed scenario definitions.
+        </p>
+
+    </section>
+
+
+    <section class="panel">
+
+        <div class="panel-header">
+
+            <h2>
+                Available Scenarios
+            </h2>
+
+            <span class="panel-tag">
+                Dynamic
+            </span>
+
+        </div>
+
+
+        <div
+            id="scenarioGrid"
+            class="phase-grid"
         >
 
-            <section class="panel">
+            <div class="phase-card">
 
-                <div class="panel-header">
+                <div class="phase-info">
 
-                    <h2>
-                        Scenarios
-                    </h2>
+                    <strong>
+                        Loading scenarios...
+                    </strong>
+
+                    <span>
+                        Reading installed scenario definitions
+                    </span>
 
                 </div>
 
-                <p class="muted">
-                    Scenario library will be added here.
-                </p>
+            </div>
 
-            </section>
+        </div>
 
-        </section>
+    </section>
+
+
+    <section class="panel">
+
+        <div class="panel-header">
+
+            <h2>
+                Scenario Details
+            </h2>
+
+            <span class="panel-tag">
+                Execution
+            </span>
+
+        </div>
+
+
+        <div
+            id="scenarioDetail"
+            class="phase-detail"
+        >
+
+            <p class="muted">
+                Select a scenario to inspect its phases,
+                configuration and execution options.
+            </p>
+
+        </div>
+
+    </section>
+
+</section>
 
 
         <!-- =================================================
@@ -1217,27 +1289,209 @@
         ================================================== -->
 
         <section
-            id="page-reports"
-            class="app-page"
-        >
+    id="page-reports"
+    class="app-page"
+>
 
-            <section class="panel">
+    <section class="panel intro-panel">
 
-                <div class="panel-header">
+        <div class="panel-header">
 
-                    <h2>
-                        Reports
-                    </h2>
+            <h2>
+                Reports
+            </h2>
 
+            <span class="panel-tag">
+                Incident Evidence
+            </span>
+
+        </div>
+
+        <p>
+            Review completed incidents, collected evidence and campaign results.
+        </p>
+
+        <p class="muted">
+            Reports will combine campaign state, phase execution,
+            discovered hosts, compromise evidence, exfiltration and impact.
+        </p>
+
+    </section>
+
+
+    <section class="panel">
+
+        <div class="panel-header">
+
+            <h2>
+                Incident Reports
+            </h2>
+
+            <span class="panel-tag">
+                History
+            </span>
+
+        </div>
+
+
+        <div class="stats-grid">
+
+            <div class="stat-card">
+
+                <div
+                    id="reportIncidentCount"
+                    class="stat-number"
+                >
+                    0
                 </div>
 
-                <p class="muted">
-                    Incident reports and evidence will be available here.
-                </p>
+                <div class="stat-label">
+                    Incidents
+                </div>
 
-            </section>
+            </div>
 
-        </section>
+
+            <div class="stat-card">
+
+                <div
+                    id="reportCompromisedCount"
+                    class="stat-number"
+                >
+                    0
+                </div>
+
+                <div class="stat-label">
+                    Compromised Hosts
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div
+                    id="reportExfilCount"
+                    class="stat-number"
+                >
+                    0
+                </div>
+
+                <div class="stat-label">
+                    Exfiltration Events
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div
+                    id="reportImpactCount"
+                    class="stat-number"
+                >
+                    0
+                </div>
+
+                <div class="stat-label">
+                    Impacted Hosts
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <div class="table-container">
+
+            <table class="inventory-table">
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            Incident ID
+                        </th>
+
+                        <th>
+                            Status
+                        </th>
+
+                        <th>
+                            Started
+                        </th>
+
+                        <th>
+                            Hosts
+                        </th>
+
+                        <th>
+                            Compromised
+                        </th>
+
+                        <th>
+                            Actions
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody id="reportTable">
+
+                    <tr>
+
+                        <td
+                            colspan="6"
+                            class="empty-table"
+                        >
+                            No incident reports available.
+                        </td>
+
+                    </tr>
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+
+    <section class="panel">
+
+        <div class="panel-header">
+
+            <h2>
+                Report Details
+            </h2>
+
+            <span class="panel-tag">
+                Ground Truth
+            </span>
+
+        </div>
+
+
+        <div
+            id="reportDetail"
+            class="phase-detail"
+        >
+
+            <p class="muted">
+                Select an incident report to inspect evidence,
+                phase state and collected artifacts.
+            </p>
+
+        </div>
+
+    </section>
+
+</section>
+
 
 
         <!-- =================================================
@@ -1245,28 +1499,132 @@
         ================================================== -->
 
         <section
-            id="page-system"
-            class="app-page"
-        >
+    id="page-system"
+    class="app-page"
+>
 
-            <section class="panel">
+    <section class="panel intro-panel">
 
-                <div class="panel-header">
+        <div class="panel-header">
 
-                    <h2>
-                        System
-                    </h2>
+            <h2>
+                System
+            </h2>
 
+            <span class="panel-tag">
+                Platform Management
+            </span>
+
+        </div>
+
+        <p>
+            Manage MrNobody services, updates and platform health.
+        </p>
+
+        <p class="muted">
+            System information and service status will be expanded here.
+        </p>
+
+    </section>
+
+
+    <section class="panel">
+
+        <div class="panel-header">
+
+            <h2>
+                MrNobody Update
+            </h2>
+
+            <span class="panel-tag">
+                GitHub Managed
+            </span>
+
+        </div>
+
+        <p class="muted">
+            Update the installed MrNobody files from the configured repository.
+            Runtime state, logs, reports and local configuration are preserved.
+        </p>
+
+
+        <div class="campaign-controls">
+
+            <button
+                id="updateButton"
+                class="button button-start"
+                type="button"
+            >
+                UPDATE MRNOBODY
+            </button>
+
+        </div>
+
+    </section>
+
+
+    <section class="panel">
+
+        <div class="panel-header">
+
+            <h2>
+                Platform Health
+            </h2>
+
+            <span class="panel-tag">
+                Status
+            </span>
+
+        </div>
+
+
+        <div class="stats-grid">
+
+            <div class="stat-card">
+
+                <div class="stat-number">
+                    ACTIVE
                 </div>
 
-                <p class="muted">
-                    Update, health and system information will be available here.
-                </p>
+                <div class="stat-label">
+                    Web Service
+                </div>
 
-            </section>
+            </div>
 
-        </section>
 
+            <div class="stat-card">
+
+                <div class="stat-number">
+                    ACTIVE
+                </div>
+
+                <div class="stat-label">
+                    Nginx
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div class="stat-number">
+                    HTTPS
+                </div>
+
+                <div class="stat-label">
+                    Transport
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+</section>
+
+            
     </main>
 
 </div>
