@@ -36,7 +36,7 @@ CAMPAIGN_LOG = LOG_DIR / "campaign.log"
 # ============================================================
 
 app = Flask(__name__)
-
+app.url_map.redirect_defaults = False
 campaign_process = None
 campaign_lock = threading.Lock()
 
