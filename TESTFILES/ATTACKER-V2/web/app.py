@@ -223,6 +223,43 @@ def read_scenario_metadata(path):
 
     return result
 
+def find_scenario(
+    scenario_id,
+):
+    """
+    Find an installed scenario by SCENARIO_ID.
+    """
+
+    if not SCENARIO_DIR.exists():
+        return None
+
+
+    for path in SCENARIO_DIR.glob(
+        "*.sh"
+    ):
+
+        metadata =
+            read_scenario_metadata(
+                path
+            )
+
+
+        current_id = metadata.get(
+            "SCENARIO_ID",
+            path.stem,
+        )
+
+
+        if current_id == scenario_id:
+
+            return {
+                "path": path,
+                "metadata": metadata,
+            }
+
+
+    return None
+
 def tail_file(path, lines=300):
     if not path.exists():
         return ""
