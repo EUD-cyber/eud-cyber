@@ -63,6 +63,7 @@ let inventoryTimer = null;
 let logTimer = null;
 
 let campaignWasRunning = false;
+let selectedScenario = null;
 
 
 // ==========================================================
@@ -557,6 +558,37 @@ async function loadPhases() {
         );
 
 
+const dashboardPhaseCount =
+    document.getElementById(
+        "dashboardPhaseCount"
+    );
+
+if (dashboardPhaseCount) {
+
+    dashboardPhaseCount.textContent =
+        phases.length;
+}
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "Phase discovery error:",
+            error
+        );
+
+        phaseGrid.innerHTML = `
+            <div class="phase-card">
+                <div class="phase-info">
+                    <strong>Unable to load phases</strong>
+                    <span>Check /api/phases</span>
+                </div>
+            </div>
+        `;
+    }
+}
+
 // ==========================================================
 // SCENARIOS
 // ==========================================================
@@ -771,6 +803,51 @@ function renderScenarioDetail(
             </strong>
         </p>
     `;
+
+    const runButton = document.createElement("button");
+    runButton.type = "button";
+    runButton.className = "button button-start";
+    runButton.textContent = "RUN";
+    runButton.addEventListener("click", () => {
+        configureScenario(scenario);
+    });
+    scenarioDetail.appendChild(runButton);
+
+}
+
+
+function configureScenario(scenario) {
+    selectedScenario = scenario;
+
+    if (startButton) {
+        startButton.textContent = scenario
+            ? `START ${scenario.name}`
+            : "START FULL H3 INCIDENT";
+    }
+
+    let resetButton = document.getElementById("resetScenarioButton");
+    if (!resetButton && startButton) {
+        resetButton = document.createElement("button");
+        resetButton.id = "resetScenarioButton";
+        resetButton.type = "button";
+        resetButton.className = "button button-small";
+        resetButton.textContent = "USE DEFAULT H3 SCENARIO";
+        resetButton.addEventListener("click", () => {
+            configureScenario(null);
+        });
+        startButton.parentElement.appendChild(resetButton);
+    }
+    if (resetButton) {
+        resetButton.hidden = !scenario;
+    }
+
+    showPage("campaigns");
+    showMessage(
+        scenario
+            ? `Configure ${scenario.name}, then press START to run it.`
+            : "Full H3 Incident selected. Review the configuration before starting.",
+        "info"
+    );
 }
 
 
@@ -818,36 +895,6 @@ async function loadScenarios() {
     }
 }
 
-const dashboardPhaseCount =
-    document.getElementById(
-        "dashboardPhaseCount"
-    );
-
-if (dashboardPhaseCount) {
-
-    dashboardPhaseCount.textContent =
-        phases.length;
-}
-
-    }
-
-    catch (error) {
-
-        console.error(
-            "Phase discovery error:",
-            error
-        );
-
-        phaseGrid.innerHTML = `
-            <div class="phase-card">
-                <div class="phase-info">
-                    <strong>Unable to load phases</strong>
-                    <span>Check /api/phases</span>
-                </div>
-            </div>
-        `;
-    }
-}
 
 function phaseFieldLabel(parameter) {
 
@@ -1509,6 +1556,9 @@ if (dashboardCampaignStatus) {
 
 async function startCampaign() {
 
+    // Keep the selected scenario stable throughout this submission.
+    const scenario = selectedScenario;
+
     hideMessage();
 
 
@@ -1794,7 +1844,9 @@ async function startCampaign() {
 
     const confirmed =
     window.confirm(
-        "Start the full H3 Incident Campaign?\n\n" +
+        (scenario
+            ? `Start ${scenario.name}?\n\n`
+            : "Start the full H3 Incident Campaign?\n\n") +
         "The campaign will dynamically discover hosts " +
         "and execute the configured simulation phases.\n\n" +
         "Linux targets will use SSH credentials.\n" +
@@ -1923,7 +1975,9 @@ async function startCampaign() {
 
         const result =
             await apiPostForm(
-                "/api/start",
+                scenario
+                    ? `/api/scenario/${encodeURIComponent(scenario.id)}/start`
+                    : "/api/start",
                 formData
             );
 
@@ -1979,7 +2033,7 @@ async function startCampaign() {
         showMessage(
             result.incident_id
                 ? `Campaign ${result.incident_id} started.`
-                : "H3 Incident Campaign V2 started.",
+                : (result.message || "H3 Incident Campaign V2 started."),
             "success"
         );
 
@@ -2893,4 +2947,5 @@ document.addEventListener(
     "DOMContentLoaded",
     initialize
 );
+
 
