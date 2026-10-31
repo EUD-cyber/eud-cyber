@@ -242,8 +242,8 @@ write_files:
       # ------------------------------------------------------
 
       download_file \
-          "scenarios/full-incident-h3.sh" \
-          "$INSTALL_DIR/scenarios/full-incident-h3.sh"
+          "scenarios/full-incident.sh" \
+          "$INSTALL_DIR/scenarios/full-incident.sh"
 
 
       # ------------------------------------------------------

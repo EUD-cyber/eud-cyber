@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-# SCENARIO_ID="full-incident-h3"
-# SCENARIO_NAME="Full H3 Incident"
-# SCENARIO_DESCRIPTION="Complete H3 incident simulation from discovery through impact."
+# SCENARIO_ID="full-incident"
+# SCENARIO_NAME="Full Incident"
+# SCENARIO_DESCRIPTION="Complete incident simulation from discovery through impact."
 # SCENARIO_PHASES="01,02,03,08,04,05,06,07"
 
 set -u
@@ -417,7 +417,7 @@ if [[ -t 0 ]]; then
     echo
 
 
-    read -r -p "Start full H3 incident campaign? [y/N]: " CONFIRM
+    read -r -p "Start full incident campaign? [y/N]: " CONFIRM
 
     case "$CONFIRM" in
 
