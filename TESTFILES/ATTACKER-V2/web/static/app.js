@@ -913,8 +913,8 @@ function phaseFieldLabel(parameter) {
         protocol: "Protocol",
         username: "Username",
         password: "Password",
-        powershell: "P10 PowerShell command (runtime only, never saved)",
-        timeout: "Windows action timeout (seconds, 5–300)",
+        powershell: "P10 remote command (PowerShell / Bash) (runtime only, never saved)",
+        timeout: "Action timeout (seconds, 5–300)",
         file: "File",
     };
 
@@ -1032,6 +1032,10 @@ function renderPhaseDetail(phase) {
             input.type =
                 "checkbox";
 
+        } else if (["10", "11"].includes(phase.id) && ["platform", "method", "action", "protocol"].includes(parameter)) {
+            input = document.createElement("select");
+            const choices = {platform: ["auto", "windows", "linux"], method: ["auto", "scheduled-task", "service", "cron", "systemd"], action: ["create", "cleanup"], protocol: ["", "ssh", "winrm-http", "winrm-https"]}[parameter];
+            choices.forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value || "Choose transport"; input.appendChild(option);});
         } else if (parameter === "powershell") {
             input = document.createElement("textarea");
             input.rows = 5; input.maxLength = 16384; input.autocomplete = "off";
@@ -1071,6 +1075,22 @@ function renderPhaseDetail(phase) {
 
 
     phaseDetail.appendChild(form);
+    if (["10", "11"].includes(phase.id)) {
+        const platform = document.getElementById(`phase-${phase.id}-platform`);
+        const adapt = () => {
+            const mode = platform?.value || "auto";
+            for (const key of ["protocol", "method"]) {
+                const input = document.getElementById(`phase-${phase.id}-${key}`);
+                if (!input) continue;
+                for (const option of input.options) {
+                    option.hidden = !!option.value && option.value !== "auto" && mode !== "auto" && (["ssh", "cron", "systemd"].includes(option.value)) !== (mode === "linux");
+                    option.disabled = option.hidden;
+                }
+                if (input.selectedOptions[0]?.disabled) input.value = key === "method" ? "auto" : "";
+            }
+        };
+        platform?.addEventListener("change", adapt); adapt();
+    }
 
 
     const controls =
@@ -1596,7 +1616,7 @@ async function startCampaign() {
 
     hideMessage();
     if (((!scenario || scenario.id === "full-incident") ? powershellEnabled : scenario.phases?.includes("10")) && !powershell.trim()) {
-        showMessage("Full Incident requires a runtime P10 PowerShell command.", "error"); return;
+        showMessage("Full Incident requires a runtime P10 remote command (PowerShell / Bash).", "error"); return;
     }
 
 
@@ -2827,7 +2847,7 @@ function reportType(report) {
 const REPORT_PHASES = [
     ["01", "Discovery"], ["02", "Web"], ["03", "Initial Access"],
     ["08", "Credential Access"], ["04", "Internal Discovery"],
-    ["05", "Staging"], ["06", "Exfiltration"], ["07", "Impact"], ["09", "AD Privilege Escalation"], ["10", "Custom PowerShell"]
+    ["05", "Staging"], ["06", "Exfiltration"], ["07", "Impact"], ["09", "AD Privilege Escalation"], ["10", "Custom Remote Command"], ["11", "Persistence"]
 ];
 const reportArray = value => Array.isArray(value) ? value : [];
 let reportHistory = [];
@@ -3125,7 +3145,7 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
         selectedPhase = phase.id;
         renderReportPhase(phaseDetail, phase, groundTruth);
     };
-    const ordered = [...REPORT_PHASES.filter(([phaseId]) => !["09", "10"].includes(phaseId) || phases.some(p => p.id === phaseId)).map(([phaseId, name]) => phases.find(p => p.id === phaseId) ||
+    const ordered = [...REPORT_PHASES.filter(([phaseId]) => !["09", "10", "11"].includes(phaseId) || phases.some(p => p.id === phaseId)).map(([phaseId, name]) => phases.find(p => p.id === phaseId) ||
         {id: phaseId, name, status: "not_run", absent: true}), ...phases.filter(p => !REPORT_PHASES.some(([phaseId]) => p.id === phaseId))];
     ordered.forEach(phase => {
         const button = reportNode("button", null, timeline);
@@ -3472,7 +3492,7 @@ document.addEventListener(
             const allowed = ['complete', 'running', 'pending', 'skipped', 'failed', 'interrupted'];
             const state = allowed.includes(phase.status) ? phase.status : 'pending';
             node(row, 'span', state, `overview-phase overview-${state}`);
-            if (phase.action_result === 'command_error') node(row, 'small', 'Custom PowerShell command failed', 'muted');
+            if (phase.action_result === 'command_error') node(row, 'small', 'Custom remote command failed', 'muted');
             if (phase.action_result === 'success_with_warning') node(row, 'small', 'Completed with nonfatal stderr/warnings', 'muted');
             if (execution.profile?.mode !== 'normal' && (phase.start_offset !== undefined || phase.duration !== undefined)) {
                 node(row, 'small', [phase.start_offset !== undefined && `Planned start +${duration(phase.start_offset)}`, phase.duration !== undefined && `activity window ${duration(phase.duration)}`].filter(Boolean).join(' · '), 'muted');

@@ -33,7 +33,11 @@ class FreshInstall(unittest.TestCase):
         pairs = re.findall(r'download_file\s*\\\s*\n\s*"([^"]+)"\s*\\\s*\n\s*"\$INSTALL_DIR/([^"]+)"', script)
         downloaded = dict(pairs)
         expected = {line.split('|', 1)[1] for line in (PLATFORM / 'update-manifest.txt').read_text().splitlines() if line and not line.startswith('#')}
-        self.assertEqual(set(downloaded), expected)
+        # Release constraint: userdata stays frozen until the install batch.
+        # The existing manifest updater supplies these additions on Update.
+        deferred = {'web/remote_actions.py', 'web/persistence_actions.py', 'web/ssh_actions.py', 'scripts/11-persistence.sh'}
+        self.assertEqual(expected - set(downloaded), deferred)
+        self.assertFalse(set(downloaded) - expected)
         self.assertEqual(len(downloaded), len(pairs), 'Duplicate downloads')
         self.assertTrue(all(source == target for source, target in pairs))
         self.assertIn('main/TESTFILES/ATTACKER-V2', script)
@@ -46,10 +50,14 @@ class FreshInstall(unittest.TestCase):
                 destination = base / target
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(PLATFORM / source, destination)
+            for relative in deferred:
+                destination = base / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(PLATFORM / relative, destination)
             for path in (base / 'web').glob('*.py'):
                 ast.parse(path.read_text(encoding='utf-8'), filename=path.name)
             caps = catalogue(base / 'scripts', read_metadata)
-            self.assertTrue({'09', '10'} <= set(caps))
+            self.assertTrue({'09', '10', '11'} <= set(caps))
             self.assertTrue((base / 'web/windows_actions.py').is_file())
             phases = read_metadata(base / 'scenarios/full-incident.sh')['SCENARIO_PHASES'].split(',')
             self.assertTrue(set(phases) <= set(caps))

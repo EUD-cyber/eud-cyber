@@ -364,7 +364,7 @@ class Session:
                 report = load_report(base / 'reports', env['NORDIC_INCIDENT_ID'])
                 self.assertEqual(next(p for p in report['phases'] if p['id'] == '10')['status'], 'skipped')
                 self.assertEqual(next(p for p in report['phases'] if p['id'] == '04')['status'], 'success')
-                self.assertIn('Custom PowerShell command failed', json.dumps(report))
+                self.assertIn('Custom remote command failed', json.dumps(report))
             for path in [*paths, *(base / 'logs').glob('*')]:
                 self.assertNotIn(b'TOKEN_DO_NOT_PERSIST', path.read_bytes())
                 self.assertNotIn(b'WIN_SECRET', path.read_bytes())

@@ -710,13 +710,13 @@
 
         </div>
         <div class="config-section">
-            <div class="config-section-title">P09 / P10 Windows actions</div>
+            <div class="config-section-title">P09 / P10 remote actions · P11 Persistence is included</div>
             <p>P09 changes mrnobody membership in Domain Admins on the lab DC. P09 runs only when Windows/RDP access is available; otherwise it is skipped. AD management rights are required for domain changes.</p>
-            <label class="checkbox-label" for="powershellEnabled"><input id="powershellEnabled" type="checkbox"> Enable P10 custom PowerShell action</label>
+            <label class="checkbox-label" for="powershellEnabled"><input id="powershellEnabled" type="checkbox"> Enable P10 Custom Remote Command</label>
             <div class="form-group" id="campaignPowershellFields" hidden>
-                <label for="campaignPowershell">P10 PowerShell command (runtime only, never saved)</label>
+                <label for="campaignPowershell">P10 remote command (PowerShell / Bash) (runtime only, never saved)</label>
                 <textarea id="campaignPowershell" rows="5" maxlength="16384" autocomplete="off"></textarea>
-                <div class="field-help">Required only when P10 is enabled. Executes over WinRM. Command and output content are omitted from reports.</div>
+                <div class="field-help">Required only when P10 is enabled. Auto selects compatible P03 access: WinRM/PowerShell or SSH/Bash. Use a command suitable for the chosen platform. Reports include bounded, redacted output previews. P11 defaults to Scheduled Task or user cron; use standalone P11 cleanup afterward.</div>
             </div>
         </div>
         <!-- ==================================================
@@ -886,7 +886,7 @@
             </h2>
 
             <span class="panel-tag">
-                P01 → P10
+                P01 → P11
             </span>
 
         </div>
