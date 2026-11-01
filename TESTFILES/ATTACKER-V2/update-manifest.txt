@@ -2,7 +2,6 @@
 # Generated automatically - DO NOT EDIT
 # Format: SHA256|PATH
 
-# Format: SHA256|PATH
 0e59bfa7219e4748e89c46de18ba3578e6551cae50d335e3c093ca87d3178e4f|config/defaults.conf
 57104d6d8c4bf4088f2bf560fc044cdb659ec85294ca9102dbd2f19eb943a04e|nginx/nordic-incident.conf
 0ab9e93bf806675d7629f49ec171f66a6677bf1f0d2a3068bec45144df516a03|scenarios/full-incident.sh
