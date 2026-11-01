@@ -50,14 +50,16 @@ $ErrorActionPreference = 'Stop'
 $root = Join-Path ([IO.Path]::GetTempPath()) ('MrNobody-P13-' + [Guid]::NewGuid().ToString('N').Substring(0,24))
 $code = 1
 $cleanupOk = $true
+$createdRoot = $false
 try {
     New-Item -ItemType Directory -Path $root -ErrorAction Stop | Out-Null
+    $createdRoot = $true
     Write-Output ('artifact_path=' + $root)
 __ACTION__
 } catch { $code = 1 }
 finally {
     try {
-        if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction Stop }
+        if ($createdRoot -and (Test-Path -LiteralPath $root)) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction Stop }
         if ($cleanupOk) { Write-Output 'cleanup=complete' }
         else { Write-Output 'cleanup=required' }
     } catch { Write-Output 'cleanup=required'; $code = 1 }
