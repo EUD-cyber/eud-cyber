@@ -27,7 +27,7 @@ access. Fixed Targets supplies Windows access directly, without discovery.
 CLI example (runtime password follows the existing secret-input policy):
 
 ```sh
-mrnobody phase 13 --target 192.168.1.15 --protocol winrm-http --user Administrator --behavior certutil-decode
+mrnobody run 13 --target 192.168.1.15 --protocol winrm-http --user Administrator --behavior certutil-decode
 ```
 
 Normal, Slow and Custom Timing use the shared execution planner. Schedules save
