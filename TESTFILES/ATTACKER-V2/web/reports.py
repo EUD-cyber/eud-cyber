@@ -103,7 +103,7 @@ def add_analysis(report):
 
 
 INCIDENT_ID = re.compile(r"(?:MRN|H3)-[A-Za-z0-9][A-Za-z0-9_-]{0,100}\Z")
-PHASE_ORDER = ("01", "02", "03", "08", "04", "05", "06", "07", "09", "10")
+PHASE_ORDER = ("01", "02", "03", "08", "09", "10", "04", "05", "06", "07")
 STATE_FILES = {
     "networks": ("networks.json", "NORDIC_NETWORK_STATE"),
     "inventory": ("discovered-hosts.json", "NORDIC_DISCOVERED_STATE"),

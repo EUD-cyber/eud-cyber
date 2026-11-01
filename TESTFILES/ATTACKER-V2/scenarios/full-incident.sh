@@ -3,7 +3,7 @@
 # SCENARIO_ID="full-incident"
 # SCENARIO_NAME="Full Incident"
 # SCENARIO_DESCRIPTION="Complete incident simulation from discovery through impact."
-# SCENARIO_PHASES="01,02,03,08,04,05,06,07"
+# SCENARIO_PHASES="01,02,03,08,09,10,04,05,06,07"
 
 set -u
 
@@ -24,7 +24,8 @@ set -u
 #   P7  Impact
 #   P8  Optional Wordlist Authentication
 #
-# P8 runs AFTER P1-P7 and only when enabled.
+# P8 runs after P3 when enabled, followed by P09/P10, then P4-P7.
+# P09 performs AD account/group changes; P10 requires runtime PowerShell input.
 # ============================================================
 
 
@@ -64,6 +65,12 @@ fi
 
 # shellcheck source=/dev/null
 source "$CONFIG_FILE"
+
+# Validate the built-in CLI action input before clearing any campaign state.
+if [[ -z "${MRN_EXECUTION:-}" && "${MRN_POWERSHELL_ENABLED:-0}" == "1" && -z "${MRN_POWERSHELL_SECRET//[[:space:]]/}" ]]; then
+    echo "[ERROR] Full Incident requires runtime P10 input: MRN_POWERSHELL_SECRET"
+    exit 1
+fi
 
 mkdir -p \
     "$LOG_DIR" \
@@ -857,6 +864,8 @@ PHASE_05="$SCRIPT_DIR/05-staging.sh"
 PHASE_06="$SCRIPT_DIR/06-exfil.sh"
 PHASE_07="$SCRIPT_DIR/07-impact.sh"
 PHASE_08="$SCRIPT_DIR/08-wordlist.sh"
+PHASE_09="$SCRIPT_DIR/09-ad-privilege.sh"
+PHASE_10="$SCRIPT_DIR/10-powershell.sh"
 
 
 # ============================================================
@@ -870,7 +879,9 @@ for SCRIPT in \
     "$PHASE_04" \
     "$PHASE_05" \
     "$PHASE_06" \
-    "$PHASE_07"
+    "$PHASE_07" \
+    "$PHASE_09" \
+    "$PHASE_10"
 
 do
 
@@ -950,6 +961,7 @@ import json
 import sys
 
 from datetime import datetime, timezone
+import os
 
 
 (
@@ -1032,6 +1044,8 @@ data = {
         "05": "pending",
         "06": "pending",
         "07": "pending",
+        "09": "pending",
+        "10": "pending" if os.environ.get("MRN_POWERSHELL_ENABLED") == "1" else "disabled",
 
         "08": (
             "pending"
@@ -1130,8 +1144,35 @@ PY
 }
 
 
+# P09 requires existing Windows/RDP access. Fixed targets supply access directly.
+windows_access_available() {
+    python3 - "$NORDIC_COMPROMISED_STATE" <<'PY'
+import json, os, sys
+from pathlib import Path
+plan = json.loads(os.environ.get('MRN_EXECUTION', '{}'))
+if plan.get('target_mode') == 'fixed':
+    sys.exit(0)
+path = Path(sys.argv[1])
+if not path.exists():
+    sys.exit(1)
+try:
+    data = json.loads(path.read_text())
+    if data.get('incident_id') != os.environ.get('NORDIC_INCIDENT_ID'):
+        sys.exit(0)  # Let the adapter report stale/invalid inventory accurately.
+    found = any(h.get('compromised') and (h.get('platform') == 'windows' or h.get('access') in {'rdp', 'winrm'}) for h in data.get('hosts', []))
+except (ValueError, TypeError, AttributeError):
+    sys.exit(0)
+sys.exit(0 if found else 1)
+PY
+}
+
 if [[ -n "${MRN_EXECUTION:-}" ]]; then
     while read -r PHASE; do
+        if [[ "$PHASE" == "09" ]] && ! windows_access_available; then
+            update_phase_state "09" "disabled"
+            ground_truth "PHASE_SKIPPED phase=09 reason=no_windows_rdp_access"
+            continue
+        fi
         SCRIPT="$(find "$SCRIPT_DIR" -maxdepth 1 -name "$PHASE-*.sh" -print -quit)"
         update_phase_state "$PHASE" "running"
         if ! run_phase "$PHASE" "$PHASE" "$SCRIPT"; then
@@ -1256,6 +1297,34 @@ fi
 
 
 phase_delay
+
+# ============================================================
+# PHASE 09 / 10: Windows actions after established access, before staging.
+# ============================================================
+for NUMBER in 09 10; do
+    if [[ "$NUMBER" == "09" ]] && ! windows_access_available; then
+        update_phase_state "09" "disabled"
+        ground_truth "PHASE_SKIPPED phase=09 reason=no_windows_rdp_access"
+        continue
+    fi
+    if [[ "$NUMBER" == "10" && "${MRN_POWERSHELL_ENABLED:-0}" != "1" ]]; then
+        update_phase_state "10" "disabled"
+        continue
+    fi
+    SCRIPT="$PHASE_09"
+    NAME="Active Directory Privilege Escalation"
+    if [[ "$NUMBER" == "10" ]]; then
+        SCRIPT="$PHASE_10"
+        NAME="Custom Windows / PowerShell Action"
+    fi
+    update_phase_state "$NUMBER" "running"
+    if ! run_phase "$NUMBER" "$NAME" "$SCRIPT"; then
+        update_phase_state "$NUMBER" "failed"
+        exit 1
+    fi
+    update_phase_state "$NUMBER" "complete"
+    phase_delay
+done
 
 # ============================================================
 # PHASE 04

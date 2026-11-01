@@ -178,6 +178,16 @@ async function main() {
     assert.equal(command.value,'');
     assert.ok(!JSON.stringify(definitions).includes('COMMAND_SECRET'));
     assert.ok(!JSON.stringify(plans).includes('COMMAND_SECRET'));
-    console.log('Builder DOM tests passed: dependencies, protected actions, target modes, common targets, validation, review, friendly units, P08/P09/P10 runtime inputs and library summaries.');
+    await click(elements.get('scheduleList'),'New schedule / Run Now');
+    const fullEditor=elements.get('scheduleEditor');
+    assert.ok(!text(fullEditor).includes('P10 PowerShell command (runtime only, never saved)'));
+    set('P10 custom PowerShell','1',fullEditor);
+    field(fullEditor,'P10 PowerShell command (runtime only, never saved)').value='Get-Date';
+    set('Linux / SSH password','S',fullEditor);set('Windows / RDP / WinRM password','R',fullEditor);
+    await click(fullEditor,'Run Now');
+    const fullRun=requests.filter(r=>r.url==='/api/executions/run').at(-1);
+    assert.equal(fullRun.data.execution.powershell_enabled,true);
+    assert.equal(fullRun.data.credentials.powershell,'Get-Date');
+    console.log('Builder DOM tests passed: dependencies, protected actions, target modes, common targets, validation, review, friendly units, P08/P09/P10 runtime inputs, Full Incident toggle and library summaries.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

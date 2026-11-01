@@ -81,11 +81,13 @@ class Planning:
             handle.write(f'[SCHEDULER] {time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())} {sid} {status}\n')
 
     def execution(self, spec):
-        keys(spec, ['type', 'id', 'profile', 'parameters', 'timing', 'target_mode'], 'execution')
+        keys(spec, ['type', 'id', 'profile', 'parameters', 'timing', 'target_mode', 'powershell_enabled'], 'execution')
         if spec.get('type') not in {'phase', 'campaign', 'custom'}:
             raise ValueError('Unknown execution type')
         if not isinstance(spec.get('id'), str):
             raise ValueError('Execution ID is required')
+        if 'powershell_enabled' in spec and (spec['type'] != 'campaign' or spec['id'] != 'full-incident' or type(spec['powershell_enabled']) is not bool):
+            raise ValueError('P10 toggle is supported only for Full Incident')
         p = profile(spec.get('profile', {}))
         spec = dict(spec)
         if 'profile' in spec or spec['type'] == 'phase':
@@ -130,7 +132,7 @@ class Planning:
             ids = scenario['metadata'].get('SCENARIO_PHASES', '').split(',')
             definition = {'version': 1, 'name': scenario['metadata'].get('SCENARIO_NAME', sid),
                           'description': '', 'target_mode': 'auto', 'profile': data['profile'],
-                          'phases': [{'id': p, 'enabled': p != '08' or str(data.get('wordlist_enabled', '0')).lower() in {'1', 'true'}, 'parameters': {}, 'timing': {}} for p in ids if p]}
+                          'phases': [{'id': p, 'enabled': (str(data.get('wordlist_enabled', '0')).lower() in {'1', 'true'} if p == '08' else str(data.get('powershell_enabled', '0')).lower() in {'1', 'true'} if p == '10' else True), 'parameters': {}, 'timing': {}} for p in ids if p]}
         if definition is None:
             return None
         definition = dict(definition)
@@ -162,6 +164,8 @@ class Planning:
             data = {k: credentials.get(k) or os.environ.get('NORDIC_' + k.upper(), '') for k in ('ssh_password', 'rdp_password')}
             if 'profile' in execution:
                 data['profile'] = execution['profile']
+            if execution['type'] == 'campaign' and execution['id'] == 'full-incident':
+                data['powershell_enabled'] = execution.get('powershell_enabled', False)
             definition = self.custom(execution['id'])
             if definition and any(p['id'] == '08' and p.get('enabled', True) for p in definition['phases']):
                 data['wordlist_enabled'] = '1'

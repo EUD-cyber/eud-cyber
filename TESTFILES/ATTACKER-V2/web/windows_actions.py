@@ -78,6 +78,8 @@ def targets(env):
         hosts = [{'ip': env.get('MRNOBODY_TARGET'), 'rdp_username': env.get('MRNOBODY_USERNAME') or 'Administrator'}]
     else:
         path = Path(env.get('NORDIC_COMPROMISED_STATE', '/opt/nordic-attack/state/compromised-hosts.json'))
+        if not path.exists():
+            return []
         data = json.loads(path.read_text())
         if data.get('incident_id') != env.get('NORDIC_INCIDENT_ID'):
             raise ValueError('Windows access inventory belongs to another incident')
@@ -88,6 +90,8 @@ def targets(env):
         # Never consume credentials from persisted inventories.
         result.append({'target': private(host.get('ip')), 'protocol': protocol, 'port': int(port),
                        'username': host.get('rdp_username') or host.get('rdp_user') or 'Administrator'})
+    if not result and env.get('MRNOBODY_RUN_MODE') == 'campaign':
+        return []
     if not result:
         raise ValueError('No Windows access targets; P03 must establish Windows access first')
     return result
@@ -154,7 +158,10 @@ def run(pid, env, invoke=subprocess.run):
         limit = timeout_value(env.get('MRNOBODY_TIMEOUT') or '60')
         if pid == '10':
             runtime_command(env.get('MRN_POWERSHELL_SECRET', ''))
-        for target in targets(env):
+        selected_targets = targets(env)
+        if not selected_targets:
+            emit(base, env, pid, 'WINDOWS_ACTION_SKIPPED', warning='no_windows_rdp_access_targets', method='winrm_ntlm')
+        for target in selected_targets:
             emit(base, env, pid, 'WINDOWS_ACTION_START', target=target['target'], protocol=target['protocol'], method='winrm_ntlm')
             child_env = dict(env, MRN_WINDOWS_TARGET=json.dumps(target))
             try:

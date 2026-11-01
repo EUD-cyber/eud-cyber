@@ -1595,7 +1595,9 @@ def api_start(scenario_id="full-incident"):
         # ====================================================
 
         env = os.environ.copy()
-        if execution_plan and any(p['id'] == '10' for p in execution_plan['phases']):
+        powershell_enabled = str(data.get('powershell_enabled', '0')).lower() in {'1', 'true', 'yes', 'on'}
+        env['MRN_POWERSHELL_ENABLED'] = '1' if powershell_enabled else '0'
+        if (execution_plan and any(p['id'] == '10' for p in execution_plan['phases'])) or (execution_plan is None and powershell_enabled and '10' in scenario['metadata'].get('SCENARIO_PHASES', '').split(',')):
             try:
                 from windows_actions import runtime_command
                 env['MRN_POWERSHELL_SECRET'] = runtime_command(data.get('powershell') or env.get('MRN_POWERSHELL_SECRET', ''))
@@ -1701,7 +1703,7 @@ def api_start(scenario_id="full-incident"):
             env['MRN_OVERVIEW'] = json.dumps(dict(
                 execution_plan or {}, type='custom' if planning.custom(scenario_id) else 'campaign',
                 id=scenario_id, name=scenario_name,
-                phases=(execution_plan or {}).get('phases', [{'id': p.strip()} for p in scenario['metadata'].get('SCENARIO_PHASES', '').split(',') if p.strip() and (p.strip() != '08' or wordlist_enabled)]),
+                phases=(execution_plan or {}).get('phases', [{'id': p.strip()} for p in scenario['metadata'].get('SCENARIO_PHASES', '').split(',') if p.strip() and (p.strip() != '08' or wordlist_enabled) and (p.strip() != '10' or powershell_enabled)]),
                 trigger='scheduler' if current_schedule.get() else 'manual', schedule_id=current_schedule.get()))
             campaign_process = launch(BASE_DIR,
                 [

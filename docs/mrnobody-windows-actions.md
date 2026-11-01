@@ -1,9 +1,14 @@
 # MrNobody P09 and P10
 
-Both phases are opt-in standalone/custom scenario actions. The default Full
-Incident stays P01/P02/P03/P08/P04/P05/P06/P07: adding AD writes or arbitrary
-commands to an existing training campaign would change its established behavior.
-P01–P08 and historical reports retain their existing contracts.
+Both phases are included in Full Incident as well as standalone/custom scenarios.
+The default flow is P01 → P02 → P03 → optional P08 → P09 → P10 → P04 → P05 → P06 → P07.
+P09 executes only when P03/P08 found Windows/RDP access; otherwise its action
+is skipped with an explicit ground-truth reason. P10 is optional and disabled by
+default, like P08. Enable its checkbox and enter a runtime PowerShell command.
+Schedules save the enable flag, with command content held only in the runtime
+lease. CLI Full Incident uses MRN_POWERSHELL_ENABLED=1 plus
+MRN_POWERSHELL_SECRET. Missing input is rejected before launch when enabled. AD or WinRM failures follow the existing
+stop-on-phase-failure policy. Historical reports retain their existing layout.
 
 ## Access and dependencies
 

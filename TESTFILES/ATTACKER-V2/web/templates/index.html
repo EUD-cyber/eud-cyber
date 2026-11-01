@@ -709,6 +709,16 @@
             </div>
 
         </div>
+        <div class="config-section">
+            <div class="config-section-title">P09 / P10 Windows actions</div>
+            <p>P09 changes mrnobody membership in Domain Admins on the lab DC. P09 runs only when Windows/RDP access is available; otherwise it is skipped. AD management rights are required for domain changes.</p>
+            <label class="checkbox-label" for="powershellEnabled"><input id="powershellEnabled" type="checkbox"> Enable P10 custom PowerShell action</label>
+            <div class="form-group" id="campaignPowershellFields" hidden>
+                <label for="campaignPowershell">P10 PowerShell command (runtime only, never saved)</label>
+                <textarea id="campaignPowershell" rows="5" maxlength="16384" autocomplete="off"></textarea>
+                <div class="field-help">Required only when P10 is enabled. Executes over WinRM. Command and output content are omitted from reports.</div>
+            </div>
+        </div>
         <!-- ==================================================
             WORDLIST AUTHENTICATION
         =================================================== -->

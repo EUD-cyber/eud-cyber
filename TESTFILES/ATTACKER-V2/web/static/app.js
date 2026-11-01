@@ -1296,6 +1296,15 @@ async function runStandalonePhase(
     }
 }
 
+document.addEventListener("DOMContentLoaded", () => {
+    const toggle = document.getElementById("powershellEnabled");
+    const fields = document.getElementById("campaignPowershellFields");
+    if (toggle && fields) toggle.addEventListener("change", () => {
+        fields.hidden = !toggle.checked;
+        if (!toggle.checked) document.getElementById("campaignPowershell").value = "";
+    });
+});
+
 // ==========================================================
 // PHASE STATUS
 // ==========================================================
@@ -1575,8 +1584,13 @@ async function startCampaign() {
 
     // Keep the selected scenario stable throughout this submission.
     const scenario = selectedScenario;
+    const powershell = document.getElementById("campaignPowershell")?.value || "";
+    const powershellEnabled = !!document.getElementById("powershellEnabled")?.checked;
 
     hideMessage();
+    if (((!scenario || scenario.id === "full-incident") ? powershellEnabled : scenario.phases?.includes("10")) && !powershell.trim()) {
+        showMessage("Full Incident requires a runtime P10 PowerShell command.", "error"); return;
+    }
 
 
     // ------------------------------------------------------
@@ -1937,6 +1951,10 @@ async function startCampaign() {
         // --------------------------------------------------
         // Windows / RDP
         // --------------------------------------------------
+        formData.append("powershell_enabled", powershellEnabled ? "1" : "0");
+        if (powershellEnabled || scenario?.id !== "full-incident" && scenario?.phases?.includes("10")) {
+            if (powershell) formData.append("powershell", powershell);
+        }
 
         formData.append(
             "rdp_username",
@@ -2000,6 +2018,8 @@ async function startCampaign() {
 
 
         // --------------------------------------------------
+        const powershellField = document.getElementById("campaignPowershell");
+        if (powershellField) powershellField.value = "";
         // Remove passwords immediately after successful
         // submission.
         // --------------------------------------------------

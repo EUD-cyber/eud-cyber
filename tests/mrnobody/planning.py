@@ -261,7 +261,7 @@ class RunnerIntegration(API):
         (self.base / 'scenarios').mkdir(); (self.base / 'scripts').mkdir(); (self.base / 'web').mkdir(); (self.base / 'config').mkdir()
         for source in (PLATFORM / 'web').glob('*.py'): shutil.copy(source, self.base / 'web' / source.name)
         shutil.copy(PLATFORM / 'scenarios/full-incident.sh', self.base / 'scenarios/full-incident.sh')
-        for source in (PLATFORM / 'scripts').glob('0*.sh'):
+        for source in (PLATFORM / 'scripts').glob('[0-9][0-9]-*.sh'):
             script = self.base / 'scripts' / source.name
             script.write_text('#!/bin/sh\necho "$MRNOBODY_ATTACK_ID"\nexit 0\n'); script.chmod(0o755)
         conf = (PLATFORM / 'config/defaults.conf').read_text().replace('NORDIC_BASE_DIR="/opt/nordic-attack"', 'NORDIC_BASE_DIR="' + str(self.base) + '"')

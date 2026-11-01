@@ -31,14 +31,14 @@ def definition(ids=('09', '10'), mode='fixed'):
 
 
 class Model(unittest.TestCase):
-    def test_metadata_dependencies_and_legacy_campaign(self):
+    def test_metadata_dependencies_and_full_campaign(self):
         for pid in ('09', '10'):
             self.assertEqual(CAPS[pid]['dependencies'], ['03'])
             self.assertTrue(CAPS[pid]['credentials'])
             self.assertTrue(CAPS[pid]['standalone'])
             self.assertEqual(CAPS[pid]['timing'], ['start_offset'])
             self.assertNotIn('powershell', CAPS[pid]['fields'])
-            self.assertNotIn(pid, read_metadata(PLATFORM / 'scenarios/full-incident.sh')['SCENARIO_PHASES'].split(','))
+            self.assertIn(pid, read_metadata(PLATFORM / 'scenarios/full-incident.sh')['SCENARIO_PHASES'].split(','))
         for ids in [('09',), ('10',), ('10', '09')]:
             validate(definition(ids), CAPS)  # Direct targeting needs no discovery.
         validate(definition(('01', '03', '09', '10'), 'auto'), CAPS)
@@ -145,6 +145,33 @@ class Worker(unittest.TestCase):
 
 
 class Endpoints(API):
+    def test_full_incident_optional_powershell_and_scheduler(self):
+        import app as web
+        for mode in ('normal', 'slow'):
+            for enabled in (False, True):
+                web.campaign_process = None
+                spec = {'type': 'campaign', 'id': 'full-incident', 'profile': {'mode': mode}, 'powershell_enabled': enabled}
+                if enabled:
+                    response = self.client.post('/api/executions/run', json={'execution': spec, 'credentials': {'ssh_password': 'S', 'rdp_password': 'R'}})
+                    self.assertEqual(response.status_code, 400)
+                response = self.client.post('/api/executions/run', json={'execution': spec, 'credentials': {'ssh_password': 'S', 'rdp_password': 'R', **({'powershell': COMMAND} if enabled else {})}})
+                self.assertEqual(response.status_code, 200, response.json)
+                env = self.launch.call_args.kwargs['env']
+                ids = [p['id'] for p in json.loads(env['MRN_EXECUTION'])['phases']]
+                self.assertIn('09', ids)
+                self.assertEqual('10' in ids, enabled)
+                self.assertLess(ids.index('03'), ids.index('09'))
+                self.assertEqual(env['MRN_POWERSHELL_ENABLED'], '1' if enabled else '0')
+        web.campaign_process = None
+        spec = {'type': 'campaign', 'id': 'full-incident', 'powershell_enabled': True}
+        schedule = {'version': 1, 'execution': spec, 'at': '2030-01-01T00:00:00Z'}
+        sid = self.client.post('/api/schedules', json=schedule).json['id']
+        web.planning.scheduler.observe = None  # Dispatch-only fixture, no observer thread.
+        self.client.post(f'/api/schedules/{sid}/arm', json={'ssh_password':'S', 'rdp_password':'R', 'powershell':COMMAND})
+        self.assertEqual(self.client.post(f'/api/schedules/{sid}/run', json={}).json['status'], 'started')
+        self.assertEqual(self.launch.call_args.kwargs['env']['MRN_POWERSHELL_ENABLED'], '1')
+        self.assertNotIn(b'TOKEN_DO_NOT_PERSIST', web.planning.store.path.read_bytes())
+
     def test_windows_endpoints_scheduler_serialization_and_overview(self):
         import app as web
         for pid in ('09', '10'):
@@ -230,6 +257,25 @@ class Session:
             report = load_report(base / 'reports', 'MRN-custom-windows')
             self.assertEqual([p['id'] for p in report['phases'][:2]], ['09', '10'])
             self.assertTrue(all(p['status'] == 'success' for p in report['phases'][:2]))
+            # Built-in default includes conditional P09 and leaves P10 disabled.
+            access = next((base / 'scripts').glob('03-*.sh'))
+            access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
+            env.pop('MRN_EXECUTION')
+            env.update(NORDIC_INCIDENT_ID='MRN-full-windows', MRN_POWERSHELL_ENABLED='0')
+            result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            full = load_report(base / 'reports', 'MRN-full-windows')
+            p09 = next(p for p in full['phases'] if p['id'] == '09')
+            self.assertEqual(p09['status'], 'skipped')
+            self.assertTrue(any(e['event'] == 'PHASE_SKIPPED' for e in p09['events']))
+            self.assertEqual(next(p for p in full['phases'] if p['id'] == '10')['status'], 'skipped')
+            access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[{"ip":"192.168.1.10","compromised":true,"platform":"windows","access":"rdp"}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
+            env.update(NORDIC_INCIDENT_ID='MRN-full-enabled', MRN_POWERSHELL_ENABLED='1')
+            result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            full = load_report(base / 'reports', 'MRN-full-enabled')
+            self.assertTrue(all(p['status'] == 'success' for p in full['phases'] if p['id'] in {'09', '10'}))
+            self.assertLess([p['id'] for p in full['phases']].index('10'), [p['id'] for p in full['phases']].index('04'))
             for path in [*paths, *(base / 'logs').glob('*')]:
                 self.assertNotIn(b'TOKEN_DO_NOT_PERSIST', path.read_bytes())
                 self.assertNotIn(b'WIN_SECRET', path.read_bytes())

@@ -197,6 +197,7 @@
         node("p", "Credentials are supplied only when running or arming a schedule. They are never saved in scenario definitions.", parent, "muted");
         let model = execution?.type === "custom" ? custom.find(s => s.id === execution.id) : execution;
         if (model?.type === "phase") model = {target_mode: model.target_mode, phases: [{id: model.id, parameters: model.parameters || {}}]};
+        if (model?.type === "campaign" && model.id === "full-incident") model = {target_mode: "auto", phases: capabilities.filter(c => ["03", "09", ...(execution.powershell_enabled ? ["10"] : [])].includes(c.id)).map(c => ({id: c.id}))};
         const required = new Set();
         if (!model?.phases) {required.add("ssh"); required.add("rdp");}
         else model.phases.filter(p => p.enabled !== false).forEach(p => {
@@ -408,6 +409,9 @@
             if (spec.id === "01") field(parent, "Targets", spec.target_mode, value => {spec.target_mode = value; spec.parameters = {}; scheduleEditor(spec, existing);}, [{value: "auto", label: "Auto Discovery"}, {value: "fixed", label: "Fixed subnets"}]);
             const phase = {id: spec.id, parameters: spec.parameters ||= {}, timing: spec.timing ||= {}};
             parameterForm(parent, phase, spec.target_mode); timingForm(parent, phase, spec.profile);
+        }
+        if (spec.type === "campaign" && spec.id === "full-incident") {
+            field(parent, "P10 custom PowerShell", spec.powershell_enabled ? "1" : "0", value => {spec.powershell_enabled = value === "1"; scheduleEditor(spec, existing);}, [{value:"0",label:"Disabled"},{value:"1",label:"Enabled"}]);
         }
         const when = {mode: existing?.interval ? "recurring" : "once", at: existing ? localDate(existing.next_run || existing.at) : "", interval: existing?.interval || 86400};
         field(parent, "Run Once or Recurring", when.mode, v => {when.mode = v;}, [{value: "once", label: "Run Once"}, {value: "recurring", label: "Recurring"}]);
