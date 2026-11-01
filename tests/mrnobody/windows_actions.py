@@ -347,6 +347,7 @@ class Session:
                 self.assertTrue(any(e['event'] == 'PHASE_COMPLETE' for e in p09['events']))
                 self.assertFalse(any(e['event'] == 'PHASE_FAILED' for e in p09['events']))
             # Controlled P10 errors must continue through both actual campaign paths.
+            env.pop('MRN_EXECUTION', None)
             env.update(FIXTURE_AD='dc', FIXTURE_P10='invalid')
             result = subprocess.run(['bash', str(base / 'scripts/run-phase.sh'), '10', '--target', '192.168.1.10', '--protocol', 'winrm-http'], env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 79, result.stdout + result.stderr)
