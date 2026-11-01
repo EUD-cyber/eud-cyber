@@ -106,12 +106,20 @@ with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[2]) as tem
               "summary": {"hosts": 2}}
     save_report(module.BASE_DIR, report)
     assert module.api_reports()["reports"][0]["summary"]["hosts"] == 2
+    assert module.api_report("MRN-fixture")["report_type"] == "campaign"
+    request.args = {"raw": "1"}
     assert module.api_report("MRN-fixture") == report
+    request.args = {}
+    phase_report = {**report, "report_type": "standalone_phase", "phase_id": "03",
+                    "incident": {**report["incident"], "id": "MRN-phase"}}
+    save_report(module.BASE_DIR, phase_report)
+    assert module.api_report("MRN-phase")["phase_id"] == "03"
+    assert {r["report_type"] for r in module.api_reports()["reports"]} == {"campaign", "standalone_phase"}
     for identifier in ["MRN-missing", "../campaign", "MRN-../outside"]:
         assert module.api_report(identifier)[1] == 404
     (module.BASE_DIR / "reports/MRN-corrupt.json").write_text("{broken", encoding="utf8")
     (module.BASE_DIR / "reports/MRN-invalid.json").write_text('{"schema_version":1,"incident":[]}', encoding="utf8")
-    assert module.api_reports()["count"] == 1
+    assert module.api_reports()["count"] == 2
     assert module.api_report("MRN-corrupt")[1] == 404
     assert module.api_report("MRN-invalid")[1] == 404
 

@@ -536,7 +536,15 @@ run_attack() {
     # campaign state. Standalone behavior is introduced into
     # each phase separately.
     #
-    exec "$file"
+    # Load the same state/log paths as the phase, without changing execution mode.
+    # Full campaigns bypass this path and still publish one combined report.
+    set -a
+    if [[ -f "$BASE_DIR/config/defaults.conf" ]]; then
+        source "$BASE_DIR/config/defaults.conf"
+    fi
+    set +a
+    exec python3 "$BASE_DIR/web/reports.py" --base-dir "$BASE_DIR" \
+        --run-phase "$id" --script "$file"
 }
 
 

@@ -2768,6 +2768,25 @@ function reportTable(parent, headers, rows) {
     }
 }
 
+function reportType(report) {
+    return report.report_type === "standalone_phase" ? `Standalone phase ${report.phase_id || ""}` : "Campaign";
+}
+
+function reportMitre(parent, techniques) {
+    techniques.forEach(technique => {
+        const id = technique.id || "";
+        // Derive the trusted URL, including sub-techniques; never trust stored hrefs.
+        const valid = /^T\d{4}(?:\.\d{3})?$/.test(id);
+        const link = reportNode(valid ? "a" : "span", `${id}${technique.name ? " · " + technique.name : ""}`, parent);
+        if (valid) {
+            link.href = `https://attack.mitre.org/techniques/${id.replace(".", "/")}/`;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+        }
+        reportNode("p", technique.phases ? `Mapped phases: ${technique.phases.join(", ")}` : "Phase metadata mapping", parent);
+    });
+}
+
 async function refreshReports() {
     const table = document.getElementById("reportTable");
     if (!table) return;
@@ -2782,20 +2801,20 @@ async function refreshReports() {
         }
         reports.forEach(report => {
             const row = reportNode("tr", null, table);
-            [report.id, report.status, report.started, report.summary?.hosts, report.summary?.compromised]
+            [report.id, reportType(report), report.status, report.started, report.summary?.hosts, report.summary?.compromised]
                 .forEach(value => reportNode("td", value ?? "Unavailable", row));
             const button = reportNode("button", "Open report", reportNode("td", null, row));
             button.type = "button";
             button.addEventListener("click", () => openReport(report.id));
         });
         if (!reports.length) {
-            const cell = reportNode("td", "No incident reports available. Run a Full Incident campaign to create one.", reportNode("tr", null, table));
-            cell.colSpan = 6;
+            const cell = reportNode("td", "No incident reports available. Run a Full Incident campaign or an individual phase to create one.", reportNode("tr", null, table));
+            cell.colSpan = 7;
         }
     } catch (error) {
         table.replaceChildren();
         const cell = reportNode("td", `Could not load reports: ${error.message}`, reportNode("tr", null, table));
-        cell.colSpan = 6;
+        cell.colSpan = 7;
     }
 }
 
@@ -2809,11 +2828,15 @@ async function openReport(id) {
         detail.replaceChildren();
         const incident = report.incident;
         reportNode("h3", incident.id, detail);
+        reportNode("p", reportType(report), detail);
         reportNode("p", `${incident.scenario} · ${incident.status} · ${incident.started || "Unknown start"} → ${incident.ended || "Unknown end"}`, detail);
         const download = reportNode("a", "Open JSON report", detail);
-        download.href = `/api/reports/${encodeURIComponent(id)}`;
+        download.href = `/api/reports/${encodeURIComponent(id)}?raw=1`;
         download.target = "_blank";
         download.rel = "noopener";
+        reportNode("h3", "MITRE ATT&CK summary", detail);
+        reportNode("p", "Phase metadata mappings describe relevant techniques; they do not prove every technique executed or succeeded. Verify the evidence below.", detail);
+        reportMitre(detail, report.mitre_summary || (report.phases || []).flatMap(p => p.mitre?.techniques || []));
         reportNode("h3", "Discovered hosts", detail);
         reportTable(detail, ["Host", "Hostname", "Platform", "Status"], (report.inventory?.hosts || [])
             .map(host => [host.ip, host.hostname, host.platform || host.os, host.status]));
@@ -2825,7 +2848,25 @@ async function openReport(id) {
             const section = reportNode("details", null, detail);
             reportNode("summary", `${phase.id} · ${phase.name} · ${phase.status}`, section);
             reportNode("p", `${phase.started || "No recorded start"} → ${phase.ended || "No recorded end"}`, section);
-            reportNode("p", (phase.mitre?.techniques || []).map(t => `${t.id}${t.name ? " · " + t.name : ""}`).join(", ") || "No MITRE metadata", section);
+            const analysis = phase.analysis;
+            if (analysis) {
+                reportNode("h4", "What happened — recorded facts", section);
+                reportNode("p", analysis.what_happened, section);
+                reportNode("h4", "Findings", section);
+                (analysis.findings || []).forEach(finding => reportNode("p", finding, section));
+                reportNode("h4", "Evidence references", section);
+                (analysis.evidence || []).forEach(evidence => reportNode("p", `${evidence.path} · line ${evidence.line}`, section));
+                reportNode("p", analysis.guidance_notice, section);
+                for (const [key, label] of [["detection", "Detection in the CyberLab"], ["investigation_tasks", "Investigation tasks"], ["prevention", "Prevention / Mitigation"]]) {
+                    reportNode("h4", label, section);
+                    (analysis[key] || []).forEach(item => reportNode("p", item, section));
+                }
+            } else {
+                reportNode("p", "Historical report: recorded technical evidence is shown below.", section);
+            }
+            reportNode("h4", "MITRE ATT&CK — phase metadata", section);
+            reportMitre(section, phase.mitre?.techniques || []);
+            reportNode("h4", "Technical ground-truth events", section);
             reportTable(section, ["Timestamp", "Action", "Source", "Target", "Protocol / method", "Outcome", "Evidence"],
                 (phase.events || []).map(event => [event.timestamp, event.event, event.source, event.target,
                     [event.protocol, event.method].filter(Boolean).join(" / "), event.outcome, event.message]));

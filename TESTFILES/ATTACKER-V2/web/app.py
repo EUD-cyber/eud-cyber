@@ -885,7 +885,7 @@ def api_reports():
 @app.route("/api/reports/<incident_id>")
 def api_report(incident_id):
     try:
-        return jsonify(load_report(BASE_DIR / "reports", incident_id))
+        return jsonify(load_report(BASE_DIR / "reports", incident_id, enrich=request.args.get("raw") != "1"))
     except FileNotFoundError:
         return jsonify({"error": "Report not found"}), 404
     except (OSError, ValueError, TypeError, AttributeError):
