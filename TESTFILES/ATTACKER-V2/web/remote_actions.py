@@ -237,7 +237,7 @@ def run(pid, env, invoke=subprocess.run):
     unresolved_transport = ({t['platform'] for t in candidates} - completed if candidates else set()) if dual or not completed else set()
     if 'success' in outcomes and 'failed' not in outcomes and not unresolved_transport:
         if any(x in outcomes for x in ('action_error', 'skipped')):
-            emit(base, env, pid, 'REMOTE_ACTION_PARTIAL', execution_status='partial', warning='some_configured_actions_did_not_complete')
+            emit(base, env, pid, 'REMOTE_ACTION_PARTIAL', execution_status='success_with_warning', warning='some_configured_actions_did_not_complete')
         emit(base, env, pid, 'PHASE_COMPLETE', phase=pid)
         return 0
     if 'action_error' in outcomes and 'failed' not in outcomes and not unresolved_transport:

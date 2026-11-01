@@ -244,6 +244,7 @@ class CampaignRunners(unittest.TestCase):
                 path=fake/name;path.write_text(source);path.chmod(0o755)
             for path in (base/'scripts').glob('*'):path.chmod(0o755)
             env=dict(os.environ,NORDIC_BASE_DIR=tmp,NORDIC_INCIDENT_ID='MRN-native-runner',MRNOBODY_PASSWORD='RUNTIME',
+                     NORDIC_COMPROMISED_STATE=str(base/'state/compromised-hosts.json'),
                      NORDIC_RDP_PASSWORD='RUNTIME',NORDIC_SSH_PASSWORD='RUNTIME',PYTHONPATH=str(fake),PATH=str(fake)+os.pathsep+os.environ['PATH'])
             for behavior,(_,technique,_) in native.BEHAVIORS.items():
                 env['NORDIC_INCIDENT_ID']='MRN-runner-'+behavior
