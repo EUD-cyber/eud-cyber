@@ -63,14 +63,77 @@ class PowerShellErrors(unittest.TestCase):
     def test_worker_exit_semantics_and_safe_metadata(self):
         for code, stderr in ((0, b''), (0, b'PRIVATE_WARNING'), (1, b'PRIVATE_ERROR')):
             factory = Mock()
-            factory.return_value.run_ps.return_value = Mock(status_code=code, std_out=b'PRIVATE_OUTPUT', std_err=stderr)
+            factory.return_value.run_ps.return_value = Mock(status_code=code, std_out=b'MRNOBODY_P10_TEST_OK\nPRIVATE_CREDENTIAL', std_err=stderr)
             result = actions.perform('10', actions.targets(self.env)[0], self.env, factory)
             self.assertEqual(result['result'], 'success' if code == 0 else 'action_error')
             self.assertEqual(result['execution_status'], 'command_error' if code else 'success_with_warning' if stderr else 'success')
             self.assertEqual(result['exit_code'], code)
             self.assertEqual(result['stderr_bytes'], len(stderr))
-            for secret in ('PRIVATE_WARNING', 'PRIVATE_ERROR', 'PRIVATE_OUTPUT', 'PRIVATE_CREDENTIAL', '$env:COMPUTERNAME'):
+            self.assertIn('MRNOBODY_P10_TEST_OK', result['stdout_preview'])
+            for secret in ('PRIVATE_CREDENTIAL', '$env:COMPUTERNAME'):
                 self.assertNotIn(secret, json.dumps(result))
+
+    def test_preview_redaction_bounds_and_noise(self):
+        from reports import p10_output_preview
+        preview = p10_output_preview(b'MRNOBODY_P10_TEST_OK\nHOST01\nLAB\\Student\nPRIVATE_CREDENTIAL', self.env)
+        self.assertIn('MRNOBODY_P10_TEST_OK', preview)
+        self.assertIn('LAB\\Student', preview)
+        self.assertNotIn('PRIVATE_CREDENTIAL', preview)
+        self.assertEqual(len(p10_output_preview('benign output ' * 100)), 512)
+        self.assertIn('withheld', p10_output_preview(b'A' * 65537))
+        for secret in ('password=hiddenpass', '"api_key": "hiddenkey"', 'Bearer hiddenbearer',
+                       'https://student:hiddenurl@example.test', 'token: hiddentoken',
+                       '-----BEGIN PRIVATE KEY-----\nhiddenpem\n-----END PRIVATE KEY-----'):
+            cleaned = p10_output_preview(secret)
+            self.assertNotIn('hidden', cleaned)
+        # Redact complete input before truncating even when a credential crosses the cap.
+        self.assertNotIn('hidden', p10_output_preview('ok ' * 164 + 'password=' + 'hidden' * 30))
+        xml = b'#< CLIXML\n<Objs xmlns="http://schemas.microsoft.com/powershell/2004/04"><Obj S="progress"><MS><S N="Activity">Preparing modules for first use.</S></MS></Obj><S S="warning">Useful warning_x000D__x000A_</S></Objs>'
+        self.assertEqual(p10_output_preview(xml), 'Useful warning')
+        self.assertEqual(p10_output_preview(xml.replace(b'<S S="warning">Useful warning_x000D__x000A_</S>', b'')), '')
+        self.assertIn('CLIXML omitted', p10_output_preview(b'#< CLIXML\n<Objs>broken'))
+        self.assertNotIn('Preparing modules', p10_output_preview('Preparing modules for first use.\nOK'))
+        for command in ('Get-Content words.txt', 'Get-Secret value'):
+            self.assertIn('withheld', p10_output_preview('unlabelled sensitive material', dict(self.env, MRN_POWERSHELL_SECRET=command)))
+
+    def test_safe_previews_survive_worker_log_report_and_exports(self):
+        factory = Mock()
+        factory.return_value.run_ps.return_value = Mock(status_code=0,
+            std_out=b'MRNOBODY_P10_TEST_OK\nHOST01\nLAB\\Student\nPRIVATE_CREDENTIAL\n<script>alert(1)</script>\nexit_code=999',
+            std_err=b'Useful warning\npassword=hiddenpass')
+        result = actions.perform('10', actions.targets(self.env)[0], self.env, factory)
+        self.assertEqual(result['execution_status'], 'success_with_warning')
+        code, log = self.candidates([result])
+        self.assertEqual(code, 0)
+        self.assertIn('PHASE_COMPLETE', log)
+        self.assertEqual(len(log.splitlines()), 4)
+        self.assertNotIn('PRIVATE_CREDENTIAL', log)
+        self.assertNotIn('hiddenpass', log)
+        state = dict(incident_id=self.env['NORDIC_INCIDENT_ID'], phase_id='10', phases={'10': 'complete'})
+        report = build_report(self.base, state['incident_id'], code, self.env, standalone=state)
+        phase = report['phases'][0]
+        event = next(e for e in phase['events'] if e['event'] == 'WINDOWS_ACTION_SUCCESS')
+        self.assertEqual(event['fields']['exit_code'], '0')
+        self.assertEqual(event['fields']['stdout_preview'], result['stdout_preview'])
+        self.assertIn('Safe stdout output preview', ' '.join(phase['action_evidence']))
+        self.assertIn('Safe stderr output preview', ' '.join(phase['action_evidence']))
+        from report_exports import report_document
+        for view in ('investigation', 'ground-truth'):
+            html = export_html(report, view)
+            self.assertIn('MRNOBODY_P10_TEST_OK', html)
+            self.assertIn('Safe stdout output preview', html)
+            self.assertNotIn('<script>alert', html)
+            self.assertNotIn('hiddenpass', html)
+            self.assertNotIn('PRIVATE_CREDENTIAL', html)
+            self.assertIn('MRNOBODY_P10_TEST_OK', str(report_document(report, view)))
+            from io import BytesIO
+            from pypdf import PdfReader
+            pdf = export_pdf(report, view)
+            extracted = '\n'.join(p.extract_text() for p in PdfReader(BytesIO(pdf)).pages)
+            self.assertIn('MRNOBODY_P10_TEST_OK', extracted)
+            self.assertIn('Safe stdout output preview', extracted)
+            self.assertNotIn('hiddenpass', extracted)
+            self.assertNotIn('PRIVATE_CREDENTIAL', extracted)
 
     def test_standalone_preserves_controlled_error_exit(self):
         with patch('reports.subprocess.Popen', return_value=Mock(wait=Mock(return_value=79))), patch('reports.save_report'), patch('reports.build_report', return_value={}) as build:

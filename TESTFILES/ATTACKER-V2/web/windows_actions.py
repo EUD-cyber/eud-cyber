@@ -1,7 +1,6 @@
 """Opt-in Windows lab actions using the existing pywinrm/NTLM transport.
 
-Only fixed-format evidence leaves the worker. Arbitrary PowerShell and its output
-are runtime-only, including errors: output byte counts are safe to retain.
+Raw PowerShell and output stay runtime-only. P10 retains bounded, scrubbed previews.
 """
 import base64
 import json
@@ -12,7 +11,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 
-from reports import INCIDENT_ID, redact_environment
+from reports import INCIDENT_ID, redact_environment, p10_output_preview
 from scenario_model import private
 
 
@@ -150,6 +149,8 @@ def perform(pid, target, env, session_factory=None):
         result['execution_status'] = ('success_with_warning' if stderr else 'success') if response.status_code == 0 else 'command_error'
         result['warning'] = 'nonfatal_stderr_output_omitted' if stderr and response.status_code == 0 else result['warning']
         result['output'] = 'omitted_may_contain_secrets'
+        for stream, data in (('stdout', stdout), ('stderr', stderr)):
+            result[stream + '_preview'] = p10_output_preview(data, env)
         if response.status_code != 0:
             result['reason'] = 'Custom PowerShell command failed'
     if pid == '09':
@@ -179,6 +180,12 @@ def emit(base, env, pid, event, **fields):
     stamp = datetime.now(timezone.utc).isoformat()
     iid = env['NORDIC_INCIDENT_ID']
     safe = redact_environment(fields, env)
+    if pid == '10':
+        # JSON quoting keeps multiline output and forged key=value/event text
+        # inside one field on one physical log line. Scrub BEFORE encoding.
+        for key in ('stdout_preview', 'stderr_preview'):
+            if key in safe:
+                safe[key] = json.dumps(p10_output_preview(safe[key], env), ensure_ascii=True).replace(' ', r'\u0020').replace('=', r'\u003d')
     line = f'{stamp} INCIDENT={iid} PHASE={pid} {event} ' + ' '.join(f'{k}={v}' for k, v in safe.items()) + '\n'
     log = Path(env.get('NORDIC_GROUND_TRUTH_LOG', base / 'logs/incident-ground-truth.log'))
     log.parent.mkdir(parents=True, exist_ok=True)

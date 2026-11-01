@@ -252,6 +252,10 @@ not prevent the web service, HTML or JSON from working. No deployment is perform
 by this repository change.
 
 CI installs Flask, ReportLab and pypdf for real export-route/PDF parsing tests.
+P10 action evidence in both views and exports includes labeled safe stdout/stderr
+previews (512 characters per stream, redacted before truncation, no raw output).
+See [P10 safe output previews](mrnobody-windows-actions.md#p10-safe-output-previews)
+for CLIXML cleanup, sensitive-output withholding and redaction limitations.
 `python tests/mrnobody/report_exports.py` covers both views, both report types,
 historical raw compatibility/immutability, links, text safety, redaction, PDF
 pagination/content, long evidence, invalid requests and missing dependency.
