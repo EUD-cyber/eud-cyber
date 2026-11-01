@@ -251,6 +251,26 @@ write_files:
       # ------------------------------------------------------
 
       download_file \
+          "web/scenario_model.py" \
+          "$INSTALL_DIR/web/scenario_model.py"
+
+      download_file \
+          "web/execution.py" \
+          "$INSTALL_DIR/web/execution.py"
+
+      download_file \
+          "web/scheduler.py" \
+          "$INSTALL_DIR/web/scheduler.py"
+
+      download_file \
+          "web/planning_api.py" \
+          "$INSTALL_DIR/web/planning_api.py"
+
+      download_file \
+          "web/static/planning.js" \
+          "$INSTALL_DIR/web/static/planning.js"
+
+      download_file \
           "web/app.py" \
           "$INSTALL_DIR/web/app.py"
 
