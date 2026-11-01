@@ -226,6 +226,14 @@ write_files:
           "$INSTALL_DIR/scripts/08-wordlist.sh"
 
       download_file \
+          "scripts/09-ad-privilege.sh" \
+          "$INSTALL_DIR/scripts/09-ad-privilege.sh"
+
+      download_file \
+          "scripts/10-powershell.sh" \
+          "$INSTALL_DIR/scripts/10-powershell.sh"
+
+      download_file \
           "scripts/update.sh" \
           "$INSTALL_DIR/scripts/update.sh"
 
@@ -249,6 +257,10 @@ write_files:
       # ------------------------------------------------------
       # WEB GUI
       # ------------------------------------------------------
+
+      download_file \
+          "web/windows_actions.py" \
+          "$INSTALL_DIR/web/windows_actions.py"
 
       download_file \
           "web/scenario_model.py" \
@@ -422,10 +434,8 @@ write_files:
       log "Validating Flask application..."
 
       /usr/bin/python3 \
-          -m py_compile \
-          "${INSTALL_DIR}/web/app.py" \
-          "${INSTALL_DIR}/web/reports.py" \
-          "${INSTALL_DIR}/web/report_exports.py"
+          -m compileall -q \
+          "${INSTALL_DIR}/web"
 
 
       # ======================================================
