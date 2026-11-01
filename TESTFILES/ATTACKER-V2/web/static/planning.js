@@ -238,7 +238,7 @@
         const cap = capabilities.find(c => c.id === phase.id);
         if (!cap) return;
         if (cap.runtime_powershell) node("p", "P10 PowerShell command is requested on Review or when arming the schedule; it is never stored in the definition.", parent, "muted");
-        if (phase.id === "09") node("p", "P09 requires a lab domain controller and AD management rights. New mrnobody accounts are disabled; existing account state is preserved.", parent, "muted");
+        if (phase.id === "09") node("p", "P09 requires a lab domain controller and AD management rights. New or disabled mrnobody accounts are enabled using the runtime Windows password; an already enabled account keeps its password. Domain Admins membership is verified.", parent, "muted");
         if (mode === "auto") {
             node("p", dataHint(phase.id), parent, "muted");
             return;

@@ -14,7 +14,7 @@ from reports import build_report, run_phase
 from report_exports import export_html, export_pdf
 from execution import record, snapshot
 
-DC = dict(result='success', warning='none', account='already_exists_unchanged',
+DC = dict(result='success', warning='none', account='already_enabled',
           group='already_member', domain='lab.example', dc='dc.lab.example', exit_code=0)
 WORKGROUP = dict(result='skipped', warning='target_must_be_domain_controller',
                  account='not_attempted', group='not_attempted', domain='WORKGROUP', dc='unknown', exit_code=0)

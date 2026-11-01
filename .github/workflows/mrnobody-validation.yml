@@ -42,6 +42,7 @@ jobs:
           python tests/mrnobody/planning.py --bash
           python tests/mrnobody/windows_actions.py
           python tests/mrnobody/ad_prerequisite.py
+          python tests/mrnobody/ad_enabled.py
           python tests/mrnobody/powershell_errors.py
           node tests/mrnobody/planning.cjs
           python tests/mrnobody/overview.py
