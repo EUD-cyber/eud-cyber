@@ -50,6 +50,34 @@ remove membership added by this exercise when appropriate, and delete only an
 account proven to have been created for the lab. Never blindly delete a
 pre-existing mrnobody account. Cleanup itself is not automatically scheduled.
 
+## P09 prerequisite status
+
+P09 uses the existing `skipped` terminal phase state when an authenticated
+Windows target reports that it is not a domain controller and no usable DC was
+found. A transport failure on another candidate does not turn that missing
+prerequisite into a hard failure. Both built-in campaigns and custom scenarios
+record `PHASE_SKIPPED` and continue to the next selected phase. They do not emit
+`PHASE_COMPLETE` for the skipped action. P03 dependencies and builder validation
+remain unchanged.
+
+The P09 worker/script uses exit 78 for this prerequisite outcome. The standalone
+CLI/report wrapper records phase `skipped`, retains exit 78 in the report, and
+returns 0 for the handled nonfatal outcome. Thus existing GUI and scheduler exit
+conventions remain compatible; an overall completed run does not mean P09 ran.
+Other phases' exit 78 is still an error. Direct users of `09-ad-privilege.sh`
+must handle its exit 78 explicitly.
+
+Investigation and Ground Truth views (including HTML/PDF exports) explain
+`No Active Directory Domain Controller discovered` and retain candidate target,
+domain (for example WORKGROUP), dc=unknown and account/group=not_attempted.
+Live Campaign cards and Execution Overview show SKIPPED; subsequent phases
+advance normally and skipped phases are excluded from executable-phase progress.
+
+All candidates failing transport/authentication is still a hard failure.
+Configuration, invalid worker responses, timeouts and account/group/command
+errors on a DC remain failures, even when another candidate is WORKGROUP.
+Valid DC account/group actions and MITRE mappings are unchanged.
+
 ## P10: custom PowerShell
 
 The builder configuration describes its target/protocol/username/port and optional

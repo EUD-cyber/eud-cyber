@@ -112,7 +112,7 @@ def snapshot(base, capabilities, process=None, now=None):
                 launch = dict(execution, incident_id=old['id'], started=old.get('started'),
                               id=old.get('scenario'), name=old.get('scenario_name'),
                               type='phase' if last.get('report_type') == 'standalone_phase' else 'campaign',
-                              phases=execution.get('phases') or [{'id': p['id']} for p in last.get('phases', []) if p.get('status') != 'skipped'])
+                              phases=execution.get('phases') or [{'id': p['id']} for p in last.get('phases', []) if p.get('status') != 'skipped' or last.get('report_type') == 'standalone_phase'])
                 break
             except (OSError, ValueError, KeyError, TypeError):
                 continue
@@ -168,7 +168,7 @@ def snapshot(base, capabilities, process=None, now=None):
         for line in tail.splitlines():
             if f'INCIDENT={iid} ' not in line:
                 continue
-            match = re.search(r'\b(PHASE_START|PHASE_COMPLETE|PHASE_FAILED|CAMPAIGN_START|CAMPAIGN_COMPLETE)\b', line)
+            match = re.search(r'\b(PHASE_START|PHASE_COMPLETE|PHASE_FAILED|PHASE_SKIPPED|CAMPAIGN_START|CAMPAIGN_COMPLETE)\b', line)
             if match:
                 phase = re.search(r'\bphase=(\d{2,4})\b', line)
                 logs.append(match[1].replace('_', ' ').title() + (' · P' + phase[1] if phase else ''))

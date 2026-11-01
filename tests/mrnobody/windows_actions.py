@@ -231,14 +231,21 @@ class ShellIntegration(unittest.TestCase):
             (base / 'venv/bin/python').symlink_to(sys.executable)
             # Only this fixture module is imported as winrm; no network exists.
             (base / 'fake/winrm.py').write_text('''
-import json
+import json, os
 class Session:
-    def __init__(self, *a, **kw): pass
+    def __init__(self, endpoint, **kw): self.endpoint = endpoint
     def run_ps(self, command):
+        mode = os.environ.get('FIXTURE_AD', 'dc')
+        if mode == 'unreachable' or (mode == 'mixed' and '192.168.1.10:' in self.endpoint):
+            raise RuntimeError('inert transport failure')
         class Response:
             status_code = 0
             std_err = b'WIN_SECRET'
             std_out = json.dumps({'result':'success', 'account':'already_exists_unchanged', 'group':'already_member', 'domain':'lab.example', 'dc':'dc.lab.example', 'warning':'none'}).encode() if 'Get-ADDomain' in command else b'TOKEN_DO_NOT_PERSIST'
+        if 'Get-ADDomain' in command and mode in {'workgroup', 'mixed'}:
+            Response.std_out = json.dumps({'result':'skipped', 'account':'not_attempted', 'group':'not_attempted', 'domain':'WORKGROUP', 'dc':'unknown', 'warning':'target_must_be_domain_controller'}).encode()
+        if 'Get-ADDomain' in command and mode == 'dc-error':
+            Response.std_out = json.dumps({'result':'failed', 'account':'created_disabled', 'group':'not_attempted', 'domain':'lab.example', 'dc':'dc.lab.example', 'warning':'ad_action_failed_check_rights_module_and_dc_logs'}).encode()
         return Response()
 ''')
             env = dict(os.environ, NORDIC_BASE_DIR=tmp, MRN_POWERSHELL_SECRET=COMMAND,
@@ -278,6 +285,43 @@ class Session:
             full = load_report(base / 'reports', 'MRN-full-enabled')
             self.assertTrue(all(p['status'] == 'success' for p in full['phases'] if p['id'] in {'09', '10'}))
             self.assertLess([p['id'] for p in full['phases']].index('10'), [p['id'] for p in full['phases']].index('04'))
+            # Both real runner paths must preserve the nonfatal prerequisite
+            # state and advance to another phase. No real WinRM module exists.
+            for mode in ('workgroup', 'mixed', 'unreachable', 'dc-error'):
+                env.update(FIXTURE_AD=mode)
+                expected = 'skipped' if mode in {'workgroup', 'mixed'} else 'failure'
+                target = '192.168.1.11' if mode == 'mixed' else '192.168.1.10'
+                result = subprocess.run(['bash', str(base / 'scripts/run-phase.sh'), '09', '--target', target, '--protocol', 'winrm-http'], env=env, capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0 if expected == 'skipped' else 1, result.stdout + result.stderr)
+                standalone_path = next(line.removeprefix('Report: ') for line in result.stdout.splitlines() if line.startswith('Report: '))
+                standalone = json.loads(Path(standalone_path).read_text())
+                self.assertEqual(standalone['phases'][0]['status'], expected)
+                self.assertEqual(standalone['incident']['exit_code'], 78 if expected == 'skipped' else 1)
+                # Include an inert P04 after P09 in the custom plan.
+                spec = definition(('09', '04'))
+                spec['phases'][0]['parameters']['target'] = target
+                spec['phases'][1]['parameters']['source'] = target
+                custom = plan(validate(spec, CAPS)); custom['id'] = 'custom-' + 'b' * 32
+                env.update(MRN_EXECUTION=json.dumps(custom), NORDIC_INCIDENT_ID='MRN-custom-' + mode)
+                result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0 if expected == 'skipped' else 1, result.stdout + result.stderr)
+                custom_report = load_report(base / 'reports', env['NORDIC_INCIDENT_ID'])
+                self.assertEqual(custom_report['phases'][0]['status'], expected)
+                self.assertEqual(custom_report['phases'][1]['status'], 'success' if expected == 'skipped' else 'not_run')
+                env.pop('MRN_EXECUTION')
+                access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[{"ip":"192.168.1.10","compromised":true,"platform":"windows","access":"rdp"},{"ip":"192.168.1.11","compromised":true,"platform":"windows","access":"rdp"}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
+                env.update(NORDIC_INCIDENT_ID='MRN-full-' + mode, MRN_POWERSHELL_ENABLED='0')
+                result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0 if expected == 'skipped' else 1, result.stdout + result.stderr)
+                full = load_report(base / 'reports', env['NORDIC_INCIDENT_ID'])
+                p09 = next(p for p in full['phases'] if p['id'] == '09')
+                self.assertEqual(p09['status'], expected)
+                self.assertEqual(next(p for p in full['phases'] if p['id'] == '04')['status'], 'success' if expected == 'skipped' else 'not_run')
+                events = [e['event'] for e in p09['events']]
+                self.assertIn('PHASE_SKIPPED' if expected == 'skipped' else 'PHASE_FAILED', events)
+                if expected == 'skipped':
+                    self.assertNotIn('PHASE_COMPLETE', events)
+                    self.assertNotIn('PHASE_FAILED', events)
             for path in [*paths, *(base / 'logs').glob('*')]:
                 self.assertNotIn(b'TOKEN_DO_NOT_PERSIST', path.read_bytes())
                 self.assertNotIn(b'WIN_SECRET', path.read_bytes())

@@ -96,6 +96,15 @@ def add_analysis(report):
             "guidance_notice": "Educational recommendations, not evidence that a sensor detected or a control prevented this activity. Apply only to recorded actions/protocols; logging and audit configuration vary.",
             "mitre_notice": "Mapped from phase metadata, not proof that every technique executed or succeeded.",
         }
+        if phase['id'] == '09' and phase.get('status') == 'skipped':
+            # Operational prerequisite information belongs in both report views.
+            phase['prerequisite_outcome'] = next((e['fields'].get('reason') for e in reversed(events)
+                if e['event'] == 'PHASE_SKIPPED' and e['fields'].get('reason')),
+                'Active Directory prerequisite unavailable; privileged AD action not attempted')
+            details = [e['message'] for e in events if e['event'] == 'WINDOWS_ACTION_SKIPPED']
+            phase['prerequisite_evidence'] = details
+            phase['analysis']['what_happened'] = phase['prerequisite_outcome']
+            phase['analysis']['findings'] = details or [phase['prerequisite_outcome']]
     report["analysis_version"] = 2
     report["mitre_summary"] = list(summary.values())
     report.setdefault("report_type", "campaign")
@@ -258,7 +267,7 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
             "id": phase_id, "name": metadata.get("ATTACK_NAME", script.stem[3:] if script else phase_id),
             "status": status, "runtime_status": state,
             "started": next((e["timestamp"] for e in phase_events if e["event"] == "PHASE_START"), campaign.get("started") if standalone is not None else None),
-            "ended": next((e["timestamp"] for e in reversed(phase_events) if e["event"] in {"PHASE_COMPLETE", "PHASE_FAILED"}), campaign.get("completed") if standalone is not None else None),
+            "ended": next((e["timestamp"] for e in reversed(phase_events) if e["event"] in {"PHASE_COMPLETE", "PHASE_FAILED", "PHASE_SKIPPED"}), campaign.get("completed") if standalone is not None else None),
             "mitre": {"tactic": metadata.get("MITRE_TACTIC"), "techniques": [
                 {"id": tid, "name": names[i] if i < len(names) and names[i] else None}
                 for i, tid in enumerate(technique_ids)]},
@@ -266,7 +275,8 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
             "events": phase_events,
         })
     now = datetime.now(timezone.utc).isoformat()
-    status = "complete" if campaign.get("status") == "complete" and exit_code == 0 else (
+    prerequisite_skip = standalone is not None and standalone['phase_id'] == '09' and exit_code == 78
+    status = "complete" if campaign.get("status") == "complete" and (exit_code == 0 or prerequisite_skip) else (
         "interrupted" if exit_code in {130, 137, 143} else "failed")
     report = {
         "schema_version": 1, "generated_at": now,
@@ -370,10 +380,11 @@ def run_phase(base, phase_id, script, environ=None):
         except OSError:
             print("[WARN] Phase could not be started", flush=True)
         finally:
+            skipped = phase_id == '09' and code == 78
             state = {"incident_id": incident_id, "scenario": "standalone-phase", "phase_id": phase_id,
                      "started": started, "completed": datetime.now(timezone.utc).isoformat(),
-                     "status": "complete" if code == 0 else "failed",
-                     "phases": {phase_id: "complete" if code == 0 else "running" if code in {130, 137, 143} else "failed"}}
+                     "status": "complete" if code == 0 or skipped else "failed",
+                     "phases": {phase_id: "skipped" if skipped else "complete" if code == 0 else "running" if code in {130, 137, 143} else "failed"}}
             try:
                 path = save_report(base, build_report(base, incident_id, code, env, standalone=state))
                 print(f"Report: {path}", flush=True)
@@ -383,7 +394,9 @@ def run_phase(base, phase_id, script, environ=None):
     finally:
         for sig, handler in previous.items():
             signal.signal(sig, handler)
-    return code
+    # CLI/scheduler conventions: a handled prerequisite skip is nonfatal. Keep
+    # the worker's exit 78 in the report and the phase itself explicitly skipped.
+    return 0 if phase_id == '09' and code == 78 else code
 
 
 def main():

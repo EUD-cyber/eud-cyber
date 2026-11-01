@@ -233,6 +233,15 @@ async function main() {
     assert.ok(windowsTimeline.some(n=>text(n).includes('09 · AD Privilege Escalation')));
     assert.ok(windowsTimeline.some(n=>text(n).includes('10 · Custom PowerShell')));
     assert.ok(descendants(root).some(n=>n.href==='https://attack.mitre.org/techniques/T1059/001/'));
+    context.skippedPhase = {id:'09', name:'AD Privilege Escalation', status:'skipped',
+        prerequisite_outcome:'No Active Directory Domain Controller discovered',
+        prerequisite_evidence:['target=192.168.2.200 domain=WORKGROUP dc=unknown account=not_attempted group=not_attempted']};
+    for (const groundTruth of [false, true]) {
+        root.replaceChildren();
+        vm.runInContext(`renderReportPhase(document.getElementById('reportDetail'), skippedPhase, ${groundTruth})`, context);
+        for (const expected of ['skipped','No Active Directory Domain Controller discovered','192.168.2.200','domain=WORKGROUP','dc=unknown','account=not_attempted','group=not_attempted'])
+            assert.ok(text(root).includes(expected));
+    }
     console.log("Reports UI passed: overview, canonical timeline/status/navigation, P09/P10, MITRE dedupe/trusted links, evidence-based assets, filters/host search, collapsed raw evidence, historical/empty/error states, response races and text-safe rendering.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

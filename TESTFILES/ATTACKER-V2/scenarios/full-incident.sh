@@ -676,6 +676,7 @@ run_phase() {
     local NUMBER="$1"
     local NAME="$2"
     local SCRIPT="$3"
+    RUN_PHASE_STATUS="complete"
 
 
     echo
@@ -702,6 +703,13 @@ run_phase() {
         RESULT=${PIPESTATUS[0]}
     fi
 
+
+    if [[ "$NUMBER" == "09" && $RESULT -eq 78 ]]; then
+        RUN_PHASE_STATUS="skipped"
+        update_phase_state "$NUMBER" "skipped"
+        log "[PHASE $NUMBER] SKIPPED - No Active Directory Domain Controller discovered"
+        return 0
+    fi
 
     if [[ $RESULT -ne 0 ]]; then
 
@@ -1179,7 +1187,7 @@ if [[ -n "${MRN_EXECUTION:-}" ]]; then
             update_phase_state "$PHASE" "failed"
             exit 1
         fi
-        update_phase_state "$PHASE" "complete"
+        update_phase_state "$PHASE" "$RUN_PHASE_STATUS"
     done < <(python3 "$BASE_DIR/web/execution.py" --list)
 else
 # ============================================================
@@ -1322,7 +1330,7 @@ for NUMBER in 09 10; do
         update_phase_state "$NUMBER" "failed"
         exit 1
     fi
-    update_phase_state "$NUMBER" "complete"
+    update_phase_state "$NUMBER" "$RUN_PHASE_STATUS"
     phase_delay
 done
 

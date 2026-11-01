@@ -1901,6 +1901,8 @@ footer {
 .report-status-success { color: #5ee0b4; }
 .report-status-failure { color: #ff9595; }
 .report-status-skipped { color: #e9cb79; }
+.phase-skipped { border-color: #e9cb79; }
+.phase-skipped .phase-status { color: #e9cb79; }
 .report-status-interrupted { color: #ffb87a; }
 .report-status-not_run, .report-status-unknown { color: #acbacb; }
 .report-phase-detail li { margin: 10px 0; }

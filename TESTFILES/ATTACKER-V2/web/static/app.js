@@ -1337,10 +1337,17 @@ function updatePhases(phases) {
         card.classList.remove(
             "phase-running",
             "phase-complete",
-            "phase-failed"
+            "phase-failed",
+            "phase-skipped"
         );
 
         switch (status) {
+
+            case "skipped":
+            case "disabled":
+                statusElement.textContent = "SKIPPED";
+                card.classList.add("phase-skipped");
+                break;
 
             case "running":
 
@@ -3025,6 +3032,10 @@ function renderReportPhase(parent, phase, groundTruth = true) {
     section.className = "report-phase-detail";
     reportNode("h3", `${phase.id} · ${phase.name}`, section);
     reportBadge(section, phase.status);
+    if (phase.prerequisite_outcome) {
+        reportNode('p', phase.prerequisite_outcome, section);
+        reportArray(phase.prerequisite_evidence).forEach(detail => reportNode('p', detail, section));
+    }
     reportNode("p", `${phase.started || "No recorded start"} → ${phase.ended || "No recorded end"}`, section);
     reportNode("h4", "What happened — recorded facts", section);
     reportNode("p", (groundTruth ? analysis.what_happened : "Review collected logs to establish source, target, method and outcome. Phase status describes the run, not the success of each action.") || "Historical report: no educational analysis recorded. Review the available evidence.", section);
