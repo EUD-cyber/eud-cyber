@@ -31,19 +31,65 @@ Select the lab domain controller itself and provide a Windows account already
 authorized to create domain users and change Domain Admins membership. The
 ActiveDirectory PowerShell module must exist on that DC. P09 deliberately does
 not open a second hop to a different DC: a member server/workstation records its
-domain when available and fails with target_must_be_domain_controller. In Auto
-mode each Windows candidate is tried; unsuitable candidates are recorded as
-failures, not silently counted as successful privilege escalation.
+domain when available and is skipped with target_must_be_domain_controller. In
+Auto mode each Windows candidate is tried; a skipped candidate is not evidence
+of successful privilege escalation.
 
 The action discovers the domain and DC, resolves Domain Admins by domain SID
 plus RID 512 (supports localized group names), looks up mrnobody, creates it
-**disabled** if absent, and adds direct membership only when needed. It verifies
-membership afterwards. Existing account passwords, enablement and other state
-are preserved. No new password is created, returned or stored. This demonstrates
-account creation/group privilege changes without creating a new usable login;
-it does not bypass AD permissions. Repeated runs accurately record
-already_exists_unchanged/already_member. Partial failures retain completed
-account/group steps. Failed AD exception text is omitted.
+**enabled** if absent, and adds direct membership only when needed. New accounts
+report `account=created_enabled`. An existing disabled account receives the
+runtime password and is enabled (`enabled_existing`); this also repairs accounts
+created without a password by earlier P09 versions. An already enabled account
+is not recreated and its password is preserved (`already_enabled`). Membership
+reports `group=added` or `already_member`. Both enabled state and direct group
+membership are read back and verified before reporting success. This makes a
+newly created/enabled account usable for later lab testing; it does not bypass
+AD permissions, password policy, logon restrictions or account expiry. Partial
+failures retain completed account/group steps. Failed AD exception text is omitted.
+
+### Runtime password (standalone, custom, campaign and scheduler)
+
+P09 reuses the existing execution-time Windows password: `MRNOBODY_PASSWORD`,
+falling back to `NORDIC_RDP_PASSWORD`. This password authenticates WinRM and sets
+the password for **new or disabled** mrnobody accounts. It must satisfy the lab
+domain password policy; rejection is a hard AD-action failure. Enabling an
+existing disabled account deliberately resets its password to this value. For
+an already enabled account, use its existing password in later tests.
+
+The standalone GUI/API uses its existing runtime `password` input. Standalone
+CLI (`mrnobody run 09 --target <private-DC-IP> --protocol winrm-http`) uses the
+existing runtime password environment; supply it securely and avoid password command-line
+arguments or shell history. Built-in campaigns and custom executions use their
+existing runtime `rdp_password` input (`NORDIC_RDP_PASSWORD` in CLI campaigns).
+Fixed custom phases receive it through `phase_environment`; Auto mode uses the
+same runtime credential for discovered candidates. Scheduler arming uses the
+existing process-local Windows credential lease; re-arm after service restart.
+Normal/Slow/Custom timing does not alter this credential path.
+
+No new secret field is added to saved scenarios or schedules. The password and
+substituted PowerShell exist only in process memory/WinRM transport; neither is
+written to MrNobody reports, logs or runtime state. Base64 is quoting, not
+encryption. Target-side PowerShell/script-block auditing may capture the script;
+protect that evidence as credential-bearing. No password is hardcoded or returned.
+
+### P09 final result
+
+P09 emits `PHASE_COMPLETE`/exit 0 when at least one eligible DC returns exit 0
+with a verified enabled account and verified Domain Admins membership, and no
+candidate reports a hard action/configuration/internal failure. Earlier or later
+transport/authentication failures do not poison that success. Nonempty stderr
+(including PowerShell module-progress CLIXML) is counted, not treated as failure;
+raw output is omitted. All transport/authentication failures remain fatal, as do
+account creation/password/enablement/group failures, invalid responses, worker
+timeouts and malformed configuration, even alongside another DC success.
+
+Ground Truth retains candidate timestamps, target, protocol, method, exit code,
+domain/DC, account/group states and stdout/stderr byte counts. Investigation and
+Ground Truth views and their HTML/PDF exports show the same final P09 success
+and candidate evidence, including any earlier failed attempt. Live Campaign and
+Execution Overview/timeline use the successful phase exit/state and advance to
+the next selected phase. Historical report evidence is not rewritten.
 
 Cleanup is deliberate and manual: compare account/group actions with evidence,
 remove membership added by this exercise when appropriate, and delete only an
@@ -198,7 +244,7 @@ content; handle those logs according to the lab's access policy.
 
 ## Student analysis and verified references
 
-For P09, compare Security 4720 (creation), 4728 (global security-group membership),
+For P09, compare Security 4720 (creation), 4722 (enablement), 4724 (password reset), 4728 (global security-group membership),
 4738 (account changes), and 4624/4672 around the action times. Check subject,
 member SID, domain and group RID 512. Idempotent runs may generate neither a new
 creation nor membership-add event. In Wazuh, filter win.system.eventID and the

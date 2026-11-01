@@ -70,8 +70,8 @@ def mitre_url(technique_id):
 # Recommendations, never observations. Sensors/auditing must be configured in the lab.
 PHASE_GUIDANCE = {
     "09": (
-        "On the selected lab DC, correlate Security 4720 (account created), 4728 (member added to a global security group), 4738 (account changed) and 4624/4672 logons. Domain Admins is RID 512. In Wazuh filter win.system.eventID, subject account, target account/SID and time; auditing and collection must be enabled.",
-        "Was mrnobody created disabled or already present? Was membership added or already present? Confirm the subject, domain/DC, group SID and partial failures. Existing membership need not generate a new 4728. P03 access alone does not grant rights to change AD.",
+        "On the selected lab DC, correlate Security 4720 (account created), 4722 (account enabled), 4724 (password reset), 4728 (member added to a global security group), 4738 (account changed) and 4624/4672 logons. Domain Admins is RID 512. In Wazuh filter win.system.eventID, subject account, target account/SID and time; auditing and collection must be enabled.",
+        "Was mrnobody created enabled, enabled from a disabled state, or already enabled? Was membership added or already present? Confirm the subject, domain/DC, group SID and partial failures. Existing membership need not generate a new 4728. Historical created_disabled evidence describes the earlier behavior. P03 access alone does not grant rights to change AD.",
         "Restrict Domain Admin membership and WinRM, separate administrative accounts, alert on privileged group changes and review delegated AD rights. After the exercise remove only lab membership/account changes verified in ground truth; never delete a pre-existing account blindly."),
     "10": (
         "Correlate WinRM Operational and PowerShell Operational 4103/4104 with Security 4688 and 4624 where enabled. In Wazuh compare win.system.eventID, host, subject and timestamp. Script block logs on the target may contain sensitive command content.",
@@ -150,6 +150,15 @@ def add_analysis(report):
             phase['prerequisite_evidence'] = details
             phase['analysis']['what_happened'] = phase['prerequisite_outcome']
             phase['analysis']['findings'] = details or [phase['prerequisite_outcome']]
+        if phase['id'] == '09' and phase.get('status') in {'success', 'failure'}:
+            details = [e['timestamp'] + ' · ' + e['message'] for e in events
+                       if e['event'].startswith('WINDOWS_ACTION_') and e['event'] != 'WINDOWS_ACTION_START']
+            phase['action_result'] = phase['status']
+            phase['action_outcome'] = ('Active Directory account and Domain Admins action completed'
+                                       if phase['status'] == 'success' else 'Active Directory action failed')
+            phase['action_evidence'] = details
+            phase['analysis']['what_happened'] = phase['action_outcome']
+            phase['analysis']['findings'] = details or [phase['action_outcome']]
         if phase['id'] == '10':
             details = [e['timestamp'] + ' · ' + e['message'] for e in events if e['event'].startswith('WINDOWS_ACTION_') and e['event'] != 'WINDOWS_ACTION_START']
             for event in events:

@@ -91,7 +91,7 @@ class Worker(unittest.TestCase):
             factory.return_value.run_ps.assert_called_once_with(actions.custom_script(COMMAND))
 
     def test_ad_idempotence_and_partial_failure_evidence(self):
-        for account, group, outcome in [('created_disabled', 'added', 'success'), ('already_exists_unchanged', 'already_member', 'success'), ('created_disabled', 'not_attempted', 'failed')]:
+        for account, group, outcome in [('created_enabled', 'added', 'success'), ('already_enabled', 'already_member', 'success'), ('created_enabled', 'not_attempted', 'failed')]:
             data = {'account': account, 'group': group, 'result': outcome, 'domain': 'lab.example', 'dc': 'dc.lab.example', 'warning': 'none', 'password': 'DO_NOT_KEEP'}
             factory = Mock()
             factory.return_value.run_ps.return_value = Mock(status_code=0, std_out=json.dumps(data).encode(), std_err=b'')
@@ -99,7 +99,7 @@ class Worker(unittest.TestCase):
             self.assertEqual((result['account'], result['group'], result['result']), (account, group, outcome))
             self.assertNotIn('DO_NOT_KEEP', json.dumps(result))
         self.assertIn("DomainSID.Value + '-512'", actions.AD_ACTION)
-        self.assertIn('-Enabled $false', actions.AD_ACTION)
+        self.assertIn('-Enabled $true', actions.AD_ACTION)
         self.assertNotIn('Set-ADUser', actions.AD_ACTION)
 
     def test_scope_and_inventory_not_secret_source(self):
@@ -121,7 +121,8 @@ class Worker(unittest.TestCase):
                     source = next((PLATFORM / 'scripts').glob(pid + '-*.sh'))
                     (base / 'scripts' / source.name).write_bytes(source.read_bytes())
                     env = dict(self.env, NORDIC_BASE_DIR=tmp)
-                    invoke = Mock(side_effect=subprocess.TimeoutExpired('hidden', 60)) if timeout else Mock(return_value=Mock(returncode=0, stdout=b'{"result":"success","exit_code":0,"command":"custom_powershell_content_omitted"}'))
+                    success = {'result': 'success', 'exit_code': 0, 'account': 'already_enabled', 'group': 'already_member', 'domain': 'lab.example', 'dc': 'dc.lab.example', 'warning': 'none'}
+                    invoke = Mock(side_effect=subprocess.TimeoutExpired('hidden', 60)) if timeout else Mock(return_value=Mock(returncode=0, stdout=json.dumps(success)))
                     code = actions.run(pid, env, invoke)
                     self.assertEqual(code, int(timeout))
                     call = invoke.call_args
@@ -239,16 +240,16 @@ class Session:
     def __init__(self, endpoint, **kw): self.endpoint = endpoint
     def run_ps(self, command):
         mode = os.environ.get('FIXTURE_AD', 'dc')
-        if mode == 'unreachable' or (mode == 'mixed' and '192.168.1.10:' in self.endpoint):
+        if mode == 'unreachable' or (mode in {'mixed', 'fallback-dc'} and '192.168.1.10:' in self.endpoint):
             raise WinRMError('inert transport failure')
         class Response:
             status_code = 0
             std_err = b'WIN_SECRET'
-            std_out = json.dumps({'result':'success', 'account':'already_exists_unchanged', 'group':'already_member', 'domain':'lab.example', 'dc':'dc.lab.example', 'warning':'none'}).encode() if 'Get-ADDomain' in command else b'TOKEN_DO_NOT_PERSIST'
+            std_out = json.dumps({'result':'success', 'account':'already_enabled', 'group':'already_member', 'domain':'lab.example', 'dc':'dc.lab.example', 'warning':'none'}).encode() if 'Get-ADDomain' in command else b'TOKEN_DO_NOT_PERSIST'
         if 'Get-ADDomain' in command and mode in {'workgroup', 'mixed'}:
             Response.std_out = json.dumps({'result':'skipped', 'account':'not_attempted', 'group':'not_attempted', 'domain':'WORKGROUP', 'dc':'unknown', 'warning':'target_must_be_domain_controller'}).encode()
         if 'Get-ADDomain' in command and mode == 'dc-error':
-            Response.std_out = json.dumps({'result':'failed', 'account':'created_disabled', 'group':'not_attempted', 'domain':'lab.example', 'dc':'dc.lab.example', 'warning':'ad_action_failed_check_rights_module_and_dc_logs'}).encode()
+            Response.std_out = json.dumps({'result':'failed', 'account':'created_enabled', 'group':'not_attempted', 'domain':'lab.example', 'dc':'dc.lab.example', 'warning':'ad_action_failed_check_rights_module_and_dc_logs'}).encode()
         if 'Get-ADDomain' not in command and os.environ.get('FIXTURE_P10') == 'invalid':
             Response.status_code = 1
         return Response()
@@ -327,7 +328,26 @@ class Session:
                 if expected == 'skipped':
                     self.assertNotIn('PHASE_COMPLETE', events)
                     self.assertNotIn('PHASE_FAILED', events)
+            # Real campaign/custom wrappers must consume the corrected exit 0
+            # after the first candidate fails transport and the second DC works.
+            for custom_mode in (False, True):
+                env.update(FIXTURE_AD='fallback-dc', NORDIC_INCIDENT_ID='MRN-dc-fallback-' + str(custom_mode), MRN_POWERSHELL_ENABLED='0')
+                env.pop('MRN_EXECUTION', None)
+                if custom_mode:
+                    spec = definition(('01', '03', '09', '04'), 'auto')
+                    value = plan(validate(spec, CAPS)); value['id'] = 'custom-' + 'd' * 32
+                    env['MRN_EXECUTION'] = json.dumps(value)
+                result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                report = load_report(base / 'reports', env['NORDIC_INCIDENT_ID'])
+                p09 = next(p for p in report['phases'] if p['id'] == '09')
+                self.assertEqual(p09['status'], 'success')
+                self.assertEqual(next(p for p in report['phases'] if p['id'] == '04')['status'], 'success')
+                self.assertTrue(any(e['event'] == 'WINDOWS_ACTION_FAILED' for e in p09['events']))
+                self.assertTrue(any(e['event'] == 'PHASE_COMPLETE' for e in p09['events']))
+                self.assertFalse(any(e['event'] == 'PHASE_FAILED' for e in p09['events']))
             # Controlled P10 errors must continue through both actual campaign paths.
+            env.pop('MRN_EXECUTION', None)
             env.update(FIXTURE_AD='dc', FIXTURE_P10='invalid')
             result = subprocess.run(['bash', str(base / 'scripts/run-phase.sh'), '10', '--target', '192.168.1.10', '--protocol', 'winrm-http'], env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 79, result.stdout + result.stderr)
