@@ -36,7 +36,7 @@ for(const status of ['complete','failed','interrupted']) {
     assert.match(text(),/Last execution/);assert.match(text(),/No active execution/);
     walk(root).find(n=>n.tag==='button').listeners.click();assert.equal(context.page,'reports');assert.equal(context.report,'MRN-test');
 }
-for (const [result, status, label] of [['command_error', 'skipped', 'Custom PowerShell command failed'], ['success_with_warning', 'complete', 'Completed with nonfatal stderr/warnings']]) {
+for (const [result, status, label] of [['command_error', 'skipped', 'Custom remote command failed'], ['success_with_warning', 'complete', 'Completed with nonfatal stderr/warnings']]) {
     render({...run, timeline:[{id:'10',name:'PowerShell',status,action_result:result},{id:'04',status:'running'}]});
     assert.ok(text().includes(label));
     assert.ok(text().includes(status));

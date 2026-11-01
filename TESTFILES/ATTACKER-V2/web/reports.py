@@ -73,8 +73,12 @@ PHASE_GUIDANCE = {
         "On the selected lab DC, correlate Security 4720 (account created), 4722 (account enabled), 4724 (password reset), 4728 (member added to a global security group), 4738 (account changed) and 4624/4672 logons. Domain Admins is RID 512. In Wazuh filter win.system.eventID, subject account, target account/SID and time; auditing and collection must be enabled.",
         "Was mrnobody created enabled, enabled from a disabled state, or already enabled? Was membership added or already present? Confirm the subject, domain/DC, group SID and partial failures. Existing membership need not generate a new 4728. Historical created_disabled evidence describes the earlier behavior. P03 access alone does not grant rights to change AD.",
         "Restrict Domain Admin membership and WinRM, separate administrative accounts, alert on privileged group changes and review delegated AD rights. After the exercise remove only lab membership/account changes verified in ground truth; never delete a pre-existing account blindly."),
+    "11": (
+        "Correlate Windows Security 4698/4702/4699 (task create/update/delete), TaskScheduler Operational 106/140/141/200/201, System 7045/7036 and Security 4697 (service install where audited). For Linux inspect cron/syslog/journal, user systemd journal, ~/.config/systemd/user, crontab changes and FIM/Wazuh sources. Sensors/auditing must be configured.",
+        "Which namespaced artifact was created or removed, by which account and method? Compare artifact/path, action, outcome and cleanup_required with target evidence. Re-run P11 cleanup with the same target, username, method and artifact suffix; verify removal independently. Failures/timeouts may leave partial artifacts.",
+        "Restrict task/service creation and cron/systemd write permissions, monitor configuration changes, use least privilege and remove only verified MrNobody artifacts after the exercise."),
     "10": (
-        "Correlate WinRM Operational and PowerShell Operational 4103/4104 with Security 4688 and 4624 where enabled. In Wazuh compare win.system.eventID, host, subject and timestamp. Script block logs on the target may contain sensitive command content.",
+        "For Windows correlate WinRM Operational and PowerShell Operational 4103/4104 with Security 4688 and 4624 where enabled. For Linux correlate SSH auth/journal, shell/auditd exec records and process telemetry. In Wazuh compare win.system.eventID, host, subject and timestamp. Script block logs on the target may contain sensitive command content.",
         "Identify the configured custom action and its recorded transport/exit result. Raw command/output are omitted; P10 can show a redacted stdout/stderr preview capped at 512 characters per stream. A preview verifies returned text, not the intended side effect. Verify target-side artifacts independently.",
         "Restrict WinRM management paths, apply least privilege and application control, enable protected PowerShell logging and alert on unexpected remote script execution."),
     "01": (
@@ -160,7 +164,7 @@ def add_analysis(report):
             phase['analysis']['what_happened'] = phase['action_outcome']
             phase['analysis']['findings'] = details or [phase['action_outcome']]
         if phase['id'] == '10':
-            details = [e['timestamp'] + ' · ' + e['message'] for e in events if e['event'].startswith('WINDOWS_ACTION_') and e['event'] != 'WINDOWS_ACTION_START']
+            details = [e['timestamp'] + ' · ' + e['message'] for e in events if e['event'].startswith(('WINDOWS_ACTION_', 'REMOTE_ACTION_')) and not e['event'].endswith('_START')]
             for event in events:
                 for stream in ('stdout', 'stderr'):
                     preview = event['fields'].get(stream + '_preview')
@@ -168,17 +172,24 @@ def add_analysis(report):
                         details.append(event['timestamp'] + ' · ' + str(event.get('target') or '') + ' · Safe ' + stream + ' output preview (redacted, max 512 characters): ' + preview)
             phase['action_evidence'] = details
             phase['action_result'] = ('infrastructure_error' if phase.get('status') == 'failure'
-                else 'command_error' if any(e['event'] == 'WINDOWS_ACTION_ERROR' for e in events)
+                else 'command_error' if any(e['event'] in {'WINDOWS_ACTION_ERROR', 'REMOTE_ACTION_ERROR'} for e in events)
                 else 'success_with_warning' if any(e['fields'].get('execution_status') == 'success_with_warning' for e in events)
                 else 'success' if phase.get('status') == 'success' else None)
             phase['action_outcome'] = {
-                'infrastructure_error': 'Custom PowerShell transport/authentication or infrastructure failure',
-                'command_error': 'Custom PowerShell command failed',
-                'success_with_warning': 'Custom PowerShell completed with nonfatal stderr/warnings',
-                'success': 'Custom PowerShell completed',
-            }.get(phase['action_result'], 'Custom PowerShell not executed')
+                'infrastructure_error': 'Custom remote command transport/authentication or infrastructure failure',
+                'command_error': 'Custom remote command failed',
+                'success_with_warning': 'Custom remote command completed with nonfatal stderr/warnings',
+                'success': 'Custom remote command completed',
+            }.get(phase['action_result'], 'Custom remote command not executed')
             phase['analysis']['what_happened'] = phase['action_outcome']
             phase['analysis']['findings'] = details or [phase['action_outcome']]
+        if phase['id'] == '11':
+            details = [e['timestamp'] + ' · ' + e['message'] for e in events
+                       if e['event'].startswith('PERSISTENCE_ACTION_')]
+            phase['action_evidence'] = details
+            phase['action_outcome'] = 'Persistence: ' + str(phase.get('status', 'not_run')) + '; verify artifact and cleanup metadata'
+            phase['analysis']['what_happened'] = phase['action_outcome']
+            phase['analysis']['findings'] = details or ['No persistence artifact evidence recorded']
     report["analysis_version"] = 2
     report["mitre_summary"] = list(summary.values())
     report.setdefault("report_type", "campaign")
@@ -186,7 +197,7 @@ def add_analysis(report):
 
 
 INCIDENT_ID = re.compile(r"(?:MRN|H3)-[A-Za-z0-9][A-Za-z0-9_-]{0,100}\Z")
-PHASE_ORDER = ("01", "02", "03", "08", "09", "10", "04", "05", "06", "07")
+PHASE_ORDER = ("01", "02", "03", "08", "09", "10", "11", "04", "05", "06", "07")
 STATE_FILES = {
     "networks": ("networks.json", "NORDIC_NETWORK_STATE"),
     "inventory": ("discovered-hosts.json", "NORDIC_DISCOVERED_STATE"),
@@ -333,16 +344,22 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
     selected = [p['id'] for p in campaign.get('execution', {}).get('phases', [])]
     # Opt-in phases must not appear as new pending actions in legacy campaigns.
     known = set(campaign.get('phases', {})) | {e['phase'] for e in events}
-    order = selected + [pid for pid in PHASE_ORDER if pid not in selected and (pid not in {'09', '10'} or pid in known)]
+    order = selected + [pid for pid in PHASE_ORDER if pid not in selected and (pid not in {'09', '10', '11'} or pid in known)]
     for phase_id in ([standalone["phase_id"]] if standalone is not None else order):
         script = next(iter(sorted((base / "scripts").glob(phase_id + "-*.sh"))), None)
         metadata = read_metadata(script) if script else {}
         technique_ids = [x.strip() for x in metadata.get("MITRE_TECHNIQUES", "").split(",") if x.strip()]
         names = metadata.get("MITRE_TECHNIQUE_NAMES", "").split("|")
         phase_events = [event for event in events if event["phase"] == phase_id]
+        recorded = {e['fields'].get('mitre') for e in phase_events} & set(technique_ids)
+        if phase_id in {'10', '11'} and recorded:
+            named = dict(zip(technique_ids, names))
+            technique_ids = [tid for tid in technique_ids if tid in recorded]
+            names = [named.get(tid, '') for tid in technique_ids]
         for event in phase_events:
-            event["mitre_technique_ids"] = technique_ids
-            event["mitre_mapping"] = "phase_metadata"
+            action_tid = event['fields'].get('mitre')
+            event["mitre_technique_ids"] = [action_tid] if action_tid in technique_ids else technique_ids
+            event["mitre_mapping"] = "action_metadata" if action_tid in technique_ids else "phase_metadata"
         state = campaign.get("phases", {}).get(phase_id, "pending")
         status = {"complete": "success", "failed": "failure", "disabled": "skipped",
                   "pending": "not_run", "running": "interrupted"}.get(state, state)
@@ -358,7 +375,7 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
             "events": phase_events,
         })
     now = datetime.now(timezone.utc).isoformat()
-    prerequisite_skip = standalone is not None and standalone['phase_id'] == '09' and exit_code == 78
+    prerequisite_skip = standalone is not None and standalone['phase_id'] in {'09', '11'} and exit_code == 78
     status = "complete" if campaign.get("status") == "complete" and (exit_code == 0 or prerequisite_skip) else (
         "interrupted" if exit_code in {130, 137, 143} else "failed")
     report = {
@@ -463,10 +480,10 @@ def run_phase(base, phase_id, script, environ=None):
         except OSError:
             print("[WARN] Phase could not be started", flush=True)
         finally:
-            skipped = (phase_id == '09' and code == 78) or (phase_id == '10' and code == 79)
+            skipped = (phase_id in {'09', '11'} and code == 78) or (phase_id == '10' and code == 79)
             state = {"incident_id": incident_id, "scenario": "standalone-phase", "phase_id": phase_id,
                      "started": started, "completed": datetime.now(timezone.utc).isoformat(),
-                     "status": "complete" if code == 0 or (phase_id == '09' and skipped) else "failed",
+                     "status": "complete" if code == 0 or (phase_id in {'09', '11'} and skipped) else "failed",
                      "phases": {phase_id: "skipped" if skipped else "complete" if code == 0 else "running" if code in {130, 137, 143} else "failed"}}
             try:
                 path = save_report(base, build_report(base, incident_id, code, env, standalone=state))
@@ -479,7 +496,7 @@ def run_phase(base, phase_id, script, environ=None):
             signal.signal(sig, handler)
     # CLI/scheduler conventions: a handled prerequisite skip is nonfatal. Keep
     # the worker's exit 78 in the report and the phase itself explicitly skipped.
-    return 0 if phase_id == '09' and code == 78 else code
+    return 0 if phase_id in {'09', '11'} and code == 78 else code
 
 
 def main():

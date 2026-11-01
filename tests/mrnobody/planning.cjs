@@ -11,7 +11,7 @@ function element(tag = 'div') {
     };
 }
 for (const id of ['builderBody','planningMessage','customLibrary','scheduleEditor','scheduleList','newCustomScenario']) elements.set(id, element());
-const dependencyMap = {'01':[], '02':['01'], '03':['01'], '04':['03'], '05':['03'], '06':['03','05'], '07':['03'], '08':['01','03'], '09':['03'], '10':['03']};
+const dependencyMap = {'01':[], '02':['01'], '03':['01'], '04':['03'], '05':['03'], '06':['03','05'], '07':['03'], '08':['01','03'], '09':['03'], '10':['03'], '11':['03']};
 const caps = Object.entries(dependencyMap).map(([id, dependencies]) => ({
     id, dependencies, name:{'01':'Discovery','02':'Web Discovery','03':'Initial Access','04':'Lateral Movement','05':'Staging','06':'Exfiltration','07':'Impact','08':'Wordlist Authentication'}[id],
     fields: id === '01' ? {subnet:{label:'Subnets',type:'networks'}} : {
@@ -20,14 +20,26 @@ const caps = Object.entries(dependencyMap).map(([id, dependencies]) => ({
         ...(id === '06' ? {file:{label:'Synthetic staged file',type:'path'}} : {})},
     required_fields: id === '01' ? ['subnet'] : ['target', ...(['03','08'].includes(id) ? ['protocol'] : []), ...(id === '04' ? ['source'] : []), ...(id === '06' ? ['file'] : [])],
     timing: ['01','02'].includes(id) ? ['start_offset','duration','delay_min','delay_max','jitter'] : ['start_offset'],
-    credentials:['03','04','05','06','07','09','10'].includes(id), wordlist:id === '08', standalone:true,
+    credentials:['03','04','05','06','07','09','10','11'].includes(id), wordlist:id === '08', standalone:true,
     runtime_powershell:id === '10'
 }));
 for (const cap of caps.filter(c=>['09','10'].includes(c.id))) {
     cap.name = cap.id === '09' ? 'AD Privilege Escalation' : 'Custom PowerShell';
     cap.fields.protocol.options = ['winrm-http','winrm-https'];
-    cap.fields.timeout = {label:'Windows action timeout',type:'timeout'};
+    cap.fields.timeout = {label:'Action timeout',type:'timeout'};
     cap.required_fields = ['target','protocol'];
+}
+for (const cap of caps.filter(c=>['10','11'].includes(c.id))) {
+    cap.name = cap.id === '10' ? 'Custom Remote Command' : 'Persistence';
+    cap.fields.protocol.options = ['ssh','winrm-http','winrm-https'];
+    cap.fields.platform = {label:'Execution platform',options:['auto','windows','linux']};
+    cap.fields.timeout = {label:'Action timeout',type:'timeout'};
+    cap.required_fields = ['target','protocol'];
+    if (cap.id === '11') {
+        cap.fields.method = {label:'Persistence method',options:['auto','scheduled-task','service','cron','systemd']};
+        cap.fields.action = {label:'Persistence action',options:['create','cleanup']};
+        cap.fields.artifact = {label:'Artifact suffix',type:'text'};
+    }
 }
 const definitions = [], plans = [], requests = [];
 const context = vm.createContext({document:{getElementById:id=>elements.get(id) || [...elements.values()].flatMap(walk).find(n=>n.id===id), createElement:element, querySelectorAll:()=>[],addEventListener(){}},
@@ -173,11 +185,11 @@ async function main() {
         assert.ok(textButton(row(pid),'↑').disabled);
     }
     await select('fixed'); await add('10'); await next();
-    assert.match(text(body()),/PowerShell command is requested on Review/);
+    assert.match(text(body()),/remote command .* is requested on Review/);
     set('Common Target (optional)','192.168.1.10'); set('Protocol','rdp'); await next(); assert.match(error(),/supported protocol/);
-    set('Protocol','winrm-https'); set('Windows action timeout','301'); await next(); assert.match(error(),/5–300/);
-    set('Windows action timeout','60'); await next(); await next(); await next();
-    const command=field(body(),'P10 PowerShell command (runtime only, never saved)');
+    set('Protocol','winrm-https'); set('Action timeout','301'); await next(); assert.match(error(),/5–300/);
+    set('Action timeout','60'); await next(); await next(); await next();
+    const command=field(body(),'P10 remote command (PowerShell / Bash) (runtime only, never saved)');
     assert.equal(command.tag,'textarea'); command.value='Write-Output "COMMAND_SECRET"';
     await click(body(),'Save + Run Now');
     const dispatched=requests.filter(r=>r.url==='/api/executions/run').at(-1);
@@ -187,14 +199,35 @@ async function main() {
     assert.ok(!JSON.stringify(plans).includes('COMMAND_SECRET'));
     await click(elements.get('scheduleList'),'New schedule / Run Now');
     const fullEditor=elements.get('scheduleEditor');
-    assert.ok(!text(fullEditor).includes('P10 PowerShell command (runtime only, never saved)'));
-    set('P10 custom PowerShell','1',fullEditor);
-    field(fullEditor,'P10 PowerShell command (runtime only, never saved)').value='Get-Date';
+    assert.ok(!text(fullEditor).includes('P10 remote command (PowerShell / Bash) (runtime only, never saved)'));
+    set('P10 Custom Remote Command','1',fullEditor);
+    field(fullEditor,'P10 remote command (PowerShell / Bash) (runtime only, never saved)').value='Get-Date';
     set('Linux / SSH password','S',fullEditor);set('Windows / RDP / WinRM password','R',fullEditor);
     await click(fullEditor,'Run Now');
     const fullRun=requests.filter(r=>r.url==='/api/executions/run').at(-1);
     assert.equal(fullRun.data.execution.powershell_enabled,true);
     assert.equal(fullRun.data.credentials.powershell,'Get-Date');
+    await select(); await add('11'); assert.deepEqual(ids(),['01','03','11']);
+    assert.ok(textButton(row('03'),'Remove').disabled);
+    await next();
+    set('Execution platform','linux'); set('Persistence method','systemd');
+    const protocolOptions=field(body(),'Protocol').children.map(c=>c.value);
+    assert.ok(protocolOptions.includes('ssh')); assert.ok(!protocolOptions.includes('winrm-http'));
+    set('Target IPv4','8.8.8.8'); await next(); assert.match(error(),/private lab/);
+    set('Target IPv4','192.168.1.44'); set('Persistence action','cleanup'); set('Artifact suffix','lesson');
+    await review(); assert.match(text(body()),/systemd/);
+    await click(body(),'Save');
+    let p11=definitions.at(-1).phases.find(p=>p.id==='11');
+    assert.equal(p11.parameters.method,'systemd'); assert.equal(p11.parameters.action,'cleanup');
+    assert.equal(p11.parameters.target,'192.168.1.44');
+    await select('fixed'); await add('11'); assert.deepEqual(ids(),['11']); await next();
+    set('Common Target (optional)','192.168.1.55'); set('Execution platform','windows');
+    assert.ok(!field(body(),'Persistence method').children.some(c=>c.value==='cron'));
+    set('Protocol','winrm-https'); set('Persistence method','cron'); await next(); assert.match(error(),/method and platform/);
+    set('Persistence method','service'); set('Persistence action','cleanup'); await review();
+    assert.match(text(body()),/192.168.1.55/);
+    await click(body(),'Save + Run Now');
+    assert.equal(requests.filter(r=>r.url==='/api/executions/run').at(-1).data.execution.type,'custom');
     console.log('Builder DOM tests passed: dependencies, protected actions, target modes, common targets, validation, review, friendly units, P08/P09/P10 runtime inputs, Full Incident toggle and library summaries.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

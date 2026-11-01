@@ -17,11 +17,11 @@
             dependencies(id).forEach(visit);
             let item = draft.phases.find(p => p.id === id);
             if (!item) {item = phase(id); autoAdded.add(id);}
-            item.enabled = true; item.parameters = {};
+            item.enabled = true; if (!["10", "11"].includes(id)) item.parameters = {};
             seen.add(id); result.push(item);
         };
         visit("01"); enabled().forEach(p => visit(p.id));
-        draft.phases.filter(p => !seen.has(p.id)).forEach(p => {p.parameters = {}; result.push(p);});
+        draft.phases.filter(p => !seen.has(p.id)).forEach(p => {if (!["10", "11"].includes(p.id)) p.parameters = {}; result.push(p);});
         draft.phases = result;
     }
     function required(id) {
@@ -98,11 +98,16 @@
         }
         if (index === 1 && !["auto", "fixed"].includes(draft.target_mode)) return "Choose Auto Discovery or Fixed Targets.";
         if (index === 2 && (!enabled().length || !validOrder(draft.phases))) return "Enable at least one phase in a valid dependency order.";
-        if (index === 3 && draft.target_mode === "fixed") {
+        if (index === 3) {
             if (commonTarget && !privateAddress(commonTarget)) return "Common Target must be a private lab IPv4 address.";
             for (const p of enabled()) {
                 const cap = capFor(p.id), params = p.parameters;
-                for (const key of cap.required_fields || []) if (!params[key]) return `P${p.id}: enter ${cap.fields[key]?.label || key}.`;
+                for (const key of draft.target_mode === "fixed" ? cap.required_fields || [] : []) if (!params[key]) return `P${p.id}: enter ${cap.fields[key]?.label || key}.`;
+                const platform = params.platform || "auto";
+                const effective = params.protocol === "ssh" ? "linux" : params.protocol ? "windows" : platform;
+                if (["10", "11"].includes(p.id) && platform !== "auto" && platform !== effective) return `P${p.id}: platform and protocol must match.`;
+                const methodPlatform = {"scheduled-task":"windows", service:"windows", cron:"linux", systemd:"linux"}[params.method];
+                if (p.id === "11" && methodPlatform && effective !== "auto" && effective !== methodPlatform) return "P11: method and platform must match.";
                 for (const [key, value] of Object.entries(params)) {
                     const spec = cap.fields[key];
                     if (!spec) return `P${p.id}: unsupported field ${key}.`;
@@ -111,6 +116,7 @@
                     if (spec.type === "timeout" && (!Number.isInteger(Number(value)) || value < 5 || value > 300)) return `P${p.id}: timeout must be 5–300 seconds.`;
                     if (spec.type === "port" && (!Number.isInteger(Number(value)) || value < 1 || value > 65535)) return `P${p.id}: port must be 1–65535.`;
                     if (spec.options && !spec.options.includes(value)) return `P${p.id}: choose a supported protocol.`;
+                    if (key === "artifact" && !/^[a-z0-9][a-z0-9-]{0,31}$/.test(value)) return "P11: invalid artifact suffix.";
                     if (key === "username" && !/^[A-Za-z0-9_.@\\-]{1,128}$/.test(value)) return `P${p.id}: enter a valid username.`;
                     if (key === "file" && value !== "@staged" && !/^(?:\/tmp\/\.nordic-(?:MRN|H3)-[A-Za-z0-9_-]+\/nordic-data-(?:MRN|H3)-[A-Za-z0-9_-]+\.txt|C:\\NordicIncident\\(?:MRN|H3)-[A-Za-z0-9_-]+\\staging\\nordic-data-(?:MRN|H3)-[A-Za-z0-9_-]+\.txt)$/.test(value)) return `P${p.id}: use @staged or a synthetic staging file path.`;
                 }
@@ -128,7 +134,7 @@
         return "";
     }
     function dataHint(id) {
-        return {"01": "Discovers hosts on configured lab networks.", "02": "Uses hosts discovered by P01.", "03": "Uses hosts discovered by P01.", "04": "Uses compromised hosts from P03 as source and target.", "05": "Uses compromised hosts from P03.", "06": "Uses compromised hosts from P03 and staged data from P05.", "07": "Uses compromised hosts from P03.", "09": "Requires Windows access from P03. Select a lab DC with AD management rights; P03 authentication alone does not grant them.", "10": "Requires Windows access from P03; executes through WinRM. PowerShell command is supplied at run time only.", "08": "Uses discovery from P01 and access results from P03; wordlist is supplied only at execution."}[id] || "";
+        return {"01": "Discovers hosts on configured lab networks.", "02": "Uses hosts discovered by P01.", "03": "Uses hosts discovered by P01.", "04": "Uses compromised hosts from P03 as source and target.", "05": "Uses compromised hosts from P03.", "06": "Uses compromised hosts from P03 and staged data from P05.", "07": "Uses compromised hosts from P03.", "09": "Requires Windows access from P03. Select a lab DC with AD management rights; P03 authentication alone does not grant them.", "10": "Uses P03 Windows/WinRM or Linux/SSH access. Auto chooses a compatible host; optional target override filters established access.", "11": "Uses P03 access. Auto chooses Scheduled Task on Windows or cron on Linux. Cleanup uses the same target, username, method and artifact suffix.", "08": "Uses discovery from P01 and access results from P03; wordlist is supplied only at execution."}[id] || "";
     }
     function scheduleSummary(value) {
         return value.mode === "now" ? "Run now / save only" : `${value.mode === "recurring" ? "Repeat every " + intervalText(value.interval) : "Run once"} · ${new Date(value.at).toLocaleString()} · ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
@@ -151,7 +157,7 @@
         enabled().forEach(p => {
             node("p", `P${p.id} · ${capFor(p.id)?.name}${required(p.id) ? " · Required" : ""}${autoAdded.has(p.id) ? " · Auto-added prerequisite" : ""}`, parent);
             if (draft.target_mode === "fixed") node("p", Object.entries(p.parameters).map(([k,v]) => `${capFor(p.id).fields[k]?.label || k}: ${v}${k === "target" ? inherited.has(p.id) ? " (Common Target)" : " (local)" : ""}`).join(" · "), parent);
-            else node("p", dataHint(p.id), parent, "muted");
+            else {node("p", dataHint(p.id), parent, "muted"); node("p", Object.entries(p.parameters).map(([k,v]) => k + ": " + v).join(" · "), parent); }
         });
         node("p", timingSummary(draft), parent);
         if (draft.profile.mode === "custom") enabled().forEach(p => {
@@ -197,7 +203,7 @@
         node("p", "Credentials are supplied only when running or arming a schedule. They are never saved in scenario definitions.", parent, "muted");
         let model = execution?.type === "custom" ? custom.find(s => s.id === execution.id) : execution;
         if (model?.type === "phase") model = {target_mode: model.target_mode, phases: [{id: model.id, parameters: model.parameters || {}}]};
-        if (model?.type === "campaign" && model.id === "full-incident") model = {target_mode: "auto", phases: capabilities.filter(c => ["03", "09", ...(execution.powershell_enabled ? ["10"] : [])].includes(c.id)).map(c => ({id: c.id}))};
+        if (model?.type === "campaign" && model.id === "full-incident") model = {target_mode: "auto", phases: capabilities.filter(c => ["03", "09", "11", ...(execution.powershell_enabled ? ["10"] : [])].includes(c.id)).map(c => ({id: c.id}))};
         const required = new Set();
         if (!model?.phases) {required.add("ssh"); required.add("rdp");}
         else model.phases.filter(p => p.enabled !== false).forEach(p => {
@@ -213,7 +219,7 @@
         }
         if (model?.phases?.some(p => p.id === "10" && p.enabled !== false)) {
             const wrap = node("label", undefined, parent, "planning-field");
-            node("span", "P10 PowerShell command (runtime only, never saved)", wrap);
+            node("span", "P10 remote command (PowerShell / Bash) (runtime only, never saved)", wrap);
             const input = node("textarea", undefined, wrap);
             input.rows = 5; input.autocomplete = "off"; input.maxLength = 16384;
             inputs.powershell = input;
@@ -237,17 +243,29 @@
     function parameterForm(parent, phase, mode, common = false) {
         const cap = capabilities.find(c => c.id === phase.id);
         if (!cap) return;
-        if (cap.runtime_powershell) node("p", "P10 PowerShell command is requested on Review or when arming the schedule; it is never stored in the definition.", parent, "muted");
+        if (cap.runtime_powershell) node("p", "P10 remote command (PowerShell / Bash) is requested on Review or when arming the schedule; it is never stored in the definition.", parent, "muted");
         if (phase.id === "09") node("p", "P09 requires a lab domain controller and AD management rights. New or disabled mrnobody accounts are enabled using the runtime Windows password; an already enabled account keeps its password. Domain Admins membership is verified.", parent, "muted");
         if (mode === "auto") {
             node("p", dataHint(phase.id), parent, "muted");
-            return;
+            if (!["10", "11"].includes(phase.id)) return;
         }
         Object.entries(cap.fields).forEach(([key, spec]) => {
-            const opts = spec.options ? [{value: "", label: "Choose protocol"}, ...spec.options] : undefined;
+            const platform = phase.parameters.platform || "auto";
+            let options = spec.options;
+            if (["10", "11"].includes(phase.id)) {
+                if (key === "protocol") options = options.filter(v => platform === "auto" || (v === "ssh") === (platform === "linux"));
+                if (key === "method") options = options.filter(v => v === "auto" || platform === "auto" || (["cron", "systemd"].includes(v)) === (platform === "linux"));
+                if (key === "source" || key === "subnet" || key === "file") return;
+            }
+            const opts = options ? [{value: "", label: "Automatic / choose"}, ...options] : undefined;
             let hint;
             const input = field(parent, spec.label, phase.parameters[key], v => {
                 if (v === "") delete phase.parameters[key]; else phase.parameters[key] = ["port", "timeout"].includes(spec.type) ? Number(v) : v;
+                if (key === "platform") {
+                    delete phase.parameters.protocol; delete phase.parameters.port; delete phase.parameters.username;
+                    if (phase.id === "11") delete phase.parameters.method;
+                    parent.replaceChildren(); parameterForm(parent, phase, mode, common);
+                }
                 if (key === "target" && common) {inherited.delete(phase.id); if (hint) hint.textContent = "Local override";}
             }, opts);
             if (key === "target" && common && commonTarget) {
@@ -419,7 +437,7 @@
             parameterForm(parent, phase, spec.target_mode); timingForm(parent, phase, spec.profile);
         }
         if (spec.type === "campaign" && spec.id === "full-incident") {
-            field(parent, "P10 custom PowerShell", spec.powershell_enabled ? "1" : "0", value => {spec.powershell_enabled = value === "1"; scheduleEditor(spec, existing);}, [{value:"0",label:"Disabled"},{value:"1",label:"Enabled"}]);
+            field(parent, "P10 Custom Remote Command", spec.powershell_enabled ? "1" : "0", value => {spec.powershell_enabled = value === "1"; scheduleEditor(spec, existing);}, [{value:"0",label:"Disabled"},{value:"1",label:"Enabled"}]);
         }
         const when = {mode: existing?.interval ? "recurring" : "once", at: existing ? localDate(existing.next_run || existing.at) : "", interval: existing?.interval || 86400};
         field(parent, "Run Once or Recurring", when.mode, v => {when.mode = v;}, [{value: "once", label: "Run Once"}, {value: "recurring", label: "Recurring"}]);

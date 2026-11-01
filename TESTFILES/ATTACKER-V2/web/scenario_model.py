@@ -19,7 +19,11 @@ FIELDS = {
     'port': {'type': 'port', 'label': 'Port'},
     'protocol': {'type': 'choice', 'label': 'Protocol'},
     'username': {'type': 'text', 'label': 'Username'},
-    'timeout': {'type': 'timeout', 'label': 'Windows action timeout (seconds, 5–300)'},
+    'timeout': {'type': 'timeout', 'label': 'Action timeout (seconds, 5–300)'},
+    'platform': {'type': 'choice', 'label': 'Execution platform', 'options': ['auto', 'windows', 'linux']},
+    'method': {'type': 'choice', 'label': 'Persistence method', 'options': ['auto', 'scheduled-task', 'service', 'cron', 'systemd']},
+    'action': {'type': 'choice', 'label': 'Persistence action', 'options': ['create', 'cleanup']},
+    'artifact': {'type': 'text', 'label': 'Artifact suffix (default: telemetry)'},
     'file': {'type': 'path', 'label': 'Synthetic staged file (@staged = current target staging output)'},
 }
 PROTOCOLS = {'02': ['http', 'https'], '03': ['ssh', 'rdp'],
@@ -27,18 +31,18 @@ PROTOCOLS = {'02': ['http', 'https'], '03': ['ssh', 'rdp'],
              '05': ['ssh', 'winrm', 'winrm-http', 'winrm-https'],
              '06': ['ssh', 'winrm', 'winrm-http', 'winrm-https'],
              '07': ['ssh', 'winrm', 'winrm-http', 'winrm-https'],
-             '08': ['ssh', 'rdp'], '09': ['winrm-http', 'winrm-https'], '10': ['winrm-http', 'winrm-https']}
+             '08': ['ssh', 'rdp'], '09': ['winrm-http', 'winrm-https'], '10': ['ssh', 'winrm-http', 'winrm-https'], '11': ['ssh', 'winrm-http', 'winrm-https']}
 TIMING = {'start_offset': 'Start offset (seconds)', 'duration': 'Target duration (seconds)',
           'delay_min': 'Minimum action delay (seconds)', 'delay_max': 'Maximum action delay (seconds)',
           'jitter': 'Jitter fraction (0–1)'}
 PRIVATE = [ipaddress.ip_network(x) for x in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16')]
 DEPENDENCIES = {'02': ['01'], '03': ['01'], '04': ['03'], '05': ['03'],
-                '06': ['03', '05'], '07': ['03'], '08': ['01', '03'], '09': ['03'], '10': ['03']}
+                '06': ['03', '05'], '07': ['03'], '08': ['01', '03'], '09': ['03'], '10': ['03'], '11': ['03']}
 
 
 def required_fields(pid):
     required = {'subnet'} if pid == '01' else {'target'}
-    if pid in {'03', '08', '09', '10'}:
+    if pid in {'03', '08', '09', '10', '11'}:
         required.add('protocol')
     if pid == '06':
         required.add('file')
@@ -140,7 +144,7 @@ def validate(value, capabilities):
             raise ValueError('Enabled must be boolean')
         params = phase.setdefault('parameters', {})
         allowed = set(cap['fields'])
-        if mode == 'auto':
+        if mode == 'auto' and pid not in {'10', '11'}:
             allowed -= {'target', 'source', 'subnet', 'protocol', 'port', 'username', 'file'}
         keys(params, allowed, 'phase parameter')
         for key, val in list(params.items()):
@@ -156,9 +160,12 @@ def validate(value, capabilities):
                 if isinstance(val, bool) or not str(val).isdigit() or not 5 <= int(val) <= 300:
                     raise ValueError('Windows action timeout must be 5–300 seconds')
                 params[key] = int(val)
-            elif key == 'protocol':
+            elif key in {'platform', 'method', 'action', 'protocol'}:
                 if val not in cap['fields'][key]['options']:
-                    raise ValueError('Unsupported protocol')
+                    raise ValueError('Unsupported choice')
+            elif key == 'artifact':
+                if not isinstance(val, str) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,31}', val):
+                    raise ValueError('Artifact suffix must be 1–32 lowercase letters/digits/hyphens')
             elif key == 'file':
                 # The existing exfil phase accepts a synthetic file. Do not turn
                 # the builder into a way to transfer arbitrary remote files.
@@ -167,6 +174,17 @@ def validate(value, capabilities):
             else:
                 if not re.fullmatch(r'[A-Za-z0-9_.@\\-]{1,128}', str(val)):
                     raise ValueError('Invalid username')
+        if pid in {'10', '11'}:
+            platform = params.get('platform', 'auto')
+            protocol = params.get('protocol')
+            effective = 'linux' if protocol == 'ssh' else 'windows' if protocol else platform
+            if platform != 'auto' and effective != platform:
+                raise ValueError('Platform/protocol mismatch')
+            method = params.get('method', 'auto')
+            if pid == '11' and method != 'auto':
+                from persistence_actions import METHODS
+                if effective != 'auto' and METHODS[method][0] != effective:
+                    raise ValueError('Persistence method/platform mismatch')
         timing = phase.setdefault('timing', {})
         keys(timing, cap['timing'], 'timing')
         if result['profile']['mode'] != 'custom' and timing:
@@ -219,11 +237,11 @@ def needs_password(definition, windows=False):
     if definition is None:
         return True  # Preserve the existing Full Incident form contract.
     for p in definition['phases']:
-        if p['id'] not in {'03', '04', '05', '06', '07', '09', '10'}:
+        if p['id'] not in {'03', '04', '05', '06', '07', '09', '10', '11'}:
             continue
         if definition['target_mode'] == 'auto':
             return True
-        protocol = p.get('parameters', {}).get('protocol', 'winrm-http' if p['id'] in {'09', '10'} else 'ssh')
+        protocol = p.get('parameters', {}).get('protocol', 'winrm-http' if p['id'] in {'09', '10', '11'} else 'ssh')
         if protocol.startswith(('rdp', 'winrm')) == windows:
             return True
     return False

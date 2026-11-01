@@ -56,6 +56,10 @@ USERNAME=""
 PASSWORD=""
 FILE=""
 ACTION_TIMEOUT=""
+PLATFORM=""
+METHOD=""
+ACTION=""
+ARTIFACT=""
 SUBNET=""
 AUTO_DISCOVERY=""
 
@@ -503,6 +507,10 @@ run_attack() {
     export MRNOBODY_PROTOCOL="$PROTOCOL"
     export MRNOBODY_USERNAME="$USERNAME"
     export MRNOBODY_PASSWORD="${PASSWORD:-${MRNOBODY_PASSWORD:-}}"
+    export MRNOBODY_PLATFORM="${PLATFORM:-${MRNOBODY_PLATFORM:-}}"
+    export MRNOBODY_METHOD="${METHOD:-${MRNOBODY_METHOD:-}}"
+    export MRNOBODY_ACTION="${ACTION:-${MRNOBODY_ACTION:-}}"
+    export MRNOBODY_ARTIFACT="${ARTIFACT:-${MRNOBODY_ARTIFACT:-}}"
     export MRNOBODY_FILE="$FILE"
     export MRNOBODY_TIMEOUT="${ACTION_TIMEOUT:-${MRNOBODY_TIMEOUT:-60}}"
 
@@ -604,7 +612,11 @@ Options:
   --user <username>
   --password <password>
   --file <path>
-  --timeout <seconds> (P09/P10, 5–300)
+  --platform <auto|windows|linux> (P10/P11)
+  --method <auto|scheduled-task|service|cron|systemd> (P11)
+  --action <create|cleanup> (P11)
+  --artifact <suffix> (P11, default telemetry)
+  --timeout <seconds> (P09/P10/P11, 5–300)
   P10 command: MRN_POWERSHELL_SECRET environment input only; never a CLI argument.
   --dry-run
   --help
@@ -744,6 +756,17 @@ case "$COMMAND" in
                         die "--password requires a value"
 
                     PASSWORD="$2"
+                    shift 2
+                    ;;
+
+                --platform|--method|--action|--artifact)
+                    [[ $# -ge 2 ]] || die "$1 requires a value"
+                    case "$1" in
+                        --platform) PLATFORM="$2" ;;
+                        --method) METHOD="$2" ;;
+                        --action) ACTION="$2" ;;
+                        --artifact) ARTIFACT="$2" ;;
+                    esac
                     shift 2
                     ;;
 

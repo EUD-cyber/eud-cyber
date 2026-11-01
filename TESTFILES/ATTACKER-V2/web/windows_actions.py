@@ -90,7 +90,7 @@ def ad_success(result):
 
 def runtime_command(value):
     if not isinstance(value, str) or not value.strip() or len(value) > 16384 or '\x00' in value:
-        raise ValueError('P10 requires a runtime PowerShell command of 1–16384 characters')
+        raise ValueError('P10 requires a runtime remote command of 1–16384 characters')
     return value
 
 

@@ -143,7 +143,7 @@ class PowerShellErrors(unittest.TestCase):
             self.assertEqual(state['status'], 'failed')
 
     def test_reports_both_views_and_live_status(self):
-        for result, status, label in ((SUCCESS, 'complete', 'nonfatal stderr/warnings'), (ERROR, 'skipped', 'Custom PowerShell command failed'), (TRANSPORT, 'failed', 'transport/authentication')):
+        for result, status, label in ((SUCCESS, 'complete', 'nonfatal stderr/warnings'), (ERROR, 'skipped', 'Custom remote command failed'), (TRANSPORT, 'failed', 'transport/authentication')):
             (self.base / 'logs').mkdir(exist_ok=True)
             (self.base / 'logs/incident-ground-truth.log').write_text('')
             code, log = self.candidates([result])

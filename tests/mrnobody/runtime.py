@@ -59,7 +59,7 @@ for name in ['campaign_status', 'campaign_log']:
     assert not re.fullmatch(pattern, '../H3-20261031-072933')
 
 scripts = list((PLATFORM / 'scripts').glob('[0-9]*.sh')) + list((PLATFORM / 'scenarios').glob('*.sh'))
-assert len(scripts) == 11
+assert len(scripts) == 12
 for script in scripts:
     text = script.read_text(encoding='utf8')
     assignment = next(line for line in text.splitlines() if line.startswith('INCIDENT_ID='))

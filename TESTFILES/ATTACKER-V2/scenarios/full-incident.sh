@@ -3,7 +3,7 @@
 # SCENARIO_ID="full-incident"
 # SCENARIO_NAME="Full Incident"
 # SCENARIO_DESCRIPTION="Complete incident simulation from discovery through impact."
-# SCENARIO_PHASES="01,02,03,08,09,10,04,05,06,07"
+# SCENARIO_PHASES="01,02,03,08,09,10,11,04,05,06,07"
 
 set -u
 
@@ -24,7 +24,7 @@ set -u
 #   P7  Impact
 #   P8  Optional Wordlist Authentication
 #
-# P8 runs after P3 when enabled, followed by P09/P10, then P4-P7.
+# P8 runs after P3 when enabled, followed by P09/P10/P11, then P4-P7.
 # P09 performs AD account/group changes; P10 requires runtime PowerShell input.
 # ============================================================
 
@@ -704,6 +704,13 @@ run_phase() {
     fi
 
 
+    if [[ "$NUMBER" == "11" && $RESULT -eq 78 ]]; then
+        RUN_PHASE_STATUS="skipped"
+        update_phase_state "$NUMBER" "skipped"
+        log "[PHASE $NUMBER] SKIPPED - No supported persistence target or method"
+        return 0
+    fi
+
     if [[ "$NUMBER" == "09" && $RESULT -eq 78 ]]; then
         RUN_PHASE_STATUS="skipped"
         update_phase_state "$NUMBER" "skipped"
@@ -714,7 +721,7 @@ run_phase() {
     if [[ "$NUMBER" == "10" && $RESULT -eq 79 ]]; then
         RUN_PHASE_STATUS="skipped"
         update_phase_state "$NUMBER" "skipped"
-        log "[PHASE $NUMBER] ACTION_ERROR - Custom PowerShell command failed; campaign continues"
+        log "[PHASE $NUMBER] ACTION_ERROR - Custom remote command failed; campaign continues"
         return 0
     fi
 
@@ -881,6 +888,7 @@ PHASE_07="$SCRIPT_DIR/07-impact.sh"
 PHASE_08="$SCRIPT_DIR/08-wordlist.sh"
 PHASE_09="$SCRIPT_DIR/09-ad-privilege.sh"
 PHASE_10="$SCRIPT_DIR/10-powershell.sh"
+PHASE_11="$SCRIPT_DIR/11-persistence.sh"
 
 
 # ============================================================
@@ -896,7 +904,8 @@ for SCRIPT in \
     "$PHASE_06" \
     "$PHASE_07" \
     "$PHASE_09" \
-    "$PHASE_10"
+    "$PHASE_10" \
+    "$PHASE_11"
 
 do
 
@@ -1060,6 +1069,7 @@ data = {
         "06": "pending",
         "07": "pending",
         "09": "pending",
+        "11": "pending",
         "10": "pending" if os.environ.get("MRN_POWERSHELL_ENABLED") == "1" else "disabled",
 
         "08": (
@@ -1316,7 +1326,7 @@ phase_delay
 # ============================================================
 # PHASE 09 / 10: Windows actions after established access, before staging.
 # ============================================================
-for NUMBER in 09 10; do
+for NUMBER in 09 10 11; do
     if [[ "$NUMBER" == "09" ]] && ! windows_access_available; then
         update_phase_state "09" "disabled"
         ground_truth "PHASE_SKIPPED phase=09 reason=no_windows_rdp_access"
@@ -1330,7 +1340,11 @@ for NUMBER in 09 10; do
     NAME="Active Directory Privilege Escalation"
     if [[ "$NUMBER" == "10" ]]; then
         SCRIPT="$PHASE_10"
-        NAME="Custom Windows / PowerShell Action"
+        NAME="Custom Remote Command"
+    fi
+    if [[ "$NUMBER" == "11" ]]; then
+        SCRIPT="$PHASE_11"
+        NAME="Persistence"
     fi
     update_phase_state "$NUMBER" "running"
     if ! run_phase "$NUMBER" "$NAME" "$SCRIPT"; then
