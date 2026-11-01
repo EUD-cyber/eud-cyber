@@ -819,6 +819,10 @@ function renderScenarioDetail(
 
 
 function configureScenario(scenario) {
+    if (scenario?.custom && window.MrnPlanning && !scenario.phases?.includes("08")) {
+        window.MrnPlanning.runCustom(scenario.id).catch(error => showMessage(error.message, "error"));
+        return;
+    }
     selectedScenario = scenario;
 
     if (startButton) {

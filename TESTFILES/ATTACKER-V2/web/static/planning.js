@@ -34,11 +34,23 @@
         input.addEventListener("change", () => change(input.value));
         return input;
     }
-    function credentials(parent) {
+    function credentials(parent, execution) {
         node("p", "Credentials are supplied only when running or arming a schedule. They are never saved in scenario definitions.", parent, "muted");
-        const ssh = field(parent, "Linux / SSH password", "", () => {}); ssh.type = "password"; ssh.autocomplete = "new-password";
-        const rdp = field(parent, "Windows / RDP / WinRM password", "", () => {}); rdp.type = "password"; rdp.autocomplete = "new-password";
-        return () => ({ssh_password: ssh.value, rdp_password: rdp.value});
+        let model = execution?.type === "custom" ? custom.find(s => s.id === execution.id) : execution;
+        if (model?.type === "phase") model = {target_mode: model.target_mode, phases: [{id: model.id, parameters: model.parameters || {}}]};
+        const required = new Set();
+        if (!model?.phases) {required.add("ssh"); required.add("rdp");}
+        else model.phases.filter(p => p.enabled !== false).forEach(p => {
+            if (!capabilities.find(c => c.id === p.id)?.credentials) return;
+            if (model.target_mode === "auto") {required.add("ssh"); required.add("rdp");}
+            else required.add(/^(rdp|winrm)/.test(p.parameters?.protocol || "ssh") ? "rdp" : "ssh");
+        });
+        const inputs = {};
+        for (const protocol of required) {
+            const input = field(parent, protocol === "ssh" ? "Linux / SSH password" : "Windows / RDP / WinRM password", "", () => {});
+            input.type = "password"; input.autocomplete = "new-password"; inputs[protocol + "_password"] = input;
+        }
+        return () => Object.fromEntries(Object.entries(inputs).map(([key, input]) => {const value = input.value; input.value = ""; return [key, value];}));
     }
     function newDraft(definition) {
         draft = definition ? copy(definition) : {version: 1, name: "Custom Incident", description: "", target_mode: "auto", phases: [], profile: {mode: "normal", duration: 0}};
@@ -145,7 +157,7 @@
         else {
             node("pre", JSON.stringify(definition(), null, 2), parent, "planning-review");
             node("p", `Schedule: ${draft.schedule.mode}${draft.schedule.at ? " · " + draft.schedule.at : ""}`, parent);
-            readBuilderCredentials = credentials(parent);
+            readBuilderCredentials = credentials(parent, definition());
             button(parent, draft.schedule.mode === "now" ? "Save" : "Save scenario + schedule", () => saveDraft(false));
             if (draft.schedule.mode === "now") button(parent, "Save + Run Now", () => saveDraft(true));
             if (draft.phases.some(p => p.enabled && p.id === "08")) node("p", "For a wordlist campaign, save first, then use RUN in Scenarios to upload the wordlist through the existing execution form.", parent, "muted");
@@ -193,7 +205,7 @@
         field(parent, "Run Once or Recurring", when.mode, v => {when.mode = v;}, [{value: "once", label: "Run Once"}, {value: "recurring", label: "Recurring"}]);
         field(parent, "Start date/time (browser timezone)", when.at, v => {when.at = v;}).type = "datetime-local";
         field(parent, "Repeat interval (seconds, used for Recurring)", when.interval, v => {when.interval = Number(v);}).type = "number";
-        const read = credentials(parent);
+        const read = credentials(parent, spec);
         if (existing) button(parent, "Supply credentials without changing schedule", async () => {
             await api(`/api/schedules/${existing.id}/arm`, "POST", read());
             message("Temporary credentials supplied until service restart."); parent.replaceChildren(); await refresh();
@@ -236,5 +248,11 @@
         refresh().catch(error => message(error.message));
     });
     // Expose pure helpers for DOM-based regression tests and existing GUI hooks.
-    window.MrnPlanning = {newDraft, refresh, localDate};
+    async function runCustom(id) {
+        if (!custom.some(s => s.id === id)) await refresh();
+        const saved = custom.find(s => s.id === id);
+        if (!saved) throw new Error("Custom scenario not found");
+        newDraft(saved); step = steps.length - 1; renderBuilder();
+    }
+    window.MrnPlanning = {newDraft, refresh, localDate, runCustom};
 })();

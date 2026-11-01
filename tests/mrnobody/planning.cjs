@@ -65,11 +65,14 @@ async function main() {
     change(field(body(),'Target activity duration (seconds)'),'120');
     await click(body(),'Next'); await click(body(),'Next');
     const review=walk(body()).find(n=>n.tag==='pre');assert.ok(review.textContent.includes('<img')); // text, never innerHTML
+    assert.equal(walk(body()).filter(n=>n.tag==='input'&&n.type==='password').length,1); // SSH only; no irrelevant Windows password
     await click(body(),'Save');
     assert.equal(definitions.length,1);
     assert.deepEqual(definitions[0].phases.map(x=>x.id),['03','01']);
     assert.equal(definitions[0].phases[1].timing.duration,120);
     assert.ok(!JSON.stringify(definitions).includes('password'));
+    await context.window.MrnPlanning.runCustom('custom-test');
+    assert.equal(walk(body()).filter(n=>n.tag==='input'&&n.type==='password').length,1);
     const library=elements.get('customLibrary');await click(library,'Duplicate');
     assert.equal(field(body(),'Name').value,'<img src=x onerror=alert(1)> (copy)');
     await context.window.MrnPlanning.refresh();
