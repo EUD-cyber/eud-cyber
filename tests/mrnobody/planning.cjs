@@ -154,6 +154,13 @@ async function main() {
     set('P08 usernames (execution only)','ubuntu');await click(body(),'Save + Run Now');
     const request=requests.find(r=>r.url.startsWith('/api/scenario/'));assert.ok(request.data instanceof FormData);assert.equal(request.data.get('wordlist_users'),'ubuntu');assert.equal(await request.data.get('wordlist_file').text(),'execution-only-wordlist');
     assert.ok(!JSON.stringify(definitions).includes('execution-only-wordlist'));assert.ok(!JSON.stringify(plans).includes('wordlist'));
+    await select();await add('08');await review();
+    set('P08 wordlist path on server (execution only)','/usr/share/wordlists/lab.txt');
+    await click(body(),'Save + Run Now');
+    const serverRun=requests.filter(r=>r.url.startsWith('/api/scenario/')).at(-1);
+    assert.equal(serverRun.data.get('wordlist_path'),'/usr/share/wordlists/lab.txt');
+    assert.equal(serverRun.data.get('wordlist_file'),null);
+    assert.ok(!JSON.stringify(definitions).includes('/usr/share/wordlists/lab.txt'));
     await context.window.MrnPlanning.runCustom(definitions.at(-1).id);assert.match(title(),/^7\./);
     await back();set('When','once');assert.match(text(body()),/NORDIC_WORDLIST_FILE/);
     await click(elements.get('scheduleList'),'New schedule / Run Now');

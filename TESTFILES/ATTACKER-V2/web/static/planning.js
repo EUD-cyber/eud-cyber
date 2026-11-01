@@ -308,6 +308,7 @@
                 const data = new FormData(); Object.entries(secret).forEach(([key, value]) => data.append(key, value));
                 data.append("wordlist_enabled", "1"); data.append("wordlist_users", wordlist.users);
                 if (wordlist.file) data.append("wordlist_file", wordlist.file);
+                if (wordlist.path) data.append("wordlist_path", wordlist.path);
                 const response = await fetch(`/api/scenario/${saved.id}/start`, {method: "POST", body: data});
                 result = await response.json(); if (!response.ok) throw new Error(result.message || result.status);
             } else result = await api("/api/executions/run", "POST", {execution, credentials: secret});
@@ -366,8 +367,15 @@
             if (enabled().some(p => p.id === "08") && draft.schedule.mode === "now") {
                 const users = field(parent, "P08 usernames (execution only)", "ubuntu,Administrator", () => {});
                 const upload = field(parent, "P08 wordlist upload (execution only)", "", () => {}); upload.type = "file";
-                node("p", "Upload a wordlist for this run, or use the configured service wordlist. These inputs are never saved in the scenario or schedule.", parent, "muted");
-                readWordlist = () => {if (!users.value.trim()) throw new Error("Enter at least one P08 username for this run."); return {users: users.value.trim(), file: upload.files?.[0]};};
+                const serverPath = field(parent, "P08 wordlist path on server (execution only)", "", () => {});
+                node("p", "Upload a file OR enter an existing absolute path on MrNobody. Leave both empty to use the configured service wordlist. These inputs are never saved in scenario or schedule definitions.", parent, "muted");
+                readWordlist = () => {
+                    if (!users.value.trim()) throw new Error("Enter at least one P08 username for this run.");
+                    const path = serverPath.value.trim(), file = upload.files?.[0];
+                    if (path && file) throw new Error("Choose either an upload or a server wordlist path.");
+                    if (path && !path.startsWith("/")) throw new Error("Enter an absolute wordlist path on MrNobody.");
+                    return {users: users.value.trim(), file, path};
+                };
             }
         }
         const navigation = node("div", undefined, parent, "planning-row");

@@ -143,6 +143,33 @@ class API(unittest.TestCase):
         self.assertEqual(self.client.delete('/api/custom-scenarios/full-incident').status_code, 400)
         self.assertEqual(self.client.delete('/api/custom-scenarios/' + sid).status_code, 200)
 
+    def test_campaign_server_wordlist_and_upload_selection(self):
+        path = self.base / 'existing-wordlist.txt'
+        content = b'WORDLIST_RUNTIME_SECRET\n'
+        path.write_bytes(content)
+        data = {'ssh_password': 'SSH', 'rdp_password': 'RDP', 'wordlist_enabled': True,
+                'wordlist_users': 'ubuntu', 'wordlist_path': str(path.resolve())}
+        result = self.client.post('/api/start', json=data)
+        self.assertEqual(result.status_code, 200, result.json)
+        env = self.launch.call_args.kwargs['env']
+        self.assertEqual(env['NORDIC_WORDLIST_FILE'], str(path.resolve()))
+        self.assertEqual(path.read_bytes(), content)
+        self.assertNotIn(content.decode().strip(), web.CAMPAIGN_LOG.read_text())
+        # An existing server file is never copied into uploads or deleted.
+        self.assertFalse((self.base / 'uploads').exists())
+        for bad in ('relative.txt', str(self.base / 'missing.txt'), str(self.base)):
+            web.campaign_process = None
+            self.assertEqual(self.client.post('/api/start', json=dict(data, wordlist_path=bad)).status_code, 400)
+        empty = self.base / 'empty.txt'; empty.touch()
+        self.assertEqual(self.client.post('/api/start', json=dict(data, wordlist_path=str(empty))).status_code, 400)
+        web.campaign_process = None
+        both = dict(data, wordlist_enabled='1', wordlist_file=(io.BytesIO(b'upload\n'), 'upload.txt'))
+        self.assertEqual(self.client.post('/api/start', data=both).status_code, 400)
+        web.campaign_process = None
+        self.assertEqual(self.client.post('/api/start', json=dict(data, wordlist_enabled=False, wordlist_path='missing.txt')).status_code, 200)
+        self.assertNotIn('NORDIC_WORDLIST_FILE', self.launch.call_args.kwargs['env'])
+        self.assertEqual(path.read_bytes(), content)
+
     def test_run_now_overlap_and_redaction(self):
         saved = self.save()
         result = self.client.post('/api/executions/run', json={'execution': {'type': 'custom', 'id': saved['id']}, 'credentials': {'ssh_password': 'SUPER_SECRET'}})

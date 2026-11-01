@@ -16,7 +16,8 @@ function element(id = "") {
 }
 for (const id of ["startButton", "scenarioDetail", "messageBox", "incidentIp",
                   "webPorts", "exfilPort", "sshUser", "sshPassword", "sshPort",
-                  "rdpUser", "rdpPassword", "rdpPort", "powershellEnabled", "campaignPowershell"]) {
+                  "rdpUser", "rdpPassword", "rdpPort", "powershellEnabled", "campaignPowershell",
+                  "wordlistEnabled", "wordlistFields", "wordlistUsers", "wordlistSource", "wordlistPath", "wordlistFile", "wordlistServerFields", "wordlistUploadFields"]) {
     elements.set(id, element(id));
 }
 elements.get("startButton").parentElement = element();
@@ -43,6 +44,18 @@ vm.runInContext(`
     refreshStatus = refreshInventory = refreshLog = async () => {};
 `, context);
 async function main() {
+    assert.equal(elements.get('wordlistFields').hidden, true);
+    elements.get('wordlistEnabled').checked = true;
+    elements.get('wordlistEnabled').listeners.change();
+    assert.equal(elements.get('wordlistFields').hidden, false);
+    elements.get('wordlistSource').value = 'server';
+    elements.get('wordlistSource').listeners.change();
+    assert.equal(elements.get('wordlistFile').disabled, true);
+    assert.equal(elements.get('wordlistPath').disabled, false);
+    assert.equal(elements.get('wordlistServerFields').hidden, false);
+    elements.get('wordlistEnabled').checked = false;
+    elements.get('wordlistEnabled').listeners.change();
+    assert.equal(elements.get('wordlistFields').hidden, true);
     const values = {
         incidentIp: "192.168.1.254", webPorts: "80,443", exfilPort: "9090",
         sshUser: "ubuntu", sshPassword: "ssh-test", sshPort: "22",
@@ -80,6 +93,21 @@ async function main() {
     assert.equal(context.submissions[2].form.get("powershell_enabled"), "1");
     assert.equal(context.submissions[2].form.get("powershell"), "Get-Date");
     assert.equal(elements.get("campaignPowershell").value, "");
+    elements.get('powershellEnabled').checked = false;
+    elements.get('wordlistEnabled').checked = true;
+    elements.get('wordlistUsers').value = 'ubuntu';
+    elements.get('wordlistSource').value = 'server';
+    elements.get('wordlistPath').value = '/usr/share/wordlists/lab.txt';
+    elements.get('wordlistFile').files = [new Blob(['unused-upload'])];
+    elements.get('sshPassword').value = 'SSH';elements.get('rdpPassword').value = 'RDP';
+    await vm.runInContext('startCampaign()', context);
+    assert.equal(context.submissions.at(-1).form.get('wordlist_path'), '/usr/share/wordlists/lab.txt');
+    assert.equal(context.submissions.at(-1).form.get('wordlist_file'), null);
+    elements.get('wordlistSource').value = 'upload';
+    elements.get('sshPassword').value = 'SSH';elements.get('rdpPassword').value = 'RDP';
+    await vm.runInContext('startCampaign()', context);
+    assert.equal(context.submissions.at(-1).form.get('wordlist_path'), null);
+    assert.equal(await context.submissions.at(-1).form.get('wordlist_file').text(), 'unused-upload');
     console.log("JavaScript syntax and isolated frontend checks passed; no network requests sent.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

@@ -190,3 +190,16 @@ and exercise the reused multipart upload with no secrets in planning storage.
 Existing frontend, backend, Full Incident, standalone, historical report and
 export tests remain in the validation workflow. Fresh-install userdata fetches
 the new modules and GUI asset; the updater manifest includes their checksums.
+
+## P08 wordlist source in the GUI
+
+Full Incident hides P08 configuration until its checkbox is enabled. Choose an
+upload or an existing absolute wordlist path on the MrNobody server. Existing
+files must be regular, readable and non-empty; they are not changed or deleted.
+The chosen source alone is submitted. Supplying both an upload and a path is
+rejected. Paths are validated by the server before a campaign starts.
+
+Custom Scenario Review / Run Now also accepts an execution-only server path.
+Paths, usernames and uploads supplied there do not enter the saved definition.
+Schedules retain their existing service-side NORDIC_WORDLIST_FILE behavior.
+Existing CLI wordlist handling is unchanged.
