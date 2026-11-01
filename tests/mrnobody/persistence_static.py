@@ -14,6 +14,47 @@ from persistence_actions import METHODS, script
 
 
 class StaticChecks(unittest.TestCase):
+    @unittest.skipUnless(os.name == 'nt', 'PowerShell fixture with in-process fake task/service providers')
+    def test_windows_create_rerun_cleanup_and_ownership_with_fake_providers(self):
+        # These functions shadow every task/service operation. Only owned files
+        # below the isolated temporary ProgramData directory can be modified.
+        providers = r'''
+$ErrorActionPreference = 'Stop'
+$script:task = $null
+$script:service = $null
+function Get-ScheduledTask { param($TaskName,$TaskPath,$ErrorAction) if($TaskPath -ne '\'){throw 'wrong_task_path'}; $script:task }
+function New-ScheduledTaskAction { param($Execute,$Argument) @{Execute=$Execute;Argument=$Argument} }
+function New-ScheduledTaskTrigger { param([switch]$Daily,$At) @{At=$At} }
+function Register-ScheduledTask { param($TaskName,$TaskPath,$Description,$Action,$Trigger,[switch]$Force) if($TaskPath -ne '\'){throw 'wrong_task_path'}; $script:task = [pscustomobject]@{Description=$Description} }
+function Unregister-ScheduledTask { param($TaskName,$TaskPath,$Confirm) if($TaskPath -ne '\'){throw 'wrong_task_path'}; $script:task=$null }
+function Get-CimInstance { param($ClassName,$Filter) $script:service }
+function Add-Type { param($TypeDefinition,$ReferencedAssemblies,$OutputAssembly,$OutputType) [IO.File]::WriteAllBytes($OutputAssembly,[byte[]]@(1,2,3)) }
+function New-Service { param($Name,$BinaryPathName,$DisplayName,$Description,$StartupType) $script:service=[pscustomobject]@{Description=$Description;PathName=$BinaryPathName;State='Stopped';Status='Stopped'} }
+function Start-Service { param($Name) $script:service.State='Running';$script:service.Status='Running' }
+function Stop-Service { param($Name,$ErrorAction) $script:service.State='Stopped';$script:service.Status='Stopped' }
+function Get-Service { param($Name) $script:service }
+function Invoke-CimMethod { param($InputObject,$MethodName) if($MethodName -ne 'Delete'){throw 'wrong_method'}; $script:service=$null; [pscustomobject]@{ReturnValue=0} }
+'''
+        for method in ('scheduled-task', 'service'):
+            create = script({'MRNOBODY_METHOD': method}, 'windows')
+            cleanup = script({'MRNOBODY_METHOD': method, 'MRNOBODY_ACTION': 'cleanup'}, 'windows')
+            member = 'task' if method == 'scheduled-task' else 'service'
+            fixture = providers
+            fixture += '\n& {\n' + create + '\n}\n'
+            fixture += f"if ($null -eq $script:{member}) {{ throw 'missing_artifact' }}\n"
+            fixture += '\n& {\n' + create + '\n}\n'
+            fixture += f"$script:{member}.Description = 'unrelated artifact'\n"
+            fixture += "$blocked=$false; try { & {\n" + cleanup + "\n} } catch { $blocked=$true }; if(-not $blocked){throw 'ownership_not_enforced'}\n"
+            fixture += f"$script:{member}.Description = 'MrNobody controlled lab P11'\n"
+            fixture += '\n& {\n' + cleanup + '\n}\n& {\n' + cleanup + '\n}\n'
+            fixture += f"if ($null -ne $script:{member}) {{ throw 'artifact_not_removed' }}\n"
+            with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+                result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
+                                         '& ([scriptblock]::Create([Console]::In.ReadToEnd()))'],
+                                        input=fixture, env=dict(os.environ, ProgramData=tmp), capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertFalse(list(Path(tmp).rglob('owner.txt')))
+
     def test_generated_scripts_parse(self):
         for method, (platform, _, _) in METHODS.items():
             for action in ('create', 'cleanup'):

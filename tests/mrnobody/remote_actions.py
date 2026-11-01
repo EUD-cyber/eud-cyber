@@ -238,6 +238,8 @@ class Endpoints(API):
             self.assertEqual(self.client.post('/api/executions/run',json=dict(execution=execution,credentials=credentials)).status_code,200)
             saved=self.client.post('/api/schedules',json=dict(version=1,execution=execution,interval=0,enabled=True,at='2099-01-01T00:00:00Z')).get_json()
             self.assertEqual(self.client.post('/api/schedules/'+saved['id']+'/arm',json=credentials).status_code,200)
+            stored = self.client.get('/api/schedules').get_json()['schedules']
+            self.assertEqual(next(s for s in stored if s['id'] == saved['id'])['execution']['parameters'], params)
             import app as web
             web.campaign_process = None
             custom=self.client.post('/api/custom-scenarios',json=definition(pid,platform='linux')).get_json()
@@ -245,6 +247,9 @@ class Endpoints(API):
             text=''.join(p.read_text() for p in self.base.rglob('*.json'))
             self.assertNotIn('SSH_RUNTIME',text)
             self.assertNotIn('printf lab',text)
+            persisted = web.planning.store.path.read_bytes()
+            self.assertNotIn(b'SSH_RUNTIME', persisted)
+            self.assertNotIn(b'printf lab', persisted)
 
 
 @unittest.skipIf(os.name=='nt','Real Bash fixtures run in Linux CI')
@@ -276,7 +281,7 @@ esac
             env=dict(os.environ,HOME=str(home),PATH=str(fake)+os.pathsep+os.environ['PATH'],
                      NORDIC_BASE_DIR=tmp,NORDIC_COMPROMISED_STATE=str(base/'state/compromised-hosts.json'),NORDIC_SSH_PASSWORD='SSH_RUNTIME',MRNOBODY_RUN_MODE='standalone',MRNOBODY_PASSWORD='SSH_RUNTIME',
                      MRNOBODY_PROTOCOL='ssh',MRNOBODY_TARGET=TARGET['target'])
-            for command,expected in [('printf lab',0),('printf warning >&2',0),('if broken',2),('exit 255',255),('printf '+ 'x'*1000,0)]:
+            for command,expected in [('printf lab',0),('printf warning >&2',0),('if broken',2),('exit 255',255),('printf '+ 'x'*1000,0),("printf '%070000d' 0",0)]:
                 result=remote.perform('10',TARGET,dict(env,MRN_POWERSHELL_SECRET=command))
                 self.assertEqual(result['exit_code'],expected)
                 self.assertLessEqual(len(result.get('stdout_preview','')),512)
@@ -290,6 +295,13 @@ esac
                         self.assertIn('echo preserve',table)
                         self.assertEqual(table.count('# MrNobody controlled lab P11'),1 if action=='create' else 0)
                     else:self.assertEqual((home/'.config/systemd/user/mrnobody-p11-telemetry.service').exists(),action=='create')
+            unit = home/'.config/systemd/user/mrnobody-p11-telemetry.service'
+            unit.write_text('unrelated unit\n')
+            for action in ('create', 'cleanup'):
+                result = remote.perform('11', TARGET, dict(env, MRNOBODY_METHOD='systemd', MRNOBODY_ACTION=action))
+                self.assertEqual(result['result'], 'failed')
+                self.assertEqual(unit.read_text(), 'unrelated unit\n')
+            unit.unlink()
             # Real standalone runner/report wrapper; only the fake SSH is reachable.
             shutil.copytree(PLATFORM/'web',base/'web')
             shutil.copytree(PLATFORM/'scripts',base/'scripts')
@@ -319,6 +331,13 @@ esac
                 env.update(NORDIC_INCIDENT_ID='MRN-custom-'+mode,MRN_EXECUTION=json.dumps(value),MRN_STARTED='0')
                 result=subprocess.run(['bash',str(base/'scenarios/full-incident.sh')],env=env,capture_output=True,text=True,timeout=30)
                 self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+            env.update(NORDIC_INCIDENT_ID='MRN-linux-command-error', MRN_POWERSHELL_SECRET='if broken')
+            result=subprocess.run(['bash',str(base/'scenarios/full-incident.sh')],env=env,capture_output=True,text=True,timeout=30)
+            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+            report=load_report(base/'reports','MRN-linux-command-error')
+            self.assertEqual(next(p for p in report['phases'] if p['id']=='10')['action_result'],'command_error')
+            self.assertEqual(next(p for p in report['phases'] if p['id']=='04')['status'],'success')
+            env['MRN_POWERSHELL_SECRET']='printf lab'
             env.pop('MRN_EXECUTION');env.update(NORDIC_INCIDENT_ID='MRN-full-remote',MRN_POWERSHELL_ENABLED='1',NORDIC_SSH_PASSWORD='SSH_RUNTIME')
             result=subprocess.run(['bash',str(base/'scenarios/full-incident.sh')],env=env,capture_output=True,text=True,timeout=30)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
