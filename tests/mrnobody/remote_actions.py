@@ -274,7 +274,7 @@ is-enabled|is-active) test -f "$HOME/enabled";;
 esac
 ''')
             env=dict(os.environ,HOME=str(home),PATH=str(fake)+os.pathsep+os.environ['PATH'],
-                     NORDIC_BASE_DIR=tmp,MRNOBODY_RUN_MODE='standalone',MRNOBODY_PASSWORD='SSH_RUNTIME',
+                     NORDIC_BASE_DIR=tmp,NORDIC_COMPROMISED_STATE=str(base/'state/compromised-hosts.json'),MRNOBODY_RUN_MODE='standalone',MRNOBODY_PASSWORD='SSH_RUNTIME',
                      MRNOBODY_PROTOCOL='ssh',MRNOBODY_TARGET=TARGET['target'])
             for command,expected in [('printf lab',0),('printf warning >&2',0),('if broken',2),('exit 255',255),('printf '+ 'x'*1000,0)]:
                 result=remote.perform('10',TARGET,dict(env,MRN_POWERSHELL_SECRET=command))

@@ -150,6 +150,8 @@ def run(pid, env, invoke=subprocess.run):
                 outcome = 'failed'
             if outcome == 'skipped' and pid != '11':
                 outcome = 'failed'
+            if pid == '11' and outcome != 'success':
+                fields['cleanup_required'] = 'true'
             emit(base, env, pid, prefix + '_' + {'success': 'SUCCESS', 'action_error': 'ERROR', 'skipped': 'SKIPPED', 'failed': 'FAILED'}[outcome], **{**fields, **result})
             outcomes.append('transport' if result.get('warning') == 'transport_error_details_omitted' else outcome)
             if outcome in {'success', 'action_error'}:

@@ -66,6 +66,13 @@ fi
 # shellcheck source=/dev/null
 source "$CONFIG_FILE"
 
+# Built-in phases consume campaign access; never inherit standalone overrides.
+if [[ -z "${MRN_EXECUTION:-}" ]]; then
+    export MRNOBODY_RUN_MODE=campaign
+    unset MRNOBODY_TARGET MRNOBODY_SOURCE MRNOBODY_PORT MRNOBODY_PROTOCOL MRNOBODY_USERNAME
+    unset MRNOBODY_PLATFORM MRNOBODY_METHOD MRNOBODY_ACTION MRNOBODY_ARTIFACT
+fi
+
 # Validate the built-in CLI action input before clearing any campaign state.
 if [[ -z "${MRN_EXECUTION:-}" && "${MRN_POWERSHELL_ENABLED:-0}" == "1" && -z "${MRN_POWERSHELL_SECRET//[[:space:]]/}" ]]; then
     echo "[ERROR] Full Incident requires runtime P10 input: MRN_POWERSHELL_SECRET"
@@ -165,7 +172,7 @@ if [[ -t 0 ]]; then
     echo
     echo "============================================================"
     echo
-    echo "        NORDIC MANUFACTURING A/S"
+    echo "        MrNobody Lab Simulation"
     echo "        MrNobody Incident Platform"
     echo
     echo "        CLI CONFIGURATION"
