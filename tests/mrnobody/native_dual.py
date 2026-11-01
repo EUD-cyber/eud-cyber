@@ -111,11 +111,13 @@ class NativeDual(unittest.TestCase):
                 log=self.base/'logs/incident-ground-truth.log'
                 if log.exists():log.unlink()
                 env=dict(self.env,MRNOBODY_BEHAVIOR=behavior)
-                response=SimpleNamespace(status_code=0,std_out=b'artifact_path=C:\\Temp\\MrNobody-P13-safe\ncleanup=complete\nPASSWORD_TO_REDACT',std_err=b'benign warning')
+                artifact='MrNobody-P13-'+'a'*24
+                response=SimpleNamespace(status_code=0,std_out=('artifact_path=C:\\Temp\\'+artifact+'\njob_name: '+artifact+'\ncleanup=complete\nPASSWORD_TO_REDACT').encode(),std_err=b'benign warning')
                 session=Mock();session.run_ps.return_value=response
                 result=remote.perform('13',target,env,session_factory=Mock(return_value=session))
                 self.assertEqual(result['result'],'success');self.assertEqual(result['cleanup'],'complete')
-                self.assertEqual(result['artifact_path'],r'C:\Temp\MrNobody-P13-safe')
+                self.assertEqual(result['artifact_path'],'C:\\Temp\\'+artifact)
+                self.assertEqual(result['job_name'],artifact)
                 self.assertNotIn('PASSWORD_TO_REDACT',json.dumps(result))
                 worker=self.invoke({'windows':result})
                 self.assertEqual(self.run_phase('13',env,worker),0)
@@ -245,9 +247,12 @@ class CampaignRunners(unittest.TestCase):
                      NORDIC_RDP_PASSWORD='RUNTIME',NORDIC_SSH_PASSWORD='RUNTIME',PYTHONPATH=str(fake),PATH=str(fake)+os.pathsep+os.environ['PATH'])
             for behavior,(_,technique,_) in native.BEHAVIORS.items():
                 env['NORDIC_INCIDENT_ID']='MRN-runner-'+behavior
+                before=set((base/'reports').glob('*.json'))
                 result=subprocess.run(['bash',str(base/'scripts/run-phase.sh'),'13','--target','192.168.1.15','--protocol','winrm-http','--behavior',behavior],env=env,capture_output=True,text=True,timeout=30)
                 self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-                report=json.loads((base/'reports'/(env['NORDIC_INCIDENT_ID']+'.json')).read_text())
+                created=set((base/'reports').glob('*.json'))-before
+                self.assertEqual(len(created),1,result.stdout+result.stderr)
+                report=json.loads(created.pop().read_text())
                 self.assertEqual(report['phases'][0]['mitre']['techniques'][0]['id'],technique)
             # Keep P10/P13 runners real. Every other phase is an inert fixture;
             # P03 creates only a synthetic inventory for the local fake transports.

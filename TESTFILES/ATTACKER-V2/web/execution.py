@@ -170,7 +170,10 @@ def snapshot(base, capabilities, process=None, now=None):
             if f'INCIDENT={iid} ' not in line:
                 continue
             if 'PHASE=10 ' in line:
-                if 'WINDOWS_ACTION_ERROR ' in line or 'REMOTE_ACTION_ERROR ' in line:
+                if 'REMOTE_ACTION_PARTIAL ' in line:
+                    action_result = 'success_with_warning'
+                    logs.append('P10 · Partial result; inspect separate Windows/Linux action evidence')
+                elif 'WINDOWS_ACTION_ERROR ' in line or 'REMOTE_ACTION_ERROR ' in line:
                     action_result = 'command_error'
                     logs.append('P10 · Custom remote command failed')
                 elif ('WINDOWS_ACTION_SUCCESS ' in line or 'REMOTE_ACTION_SUCCESS ' in line) and 'execution_status=success_with_warning' in line:

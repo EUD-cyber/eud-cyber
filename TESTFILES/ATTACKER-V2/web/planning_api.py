@@ -145,6 +145,8 @@ class Planning:
         execution = self.execution(execution)  # Revalidate at dispatch; capabilities may change.
         credentials = dict(credentials)
         keys(credentials, ['ssh_password', 'rdp_password', 'password', 'powershell', 'powershell_windows', 'bash'], 'credential')
+        if not all(isinstance(v, str) and len(v) <= (16384 if k in {'powershell', 'powershell_windows', 'bash'} else 4096) for k, v in credentials.items()):
+            raise ValueError('Invalid credential input')
         from windows_actions import runtime_command
         for field in ('powershell', 'powershell_windows', 'bash'):
             if credentials.get(field, '').strip():

@@ -72,7 +72,7 @@ def perform(pid, target, env, session_factory=None, ssh=None):
         artifact = re.search(r'(?m)^artifact_path=([^\r\n]{1,260})$', preview)
         if artifact:
             result['artifact_path'] = artifact[1]
-        job = re.search(r'(?m)^job_name=(MrNobody-P13-[A-Za-z0-9-]{1,100})$', preview)
+        job = re.search(r'(?m)^job_name: (MrNobody-P13-[a-f0-9]{24})$', preview)
         if job:
             result['job_name'] = job[1]
         result['cleanup'] = 'complete' if 'cleanup=complete' in preview else 'required_or_unverified'

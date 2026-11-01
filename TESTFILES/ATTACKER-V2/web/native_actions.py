@@ -32,14 +32,14 @@ $code = $LASTEXITCODE
 if ($code -eq 0 -and [IO.File]::ReadAllText($outputFile) -ne 'MrNobody telemetry') { $code = 1 }
 """,
         'bits-job': r"""
-$job = 'MrNobody-P13-' + [IO.Path]::GetFileName($root)
-Write-Output ('job_name=' + $job)
+$job = [IO.Path]::GetFileName($root)
+Write-Output ('job_name: ' + $job)
 try {
     & "$env:SystemRoot\System32\bitsadmin.exe" /create /download $job | Out-Null
     $code = $LASTEXITCODE
 } finally {
     & "$env:SystemRoot\System32\bitsadmin.exe" /cancel $job | Out-Null
-    if ($LASTEXITCODE -ne 0) { $code = 1 }
+    if ($LASTEXITCODE -ne 0) { $code = 1; $cleanupOk = $false }
 }
 """,
     }
@@ -47,8 +47,9 @@ try {
     # Emit only controlled artifact metadata; no native output leaves the target.
     return r"""
 $ErrorActionPreference = 'Stop'
-$root = Join-Path ([IO.Path]::GetTempPath()) ('MrNobody-P13-' + [Guid]::NewGuid().ToString('N'))
+$root = Join-Path ([IO.Path]::GetTempPath()) ('MrNobody-P13-' + [Guid]::NewGuid().ToString('N').Substring(0,24))
 $code = 1
+$cleanupOk = $true
 try {
     New-Item -ItemType Directory -Path $root -ErrorAction Stop | Out-Null
     Write-Output ('artifact_path=' + $root)
@@ -57,7 +58,8 @@ __ACTION__
 finally {
     try {
         if (Test-Path -LiteralPath $root) { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction Stop }
-        Write-Output 'cleanup=complete'
+        if ($cleanupOk) { Write-Output 'cleanup=complete' }
+        else { Write-Output 'cleanup=required' }
     } catch { Write-Output 'cleanup=required'; $code = 1 }
 }
 exit $code
