@@ -13,6 +13,51 @@ import tempfile
 import signal
 import subprocess
 import uuid
+import xml.etree.ElementTree as ET
+
+
+P10_PREVIEW_LIMIT = 512
+
+
+def p10_output_preview(value, environ=None):
+    """Scrub complete bounded input before taking a display prefix; never raw XML.
+
+    Unknown/broken CLIXML and oversized streams fail closed. Unlabelled secrets
+    cannot be recognized reliably; credential/wordlist retrieval is suppressed.
+    """
+    environ = environ or {}
+    command = environ.get('MRN_POWERSHELL_SECRET', '')
+    if re.search(r'(?i)password|passwd|secret|token|credential|wordlist|private.?key|\b(?:Get-Content|gc|cat|type)\b', command):
+        return '[output withheld: sensitive command]'
+    if not isinstance(value, (bytes, str)) or len(value) > 65536:
+        return '[output withheld: size or format]'
+    text = value.decode('utf-8-sig', errors='replace') if isinstance(value, bytes) else value
+    if '#< CLIXML' in text or re.search(r'<(?:\w+:)?Objs\b', text):
+        start = text.find('<Objs')
+        end = text.find('</Objs>', start)
+        if start < 0 or end < 0 or '<!DOCTYPE' in text or '<!ENTITY' in text:
+            return '[CLIXML omitted]'
+        try:
+            root = ET.fromstring(text[start:end + 7])
+            records = []
+            for node in root:
+                # Only string output/warning/error records, never object properties.
+                if node.tag.rsplit('}', 1)[-1] == 'S' and node.get('S', 'output').lower() in {'output', 'warning', 'error'}:
+                    records.append(node.text or '')
+            text = text[:start].replace('#< CLIXML', '') + '\n'.join(records) + text[end + 7:]
+            text = re.sub(r'_x([0-9a-fA-F]{4})_', lambda m: chr(int(m[1], 16)), text)
+        except (ValueError, ET.ParseError):
+            return '[CLIXML omitted]'
+    text = '\n'.join(line for line in text.splitlines() if 'Preparing modules for first use' not in line)
+    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+    text = redact_environment(text, environ)
+    # Reuse export scrubbing (authorization, JSON/colon credentials, PEM keys).
+    from report_exports import safe_report
+    text = safe_report(text)
+    text = re.sub(r'(?i)\b(?:authorization|wordlist|private.?key)\b[^\n]*', '[REDACTED]', text)
+    text = re.sub(r'\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|AKIA[A-Z0-9]{16}|eyJ[A-Za-z0-9_.-]+|[A-Za-z0-9+/=_-]{40,})\b', '[REDACTED]', text)
+    text = text.strip()
+    return text if len(text) <= P10_PREVIEW_LIMIT else text[:P10_PREVIEW_LIMIT - 1] + '…'
 
 
 def mitre_url(technique_id):
@@ -30,7 +75,7 @@ PHASE_GUIDANCE = {
         "Restrict Domain Admin membership and WinRM, separate administrative accounts, alert on privileged group changes and review delegated AD rights. After the exercise remove only lab membership/account changes verified in ground truth; never delete a pre-existing account blindly."),
     "10": (
         "Correlate WinRM Operational and PowerShell Operational 4103/4104 with Security 4688 and 4624 where enabled. In Wazuh compare win.system.eventID, host, subject and timestamp. Script block logs on the target may contain sensitive command content.",
-        "Identify the configured custom action and its recorded transport/exit result. Command and output content are deliberately omitted from MrNobody logs. Byte counts are evidence of returned data, not proof of the intended side effect. Verify target-side artifacts independently.",
+        "Identify the configured custom action and its recorded transport/exit result. Raw command/output are omitted; P10 can show a redacted stdout/stderr preview capped at 512 characters per stream. A preview verifies returned text, not the intended side effect. Verify target-side artifacts independently.",
         "Restrict WinRM management paths, apply least privilege and application control, enable protected PowerShell logging and alert on unexpected remote script execution."),
     "01": (
         "Correlate Suricata eve.json flow/scan alerts with firewall logs for one source contacting many hosts. Wazuh can ingest these logs; discovery need not create an authentication event.",
@@ -107,6 +152,11 @@ def add_analysis(report):
             phase['analysis']['findings'] = details or [phase['prerequisite_outcome']]
         if phase['id'] == '10':
             details = [e['timestamp'] + ' · ' + e['message'] for e in events if e['event'].startswith('WINDOWS_ACTION_') and e['event'] != 'WINDOWS_ACTION_START']
+            for event in events:
+                for stream in ('stdout', 'stderr'):
+                    preview = event['fields'].get(stream + '_preview')
+                    if preview:
+                        details.append(event['timestamp'] + ' · ' + str(event.get('target') or '') + ' · Safe ' + stream + ' output preview (redacted, max 512 characters): ' + preview)
             phase['action_evidence'] = details
             phase['action_result'] = ('infrastructure_error' if phase.get('status') == 'failure'
                 else 'command_error' if any(e['event'] == 'WINDOWS_ACTION_ERROR' for e in events)
@@ -222,6 +272,14 @@ def read_events(path, incident_id, started, warnings):
                     r"\b(\w+)=(.*?)(?=\s+\w+=|$)", message)}
                 name = message.split(" ", 1)[0]
                 phase = match[3] or fields.get("phase")
+                if phase == '10':
+                    for key in ('stdout_preview', 'stderr_preview'):
+                        encoded = re.search(r'\b' + key + r'=("(?:\\.|[^"\\])*")(?=\s|$)', message)
+                        if key in fields:
+                            try:
+                                fields[key] = p10_output_preview(json.loads(encoded[1])) if encoded else '[invalid preview omitted]'
+                            except (ValueError, TypeError):
+                                fields[key] = '[invalid preview omitted]'
                 protocol = fields.get("protocol") or fields.get("access") or fields.get("service")
                 events.append(redact({
                     "timestamp": match[1], "phase": phase, "event": name,
@@ -230,7 +288,8 @@ def read_events(path, incident_id, started, warnings):
                     "protocol": protocol, "method": fields.get("method") or (
                         "wordlist" if name.startswith("WORDLIST_") else protocol),
                     "fields": fields, "message": name + " " + " ".join(
-                        f"{key}={value}" for key, value in redact(fields).items()),
+                        f"{key}={value}" for key, value in redact(fields).items()
+                        if phase != '10' or key not in {'stdout_preview', 'stderr_preview'}),
                     "evidence": {"path": str(path), "line": number},
                 }))
     except OSError:

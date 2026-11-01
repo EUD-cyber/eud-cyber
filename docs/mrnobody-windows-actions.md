@@ -157,11 +157,38 @@ special install step, remote agent or new Python dependency is introduced.
 Permanent MRN reports include per-target timestamped action start/result events,
 protocol, method, safe command summary, exit/transport status and warnings. P09
 also records domain/DC, account action and group action. P10 records stdout/stderr
-byte counts; **all** raw output, command content and transport exception text are
-omitted, including from raw MrNobody logs. This prevents arbitrary embedded
-tokens from leaking through heuristic redaction. Supplied credentials are
+byte counts; raw output, command content and transport exception text are
+omitted. P10 additionally retains safe previews as described below. Supplied credentials are
 environment-only and existing environment redaction remains applied. Inventory
 passwords are never consumed by these phases.
+
+### P10 safe output previews
+
+P10 captures stdout and stderr separately. Each safe preview is at most **512
+characters**, including a trailing ellipsis when truncated. Redaction runs on
+the complete accepted input before truncation: existing environment/credential
+redaction and export scrubbing remove supplied secrets, credential assignments,
+authorization values, URL passwords, private keys and common token forms.
+Commands mentioning credentials, secrets, tokens or wordlists, and direct file
+reads (`Get-Content`, `gc`, `cat`, `type`) have previews withheld. Streams over
+64 KiB are withheld rather than partially decoded or partially redacted.
+
+PowerShell CLIXML progress objects (including “Preparing modules for first use”)
+are discarded. Only top-level string output/error/warning records are used;
+PowerShell newline escapes are decoded. Malformed/unsupported XML is omitted.
+These display rules never influence the recorded exit code or failure semantics.
+
+The ground-truth log stores only these scrubbed previews, JSON-quoted on one
+physical line with spaces/equals escaped to prevent forged event fields. Both
+Investigation and Ground Truth show timestamped, per-target **Safe stdout/stderr
+output preview** labels through existing P10 action evidence. HTML and PDF use
+the same report model and reapply export redaction. No unrestricted output is
+saved in the raw evidence appendix; existing dashboard behavior is unchanged.
+
+A preview confirms returned text such as `MRNOBODY_P10_TEST_OK`, hostname or
+whoami; it does not prove a side effect. Redaction cannot reliably recognize an
+arbitrary unlabelled secret or every indirect file-reading command. Use benign
+verification output, never credential/token dumps or wordlist-printing actions.
 
 Investigation and Ground Truth views, MITRE summary/direct links, timeline,
 evidence references, detection/investigation/mitigation guidance and HTML/PDF
