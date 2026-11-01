@@ -42,6 +42,21 @@ assert.ok(text().includes(hostile));assert.equal(walk(root).filter(n=>n.tag==='i
 assert.equal(walk(root).filter(n=>n.className?.startsWith('overview-phase')).length,6);
 render({...run,report_id:'javascript:alert(1)'});assert.equal(walk(root).filter(n=>n.tag==='button').length,0);
 const html=fs.readFileSync('TESTFILES/ATTACKER-V2/web/templates/index.html','utf8');
+render({...run, current_phase:{id:'04',name:'Lateral'}, next_phase:{id:'05',name:'Staging'},
+    timeline:[{id:'03',status:'complete'},{id:'09',status:'skipped'},{id:'04',status:'running'},{id:'05',status:'pending'}]});
+assert.match(text(),/09[\s\S]*skipped/i);
+assert.match(text(),/04/);
+assert.match(text(),/05/);
+// Legacy Live Campaign cards must use the same terminal status.
+const cards=['09','04'].map(phase=>({dataset:{phase}, status:{},
+    querySelector(){return this.status;}, classList:{remove(){},add(value){this.value=value;}}}));
+context.document.querySelectorAll=()=>cards;
+const statusSource=fs.readFileSync('TESTFILES/ATTACKER-V2/web/static/app.js','utf8');
+vm.runInContext(statusSource.slice(statusSource.indexOf('function updatePhases('),statusSource.indexOf('async function refreshStatus(')),context);
+context.updatePhases({'09':'skipped','04':'running'});
+assert.equal(cards[0].status.textContent,'SKIPPED');
+assert.equal(cards[0].classList.value,'phase-skipped');
+assert.equal(cards[1].status.textContent,'RUNNING');
 const nav=html.match(/<nav class="sidebar-nav">([\s\S]*?)<\/nav>/)[1];
 const order=[...nav.matchAll(/data-page="([^"]+)"/g)].map(m=>m[1]);
 assert.deepEqual(order,['dashboard','campaigns','scenarios','phases','schedules','inventory','reports','system']);

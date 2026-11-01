@@ -127,6 +127,10 @@ def report_document(report, view="investigation"):
     for phase in phases:
         add("h3", f"{text(phase.get('id'))} - {text(phase.get('name'))}")
         add("p", f"Phase status: {text(phase.get('status'))}")
+        if phase.get('prerequisite_outcome'):
+            add('p', phase['prerequisite_outcome'])
+            for detail in array(phase.get('prerequisite_evidence')):
+                add('p', detail)
         analysis = obj(phase.get("analysis"))
         add("p", analysis.get("what_happened") if full else "Establish source, target, method and outcome from independent host and network evidence.")
         add("h3", "Findings")

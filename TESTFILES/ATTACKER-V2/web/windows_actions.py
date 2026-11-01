@@ -25,6 +25,7 @@ try {
     $system = Get-CimInstance Win32_ComputerSystem
     $r.domain = $system.Domain
     if ($system.DomainRole -lt 4) {
+        $r.result = 'skipped'
         $r.warning = 'target_must_be_domain_controller'
         throw 'not_dc'
     }
@@ -121,8 +122,13 @@ def perform(pid, target, env, session_factory=None):
     if pid == '09':
         try:
             data = json.loads(stdout.decode('utf-8-sig')) if len(stdout) <= 8192 else {}
-            if not isinstance(data, dict) or data.get('result') not in {'success', 'failed'}:
+            if not isinstance(data, dict) or data.get('result') not in {'success', 'failed', 'skipped'}:
                 raise ValueError('invalid response')
+            if data['result'] == 'skipped' and not (
+                    data.get('warning') == 'target_must_be_domain_controller'
+                    and data.get('account') == data.get('group') == 'not_attempted'
+                    and data.get('dc') == 'unknown'):
+                raise ValueError('invalid prerequisite response')
             result['result'] = data['result'] if response.status_code == 0 else 'failed'
             for key, allowed in {'account': {'not_attempted', 'created_disabled', 'already_exists_unchanged'},
                                  'group': {'not_attempted', 'added', 'already_member'},
@@ -153,7 +159,7 @@ def run(pid, env, invoke=subprocess.run):
     if pid not in {'09', '10'} or not INCIDENT_ID.fullmatch(env.get('NORDIC_INCIDENT_ID', '')):
         raise ValueError('Invalid phase/incident')
     emit(base, env, pid, 'PHASE_START', phase=pid, method='winrm_ntlm')
-    success = True
+    outcomes = []
     try:
         limit = timeout_value(env.get('MRNOBODY_TIMEOUT') or '60')
         if pid == '10':
@@ -161,24 +167,41 @@ def run(pid, env, invoke=subprocess.run):
         selected_targets = targets(env)
         if not selected_targets:
             emit(base, env, pid, 'WINDOWS_ACTION_SKIPPED', warning='no_windows_rdp_access_targets', method='winrm_ntlm')
+            outcomes.append('skipped')
         for target in selected_targets:
             emit(base, env, pid, 'WINDOWS_ACTION_START', target=target['target'], protocol=target['protocol'], method='winrm_ntlm')
             child_env = dict(env, MRN_WINDOWS_TARGET=json.dumps(target))
             try:
                 child = invoke([sys.executable, str(Path(__file__).resolve()), pid, '--worker'],
                                env=child_env, capture_output=True, timeout=limit, check=False)
-                result = json.loads(child.stdout) if child.returncode == 0 else {'result': 'failed', 'warning': 'transport_error_details_omitted'}
+                result = json.loads(child.stdout) if child.returncode == 0 else {'result': 'failed', 'warning': 'worker_execution_failed'}
+                if not isinstance(result, dict) or result.get('result') not in {'success', 'failed', 'skipped'}:
+                    raise ValueError('Invalid worker response')
             except subprocess.TimeoutExpired:
                 result = {'result': 'failed', 'warning': 'timeout_remote_action_may_still_be_running'}
-            except (ValueError, OSError):
-                result = {'result': 'failed', 'warning': 'transport_error_details_omitted'}
-            ok = result.pop('result', 'failed') == 'success'
-            success &= ok
-            emit(base, env, pid, 'WINDOWS_ACTION_SUCCESS' if ok else 'WINDOWS_ACTION_FAILED',
+            except OSError:
+                result = {'result': 'failed', 'warning': 'worker_execution_failed'}
+            except ValueError:
+                result = {'result': 'failed', 'warning': 'invalid_ad_response'}
+            outcome = result.pop('result', 'failed')
+            # Only an authenticated P09 prerequisite response may be nonfatal.
+            if outcome == 'skipped' and pid != '09':
+                outcome = 'failed'
+            outcomes.append('transport' if outcome == 'failed' and result.get('warning') == 'transport_error_details_omitted' else outcome)
+            if outcome == 'skipped':
+                result['reason'] = 'Target is not an Active Directory Domain Controller; privileged AD action not attempted'
+            emit(base, env, pid, {'success': 'WINDOWS_ACTION_SUCCESS', 'skipped': 'WINDOWS_ACTION_SKIPPED'}.get(outcome, 'WINDOWS_ACTION_FAILED'),
                  target=target['target'], protocol=target['protocol'], method='winrm_ntlm', **result)
     except (ValueError, OSError, KeyError, TypeError):
-        success = False
+        outcomes.append('failed')
         emit(base, env, pid, 'WINDOWS_ACTION_FAILED', warning='invalid_or_missing_runtime_configuration')
+    # A reachable non-DC establishes the missing prerequisite even if other
+    # candidates had transport failures. Never suppress an action/config error.
+    if pid == '09' and 'skipped' in outcomes and not any(x in outcomes for x in ('success', 'failed')):
+        emit(base, env, pid, 'PHASE_SKIPPED', phase=pid, reason='No Active Directory Domain Controller discovered',
+             account='not_attempted', group='not_attempted')
+        return 78  # Internal prerequisite exit; campaign/CLI wrappers handle explicitly.
+    success = all(x in {'success', 'skipped'} for x in outcomes)
     emit(base, env, pid, 'PHASE_COMPLETE' if success else 'PHASE_FAILED', phase=pid)
     return 0 if success else 1
 
@@ -188,6 +211,8 @@ if __name__ == '__main__':
     if '--worker' in sys.argv:
         try:
             print(json.dumps(perform(phase, json.loads(os.environ['MRN_WINDOWS_TARGET']), os.environ)))
+        except (ImportError, ValueError, KeyError, TypeError):
+            print(json.dumps({'result': 'failed', 'warning': 'invalid_or_missing_runtime_configuration'}))
         except Exception:
             # Transport exceptions may echo auth/command content. Never emit them.
             print(json.dumps({'result': 'failed', 'warning': 'transport_error_details_omitted'}))
