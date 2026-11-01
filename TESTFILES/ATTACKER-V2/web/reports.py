@@ -106,17 +106,18 @@ def add_analysis(report):
             phase['analysis']['what_happened'] = phase['prerequisite_outcome']
             phase['analysis']['findings'] = details or [phase['prerequisite_outcome']]
         if phase['id'] == '10':
-            details = [e['message'] for e in events if e['event'].startswith('WINDOWS_ACTION_') and e['event'] != 'WINDOWS_ACTION_START']
+            details = [e['timestamp'] + ' · ' + e['message'] for e in events if e['event'].startswith('WINDOWS_ACTION_') and e['event'] != 'WINDOWS_ACTION_START']
             phase['action_evidence'] = details
             phase['action_result'] = ('infrastructure_error' if phase.get('status') == 'failure'
                 else 'command_error' if any(e['event'] == 'WINDOWS_ACTION_ERROR' for e in events)
                 else 'success_with_warning' if any(e['fields'].get('execution_status') == 'success_with_warning' for e in events)
                 else 'success' if phase.get('status') == 'success' else None)
-            phase['action_outcome'] = ('Custom PowerShell command failed' if any(e['event'] == 'WINDOWS_ACTION_ERROR' for e in events)
-                else 'Custom PowerShell completed with nonfatal stderr/warnings' if any(e['fields'].get('execution_status') == 'success_with_warning' for e in events)
-                else 'Custom PowerShell completed' if phase.get('status') == 'success'
-                else 'Custom PowerShell transport/authentication or infrastructure failure' if phase.get('status') == 'failure'
-                else 'Custom PowerShell not executed')
+            phase['action_outcome'] = {
+                'infrastructure_error': 'Custom PowerShell transport/authentication or infrastructure failure',
+                'command_error': 'Custom PowerShell command failed',
+                'success_with_warning': 'Custom PowerShell completed with nonfatal stderr/warnings',
+                'success': 'Custom PowerShell completed',
+            }.get(phase['action_result'], 'Custom PowerShell not executed')
             phase['analysis']['what_happened'] = phase['action_outcome']
             phase['analysis']['findings'] = details or [phase['action_outcome']]
     report["analysis_version"] = 2

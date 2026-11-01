@@ -87,6 +87,7 @@ class PowerShellErrors(unittest.TestCase):
             state = dict(incident_id=self.env['NORDIC_INCIDENT_ID'], phase_id='10', status='complete' if code == 0 else 'failed', phases={'10': status})
             report = build_report(self.base, state['incident_id'], code, self.env, standalone=state)
             phase = report['phases'][0]
+            self.assertTrue(all(e['timestamp'] in ' '.join(phase['action_evidence']) for e in phase['events'] if e['event'] in {'WINDOWS_ACTION_SUCCESS', 'WINDOWS_ACTION_ERROR', 'WINDOWS_ACTION_FAILED'}))
             self.assertEqual(phase['status'], {'complete':'success', 'failed':'failure'}.get(status, status))
             for view in ('investigation', 'ground-truth'):
                 html = export_html(report, view)
