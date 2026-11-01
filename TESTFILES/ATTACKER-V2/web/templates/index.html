@@ -1436,6 +1436,14 @@
         </div>
 
 
+        <div class="report-filters" aria-label="Report history filters">
+            <label>Report type<select id="reportTypeFilter"><option value="">All types</option><option value="campaign">Campaign</option><option value="standalone_phase">Standalone phase</option></select></label>
+            <label>Status<select id="reportStatusFilter"><option value="">All statuses</option><option value="complete">Complete</option><option value="failed">Failed</option><option value="interrupted">Interrupted</option></select></label>
+            <label>Recorded phase<select id="reportPhaseFilter"><option value="">All phases</option><option value="01">Phase 01</option><option value="02">Phase 02</option><option value="03">Phase 03</option><option value="08">Phase 08</option><option value="04">Phase 04</option><option value="05">Phase 05</option><option value="06">Phase 06</option><option value="07">Phase 07</option></select></label>
+            <label>Incident ID or host<input id="reportSearch" type="search" placeholder="Search ID, IP or hostname"></label>
+        </div>
+        <p id="reportFilterNotice" class="muted" aria-live="polite">History totals above cover all reports. Filters apply to the list below.</p>
+        <p class="muted">Phase filters match recorded phases, including skipped and not run. Host search uses recorded asset evidence. Totals above cover all history.</p>
         <div class="table-container">
 
             <table class="inventory-table">

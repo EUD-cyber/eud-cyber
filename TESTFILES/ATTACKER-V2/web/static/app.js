@@ -2772,119 +2772,340 @@ function reportType(report) {
     return report.report_type === "standalone_phase" ? `Standalone phase ${report.phase_id || ""}` : "Campaign";
 }
 
+const REPORT_PHASES = [
+    ["01", "Discovery"], ["02", "Web"], ["03", "Initial Access"],
+    ["08", "Credential Access"], ["04", "Internal Discovery"],
+    ["05", "Staging"], ["06", "Exfiltration"], ["07", "Impact"]
+];
+const reportArray = value => Array.isArray(value) ? value : [];
+let reportHistory = [];
+const reportCache = new Map();
+let reportFilterVersion = 0;
+let reportOpenVersion = 0;
+let reportRefreshVersion = 0;
+
+function reportStatus(value) {
+    const status = ({complete: "success", failed: "failure", disabled: "skipped",
+        pending: "not_run", running: "interrupted"})[value] || value;
+    return ["success", "failure", "skipped", "interrupted", "not_run"].includes(status) ? status : "unknown";
+}
+
+function reportBadge(parent, value) {
+    const badge = reportNode("span", value || "Unknown", parent);
+    badge.className = `report-status report-status-${reportStatus(value)}`;
+    return badge;
+}
+
+function reportTechniques(report) {
+    const unique = new Map();
+    const add = (technique, phaseIds = []) => {
+        if (typeof technique === "string") technique = {id: technique};
+        if (!technique || !/^T\d{4}(?:\.\d{3})?$/.test(technique.id)) return;
+        const existing = unique.get(technique.id) || {id: technique.id, name: technique.name, phases: []};
+        if (!existing.name) existing.name = technique.name;
+        existing.phases = [...new Set([...existing.phases, ...phaseIds])];
+        unique.set(technique.id, existing);
+    };
+    reportArray(report.mitre_summary).forEach(t => add(t, reportArray(t.phases)));
+    reportArray(report.phases).forEach(p => reportArray(p.mitre?.techniques).forEach(t => add(t, [p.id])));
+    return [...unique.values()];
+}
+
 function reportMitre(parent, techniques) {
+    const cards = reportNode("div", null, parent);
+    cards.className = "report-mitre-grid";
     techniques.forEach(technique => {
-        const id = technique.id || "";
-        // Derive the trusted URL, including sub-techniques; never trust stored hrefs.
-        const valid = /^T\d{4}(?:\.\d{3})?$/.test(id);
-        const link = reportNode(valid ? "a" : "span", `${id}${technique.name ? " · " + technique.name : ""}`, parent);
-        if (valid) {
-            link.href = `https://attack.mitre.org/techniques/${id.replace(".", "/")}/`;
-            link.target = "_blank";
-            link.rel = "noopener noreferrer";
-        }
-        reportNode("p", technique.phases ? `Mapped phases: ${technique.phases.join(", ")}` : "Phase metadata mapping", parent);
+        const card = reportNode("div", null, cards);
+        card.className = "report-mitre-card";
+        const link = reportNode("a", `${technique.id}${technique.name ? " · " + technique.name : ""}`, card);
+        // Construct trusted URLs, never use host-supplied hrefs.
+        link.href = `https://attack.mitre.org/techniques/${technique.id.replace(".", "/")}/`;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        reportNode("p", `Mapped phases: ${reportArray(technique.phases).join(", ") || "Unrecorded"}`, card);
     });
+    if (!techniques.length) reportNode("p", "No technique mappings recorded.", cards);
+}
+
+function reportAssets(report) {
+    const assets = new Map();
+    const mark = (host, state, reference) => {
+        if (typeof host === "string") host = {ip: host};
+        if (!host || typeof host.ip !== "string" || !host.ip.trim()) return;
+        const asset = assets.get(host.ip) || {ip: host.ip, hostname: "", states: new Set(), references: new Set()};
+        if (host.hostname) asset.hostname = host.hostname;
+        asset.states.add(state);
+        asset.references.add(reference);
+        assets.set(host.ip, asset);
+    };
+    const state = report.evidence || {};
+    reportArray((report.inventory || state.inventory)?.hosts).forEach(h => mark(h, "discovered", "inventory.hosts"));
+    reportArray(state.web_targets?.targets).forEach(h => mark(h, "targeted", "web_targets.targets"));
+    reportArray((report.compromised_hosts || state.compromised)?.hosts).forEach(h => {
+        if (h.compromised !== false) mark(h, "compromised", "compromised_hosts.hosts");
+    });
+    reportArray(state.staging?.hosts).forEach(h => {
+        if (h.staged !== false) mark(h, "staged", "staging.hosts");
+    });
+    reportArray(state.exfiltration?.transfers).forEach(t => {
+        mark({ip: t.source}, "targeted", "exfiltration.transfers (source)");
+        if (t.successful === true) mark({ip: t.source}, "exfiltrated", "exfiltration.transfers (successful)");
+    });
+    reportArray(state.impact?.hosts).forEach(h => {
+        if (h.impacted !== false) mark(h, "impacted", "impact.hosts");
+    });
+    // Only explicit action events establish targets/outcomes. Do not treat a
+    // receiver as exfiltrated, an open port as compromise, or metadata as activity.
+    const events = [...reportArray(report.events), ...reportArray(report.phases).flatMap(p => reportArray(p.events))];
+    events.forEach(e => {
+        const name = e.event || "";
+        const ref = `${name} · ${e.evidence?.path || "ground truth"}${e.evidence?.line ? ":" + e.evidence.line : ""}`;
+        if (/^(WEB_|ACCESS_|WORDLIST_|STAGING_|IMPACT_|INTERNAL_DISCOVERY)/.test(name) && e.target)
+            mark({ip: e.target}, "targeted", ref);
+        if (name === "HOST_DISCOVERED" || name === "Discovered") mark({ip: e.target}, "discovered", ref);
+        if (/^EXFIL_/.test(name)) mark({ip: e.source || e.fields?.source}, "targeted", ref);
+        if (name === "ACCESS_SUCCESS") mark({ip: e.target}, "compromised", ref);
+        if (name === "STAGING_SUCCESS") mark({ip: e.target}, "staged", ref);
+        if (name === "EXFIL_SUCCESS") mark({ip: e.source || e.fields?.source}, "exfiltrated", ref);
+        if (name === "IMPACT_SUCCESS") mark({ip: e.target}, "impacted", ref);
+    });
+    return [...assets.values()];
+}
+
+function reportMetric(parent, label, value) {
+    const card = reportNode("div", null, parent);
+    card.className = "report-metric";
+    reportNode("strong", value ?? "Unavailable", card);
+    reportNode("span", label, card);
+}
+
+async function fetchReport(id) {
+    if (!reportCache.has(id)) {
+        const pending = apiGet(`/api/reports/${encodeURIComponent(id)}`);
+        reportCache.set(id, pending);
+        pending.catch(() => { if (reportCache.get(id) === pending) reportCache.delete(id); });
+    }
+    return reportCache.get(id);
+}
+
+function reportFilterValue(id) {
+    return document.getElementById(id)?.value || "";
+}
+
+async function filterReports() {
+    const table = document.getElementById("reportTable");
+    if (!table) return;
+    const version = ++reportFilterVersion;
+    const type = reportFilterValue("reportTypeFilter");
+    const status = reportFilterValue("reportStatusFilter");
+    const phase = reportFilterValue("reportPhaseFilter");
+    const query = reportFilterValue("reportSearch").trim().toLowerCase();
+    const candidates = reportHistory.filter(r => (!type || (r.report_type || "campaign") === type) && (!status || r.status === status));
+    table.replaceChildren();
+    reportNode("td", "Filtering reports…", reportNode("tr", null, table)).colSpan = 7;
+    let unavailable = 0;
+    const results = new Array(candidates.length);
+    let next = 0;
+    // Bound detail requests for larger histories. Reuse immutable report snapshots.
+    await Promise.all(Array.from({length: Math.min(4, candidates.length)}, async () => {
+        while (next < candidates.length && version === reportFilterVersion) {
+            const index = next++;
+            const row = candidates[index];
+            const idMatch = String(row.id || "").toLowerCase().includes(query);
+            let detail;
+            if ((phase && row.report_type !== "standalone_phase") || (query && !idMatch)) {
+                try { detail = await fetchReport(row.id); }
+                catch { unavailable++; continue; }
+            }
+            const phaseMatch = !phase || (row.report_type === "standalone_phase" ? row.phase_id === phase :
+                reportArray(detail?.phases).some(p => p.id === phase));
+            const textMatch = !query || idMatch || reportAssets(detail || {}).some(a =>
+                `${a.ip} ${a.hostname}`.toLowerCase().includes(query));
+            if (phaseMatch && textMatch) results[index] = row;
+        }
+    }));
+    if (version !== reportFilterVersion) return;
+    const reports = results.filter(Boolean);
+    table.replaceChildren();
+    reports.forEach(report => {
+        const row = reportNode("tr", null, table);
+        [report.id, reportType(report), report.status, report.started, report.summary?.hosts, report.summary?.compromised]
+            .forEach(value => reportNode("td", value ?? "Unavailable", row));
+        const button = reportNode("button", "Open report", reportNode("td", null, row));
+        button.type = "button";
+        button.addEventListener("click", () => openReport(report.id));
+    });
+    if (!reports.length) {
+        reportNode("td", reportHistory.length ? "No reports match these filters." :
+            "No incident reports available. Run a Full Incident campaign or an individual phase to create one.",
+        reportNode("tr", null, table)).colSpan = 7;
+    }
+    const notice = document.getElementById("reportFilterNotice");
+    if (notice) notice.textContent = `${reports.length} of ${reportHistory.length} reports shown.${unavailable ? ` ${unavailable} reports could not be searched; refresh to retry.` : ""}`;
 }
 
 async function refreshReports() {
     const table = document.getElementById("reportTable");
     if (!table) return;
+    const version = ++reportRefreshVersion;
+    ++reportFilterVersion;
     try {
         const data = await apiGet("/api/reports");
-        table.replaceChildren();
-        const reports = data.reports || [];
+        if (version !== reportRefreshVersion) return;
+        reportHistory = reportArray(data.reports);
         for (const [id, key] of [["reportIncidentCount", null], ["reportCompromisedCount", "compromised"],
                                  ["reportExfilCount", "exfiltration"], ["reportImpactCount", "impact"]]) {
             const node = document.getElementById(id);
-            if (node) node.textContent = String(key ? reports.reduce((n, r) => n + (r.summary?.[key] || 0), 0) : reports.length);
+            if (node) node.textContent = String(key ? reportHistory.reduce((n, r) => n + (Number(r.summary?.[key]) || 0), 0) : reportHistory.length);
         }
-        reports.forEach(report => {
-            const row = reportNode("tr", null, table);
-            [report.id, reportType(report), report.status, report.started, report.summary?.hosts, report.summary?.compromised]
-                .forEach(value => reportNode("td", value ?? "Unavailable", row));
-            const button = reportNode("button", "Open report", reportNode("td", null, row));
-            button.type = "button";
-            button.addEventListener("click", () => openReport(report.id));
-        });
-        if (!reports.length) {
-            const cell = reportNode("td", "No incident reports available. Run a Full Incident campaign or an individual phase to create one.", reportNode("tr", null, table));
-            cell.colSpan = 7;
-        }
+        await filterReports();
     } catch (error) {
+        if (version !== reportRefreshVersion) return;
+        ++reportFilterVersion;
+        reportHistory = [];
         table.replaceChildren();
-        const cell = reportNode("td", `Could not load reports: ${error.message}`, reportNode("tr", null, table));
-        cell.colSpan = 7;
+        reportNode("td", `Could not load reports: ${error.message}`, reportNode("tr", null, table)).colSpan = 7;
+        for (const id of ["reportIncidentCount", "reportCompromisedCount", "reportExfilCount", "reportImpactCount"]) {
+            const node = document.getElementById(id);
+            if (node) node.textContent = "Unavailable";
+        }
+        const notice = document.getElementById("reportFilterNotice");
+        if (notice) notice.textContent = "History unavailable. Refresh to retry.";
+    }
+}
+
+function renderReportPhase(parent, phase) {
+    const analysis = phase.analysis || {};
+    const section = reportNode("section", null, parent);
+    section.className = "report-phase-detail";
+    reportNode("h3", `${phase.id} · ${phase.name}`, section);
+    reportBadge(section, phase.status);
+    reportNode("p", `${phase.started || "No recorded start"} → ${phase.ended || "No recorded end"}`, section);
+    reportNode("h4", "What happened — recorded facts", section);
+    reportNode("p", analysis.what_happened || "Historical report: no educational analysis recorded. Review the available evidence.", section);
+    for (const [key, label] of [["findings", "Findings"], ["detection", "Detection in the CyberLab"],
+        ["investigation_tasks", "Investigation tasks"], ["prevention", "Prevention / Mitigation"]]) {
+        reportNode("h4", label, section);
+        const list = reportNode("ul", null, section);
+        const items = reportArray(analysis[key]);
+        (items.length ? items : ["Unavailable in this report."]).forEach(item => reportNode("li", item, list));
+    }
+    reportNode("p", analysis.guidance_notice || "Educational guidance is separate from recorded evidence.", section).className = "muted";
+    reportNode("h4", "Evidence references", section);
+    const refs = reportArray(analysis.evidence);
+    refs.forEach(e => reportNode("p", `${e.path} · line ${e.line}`, section));
+    if (!refs.length) reportNode("p", "No evidence references recorded.", section);
+    reportNode("h4", "MITRE ATT&CK — phase metadata", section);
+    reportMitre(section, reportTechniques({phases: [phase]}));
+    const raw = reportNode("details", null, section);
+    reportNode("summary", "Technical ground-truth events", raw);
+    reportTable(raw, ["Timestamp", "Action", "Source", "Target", "Protocol / method", "Outcome", "Evidence"],
+        reportArray(phase.events).map(e => [e.timestamp, e.event, e.source, e.target,
+            [e.protocol, e.method].filter(Boolean).join(" / "), e.outcome, e.message]));
+}
+
+function renderReport(detail, report, id) {
+    const incident = report.incident || {};
+    const assets = reportAssets(report);
+    const techniques = reportTechniques(report);
+    reportNode("h2", "Incident overview", detail);
+    reportNode("h3", incident.id || id, detail);
+    reportNode("p", `${reportType(report)} · ${incident.scenario || "Unknown scenario"}`, detail);
+    reportBadge(detail, incident.status);
+    reportNode("p", `Started: ${incident.started || "Unavailable"} · Ended: ${incident.ended || "Unavailable"}`, detail);
+    const metrics = reportNode("div", null, detail);
+    metrics.className = "report-metrics";
+    for (const [label, key, evidence] of [["Hosts discovered", "hosts", report.inventory || report.evidence?.inventory],
+        ["Compromised hosts", "compromised", report.compromised_hosts || report.evidence?.compromised],
+        ["Exfiltration transfers recorded", "exfiltration", report.evidence?.exfiltration],
+        ["Impacted hosts", "impact", report.evidence?.impact]]) {
+        const count = report.summary?.[key] ?? (evidence ? reportArray(key === "exfiltration" ? evidence.transfers : evidence.hosts).length : null);
+        reportMetric(metrics, label, count);
+    }
+    reportMetric(metrics, "MITRE techniques mapped", techniques.length);
+    reportNode("h3", "Attack timeline", detail);
+    reportNode("p", "Select a recorded phase to read its analysis. Status describes the phase run; it does not confirm every action succeeded.", detail);
+    const timeline = reportNode("div", null, detail);
+    timeline.className = "report-timeline";
+    const phases = reportArray(report.phases);
+    const phaseDetail = reportNode("div", null);
+    phaseDetail.id = "reportPhaseAnalysis";
+    phaseDetail.setAttribute("aria-live", "polite");
+    const buttons = [];
+    const selectPhase = (phase, selected) => {
+        buttons.forEach(b => b.setAttribute("aria-pressed", String(b === selected)));
+        phaseDetail.replaceChildren();
+        renderReportPhase(phaseDetail, phase);
+    };
+    const ordered = [...REPORT_PHASES.map(([phaseId, name]) => phases.find(p => p.id === phaseId) ||
+        {id: phaseId, name, status: "not_run", absent: true}), ...phases.filter(p => !REPORT_PHASES.some(([phaseId]) => p.id === phaseId))];
+    ordered.forEach(phase => {
+        const button = reportNode("button", null, timeline);
+        button.type = "button";
+        button.className = `report-timeline-step report-status-${reportStatus(phase.status)}`;
+        button.setAttribute("aria-controls", "reportPhaseAnalysis");
+        button.setAttribute("aria-pressed", "false");
+        reportNode("strong", `${phase.id} · ${phase.name}`, button);
+        reportBadge(button, phase.status);
+        reportNode("small", `${phase.started || "No recorded start"} → ${phase.ended || "No recorded end"}`, button);
+        if (phase.absent) reportNode("small", "No phase record in this report", button);
+        button.disabled = !!phase.absent;
+        button.addEventListener("click", () => selectPhase(phase, button));
+        buttons.push(button);
+    });
+    reportNode("h3", "MITRE ATT&CK summary", detail);
+    reportNode("p", "Phase metadata mappings describe relevant techniques; they do not prove every technique executed or succeeded. Verify the evidence below.", detail);
+    reportMitre(detail, techniques);
+    reportNode("h3", "Affected assets", detail);
+    reportNode("p", "Recorded states only. — means no supporting evidence, not proof the host was unaffected. Successful transfers mark their source, not the receiver. Snapshot membership records compromise, staging and impact unless explicitly false.", detail);
+    const states = ["discovered", "targeted", "compromised", "staged", "exfiltrated", "impacted"];
+    reportTable(detail, ["Host", "Hostname", ...states.map(s => s[0].toUpperCase() + s.slice(1)), "Evidence source"],
+        assets.map(a => [a.ip, a.hostname || "Unavailable", ...states.map(s => a.states.has(s) ? "Recorded" : "—"), [...a.references].join("; ")]));
+    reportNode("h3", "Phase analysis", detail);
+    detail.appendChild(phaseDetail);
+    const first = ordered.findIndex(p => !p.absent);
+    if (first >= 0) selectPhase(ordered[first], buttons[first]);
+    else reportNode("p", "No phase records available.", phaseDetail);
+    const raw = reportNode("details", null, detail);
+    raw.className = "report-raw";
+    reportNode("summary", "Raw technical evidence and JSON", raw);
+    const download = reportNode("a", "Open JSON report", raw);
+    download.href = `/api/reports/${encodeURIComponent(id)}?raw=1`;
+    download.target = "_blank";
+    download.rel = "noopener noreferrer";
+    for (const key of ["inventory", "compromised_hosts", "evidence", "events", "sources", "campaign"]) {
+        const section = reportNode("details", null, raw);
+        reportNode("summary", key, section);
+        reportNode("pre", JSON.stringify(report[key] ?? "Unavailable", null, 2), section);
+    }
+    if (reportArray(report.warnings).length) {
+        reportNode("h3", "Evidence availability", detail);
+        report.warnings.forEach(warning => reportNode("p", warning, detail));
     }
 }
 
 async function openReport(id) {
     const detail = document.getElementById("reportDetail");
     if (!detail) return;
+    const version = ++reportOpenVersion;
     detail.replaceChildren();
     reportNode("p", "Loading report…", detail);
     try {
-        const report = await apiGet(`/api/reports/${encodeURIComponent(id)}`);
+        const report = await fetchReport(id);
+        if (version !== reportOpenVersion) return;
         detail.replaceChildren();
-        const incident = report.incident;
-        reportNode("h3", incident.id, detail);
-        reportNode("p", reportType(report), detail);
-        reportNode("p", `${incident.scenario} · ${incident.status} · ${incident.started || "Unknown start"} → ${incident.ended || "Unknown end"}`, detail);
-        const download = reportNode("a", "Open JSON report", detail);
-        download.href = `/api/reports/${encodeURIComponent(id)}?raw=1`;
-        download.target = "_blank";
-        download.rel = "noopener";
-        reportNode("h3", "MITRE ATT&CK summary", detail);
-        reportNode("p", "Phase metadata mappings describe relevant techniques; they do not prove every technique executed or succeeded. Verify the evidence below.", detail);
-        reportMitre(detail, report.mitre_summary || (report.phases || []).flatMap(p => p.mitre?.techniques || []));
-        reportNode("h3", "Discovered hosts", detail);
-        reportTable(detail, ["Host", "Hostname", "Platform", "Status"], (report.inventory?.hosts || [])
-            .map(host => [host.ip, host.hostname, host.platform || host.os, host.status]));
-        reportNode("h3", "Compromised hosts", detail);
-        reportTable(detail, ["Host", "Platform", "Access"], (report.compromised_hosts?.hosts || [])
-            .map(host => [host.ip, host.platform, host.primary_access || host.access]));
-        reportNode("h3", "Phase results", detail);
-        (report.phases || []).forEach(phase => {
-            const section = reportNode("details", null, detail);
-            reportNode("summary", `${phase.id} · ${phase.name} · ${phase.status}`, section);
-            reportNode("p", `${phase.started || "No recorded start"} → ${phase.ended || "No recorded end"}`, section);
-            const analysis = phase.analysis;
-            if (analysis) {
-                reportNode("h4", "What happened — recorded facts", section);
-                reportNode("p", analysis.what_happened, section);
-                reportNode("h4", "Findings", section);
-                (analysis.findings || []).forEach(finding => reportNode("p", finding, section));
-                reportNode("h4", "Evidence references", section);
-                (analysis.evidence || []).forEach(evidence => reportNode("p", `${evidence.path} · line ${evidence.line}`, section));
-                reportNode("p", analysis.guidance_notice, section);
-                for (const [key, label] of [["detection", "Detection in the CyberLab"], ["investigation_tasks", "Investigation tasks"], ["prevention", "Prevention / Mitigation"]]) {
-                    reportNode("h4", label, section);
-                    (analysis[key] || []).forEach(item => reportNode("p", item, section));
-                }
-            } else {
-                reportNode("p", "Historical report: recorded technical evidence is shown below.", section);
-            }
-            reportNode("h4", "MITRE ATT&CK — phase metadata", section);
-            reportMitre(section, phase.mitre?.techniques || []);
-            reportNode("h4", "Technical ground-truth events", section);
-            reportTable(section, ["Timestamp", "Action", "Source", "Target", "Protocol / method", "Outcome", "Evidence"],
-                (phase.events || []).map(event => [event.timestamp, event.event, event.source, event.target,
-                    [event.protocol, event.method].filter(Boolean).join(" / "), event.outcome, event.message]));
-        });
-        for (const key of ["staging", "exfiltration", "impact", "wordlist"]) {
-            const section = reportNode("details", null, detail);
-            reportNode("summary", `${key[0].toUpperCase() + key.slice(1)} evidence`, section);
-            reportNode("pre", JSON.stringify(report.evidence?.[key] ?? "Unavailable", null, 2), section);
-        }
-        if (report.warnings?.length) {
-            reportNode("h3", "Evidence availability", detail);
-            report.warnings.forEach(warning => reportNode("p", warning, detail));
-        }
+        renderReport(detail, report, id);
     } catch (error) {
+        if (version !== reportOpenVersion) return;
         detail.replaceChildren();
         reportNode("p", `Could not load report: ${error.message}`, detail);
     }
 }
+
+for (const id of ["reportTypeFilter", "reportStatusFilter", "reportPhaseFilter", "reportSearch"]) {
+    document.getElementById(id)?.addEventListener(id === "reportSearch" ? "input" : "change", filterReports);
+}
+
 
 
 function initializeNavigation() {
