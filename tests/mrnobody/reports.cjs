@@ -223,7 +223,17 @@ async function main() {
     await vm.runInContext("refreshReports()", context);
     assert.match(text(elements.get("reportTable")), /Could not load reports/);
     assert.equal(elements.get("reportIncidentCount").textContent, "Unavailable");
-    console.log("Reports UI passed: overview, canonical timeline/status/navigation, MITRE dedupe/trusted links, evidence-based assets, filters/host search, collapsed raw evidence, historical/empty/error states, response races and text-safe rendering.");
+    context.windowsReport = {incident:{id:'MRN-windows'}, phases:[
+        {id:'09', name:'AD Privilege Escalation', status:'success', mitre:{techniques:[{id:'T1098.007'}]}},
+        {id:'10', name:'Custom PowerShell', status:'failure', mitre:{techniques:[{id:'T1059.001'}]}}
+    ]};
+    root.replaceChildren();
+    vm.runInContext("renderReport(document.getElementById('reportDetail'), windowsReport, 'MRN-windows')", context);
+    const windowsTimeline=descendants(root).filter(n=>n.className?.includes('report-timeline-step'));
+    assert.ok(windowsTimeline.some(n=>text(n).includes('09 · AD Privilege Escalation')));
+    assert.ok(windowsTimeline.some(n=>text(n).includes('10 · Custom PowerShell')));
+    assert.ok(descendants(root).some(n=>n.href==='https://attack.mitre.org/techniques/T1059/001/'));
+    console.log("Reports UI passed: overview, canonical timeline/status/navigation, P09/P10, MITRE dedupe/trusted links, evidence-based assets, filters/host search, collapsed raw evidence, historical/empty/error states, response races and text-safe rendering.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
 

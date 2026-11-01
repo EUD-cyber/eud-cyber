@@ -19,6 +19,7 @@ FIELDS = {
     'port': {'type': 'port', 'label': 'Port'},
     'protocol': {'type': 'choice', 'label': 'Protocol'},
     'username': {'type': 'text', 'label': 'Username'},
+    'timeout': {'type': 'timeout', 'label': 'Windows action timeout (seconds, 5–300)'},
     'file': {'type': 'path', 'label': 'Synthetic staged file (@staged = current target staging output)'},
 }
 PROTOCOLS = {'02': ['http', 'https'], '03': ['ssh', 'rdp'],
@@ -26,18 +27,18 @@ PROTOCOLS = {'02': ['http', 'https'], '03': ['ssh', 'rdp'],
              '05': ['ssh', 'winrm', 'winrm-http', 'winrm-https'],
              '06': ['ssh', 'winrm', 'winrm-http', 'winrm-https'],
              '07': ['ssh', 'winrm', 'winrm-http', 'winrm-https'],
-             '08': ['ssh', 'rdp']}
+             '08': ['ssh', 'rdp'], '09': ['winrm-http', 'winrm-https'], '10': ['winrm-http', 'winrm-https']}
 TIMING = {'start_offset': 'Start offset (seconds)', 'duration': 'Target duration (seconds)',
           'delay_min': 'Minimum action delay (seconds)', 'delay_max': 'Maximum action delay (seconds)',
           'jitter': 'Jitter fraction (0–1)'}
 PRIVATE = [ipaddress.ip_network(x) for x in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16')]
 DEPENDENCIES = {'02': ['01'], '03': ['01'], '04': ['03'], '05': ['03'],
-                '06': ['03', '05'], '07': ['03'], '08': ['01', '03']}
+                '06': ['03', '05'], '07': ['03'], '08': ['01', '03'], '09': ['03'], '10': ['03']}
 
 
 def required_fields(pid):
     required = {'subnet'} if pid == '01' else {'target'}
-    if pid in {'03', '08'}:
+    if pid in {'03', '08', '09', '10'}:
         required.add('protocol')
     if pid == '06':
         required.add('file')
@@ -88,6 +89,7 @@ def catalogue(script_dir, read_metadata):
                        'script': script.name, 'fields': fields, 'auto': 'auto' in supported,
                        'credentials': 'password' in supported,
                        'wordlist': pid == '08',
+                       'runtime_powershell': pid == '10',
                        'timing': list(TIMING) if pid in {'01', '02'} else ['start_offset'],
                        'standalone': meta.get('ATTACK_STANDALONE', '').lower() == 'true'}
     return result
@@ -149,6 +151,10 @@ def validate(value, capabilities):
             elif key == 'port':
                 if isinstance(val, bool) or not str(val).isdigit() or not 1 <= int(val) <= 65535:
                     raise ValueError('Invalid port')
+                params[key] = int(val)
+            elif key == 'timeout':
+                if isinstance(val, bool) or not str(val).isdigit() or not 5 <= int(val) <= 300:
+                    raise ValueError('Windows action timeout must be 5–300 seconds')
                 params[key] = int(val)
             elif key == 'protocol':
                 if val not in cap['fields'][key]['options']:
@@ -213,11 +219,11 @@ def needs_password(definition, windows=False):
     if definition is None:
         return True  # Preserve the existing Full Incident form contract.
     for p in definition['phases']:
-        if p['id'] not in {'03', '04', '05', '06', '07'}:
+        if p['id'] not in {'03', '04', '05', '06', '07', '09', '10'}:
             continue
         if definition['target_mode'] == 'auto':
             return True
-        protocol = p.get('parameters', {}).get('protocol', 'ssh')
+        protocol = p.get('parameters', {}).get('protocol', 'winrm-http' if p['id'] in {'09', '10'} else 'ssh')
         if protocol.startswith(('rdp', 'winrm')) == windows:
             return True
     return False

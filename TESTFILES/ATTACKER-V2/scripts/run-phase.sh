@@ -55,6 +55,7 @@ PROTOCOL=""
 USERNAME=""
 PASSWORD=""
 FILE=""
+ACTION_TIMEOUT=""
 SUBNET=""
 AUTO_DISCOVERY=""
 
@@ -503,6 +504,7 @@ run_attack() {
     export MRNOBODY_USERNAME="$USERNAME"
     export MRNOBODY_PASSWORD="${PASSWORD:-${MRNOBODY_PASSWORD:-}}"
     export MRNOBODY_FILE="$FILE"
+    export MRNOBODY_TIMEOUT="${ACTION_TIMEOUT:-${MRNOBODY_TIMEOUT:-60}}"
 
     export MRNOBODY_SUBNET="$SUBNET"
 
@@ -602,6 +604,8 @@ Options:
   --user <username>
   --password <password>
   --file <path>
+  --timeout <seconds> (P09/P10, 5–300)
+  P10 command: MRN_POWERSHELL_SECRET environment input only; never a CLI argument.
   --dry-run
   --help
   --auto
@@ -740,6 +744,12 @@ case "$COMMAND" in
                         die "--password requires a value"
 
                     PASSWORD="$2"
+                    shift 2
+                    ;;
+
+                --timeout)
+                    [[ $# -ge 2 ]] || die "--timeout requires a value"
+                    ACTION_TIMEOUT="$2"
                     shift 2
                     ;;
 

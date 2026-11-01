@@ -142,11 +142,14 @@ class Planning:
     def dispatch(self, execution, credentials):
         execution = self.execution(execution)  # Revalidate at dispatch; capabilities may change.
         credentials = dict(credentials)
-        keys(credentials, ['ssh_password', 'rdp_password', 'password'], 'credential')
+        keys(credentials, ['ssh_password', 'rdp_password', 'password', 'powershell'], 'credential')
+        if credentials.get('powershell'):
+            from windows_actions import runtime_command
+            runtime_command(credentials['powershell'])
         if execution['type'] == 'phase':
             data = dict(execution.get('parameters', {}), profile=execution.get('profile', {'mode': 'normal'}),
                         timing=execution.get('timing', {}), target_mode=execution.get('target_mode', 'fixed'))
-            protocol = data.get('protocol', 'ssh')
+            protocol = data.get('protocol', 'winrm-http' if execution['id'] in {'09', '10'} else 'ssh')
             data['password'] = credentials.get('password') or credentials.get('rdp_password' if protocol.startswith(('rdp', 'winrm')) else 'ssh_password') or os.environ.get('NORDIC_RDP_PASSWORD' if protocol.startswith(('rdp', 'winrm')) else 'NORDIC_SSH_PASSWORD', '')
             cap = self.capabilities()[execution['id']]
             if cap.get('wordlist') and not os.environ.get('NORDIC_WORDLIST_FILE'):
@@ -165,6 +168,8 @@ class Planning:
                 data['wordlist_users'] = os.environ.get('NORDIC_WORDLIST_USERS', 'ubuntu,Administrator')
             url = f'/api/scenario/{execution["id"]}/start'
             call = lambda: self.m.api_start(execution['id'])
+        if credentials.get('powershell'):
+            data['powershell'] = credentials['powershell']
         with self.m.app.test_request_context(url, method='POST', json=data):
             response = call()
         if isinstance(response, tuple):
@@ -264,9 +269,12 @@ def install(module):
             service.store.update(sid, enabled=action == 'enable')
             return jsonify({'status': action})
         data = request.get_json(silent=True) or {}
-        keys(data, ['ssh_password', 'rdp_password', 'password'], 'credential')
-        if not all(isinstance(v, str) and len(v) <= 4096 for v in data.values()):
+        keys(data, ['ssh_password', 'rdp_password', 'password', 'powershell'], 'credential')
+        if not all(isinstance(v, str) and len(v) <= (16384 if k == 'powershell' else 4096) for k, v in data.items()):
             raise ValueError('Invalid credential input')
+        if 'powershell' in data and data['powershell']:
+            from windows_actions import runtime_command
+            runtime_command(data['powershell'])
         if action == 'arm':
             service.scheduler.credentials[sid] = data
             return jsonify({'status': 'credentials held until service restart or schedule edit/delete'})

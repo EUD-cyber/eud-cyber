@@ -913,6 +913,8 @@ function phaseFieldLabel(parameter) {
         protocol: "Protocol",
         username: "Username",
         password: "Password",
+        powershell: "P10 PowerShell command (runtime only, never saved)",
+        timeout: "Windows action timeout (seconds, 5–300)",
         file: "File",
     };
 
@@ -1030,6 +1032,9 @@ function renderPhaseDetail(phase) {
             input.type =
                 "checkbox";
 
+        } else if (parameter === "powershell") {
+            input = document.createElement("textarea");
+            input.rows = 5; input.maxLength = 16384; input.autocomplete = "off";
         } else {
 
             input =
@@ -1264,6 +1269,9 @@ async function runStandalonePhase(
         );
 
 
+        for (const key of ["password", "powershell"]) {
+            const input = document.getElementById(`phase-${phase.id}-${key}`); if (input) input.value = "";
+        }
         await refreshLog();
 
         console.log(
@@ -2782,7 +2790,7 @@ function reportType(report) {
 const REPORT_PHASES = [
     ["01", "Discovery"], ["02", "Web"], ["03", "Initial Access"],
     ["08", "Credential Access"], ["04", "Internal Discovery"],
-    ["05", "Staging"], ["06", "Exfiltration"], ["07", "Impact"]
+    ["05", "Staging"], ["06", "Exfiltration"], ["07", "Impact"], ["09", "AD Privilege Escalation"], ["10", "Custom PowerShell"]
 ];
 const reportArray = value => Array.isArray(value) ? value : [];
 let reportHistory = [];
@@ -3072,7 +3080,7 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
         selectedPhase = phase.id;
         renderReportPhase(phaseDetail, phase, groundTruth);
     };
-    const ordered = [...REPORT_PHASES.map(([phaseId, name]) => phases.find(p => p.id === phaseId) ||
+    const ordered = [...REPORT_PHASES.filter(([phaseId]) => !["09", "10"].includes(phaseId) || phases.some(p => p.id === phaseId)).map(([phaseId, name]) => phases.find(p => p.id === phaseId) ||
         {id: phaseId, name, status: "not_run", absent: true}), ...phases.filter(p => !REPORT_PHASES.some(([phaseId]) => p.id === phaseId))];
     ordered.forEach(phase => {
         const button = reportNode("button", null, timeline);
