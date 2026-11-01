@@ -3,7 +3,7 @@
 # SCENARIO_ID="full-incident"
 # SCENARIO_NAME="Full Incident"
 # SCENARIO_DESCRIPTION="Complete incident simulation from discovery through impact."
-# SCENARIO_PHASES="01,02,03,08,09,10,11,04,05,06,07"
+# SCENARIO_PHASES="01,02,03,08,09,10,11,13,04,05,06,07"
 
 set -u
 
@@ -71,12 +71,6 @@ if [[ -z "${MRN_EXECUTION:-}" ]]; then
     export MRNOBODY_RUN_MODE=campaign
     unset MRNOBODY_TARGET MRNOBODY_SOURCE MRNOBODY_PORT MRNOBODY_PROTOCOL MRNOBODY_USERNAME
     unset MRNOBODY_PLATFORM MRNOBODY_METHOD MRNOBODY_ACTION MRNOBODY_ARTIFACT
-fi
-
-# Validate the built-in CLI action input before clearing any campaign state.
-if [[ -z "${MRN_EXECUTION:-}" && "${MRN_POWERSHELL_ENABLED:-0}" == "1" && -z "${MRN_POWERSHELL_SECRET//[[:space:]]/}" ]]; then
-    echo "[ERROR] Full Incident requires runtime P10 input: MRN_POWERSHELL_SECRET"
-    exit 1
 fi
 
 mkdir -p \
@@ -711,10 +705,10 @@ run_phase() {
     fi
 
 
-    if [[ "$NUMBER" == "11" && $RESULT -eq 78 ]]; then
+    if [[ ( "$NUMBER" == "10" || "$NUMBER" == "11" || "$NUMBER" == "13" ) && $RESULT -eq 78 ]]; then
         RUN_PHASE_STATUS="skipped"
         update_phase_state "$NUMBER" "skipped"
-        log "[PHASE $NUMBER] SKIPPED - No supported persistence target or method"
+        log "[PHASE $NUMBER] SKIPPED - Not configured or no compatible target/method"
         return 0
     fi
 
@@ -725,7 +719,7 @@ run_phase() {
         return 0
     fi
 
-    if [[ "$NUMBER" == "10" && $RESULT -eq 79 ]]; then
+    if [[ ( "$NUMBER" == "10" || "$NUMBER" == "13" ) && $RESULT -eq 79 ]]; then
         RUN_PHASE_STATUS="skipped"
         update_phase_state "$NUMBER" "skipped"
         log "[PHASE $NUMBER] ACTION_ERROR - Custom remote command failed; campaign continues"
@@ -896,6 +890,7 @@ PHASE_08="$SCRIPT_DIR/08-wordlist.sh"
 PHASE_09="$SCRIPT_DIR/09-ad-privilege.sh"
 PHASE_10="$SCRIPT_DIR/10-powershell.sh"
 PHASE_11="$SCRIPT_DIR/11-persistence.sh"
+PHASE_13="$SCRIPT_DIR/13-native-tools.sh"
 
 
 # ============================================================
@@ -912,7 +907,8 @@ for SCRIPT in \
     "$PHASE_07" \
     "$PHASE_09" \
     "$PHASE_10" \
-    "$PHASE_11"
+    "$PHASE_11" \
+    "$PHASE_13"
 
 do
 
@@ -1077,6 +1073,7 @@ data = {
         "07": "pending",
         "09": "pending",
         "11": "pending",
+        "13": "pending",
         "10": "pending" if os.environ.get("MRN_POWERSHELL_ENABLED") == "1" else "disabled",
 
         "08": (
@@ -1333,7 +1330,7 @@ phase_delay
 # ============================================================
 # PHASE 09 / 10: Windows actions after established access, before staging.
 # ============================================================
-for NUMBER in 09 10 11; do
+for NUMBER in 09 10 11 13; do
     if [[ "$NUMBER" == "09" ]] && ! windows_access_available; then
         update_phase_state "09" "disabled"
         ground_truth "PHASE_SKIPPED phase=09 reason=no_windows_rdp_access"
@@ -1352,6 +1349,10 @@ for NUMBER in 09 10 11; do
     if [[ "$NUMBER" == "11" ]]; then
         SCRIPT="$PHASE_11"
         NAME="Persistence"
+    fi
+    if [[ "$NUMBER" == "13" ]]; then
+        SCRIPT="$PHASE_13"
+        NAME="Windows Native Tools / LOLBins Simulation"
     fi
     update_phase_state "$NUMBER" "running"
     if ! run_phase "$NUMBER" "$NAME" "$SCRIPT"; then

@@ -35,7 +35,7 @@ class FreshInstall(unittest.TestCase):
         expected = {line.split('|', 1)[1] for line in (PLATFORM / 'update-manifest.txt').read_text().splitlines() if line and not line.startswith('#')}
         # Release constraint: userdata stays frozen until the install batch.
         # The existing manifest updater supplies these additions on Update.
-        deferred = {'web/remote_actions.py', 'web/persistence_actions.py', 'web/ssh_actions.py', 'scripts/11-persistence.sh'}
+        deferred = {'web/remote_actions.py', 'web/persistence_actions.py', 'web/ssh_actions.py', 'scripts/11-persistence.sh', 'web/native_actions.py', 'scripts/13-native-tools.sh'}
         self.assertEqual(expected - set(downloaded), deferred)
         self.assertFalse(set(downloaded) - expected)
         self.assertEqual(len(downloaded), len(pairs), 'Duplicate downloads')

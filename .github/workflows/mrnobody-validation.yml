@@ -41,6 +41,8 @@ jobs:
           python tests/mrnobody/install.py
           python tests/mrnobody/planning.py --bash
           python tests/mrnobody/remote_actions.py
+          python tests/mrnobody/native_dual.py
+          node tests/mrnobody/dual_review.cjs
           python tests/mrnobody/windows_actions.py
           python tests/mrnobody/ad_prerequisite.py
           python tests/mrnobody/ad_enabled.py

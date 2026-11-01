@@ -710,13 +710,16 @@
 
         </div>
         <div class="config-section">
-            <div class="config-section-title">P09 / P10 remote actions · P11 Persistence is included</div>
+            <div class="config-section-title">P09 / P10 remote actions · P11 Persistence and P13 Native Tools are included</div>
             <p>P09 changes mrnobody membership in Domain Admins on the lab DC. P09 runs only when Windows/RDP access is available; otherwise it is skipped. AD management rights are required for domain changes.</p>
-            <label class="checkbox-label" for="powershellEnabled"><input id="powershellEnabled" type="checkbox"> Enable P10 Custom Remote Command</label>
-            <div class="form-group" id="campaignPowershellFields" hidden>
-                <label for="campaignPowershell">P10 remote command (PowerShell / Bash) (runtime only, never saved)</label>
+            <label class="checkbox-label" for="powershellEnabled"><input id="powershellEnabled" type="checkbox" checked> Enable P10 Custom Remote Command</label>
+            <div class="form-group" id="campaignPowershellFields">
+                <label for="campaignPowershell">PowerShell command (Windows, optional)</label>
                 <textarea id="campaignPowershell" rows="5" maxlength="16384" autocomplete="off"></textarea>
-                <div class="field-help">Required only when P10 is enabled. Auto selects compatible P03 access: WinRM/PowerShell or SSH/Bash. Use a command suitable for the chosen platform. Reports include bounded, redacted output previews. P11 defaults to Scheduled Task or user cron; use standalone P11 cleanup afterward.</div>
+                <label for="campaignBash">Bash command (Linux, optional)</label>
+                <textarea id="campaignBash" rows="5" maxlength="16384" autocomplete="off"></textarea>
+                <p id="campaignP10Review" aria-live="polite"></p>
+                <div class="field-help">Each command is optional. Both filled: execute both platforms independently. Both blank: P10 is skipped as NOT_CONFIGURED and the campaign continues. Auto selects compatible P03 access: WinRM/PowerShell or SSH/Bash. Blank fields skip only their own platform action. Reports include bounded, redacted output previews. P11 defaults to Scheduled Task or user cron; use standalone P11 cleanup afterward.</div>
             </div>
         </div>
         <!-- ==================================================
@@ -886,7 +889,7 @@
             </h2>
 
             <span class="panel-tag">
-                P01 → P11
+                P01 through P13
             </span>
 
         </div>
@@ -1404,7 +1407,7 @@
         <div class="report-filters" aria-label="Report history filters">
             <label>Report type<select id="reportTypeFilter"><option value="">All types</option><option value="campaign">Campaign</option><option value="standalone_phase">Standalone phase</option></select></label>
             <label>Status<select id="reportStatusFilter"><option value="">All statuses</option><option value="complete">Complete</option><option value="failed">Failed</option><option value="interrupted">Interrupted</option></select></label>
-            <label>Recorded phase<select id="reportPhaseFilter"><option value="">All phases</option><option value="01">Phase 01</option><option value="02">Phase 02</option><option value="03">Phase 03</option><option value="08">Phase 08</option><option value="04">Phase 04</option><option value="05">Phase 05</option><option value="06">Phase 06</option><option value="07">Phase 07</option><option value="09">Phase 09</option><option value="10">Phase 10</option></select></label>
+            <label>Recorded phase<select id="reportPhaseFilter"><option value="">All phases</option><option value="01">Phase 01</option><option value="02">Phase 02</option><option value="03">Phase 03</option><option value="08">Phase 08</option><option value="04">Phase 04</option><option value="05">Phase 05</option><option value="06">Phase 06</option><option value="07">Phase 07</option><option value="09">Phase 09</option><option value="10">Phase 10</option><option value="11">Phase 11</option><option value="13">Phase 13</option></select></label>
             <label>Incident ID or host<input id="reportSearch" type="search" placeholder="Search ID, IP or hostname"></label>
         </div>
         <p id="reportFilterNotice" class="muted" aria-live="polite">History totals above cover all reports. Filters apply to the list below.</p>

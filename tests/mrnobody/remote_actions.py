@@ -87,7 +87,7 @@ class Contracts(unittest.TestCase):
 
     def test_full_order_and_manifest_contract(self):
         ids = read_metadata(PLATFORM / 'scenarios/full-incident.sh')['SCENARIO_PHASES'].split(',')
-        self.assertEqual(ids, ['01','02','03','08','09','10','11','04','05','06','07'])
+        self.assertEqual(ids, ['01','02','03','08','09','10','11','13','04','05','06','07'])
         validate(dict(version=1,name='Full',target_mode='auto',profile={'mode':'normal'},phases=[dict(id=p) for p in ids]), CAPS)
         manifest = (PLATFORM / 'update-manifest.txt').read_text()
         for name in ('web/remote_actions.py','web/ssh_actions.py','web/persistence_actions.py','scripts/11-persistence.sh'):

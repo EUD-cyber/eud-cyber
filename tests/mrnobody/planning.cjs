@@ -11,7 +11,7 @@ function element(tag = 'div') {
     };
 }
 for (const id of ['builderBody','planningMessage','customLibrary','scheduleEditor','scheduleList','newCustomScenario']) elements.set(id, element());
-const dependencyMap = {'01':[], '02':['01'], '03':['01'], '04':['03'], '05':['03'], '06':['03','05'], '07':['03'], '08':['01','03'], '09':['03'], '10':['03'], '11':['03']};
+const dependencyMap = {'01':[], '02':['01'], '03':['01'], '04':['03'], '05':['03'], '06':['03','05'], '07':['03'], '08':['01','03'], '09':['03'], '10':['03'], '11':['03'], '13':['03']};
 const caps = Object.entries(dependencyMap).map(([id, dependencies]) => ({
     id, dependencies, name:{'01':'Discovery','02':'Web Discovery','03':'Initial Access','04':'Lateral Movement','05':'Staging','06':'Exfiltration','07':'Impact','08':'Wordlist Authentication'}[id],
     fields: id === '01' ? {subnet:{label:'Subnets',type:'networks'}} : {
@@ -20,7 +20,7 @@ const caps = Object.entries(dependencyMap).map(([id, dependencies]) => ({
         ...(id === '06' ? {file:{label:'Synthetic staged file',type:'path'}} : {})},
     required_fields: id === '01' ? ['subnet'] : ['target', ...(['03','08'].includes(id) ? ['protocol'] : []), ...(id === '04' ? ['source'] : []), ...(id === '06' ? ['file'] : [])],
     timing: ['01','02'].includes(id) ? ['start_offset','duration','delay_min','delay_max','jitter'] : ['start_offset'],
-    credentials:['03','04','05','06','07','09','10','11'].includes(id), wordlist:id === '08', standalone:true,
+    credentials:['03','04','05','06','07','09','10','11','13'].includes(id), wordlist:id === '08', standalone:true,
     runtime_powershell:id === '10'
 }));
 for (const cap of caps.filter(c=>['09','10'].includes(c.id))) {
@@ -41,6 +41,9 @@ for (const cap of caps.filter(c=>['10','11'].includes(c.id))) {
         cap.fields.artifact = {label:'Artifact suffix',type:'text'};
     }
 }
+const p13=caps.find(c=>c.id==='13');
+p13.fields.protocol.options=['winrm-http','winrm-https']; p13.required_fields=['target','protocol'];
+p13.fields.behavior={label:'Native tool behavior',type:'choice',options:['encoded-powershell','certutil-decode','bits-job']};
 const definitions = [], plans = [], requests = [];
 const context = vm.createContext({document:{getElementById:id=>elements.get(id) || [...elements.values()].flatMap(walk).find(n=>n.id===id), createElement:element, querySelectorAll:()=>[],addEventListener(){}},
     window:{}, Date, Intl, console, FormData, showPage:page=>{context.page=page;}, confirm:()=>true,
@@ -189,24 +192,29 @@ async function main() {
     set('Common Target (optional)','192.168.1.10'); set('Protocol','rdp'); await next(); assert.match(error(),/supported protocol/);
     set('Protocol','winrm-https'); set('Action timeout','301'); await next(); assert.match(error(),/5–300/);
     set('Action timeout','60'); await next(); await next(); await next();
-    const command=field(body(),'P10 remote command (PowerShell / Bash) (runtime only, never saved)');
+    const command=field(body(),'PowerShell command (Windows, optional)');
     assert.equal(command.tag,'textarea'); command.value='Write-Output "COMMAND_SECRET"';
     await click(body(),'Save + Run Now');
     const dispatched=requests.filter(r=>r.url==='/api/executions/run').at(-1);
-    assert.equal(dispatched.data.credentials.powershell,'Write-Output "COMMAND_SECRET"');
+    assert.equal(dispatched.data.credentials.powershell_windows,'Write-Output "COMMAND_SECRET"');
     assert.equal(command.value,'');
     assert.ok(!JSON.stringify(definitions).includes('COMMAND_SECRET'));
     assert.ok(!JSON.stringify(plans).includes('COMMAND_SECRET'));
     await click(elements.get('scheduleList'),'New schedule / Run Now');
     const fullEditor=elements.get('scheduleEditor');
-    assert.ok(!text(fullEditor).includes('P10 remote command (PowerShell / Bash) (runtime only, never saved)'));
+    assert.ok(!text(fullEditor).includes('PowerShell command (Windows, optional)'));
     set('P10 Custom Remote Command','1',fullEditor);
-    field(fullEditor,'P10 remote command (PowerShell / Bash) (runtime only, never saved)').value='Get-Date';
+    field(fullEditor,'PowerShell command (Windows, optional)').value='Get-Date';
     set('Linux / SSH password','S',fullEditor);set('Windows / RDP / WinRM password','R',fullEditor);
+    field(fullEditor,'Bash command (Linux, optional)').value='printf LINUX_SECRET';
+    field(fullEditor,'Bash command (Linux, optional)').listeners.input();
+    assert.match(text(fullEditor),/PowerShell configured \/ Bash configured/);
     await click(fullEditor,'Run Now');
     const fullRun=requests.filter(r=>r.url==='/api/executions/run').at(-1);
     assert.equal(fullRun.data.execution.powershell_enabled,true);
-    assert.equal(fullRun.data.credentials.powershell,'Get-Date');
+    assert.equal(fullRun.data.credentials.powershell_windows,'Get-Date');
+    assert.equal(fullRun.data.credentials.bash,'printf LINUX_SECRET');
+    assert.ok(!JSON.stringify(plans).includes('LINUX_SECRET'));
     await select(); await add('11'); assert.deepEqual(ids(),['01','03','11']);
     assert.ok(textButton(row('03'),'Remove').disabled);
     await next();
@@ -243,6 +251,20 @@ async function main() {
     await click(p11Editor,'Save schedule');
     assert.equal(plans.at(-1).execution.parameters.platform,'linux');
     assert.equal(plans.at(-1).execution.parameters.method,'cron');
+    for (const mode of ['auto','fixed']) {
+        await select(mode); await add('13');
+        assert.deepEqual(ids(),mode==='auto'?['01','03','13']:['13']);
+        if(mode==='auto') assert.ok(textButton(row('03'),'Remove').disabled);
+        await next();
+        const behavior=field(body(),'Native tool behavior'); assert.equal(behavior.tag,'select');
+        assert.ok(!text(body()).includes('PowerShell command (Windows, optional)'));
+        assert.deepEqual(field(body(),'Protocol').children.map(c=>c.value),['','winrm-http','winrm-https']);
+        set('Native tool behavior','bits-job');
+        if(mode==='fixed'){set('Common Target (optional)','192.168.1.88');set('Protocol','winrm-http');}
+        await review(); assert.match(text(body()),/bits-job/);
+        await click(body(),'Save');
+        assert.equal(definitions.at(-1).phases.find(p=>p.id==='13').parameters.behavior,'bits-job');
+    }
     console.log('Builder DOM tests passed: dependencies, protected actions, target modes, common targets, validation, review, friendly units, P08/P09/P10 runtime inputs, Full Incident toggle and library summaries.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

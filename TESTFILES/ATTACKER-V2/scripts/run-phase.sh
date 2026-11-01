@@ -60,6 +60,7 @@ PLATFORM=""
 METHOD=""
 ACTION=""
 ARTIFACT=""
+BEHAVIOR=""
 SUBNET=""
 AUTO_DISCOVERY=""
 
@@ -510,6 +511,7 @@ run_attack() {
     export MRNOBODY_PLATFORM="${PLATFORM:-${MRNOBODY_PLATFORM:-}}"
     export MRNOBODY_METHOD="${METHOD:-${MRNOBODY_METHOD:-}}"
     export MRNOBODY_ACTION="${ACTION:-${MRNOBODY_ACTION:-}}"
+    export MRNOBODY_BEHAVIOR="${BEHAVIOR:-${MRNOBODY_BEHAVIOR:-}}"
     export MRNOBODY_ARTIFACT="${ARTIFACT:-${MRNOBODY_ARTIFACT:-}}"
     export MRNOBODY_FILE="$FILE"
     export MRNOBODY_TIMEOUT="${ACTION_TIMEOUT:-${MRNOBODY_TIMEOUT:-60}}"
@@ -616,6 +618,7 @@ Options:
   --method <auto|scheduled-task|service|cron|systemd> (P11)
   --action <create|cleanup> (P11)
   --artifact <suffix> (P11, default telemetry)
+  --behavior <encoded-powershell|certutil-decode|bits-job> (P13)
   --timeout <seconds> (P09/P10/P11, 5–300)
   P10 command: MRN_POWERSHELL_SECRET environment input only; never a CLI argument.
   --dry-run
@@ -759,13 +762,14 @@ case "$COMMAND" in
                     shift 2
                     ;;
 
-                --platform|--method|--action|--artifact)
+                --platform|--method|--action|--artifact|--behavior)
                     [[ $# -ge 2 ]] || die "$1 requires a value"
                     case "$1" in
                         --platform) PLATFORM="$2" ;;
                         --method) METHOD="$2" ;;
                         --action) ACTION="$2" ;;
                         --artifact) ARTIFACT="$2" ;;
+                        --behavior) BEHAVIOR="$2" ;;
                     esac
                     shift 2
                     ;;

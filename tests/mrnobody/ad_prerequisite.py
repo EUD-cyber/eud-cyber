@@ -104,10 +104,10 @@ class Prerequisite(unittest.TestCase):
         self.assertTrue(any('Phase Skipped' in line for line in live['logs']))
 
     def test_cli_handles_skip_without_changing_other_phase_codes(self):
-        for pid, code, expected in [('09', 78, 0), ('09', 1, 1), ('10', 78, 78)]:
+        for pid, code, expected in [('09', 78, 0), ('09', 1, 1), ('10', 78, 0), ('13', 78, 0)]:
             with patch('reports.subprocess.Popen', return_value=Mock(wait=Mock(return_value=code))), patch('reports.save_report'), patch('reports.build_report', return_value={}) as build:
                 self.assertEqual(run_phase(self.base, pid, Path('inert'), self.env), expected)
-                self.assertEqual(build.call_args.kwargs['standalone']['phases'][pid], 'skipped' if pid == '09' and code == 78 else 'failed')
+                self.assertEqual(build.call_args.kwargs['standalone']['phases'][pid], 'skipped' if code == 78 else 'failed')
 
 
 if __name__ == '__main__':
