@@ -81,11 +81,11 @@ original single-candidate Auto behavior.
 
 ## Release scope and verification
 
-This release updates GitHub runtime files and the updater manifest only.
-`MRNOBODY/mrnobody_userdata.yaml` and fresh-install cloud-init are deliberately
-frozen. Fresh installs need the existing Update flow to obtain the deferred
-P10/P11/P13 runtime additions; installer parity is tested with an explicit
-deferred-file list. No running VM is changed or contacted by these tests.
+Fresh-install cloud-init now downloads the completed P10/P11/P13 runtime
+additions directly. No initial Update is required; the manifest-based updater
+continues to handle later runtime updates. The install test requires exact
+manifest/download parity and checks the staged application without an updater
+overlay. No running VM is changed or contacted by these tests.
 
 `tests/mrnobody/native_dual.py` covers registry, parameters, dependencies/order,
 timing, native script parsing, mocked transport exits, cleanup evidence,

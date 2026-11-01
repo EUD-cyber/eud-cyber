@@ -234,6 +234,14 @@ write_files:
           "$INSTALL_DIR/scripts/10-powershell.sh"
 
       download_file \
+          "scripts/11-persistence.sh" \
+          "$INSTALL_DIR/scripts/11-persistence.sh"
+
+      download_file \
+          "scripts/13-native-tools.sh" \
+          "$INSTALL_DIR/scripts/13-native-tools.sh"
+
+      download_file \
           "scripts/update.sh" \
           "$INSTALL_DIR/scripts/update.sh"
 
@@ -261,6 +269,22 @@ write_files:
       download_file \
           "web/windows_actions.py" \
           "$INSTALL_DIR/web/windows_actions.py"
+
+      download_file \
+          "web/remote_actions.py" \
+          "$INSTALL_DIR/web/remote_actions.py"
+
+      download_file \
+          "web/ssh_actions.py" \
+          "$INSTALL_DIR/web/ssh_actions.py"
+
+      download_file \
+          "web/persistence_actions.py" \
+          "$INSTALL_DIR/web/persistence_actions.py"
+
+      download_file \
+          "web/native_actions.py" \
+          "$INSTALL_DIR/web/native_actions.py"
 
       download_file \
           "web/scenario_model.py" \
