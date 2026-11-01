@@ -140,3 +140,52 @@ No dependencies or install payload paths were added: `MRNOBODY/mrnobody_userdata
 already installs `web/reports.py`. The normal manifest includes every modified
 runtime file and continues excluding generated reports, logs and state. No VM
 deployment or changes to a running installation are part of this repository update.
+
+## Reports incident analysis dashboard
+
+The Reports page now opens each campaign or standalone snapshot as an incident
+overview, with type, ID, status, start/end and five metric cards. Existing summary
+counts are preserved: exfiltration counts **recorded transfer entries**, not an
+inferred number of compromised or exfiltrated hosts. Missing snapshot data is
+shown as unavailable; a recorded empty collection is zero. Technique count is
+the number of unique valid ATT&CK IDs mapped in the report.
+
+The selectable timeline follows `01,02,03,08,04,05,06,07` and shows phase names,
+timestamps and success/failure/skipped/interrupted/not_run styles with text labels.
+Missing phase records (including other phases in a standalone report) are labelled
+as absent and cannot be selected. The first recorded phase is selected initially.
+Each phase shows What happened, Findings, Detection, Investigation,
+Prevention/Mitigation and Evidence references, with technical events collapsed.
+An additional collapsed section preserves snapshot state, events, campaign state,
+source paths and the existing raw JSON link. Historical reports without analysis
+fields remain readable with explicit unavailable messages.
+
+MITRE cards merge the existing summary and phase metadata, deduplicate by valid
+technique/sub-technique ID, and combine mapped phase IDs. Links are constructed
+from validated IDs on `attack.mitre.org`; stored URLs are never trusted. Mappings
+remain distinct from proof of execution or success.
+
+Affected assets combine inventory, web targets, compromised, staging, successful
+exfiltration-source and impact evidence, plus explicit action events. Snapshot
+membership establishes compromise/staging/impact unless explicitly false, matching
+the current success-only state writers. Exfiltration requires `successful: true`
+or `EXFIL_SUCCESS`, and attributes the state to the source rather than receiver.
+Failed transfer sources are targeted only. Explicit failed access events establish
+targeting, never compromise. Every row lists its evidence sources; an unmarked
+state means no supporting evidence, not proof of absence. No later attack state is
+inferred from an earlier state or from phase completion.
+
+History controls filter by type, report status, recorded phase and ID/IP/hostname.
+All filters are client-side and use the unchanged list/detail APIs. Phase matching
+includes recorded skipped/not_run phases. Host search includes recorded asset
+evidence, including assets absent from discovery. Detail snapshots are fetched on
+demand with at most four concurrent requests per filtering pass and cached in
+memory, since published reports are immutable. Failed detail reads can be retried
+and are reported in the filter notice; stale filter/selection responses cannot
+replace newer results. History totals cover all reports, independent of filters.
+
+No backend, schema, CLI, generation, HTTPS, campaign or update-flow changes are
+required. HTML/PDF export remains roadmap-only. Frontend regression checks in
+`tests/mrnobody/reports.cjs` cover metrics, timeline/navigation, MITRE deduplication
+and safe links, asset evidence, filters/search, collapsed raw evidence, historical,
+empty/error states, asynchronous selection and text-safe host-supplied content.

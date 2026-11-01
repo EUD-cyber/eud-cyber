@@ -2,17 +2,19 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 const assert = require("node:assert/strict");
 const elements = new Map();
-function element() {
+function element(tag = "div") {
     return {
-        children: [], listeners: {}, textContent: "",
+        tag, children: [], listeners: {}, attributes: {}, textContent: "", value: "",
         appendChild(child) { this.children.push(child); return child; },
         replaceChildren() { this.children = []; },
         addEventListener(type, callback) { this.listeners[type] = callback; },
+        setAttribute(name, value) { this.attributes[name] = value; },
         classList: { add() {}, remove() {}, toggle() {} },
         set innerHTML(value) { throw new Error("Evidence must not be rendered as HTML"); }
     };
 }
-for (const id of ["reportTable", "reportDetail", "reportIncidentCount", "reportCompromisedCount", "reportExfilCount", "reportImpactCount"])
+for (const id of ["reportTable", "reportDetail", "reportIncidentCount", "reportCompromisedCount", "reportExfilCount", "reportImpactCount",
+    "reportTypeFilter", "reportStatusFilter", "reportPhaseFilter", "reportSearch", "reportFilterNotice"])
     elements.set(id, element());
 let calls = [];
 let response;
@@ -54,6 +56,8 @@ async function main() {
     assert.ok(links.some(link => link.href === "https://attack.mitre.org/techniques/T1110/001/"));
     assert.ok(links.some(link => link.href === "/api/reports/MRN-test?raw=1"));
     assert.ok(!links.some(link => link.href.startsWith("javascript:")));
+    // Real reports are immutable. Use another ID for the standalone snapshot.
+    response = {...response, incident: {...response.incident, id: "MRN-standalone"}};
     response.report_type = "standalone_phase";
     response.phase_id = "03";
     response.phases[0].analysis = {
@@ -61,14 +65,141 @@ async function main() {
         detection: ["Wazuh Linux auth/journal"], investigation_tasks: ["Correlate timestamps"], prevention: ["MFA"],
         guidance_notice: "Educational recommendations, not evidence"
     };
-    await vm.runInContext("openReport('MRN-test')", context);
+    await vm.runInContext("openReport('MRN-standalone')", context);
     for (const expected of ["Standalone phase 03", "What happened", "Findings", "Evidence references", "Detection in the CyberLab", "Investigation tasks", "Prevention / Mitigation", "Wazuh", "Educational recommendations", "/logs/truth"])
         assert.ok(text(elements.get("reportDetail")).includes(expected), expected);
+
+    const phase = (id, status, name = `Phase ${id}`) => ({id, name, status,
+        started: `2026-11-01T12:${id}:00Z`, ended: `2026-11-01T12:${id}:30Z`,
+        mitre: {techniques: [{id: "T1078", name: "Valid Accounts"}, "T1110.001", {id: "javascript:attack()"}]},
+        analysis: {what_happened: `Facts ${id}`, findings: [`Finding ${id}`], detection: [`Detect ${id}`],
+            investigation_tasks: [`Investigate ${id}`], prevention: [`Prevent ${id}`], evidence: [{path: "/truth", line: 12}]},
+        events: [{event: "ACCESS_FAILED", target: "attempt-only", outcome: "failure", message: "<svg onload=attack()>"}]
+    });
+    const dashboard = {
+        incident: {id: "MRN-dashboard", status: "interrupted", started: "start", ended: "end"},
+        summary: {hosts: 2, compromised: 1, exfiltration: 2, impact: 1},
+        inventory: {hosts: [{ip: "host-one", hostname: "<img onerror=attack()>"}, {ip: "discovered-only", compromised: true}]},
+        compromised_hosts: {hosts: [{ip: "host-one"}]},
+        phases: [phase("07", "not_run"), phase("03", "failure"), phase("01", "success"), phase("06", "interrupted"),
+            phase("08", "skipped"), phase("02", "success"), phase("05", "success"), phase("04", "success")],
+        mitre_summary: [{id: "T1078", name: "Valid Accounts", url: "javascript:attack()", phases: ["03", "03"]}],
+        evidence: {
+            web_targets: {targets: [{ip: "host-one"}]}, staging: {hosts: [{ip: "host-one", staged: true}, {ip: "no-stage", staged: false}]},
+            exfiltration: {transfers: [{source: "host-one", destination: "receiver", successful: true},
+                {source: "failed-transfer", destination: "receiver", successful: false}]},
+            impact: {hosts: [{ip: "host-one", impacted: true}, {ip: "no-impact", impacted: false}]}
+        }, warnings: ["Missing snapshot"]
+    };
+    response = dashboard;
+    await vm.runInContext("openReport('MRN-dashboard')", context);
+    const root = elements.get("reportDetail");
+    const nodes = () => descendants(root);
+    assert.match(text(root), /Incident overview/);
+    const metrics = nodes().filter(n => n.className === "report-metric");
+    assert.deepEqual(metrics.map(n => n.children[0].textContent), ["2", "1", "2", "1", "2"]);
+    const timeline = nodes().filter(n => n.className?.includes("report-timeline-step"));
+    assert.deepEqual(timeline.map(n => n.children[0].textContent.split(" · ")[0]), ["01", "02", "03", "08", "04", "05", "06", "07"]);
+    for (const status of ["success", "failure", "skipped", "interrupted", "not_run"])
+        assert.ok(timeline.some(n => n.className.includes(`report-status-${status}`)));
+    assert.match(text(timeline[2]), /12:03:00Z/);
+    const analysis = () => nodes().find(n => n.id === "reportPhaseAnalysis");
+    assert.match(text(analysis()), /Facts 01/);
+    timeline[2].listeners.click();
+    assert.equal(timeline[2].attributes["aria-pressed"], "true");
+    assert.equal(timeline[0].attributes["aria-pressed"], "false");
+    assert.match(text(analysis()), /Facts 03/);
+    assert.ok(!text(analysis()).includes("Facts 01"));
+    for (const heading of ["What happened", "Findings", "Detection", "Investigation", "Prevention / Mitigation", "Evidence references"])
+        assert.ok(text(analysis()).includes(heading));
+    const mitreGrid = nodes().find(n => n.className === "report-mitre-grid");
+    assert.equal(mitreGrid.children.length, 2);
+    const summaryLinks = descendants(mitreGrid).filter(n => n.href);
+    assert.deepEqual(summaryLinks.map(n => n.href), ["https://attack.mitre.org/techniques/T1078/", "https://attack.mitre.org/techniques/T1110/001/"]);
+    assert.ok(summaryLinks.every(n => n.rel === "noopener noreferrer"));
+    assert.equal((text(mitreGrid).match(/03/g) || []).length, 2); // once per technique, despite duplicate summary metadata
+    const technical = nodes().filter(n => n.tag === "details");
+    assert.ok(technical.length >= 8);
+    assert.ok(technical.every(n => !n.open));
+    assert.ok(technical.some(n => text(n.children[0]) === "Technical ground-truth events"));
+    assert.ok(technical.some(n => text(n.children[0]) === "Raw technical evidence and JSON"));
+    assert.match(text(root), /<img onerror=attack\(\)>/);
+    assert.match(text(root), /<svg onload=attack\(\)>/);
+    assert.ok(!nodes().some(n => ["script", "img", "svg"].includes(n.tag)));
+    context.dashboard = dashboard;
+    const assetStates = JSON.parse(vm.runInContext("JSON.stringify(reportAssets(dashboard).map(a => ({ip:a.ip, states:[...a.states]})))", context));
+    assert.deepEqual(assetStates.find(a => a.ip === "host-one").states, ["discovered", "targeted", "compromised", "staged", "exfiltrated", "impacted"]);
+    assert.deepEqual(assetStates.find(a => a.ip === "discovered-only").states, ["discovered"]);
+    assert.deepEqual(assetStates.find(a => a.ip === "attempt-only").states, ["targeted"]);
+    assert.deepEqual(assetStates.find(a => a.ip === "failed-transfer").states, ["targeted"]);
+    for (const ip of ["receiver", "no-stage", "no-impact"]) assert.ok(!assetStates.some(a => a.ip === ip));
+    assert.match(text(root), /exfiltration.transfers \(successful\)/);
+
+    // Missing fields remain readable and distinct from a known zero.
+    response = {incident: {id: "MRN-historical"}, phases: null, evidence: null, inventory: null};
+    await vm.runInContext("openReport('MRN-historical')", context);
+    assert.match(text(root), /No phase records available/);
+    assert.match(text(root), /No recorded evidence/);
+    assert.match(text(root), /No technique mappings recorded/);
+    assert.equal(nodes().filter(n => n.className === "report-metric")[0].children[0].textContent, "Unavailable");
+    assert.ok(nodes().filter(n => n.className?.includes("report-timeline-step")).every(n => n.disabled));
+    response = {incident: {id: "MRN-empty"}, inventory: {hosts: []}, phases: [{id: "03", name: "Historical phase", status: "failed"}]};
+    await vm.runInContext("openReport('MRN-empty')", context);
+    assert.match(text(root), /Historical report/);
+    assert.equal(nodes().filter(n => n.className === "report-metric")[0].children[0].textContent, "0");
+
+    // Client-side controls use the unchanged list/detail APIs, fetching details only when needed.
+    response = {reports: [
+        {id: "MRN-dashboard", status: "interrupted"},
+        {id: "MRN-standalone", status: "failed", report_type: "standalone_phase", phase_id: "03"},
+        {id: "MRN-broken", status: "complete"}
+    ]};
+    await vm.runInContext("refreshReports()", context);
+    context.fetch = async url => { calls.push(url); return {ok: false, status: 404}; };
+    const filter = async (id, value) => {
+        elements.get(id).value = value;
+        await elements.get(id).listeners[id === "reportSearch" ? "input" : "change"]();
+    };
+    await filter("reportTypeFilter", "standalone_phase");
+    assert.match(text(elements.get("reportTable")), /MRN-standalone/);
+    assert.ok(!text(elements.get("reportTable")).includes("MRN-dashboard"));
+    await filter("reportStatusFilter", "complete");
+    assert.match(text(elements.get("reportTable")), /No reports match/);
+    await filter("reportStatusFilter", "");
+    await filter("reportPhaseFilter", "08");
+    assert.match(text(elements.get("reportTable")), /No reports match/);
+    await filter("reportPhaseFilter", "03");
+    assert.match(text(elements.get("reportTable")), /MRN-standalone/);
+    await filter("reportTypeFilter", "");
+    await filter("reportPhaseFilter", "");
+    const before = calls.length;
+    await filter("reportSearch", "MRN-dashboard");
+    assert.match(text(elements.get("reportTable")), /MRN-dashboard/);
+    assert.ok(!calls.slice(before).includes("/api/reports/MRN-dashboard"));
+    context.fetch = async url => { calls.push(url); return {ok: false, status: 404}; };
+    await filter("reportSearch", "HOST-ONE");
+    assert.match(text(elements.get("reportTable")), /MRN-dashboard/);
+    assert.match(text(elements.get("reportFilterNotice")), /1 reports could not be searched/);
+    await filter("reportSearch", "<img onerror");
+    assert.match(text(elements.get("reportTable")), /MRN-dashboard/);
+    await filter("reportSearch", "no-such-host");
+    assert.match(text(elements.get("reportTable")), /No reports match/);
+
+    // Latest user selection wins when responses arrive out of order.
+    let resolveSlow;
+    context.fetch = async url => ({ok: true, json: () => url.endsWith("MRN-slow") ? new Promise(r => {resolveSlow = r;}) : Promise.resolve({incident:{id:"MRN-fast"}})});
+    const slow = vm.runInContext("openReport('MRN-slow')", context);
+    await vm.runInContext("openReport('MRN-fast')", context);
+    resolveSlow({incident: {id: "MRN-slow"}});
+    await slow;
+    assert.match(text(root), /MRN-fast/);
+    assert.ok(!text(root).includes("MRN-slow"));
     context.fetch = async () => ({ok: false, status: 404});
     await vm.runInContext("openReport('MRN-missing')", context);
     assert.match(text(elements.get("reportDetail")), /Could not load report/);
     await vm.runInContext("refreshReports()", context);
     assert.match(text(elements.get("reportTable")), /Could not load reports/);
-    console.log("Reports UI passed: list, detail, counters, evidence, text-only rendering, empty and error states.");
+    assert.equal(elements.get("reportIncidentCount").textContent, "Unavailable");
+    console.log("Reports UI passed: overview, canonical timeline/status/navigation, MITRE dedupe/trusted links, evidence-based assets, filters/host search, collapsed raw evidence, historical/empty/error states, response races and text-safe rendering.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
