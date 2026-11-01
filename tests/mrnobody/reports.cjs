@@ -48,6 +48,17 @@ async function main() {
     };
     await button.listeners.click();
     assert.equal(calls.at(-1), "/api/reports/MRN-test");
+    const reportRoot = elements.get("reportDetail");
+    const switchView = label => descendants(reportRoot).find(n => n.tag === "button" && n.textContent === label).listeners.click();
+    const beforeSwitch = calls.length;
+    assert.ok(descendants(reportRoot).some(n => n.textContent === "Investigation View" && n.attributes["aria-pressed"] === "true"));
+    for (const hidden of ["ACCESS_FAILED", "<script>attack()</script>", "/tmp/sample", "Technical ground-truth events"])
+        assert.ok(!text(reportRoot).includes(hidden), hidden);
+    assert.ok(descendants(reportRoot).some(n => n.href === "/api/reports/MRN-test/export/html?view=investigation"));
+    assert.ok(descendants(reportRoot).some(n => n.href === "/api/reports/MRN-test/export/pdf?view=investigation"));
+    switchView("Ground Truth View");
+    assert.equal(calls.length, beforeSwitch);
+    assert.ok(descendants(reportRoot).some(n => n.href === "/api/reports/MRN-test/export/pdf?view=ground-truth"));
     const detail = text(elements.get("reportDetail"));
     for (const expected of ["full-incident", "Valid Accounts", "ACCESS_FAILED", "ssh", "<script>attack()</script>", "Unavailable impact", "/tmp/sample"])
         assert.ok(detail.includes(expected), expected);
@@ -66,6 +77,7 @@ async function main() {
         guidance_notice: "Educational recommendations, not evidence"
     };
     await vm.runInContext("openReport('MRN-standalone')", context);
+    switchView("Ground Truth View");
     for (const expected of ["Standalone phase 03", "What happened", "Findings", "Evidence references", "Detection in the CyberLab", "Investigation tasks", "Prevention / Mitigation", "Wazuh", "Educational recommendations", "/logs/truth"])
         assert.ok(text(elements.get("reportDetail")).includes(expected), expected);
 
@@ -93,6 +105,7 @@ async function main() {
     };
     response = dashboard;
     await vm.runInContext("openReport('MRN-dashboard')", context);
+    switchView("Ground Truth View");
     const root = elements.get("reportDetail");
     const nodes = () => descendants(root);
     assert.match(text(root), /Incident overview/);
@@ -110,6 +123,15 @@ async function main() {
     assert.equal(timeline[0].attributes["aria-pressed"], "false");
     assert.match(text(analysis()), /Facts 03/);
     assert.ok(!text(analysis()).includes("Facts 01"));
+    const switchCalls = calls.length;
+    switchView("Investigation View");
+    assert.ok(!text(analysis()).includes("Facts 03"));
+    assert.ok(!text(root).includes("Technical ground-truth events"));
+    assert.ok(!text(root).includes("Actual compromised hosts"));
+    assert.match(text(analysis()), /Investigate 03/);
+    switchView("Ground Truth View");
+    assert.match(text(analysis()), /Facts 03/);
+    assert.equal(calls.length, switchCalls);
     for (const heading of ["What happened", "Findings", "Detection", "Investigation", "Prevention / Mitigation", "Evidence references"])
         assert.ok(text(analysis()).includes(heading));
     const mitreGrid = nodes().find(n => n.className === "report-mitre-grid");
@@ -145,6 +167,7 @@ async function main() {
     assert.ok(nodes().filter(n => n.className?.includes("report-timeline-step")).every(n => n.disabled));
     response = {incident: {id: "MRN-empty"}, inventory: {hosts: []}, phases: [{id: "03", name: "Historical phase", status: "failed"}]};
     await vm.runInContext("openReport('MRN-empty')", context);
+    switchView("Ground Truth View");
     assert.match(text(root), /Historical report/);
     assert.equal(nodes().filter(n => n.className === "report-metric")[0].children[0].textContent, "0");
 
@@ -203,3 +226,4 @@ async function main() {
     console.log("Reports UI passed: overview, canonical timeline/status/navigation, MITRE dedupe/trusted links, evidence-based assets, filters/host search, collapsed raw evidence, historical/empty/error states, response races and text-safe rendering.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
+

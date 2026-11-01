@@ -28,6 +28,12 @@ jobs:
           find TESTFILES/ATTACKER-V2 TESTFILES/ATTACKER MRNOBODY INCIDENTVM -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
           bash -n TESTFILES/ATTACKER-V2/scripts/mrnobody
           bash -n TESTFILES/ATTACKER/attackctl
+      - name: Install isolated export test dependencies
+        run: python -m pip install 'reportlab>=4,<5' 'flask>=3,<4' 'pypdf>=5,<7'
+      - name: Verify distributed update manifest
+        run: |
+          bash TESTFILES/ATTACKER-V2/tools/build-manifest.sh
+          git diff --exit-code -- TESTFILES/ATTACKER-V2/update-manifest.txt
       - name: Check routing, live output, incident IDs and historical compatibility with isolated fixtures
         run: |
           python tests/mrnobody/backend.py
@@ -36,3 +42,5 @@ jobs:
           node tests/mrnobody/scenarios.cjs
           node tests/mrnobody/logs.cjs
           node tests/mrnobody/reports.cjs
+          python tests/mrnobody/report_exports.py
+

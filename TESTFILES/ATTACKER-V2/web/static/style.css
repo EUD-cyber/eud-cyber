@@ -1905,3 +1905,9 @@ footer {
 @media (max-width: 760px) {
     .report-filters, .report-metrics, .report-timeline, .report-mitre-grid { grid-template-columns: 1fr; }
 }
+
+
+.report-view-controls, .report-export-controls { display: flex; flex-wrap: wrap; gap: .65rem; margin: 1rem 0; }
+.report-view-controls button[aria-pressed="true"] { background: #245b85; color: white; border-color: #80c7ff; }
+.report-export-controls a { padding: .5rem .8rem; border: 1px solid #55758e; border-radius: .35rem; }
+.report-view-controls button:focus-visible, .report-export-controls a:focus-visible { outline: 3px solid #80c7ff; outline-offset: 3px; }
