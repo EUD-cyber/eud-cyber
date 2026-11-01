@@ -36,7 +36,15 @@ def launch(base, *args, **kwargs):
         env = dict(kwargs.pop('env', os.environ))
         env['MRN_LOCK_FD'] = str(handle.fileno())
         kwargs['pass_fds'] = (handle.fileno(),)
-        return subprocess.Popen(*args, env=env, **kwargs)
+        process = subprocess.Popen(*args, env=env, **kwargs)
+        if env.get('MRN_OVERVIEW'):
+            from execution import record
+            try:
+                record(base, env, process.pid)
+            except (OSError, ValueError, TypeError):
+                # Display metadata failure must never orphan or stop a valid run.
+                pass
+        return process
     finally:
         handle.close()
 

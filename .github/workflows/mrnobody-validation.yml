@@ -40,6 +40,8 @@ jobs:
           python tests/mrnobody/backend.py
           python tests/mrnobody/planning.py --bash
           node tests/mrnobody/planning.cjs
+          python tests/mrnobody/overview.py
+          node tests/mrnobody/overview.cjs
           python tests/mrnobody/reports.py --bash
           python tests/mrnobody/runtime.py --bash
           node tests/mrnobody/scenarios.cjs

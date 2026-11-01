@@ -10,6 +10,7 @@ const buttons = Array.from({length: 4}, makeElement);
 const dashboardRefresh = makeElement();
 const intervals = [];
 const context = vm.createContext({
+    window: {},
     document: {
         getElementById: id => id === 'refreshLogButton' ? dashboardRefresh : null,
         querySelectorAll: selector => ({'[data-live-log]': panels,

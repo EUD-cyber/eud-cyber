@@ -121,8 +121,8 @@ async function main() {
 
     await select();await add('02');await next();await next();set('Execution profile','custom');
     set('Start offset · Hours','1');set('Start offset · Minutes','15');set('Target activity duration · Minutes','2');set('Jitter (%)','101');await next();assert.match(error(),/jitter/);
-    set('Jitter (%)','25');set('Minimum action delay (seconds)','3');set('Maximum action delay (seconds)','2');await next();assert.match(error(),/maximum delay/);
-    set('Maximum action delay (seconds)','4');await next();set('When','recurring');await next();assert.match(error(),/date/);
+    set('Jitter (%)','25');set('Minimum action delay · Seconds','3');set('Maximum action delay · Seconds','2');await next();assert.match(error(),/maximum delay/);
+    set('Maximum action delay · Seconds','4');await next();set('When','recurring');await next();assert.match(error(),/date/);
     set('Start date / time (your browser timezone)','2000-01-01T12:00');await next();assert.match(error(),/future/);
     set('Start date / time (your browser timezone)','2099-11-02T12:00');set('Repeat every','2');set('Repeat unit','week');await next();
     assert.match(text(body()),/Repeat every 2 weeks/);assert.ok(text(body()).includes(Intl.DateTimeFormat().resolvedOptions().timeZone));

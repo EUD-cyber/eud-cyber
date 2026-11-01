@@ -1928,3 +1928,19 @@ footer {
 .planning-row button:disabled {opacity:.45;cursor:not-allowed}
 #planningMessage:not(:empty) {position:sticky;bottom:16px;padding:14px;border:1px solid #55799c;background:#162437;color:#e6effb;border-radius:8px;z-index:10}
 #scheduleList .button,#customLibrary .button,#builderBody .button,#scheduleEditor .button {margin:6px}
+
+/* Live execution overview extends the existing dark dashboard. */
+#executionOverview { padding: 0 20px 20px; }
+.overview-status { color: var(--accent, #39df8d); font-weight: 700; }
+.overview-fields { display: grid; grid-template-columns: minmax(130px, 180px) minmax(0, 1fr); gap: 8px 16px; }
+.overview-fields dt { color: #91a2b8; }
+.overview-fields dd { margin: 0; overflow-wrap: anywhere; }
+#executionOverview progress { width: 100%; accent-color: #39df8d; height: 8px; }
+.overview-timeline { list-style: none; padding: 0; display: grid; gap: 6px; }
+.overview-timeline li { display: flex; gap: 12px; flex-wrap: wrap; padding: 9px 12px; background: #0b1420; border-left: 2px solid #25364b; border-radius: 4px; }
+.overview-timeline small { flex-basis: 100%; }
+.overview-phase { margin-left: auto; color: #91a2b8; }
+.overview-running, .overview-complete { color: #39df8d; }
+.overview-failed, .overview-interrupted { color: #ffad85; }
+.overview-log { white-space: pre-wrap; font-size: 12px; max-height: 140px; overflow: auto; }
+@media (max-width: 620px) { .overview-fields { grid-template-columns: 1fr; gap: 4px; } .overview-fields dd { margin-bottom: 8px; } }

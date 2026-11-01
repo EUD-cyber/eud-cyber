@@ -97,8 +97,6 @@
 
 
         <nav class="sidebar-nav">
-<button class="nav-item" type="button" data-page="schedules"><span class="nav-icon">◷</span><span>Schedules</span></button>
-
             <button
                 class="nav-item nav-active"
                 type="button"
@@ -107,7 +105,6 @@
                 <span class="nav-icon">⌂</span>
                 <span>Dashboard</span>
             </button>
-
 
             <button
                 class="nav-item"
@@ -118,6 +115,14 @@
                 <span>Campaigns</span>
             </button>
 
+            <button
+                class="nav-item"
+                type="button"
+                data-page="scenarios"
+            >
+                <span class="nav-icon">⬡</span>
+                <span>Scenarios</span>
+            </button>
 
             <button
                 class="nav-item"
@@ -128,16 +133,7 @@
                 <span>Phases</span>
             </button>
 
-
-            <button
-                class="nav-item"
-                type="button"
-                data-page="scenarios"
-            >
-                <span class="nav-icon">⬡</span>
-                <span>Scenarios</span>
-            </button>
-
+            <button class="nav-item" type="button" data-page="schedules"><span class="nav-icon">◷</span><span>Schedules</span></button>
 
             <button
                 class="nav-item"
@@ -148,7 +144,6 @@
                 <span>Inventory / State</span>
             </button>
 
-
             <button
                 class="nav-item"
                 type="button"
@@ -158,7 +153,6 @@
                 <span>Reports</span>
             </button>
 
-
             <button
                 class="nav-item"
                 type="button"
@@ -167,7 +161,6 @@
                 <span class="nav-icon">⚙</span>
                 <span>System</span>
             </button>
-
         </nav>
 
 
@@ -253,6 +246,7 @@
         </div>
 
 
+        <div id="executionOverview" aria-live="polite">Loading execution status…</div>
     </section>
 
     <!-- ====================================================

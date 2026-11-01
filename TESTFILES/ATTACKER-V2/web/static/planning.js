@@ -251,11 +251,11 @@
         if (profile.mode !== "custom") return;
         const cap = capFor(phase.id);
         for (const key of cap.timing) {
-            if (["start_offset", "duration"].includes(key)) {
-                durationForm(parent, key === "start_offset" ? "Start offset" : "Target activity duration", phase.timing[key], v => {phase.timing[key] = v;}); continue;
+            if (["start_offset", "duration", "delay_min", "delay_max"].includes(key)) {
+                durationForm(parent, {start_offset: "Start offset", duration: "Target activity duration", delay_min: "Minimum action delay", delay_max: "Maximum action delay"}[key], phase.timing[key], v => {phase.timing[key] = v;}); continue;
             }
-            const input = field(parent, {delay_min: "Minimum action delay (seconds)", delay_max: "Maximum action delay (seconds)", jitter: "Jitter (%)"}[key], key === "jitter" ? (phase.timing[key] || 0) * 100 : phase.timing[key], v => {if (v === "") delete phase.timing[key]; else phase.timing[key] = Number(v) / (key === "jitter" ? 100 : 1);});
-            input.type = "number"; input.min = "0"; input.max = key === "jitter" ? "100" : "86400"; input.step = "any";
+            const input = field(parent, "Jitter (%)", (phase.timing[key] || 0) * 100, v => {if (v === "") delete phase.timing[key]; else phase.timing[key] = Number(v) / 100;});
+            input.type = "number"; input.min = "0"; input.max = "100"; input.step = "any";
         }
     }
 

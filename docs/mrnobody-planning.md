@@ -141,7 +141,7 @@ Normal with no timing config retains existing activity and phase delays.
 Structured Normal custom runs use the selected order without adding delays.
 Slow defaults to four hours. The GUI uses Hours/Minutes/Seconds controls for
 campaign target duration and custom per-phase offsets/activity durations.
-Delay min/max remain clearly labelled seconds; jitter is displayed as 0–100%
+Delay min/max also use Hours/Minutes/Seconds; jitter is displayed as 0–100%
 and converted to the existing 0–1 fraction. Recurrence uses Repeat every plus
 minute/hour/day/week units, converted to whole seconds (1 minute–365 days).
 Existing fractional durations and second-based recurrence values load without
