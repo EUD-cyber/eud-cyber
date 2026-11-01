@@ -3,6 +3,164 @@
     "use strict";
     let capabilities = [], scenarios = [], custom = [], schedules = [];
     let draft = null, step = 0, editingSchedule = null;
+    let autoAdded = new Set(), inherited = new Set(), commonTarget = "";
+    let readWordlist = () => null;
+    const capFor = id => capabilities.find(c => c.id === id);
+    const dependencies = id => capFor(id)?.dependencies || [];
+    const enabled = () => draft.phases.filter(p => p.enabled !== false);
+    const phase = id => ({id, enabled: true, parameters: {}, timing: {}});
+    function ensureAuto() {
+        if (draft.target_mode !== "auto") return;
+        const result = [], seen = new Set();
+        const visit = id => {
+            if (seen.has(id)) return;
+            dependencies(id).forEach(visit);
+            let item = draft.phases.find(p => p.id === id);
+            if (!item) {item = phase(id); autoAdded.add(id);}
+            item.enabled = true; item.parameters = {};
+            seen.add(id); result.push(item);
+        };
+        visit("01"); enabled().forEach(p => visit(p.id));
+        draft.phases.filter(p => !seen.has(p.id)).forEach(p => {p.parameters = {}; result.push(p);});
+        draft.phases = result;
+    }
+    function required(id) {
+        return draft.target_mode === "auto" && (id === "01" || enabled().some(p => dependencies(p.id).includes(id)));
+    }
+    function validOrder(phases) {
+        if (draft.target_mode !== "auto") return true;
+        const prior = new Set();
+        return phases.filter(p => p.enabled !== false).every(p => {
+            const valid = (prior.size > 0 || p.id === "01") && dependencies(p.id).every(id => prior.has(id));
+            prior.add(p.id); return valid;
+        });
+    }
+    function move(index, delta, apply = false) {
+        const next = index + delta, values = [...draft.phases];
+        if (next < 0 || next >= values.length) return false;
+        [values[index], values[next]] = [values[next], values[index]];
+        if (!validOrder(values) || (draft.target_mode === "auto" && values[0].id !== "01")) return false;
+        if (apply) draft.phases = values;
+        return true;
+    }
+    function setCommon(value) {
+        commonTarget = value.trim();
+        draft.phases.forEach(p => {
+            if (!capFor(p.id)?.fields.target) return;
+            if (inherited.has(p.id) || !p.parameters.target) {
+                if (commonTarget) {p.parameters.target = commonTarget; inherited.add(p.id);}
+                else {delete p.parameters.target; inherited.delete(p.id);}
+            }
+        });
+    }
+    function durationText(seconds) {
+        seconds = Number(seconds) || 0;
+        const hours = Math.floor(seconds / 3600), minutes = Math.floor(seconds % 3600 / 60), rest = Math.round(seconds % 60 * 100) / 100;
+        return [hours && `${hours} h`, minutes && `${minutes} min`, rest && `${rest} s`].filter(Boolean).join(" ") || "0 s";
+    }
+    function durationForm(parent, label, seconds, change) {
+        const group = node("div", undefined, parent, "planning-row");
+        let value = Number(seconds) || 0;
+        const units = [["Hours", 3600], ["Minutes", 60], ["Seconds", 1]];
+        const inputs = units.map(([unit, divisor]) => {
+            const amount = divisor === 3600 ? Math.floor(value / divisor) : divisor === 60 ? Math.floor(value % 3600 / 60) : value % 60;
+            const input = field(group, `${label} · ${unit}`, amount, () => change(inputs.some(input => Number(input.value) < 0 || !Number.isFinite(Number(input.value))) ? NaN : inputs.reduce((n, input, i) => n + Number(input.value) * units[i][1], 0)));
+            input.type = "number"; input.min = "0"; input.step = "any"; return input;
+        });
+    }
+    function recurrenceForm(parent, value) {
+        const units = {minute: 60, hour: 3600, day: 86400, week: 604800};
+        let unit = Object.keys(units).reverse().find(u => value.interval % units[u] === 0) || "minute";
+        const amount = field(parent, "Repeat every", value.interval / units[unit], v => {value.interval = Number(v) * units[unit];});
+        amount.type = "number"; amount.min = "1"; amount.step = "any";
+        field(parent, "Repeat unit", unit, v => {unit = v; value.interval = Number(amount.value) * units[unit];}, Object.keys(units));
+    }
+    function scheduleError(value) {
+        if (!["now", "once", "recurring"].includes(value.mode)) return "Choose a schedule mode.";
+        if (value.mode === "now") return "";
+        const date = new Date(value.at);
+        if (!value.at || !Number.isFinite(date.getTime())) return "Choose a valid local start date and time.";
+        if (date.getTime() <= Date.now()) return "Choose a start date and time in the future.";
+        if (value.mode === "recurring" && (!Number.isInteger(value.interval) || value.interval < 60 || value.interval > 31536000)) return "Repeat interval must be between 1 minute and 365 days, in whole seconds.";
+        return "";
+    }
+    function privateAddress(value, network = false) {
+        const parts = String(value).split('/'), octets = parts[0].split('.');
+        if (octets.length !== 4 || octets.some(x => !/^(0|[1-9]\d{0,2})$/.test(x) || Number(x) > 255)) return false;
+        const [a,b] = octets.map(Number);
+        return (a === 10 || a === 172 && b >= 16 && b <= 31 || a === 192 && b === 168) &&
+            (network ? parts.length <= 2 && (parts.length === 1 || /^\d+$/.test(parts[1]) && Number(parts[1]) >= 24 && Number(parts[1]) <= 32) : parts.length === 1);
+    }
+    function stepError(index) {
+        if (index === 0) {
+            if (!draft.name?.trim() || draft.name.length > 160 || /[\x00-\x1f]/.test(draft.name)) return "Enter a name of 1–160 characters without control characters.";
+            if (draft.description && (!draft.description.trim() || draft.description.length > 2000 || /[\x00-\x1f]/.test(draft.description))) return "Description must be at most 2000 characters without control characters.";
+        }
+        if (index === 1 && !["auto", "fixed"].includes(draft.target_mode)) return "Choose Auto Discovery or Fixed Targets.";
+        if (index === 2 && (!enabled().length || !validOrder(draft.phases))) return "Enable at least one phase in a valid dependency order.";
+        if (index === 3 && draft.target_mode === "fixed") {
+            if (commonTarget && !privateAddress(commonTarget)) return "Common Target must be a private lab IPv4 address.";
+            for (const p of enabled()) {
+                const cap = capFor(p.id), params = p.parameters;
+                for (const key of cap.required_fields || []) if (!params[key]) return `P${p.id}: enter ${cap.fields[key]?.label || key}.`;
+                for (const [key, value] of Object.entries(params)) {
+                    const spec = cap.fields[key];
+                    if (!spec) return `P${p.id}: unsupported field ${key}.`;
+                    if (spec.type === "ipv4" && !privateAddress(value)) return `P${p.id}: ${spec.label} must be a private lab IPv4 address.`;
+                    if (spec.type === "networks" && !String(value).split(',').every(v => privateAddress(v.trim(), true))) return `P${p.id}: enter private lab subnets of /24 or smaller.`;
+                    if (spec.type === "port" && (!Number.isInteger(Number(value)) || value < 1 || value > 65535)) return `P${p.id}: port must be 1–65535.`;
+                    if (spec.options && !spec.options.includes(value)) return `P${p.id}: choose a supported protocol.`;
+                    if (key === "username" && !/^[A-Za-z0-9_.@\\-]{1,128}$/.test(value)) return `P${p.id}: enter a valid username.`;
+                    if (key === "file" && value !== "@staged" && !/^(?:\/tmp\/\.nordic-(?:MRN|H3)-[A-Za-z0-9_-]+\/nordic-data-(?:MRN|H3)-[A-Za-z0-9_-]+\.txt|C:\\NordicIncident\\(?:MRN|H3)-[A-Za-z0-9_-]+\\staging\\nordic-data-(?:MRN|H3)-[A-Za-z0-9_-]+\.txt)$/.test(value)) return `P${p.id}: use @staged or a synthetic staging file path.`;
+                }
+            }
+        }
+        if (index === 4) {
+            const {mode, duration} = draft.profile;
+            if (!["normal", "slow", "custom"].includes(mode) || !Number.isFinite(duration) || duration < (mode === "slow" ? 60 : 0) || duration > 86400 || mode === "normal" && duration !== 0) return "Choose a valid profile and target duration (Slow: 1 minute–24 hours).";
+            if (mode === "custom") for (const p of enabled()) {
+                for (const [key, value] of Object.entries(p.timing)) if (!capFor(p.id).timing.includes(key) || !Number.isFinite(value) || value < 0 || value > (key === "jitter" ? 1 : 86400)) return `P${p.id}: timing must be 0–24 hours and jitter 0–100%.`;
+                if ((p.timing.delay_max ?? p.timing.delay_min ?? 0) < (p.timing.delay_min || 0)) return `P${p.id}: maximum delay must be at least minimum delay.`;
+            }
+        }
+        if (index === 5) return scheduleError(draft.schedule);
+        return "";
+    }
+    function dataHint(id) {
+        return {"01": "Discovers hosts on configured lab networks.", "02": "Uses hosts discovered by P01.", "03": "Uses hosts discovered by P01.", "04": "Uses compromised hosts from P03 as source and target.", "05": "Uses compromised hosts from P03.", "06": "Uses compromised hosts from P03 and staged data from P05.", "07": "Uses compromised hosts from P03.", "08": "Uses discovery from P01 and access results from P03; wordlist is supplied only at execution."}[id] || "";
+    }
+    function scheduleSummary(value) {
+        return value.mode === "now" ? "Run now / save only" : `${value.mode === "recurring" ? "Repeat every " + intervalText(value.interval) : "Run once"} · ${new Date(value.at).toLocaleString()} · ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
+    }
+    function intervalText(seconds) {
+        for (const [label, divisor] of [["week", 604800], ["day", 86400], ["hour", 3600], ["minute", 60]]) {
+            if (seconds >= divisor && seconds % divisor === 0) return `${seconds / divisor} ${label}${seconds === divisor ? "" : "s"}`;
+        }
+        return durationText(seconds);
+    }
+    function timingSummary(value) {
+        const span = value.profile.mode === "slow" ? value.profile.duration : Math.max(value.profile.duration || 0, ...value.phases.filter(p => p.enabled !== false).map(p => (p.timing?.start_offset || 0) + (p.timing?.duration || 0)));
+        return `${{normal: "Normal", slow: "Slow Campaign", custom: "Custom Timing"}[value.profile.mode]}${span ? " · target / planned span " + durationText(span) : ""}`;
+    }
+    function review(parent) {
+        node("h3", draft.name, parent); node("p", draft.description || "No description", parent);
+        node("p", draft.target_mode === "auto" ? "Auto Discovery" : "Custom / Fixed Targets", parent);
+        node("p", `Phase flow: ${enabled().map(p => `P${p.id} ${capFor(p.id)?.name}`).join(" → ")}`, parent);
+        if (commonTarget) node("p", `Common Target: ${commonTarget}`, parent);
+        enabled().forEach(p => {
+            node("p", `P${p.id} · ${capFor(p.id)?.name}${required(p.id) ? " · Required" : ""}${autoAdded.has(p.id) ? " · Auto-added prerequisite" : ""}`, parent);
+            if (draft.target_mode === "fixed") node("p", Object.entries(p.parameters).map(([k,v]) => `${capFor(p.id).fields[k]?.label || k}: ${v}${k === "target" ? inherited.has(p.id) ? " (Common Target)" : " (local)" : ""}`).join(" · "), parent);
+            else node("p", dataHint(p.id), parent, "muted");
+        });
+        node("p", timingSummary(draft), parent);
+        if (draft.profile.mode === "custom") enabled().forEach(p => {
+            node("p", `P${p.id} timing: ${Object.entries(p.timing).map(([key, value]) => `${{start_offset: "start offset", duration: "activity duration", delay_min: "minimum delay", delay_max: "maximum delay", jitter: "jitter"}[key]} ${key === "jitter" ? value * 100 + "%" : durationText(value)}`).join(" · ") || "default timing"}`, parent, "muted");
+        });
+        if (draft.profile.mode !== "normal") node("p", "Timing is best-effort. Actual runtime may extend beyond the target duration / planned span.", parent, "muted");
+        node("p", scheduleSummary(draft.schedule), parent);
+        const details = node("details", undefined, parent); node("summary", "Advanced / Show JSON", details);
+        node("pre", JSON.stringify(definition(), null, 2), details, "planning-review");
+    }
     const steps = ["Scenario basics", "Target mode", "Phase selection / order", "Phase configuration", "Execution profile / timing", "Schedule", "Review / Save / Run"];
     const byId = id => document.getElementById(id);
     const copy = value => JSON.parse(JSON.stringify(value));
@@ -45,6 +203,7 @@
             if (model.target_mode === "auto") {required.add("ssh"); required.add("rdp");}
             else required.add(/^(rdp|winrm)/.test(p.parameters?.protocol || "ssh") ? "rdp" : "ssh");
         });
+        node("p", `Required runtime credentials: ${required.size ? [...required].map(p => p === "ssh" ? "Linux / SSH" : "Windows / RDP / WinRM").join(", ") : "None"}`, parent);
         const inputs = {};
         for (const protocol of required) {
             const input = field(parent, protocol === "ssh" ? "Linux / SSH password" : "Windows / RDP / WinRM password", "", () => {});
@@ -55,39 +214,51 @@
     function newDraft(definition) {
         draft = definition ? copy(definition) : {version: 1, name: "Custom Incident", description: "", target_mode: "auto", phases: [], profile: {mode: "normal", duration: 0}};
         draft.schedule = {mode: "now", at: "", interval: 86400};
+        autoAdded = new Set(); inherited = new Set(); commonTarget = ""; ensureAuto();
         step = 0; renderBuilder(); showPage("builder");
     }
-    function profileForm(parent, value, rerender) {
+    function profileForm(parent, value, rerender, modes = ["normal", "slow", "custom"]) {
         field(parent, "Execution profile", value.mode, mode => {value.mode = mode; value.duration = mode === "slow" ? 14400 : 0; rerender();}, [
             {value: "normal", label: "Normal"}, {value: "slow", label: "Slow Campaign"}, {value: "custom", label: "Custom Timing"}
-        ]);
-        if (value.mode === "slow") field(parent, "Campaign duration (seconds; 14400 = 4 hours)", value.duration, v => {value.duration = Number(v);}).type = "number";
+        ].filter(option => modes.includes(option.value)));
+        if (value.mode !== "normal") durationForm(parent, "Target duration", value.duration, v => {value.duration = v;});
         if (value.mode === "slow") node("p", "Discovery spreads host probes across its time slot. Web discovery spaces host/port checks. Other phases use absolute start offsets. Work can run longer than the target duration.", parent, "muted");
     }
-    function parameterForm(parent, phase, mode) {
+    function parameterForm(parent, phase, mode, common = false) {
         const cap = capabilities.find(c => c.id === phase.id);
         if (!cap) return;
         if (mode === "auto") {
-            node("p", "Uses the inventory produced by earlier phases. Credentials and global campaign options are supplied at execution time.", parent, "muted");
+            node("p", dataHint(phase.id), parent, "muted");
             return;
         }
         Object.entries(cap.fields).forEach(([key, spec]) => {
             const opts = spec.options ? [{value: "", label: "Choose protocol"}, ...spec.options] : undefined;
-            const input = field(parent, spec.label, phase.parameters[key], v => {if (v === "") delete phase.parameters[key]; else phase.parameters[key] = spec.type === "port" ? Number(v) : v;}, opts);
+            let hint;
+            const input = field(parent, spec.label, phase.parameters[key], v => {
+                if (v === "") delete phase.parameters[key]; else phase.parameters[key] = spec.type === "port" ? Number(v) : v;
+                if (key === "target" && common) {inherited.delete(phase.id); if (hint) hint.textContent = "Local override";}
+            }, opts);
+            if (key === "target" && common && commonTarget) {
+                hint = node("span", inherited.has(phase.id) ? "Inherited from Common Target" : "Local override", parent, "muted");
+                button(parent, "Use Common Target", () => {phase.parameters.target = commonTarget; inherited.add(phase.id); renderBuilder();});
+            }
             if (spec.type === "port") { input.type = "number"; input.min = "1"; input.max = "65535"; }
         });
         if (cap.credentials) node("p", "Password will be requested when running. It is not part of this definition.", parent, "muted");
-        if (cap.wordlist) node("p", "Wordlist is supplied through the existing campaign upload form or the service credential file at execution time.", parent, "muted");
+        if (cap.wordlist) node("p", "Wordlist upload and usernames are requested on Review for Run Now. Scheduled runs use the service wordlist source.", parent, "muted");
     }
     function timingForm(parent, phase, profile) {
         if (profile.mode !== "custom") return;
-        const labels = {start_offset: "Start offset (seconds)", duration: "Target activity duration (seconds)", delay_min: "Minimum action delay (seconds)", delay_max: "Maximum action delay (seconds)", jitter: "Jitter fraction (0–1)"};
-        const cap = capabilities.find(c => c.id === phase.id);
+        const cap = capFor(phase.id);
         for (const key of cap.timing) {
-            const input = field(parent, labels[key], phase.timing[key], v => {if (v === "") delete phase.timing[key]; else phase.timing[key] = Number(v);});
-            input.type = "number"; input.min = "0"; input.step = "any";
+            if (["start_offset", "duration"].includes(key)) {
+                durationForm(parent, key === "start_offset" ? "Start offset" : "Target activity duration", phase.timing[key], v => {phase.timing[key] = v;}); continue;
+            }
+            const input = field(parent, {delay_min: "Minimum action delay (seconds)", delay_max: "Maximum action delay (seconds)", jitter: "Jitter (%)"}[key], key === "jitter" ? (phase.timing[key] || 0) * 100 : phase.timing[key], v => {if (v === "") delete phase.timing[key]; else phase.timing[key] = Number(v) / (key === "jitter" ? 100 : 1);});
+            input.type = "number"; input.min = "0"; input.max = key === "jitter" ? "100" : "86400"; input.step = "any";
         }
     }
+
     function scheduleForm(parent, value) {
         field(parent, "When", value.mode, v => {value.mode = v; renderBuilder();}, [
             {value: "now", label: "Run Now / save only"}, {value: "once", label: "Run Once"}, {value: "recurring", label: "Recurring"}
@@ -96,7 +267,8 @@
             field(parent, "Start date / time (your browser timezone)", value.at, v => {value.at = v;}).type = "datetime-local";
             node("p", `Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}. The server stores an explicit UTC instant.`, parent, "muted");
         }
-        if (value.mode === "recurring") field(parent, "Repeat every (seconds; 86400 = daily)", value.interval, v => {value.interval = Number(v);}).type = "number";
+        if (value.mode === "recurring") recurrenceForm(parent, value);
+        if (draft?.phases.some(p => p.enabled !== false && p.id === "08") && value.mode !== "now") node("p", "Scheduled P08 needs a service-side NORDIC_WORDLIST_FILE and NORDIC_WORDLIST_USERS. Password leases expire on restart; configure service credentials for unattended runs. Wordlist contents are never saved in schedules.", parent, "muted");
     }
     function definition() {
         const value = copy(draft); delete value.schedule;
@@ -104,16 +276,28 @@
         return value;
     }
     async function saveDraft(run) {
+        for (let i = 0; i < 6; i++) {const error = stepError(i); if (error) {step = i; renderBuilder(); byId("builderError").textContent = error; return;}}
+        const wordlist = run ? readWordlist() : null;
         const value = definition();
         const saved = await api(value.id ? `/api/custom-scenarios/${value.id}` : "/api/custom-scenarios", value.id ? "PUT" : "POST", value);
         draft.id = saved.id;
         const execution = {type: "custom", id: saved.id};
         if (draft.schedule.mode !== "now") {
             const id = await saveSchedule(execution, draft.schedule);
+            const secret = readBuilderCredentials();
+            if (Object.values(secret).some(Boolean)) await api(`/api/schedules/${id}/arm`, "POST", secret);
             message(`Scenario and schedule saved (${id}). Supply credentials on Schedules if needed.`);
             await refresh(); showPage("schedules");
         } else if (run) {
-            const result = await api("/api/executions/run", "POST", {execution, credentials: readBuilderCredentials()});
+            let result;
+            const secret = readBuilderCredentials();
+            if (wordlist) {
+                const data = new FormData(); Object.entries(secret).forEach(([key, value]) => data.append(key, value));
+                data.append("wordlist_enabled", "1"); data.append("wordlist_users", wordlist.users);
+                if (wordlist.file) data.append("wordlist_file", wordlist.file);
+                const response = await fetch(`/api/scenario/${saved.id}/start`, {method: "POST", body: data});
+                result = await response.json(); if (!response.ok) throw new Error(result.message || result.status);
+            } else result = await api("/api/executions/run", "POST", {execution, credentials: secret});
             message(result.status); await refresh();
         } else { message("Scenario saved."); await refresh(); showPage("scenarios"); }
     }
@@ -122,52 +306,63 @@
         const parent = byId("builderBody"); parent.replaceChildren();
         if (!draft) return newDraft();
         node("h2", `${step + 1}. ${steps[step]}`, parent);
-        node("p", steps.map((s, i) => `${i === step ? "●" : "○"} ${s}`).join(" → "), parent, "muted planning-steps");
+        const progress = node("ol", undefined, parent, "planning-steps");
+        steps.forEach((label, index) => {const item = node("li", `${index < step ? "✓" : index === step ? "●" : "○"} ${label}`, progress, index < step ? "completed" : index === step ? "current" : "upcoming"); if (index === step) item.setAttribute?.("aria-current", "step");});
+        const errorBox = node("p", "", parent, "planning-error"); errorBox.id = "builderError"; errorBox.setAttribute?.("role", "alert");
+        readWordlist = () => null;
         if (step === 0) {
             field(parent, "Name", draft.name, v => {draft.name = v;});
             field(parent, "Description", draft.description, v => {draft.description = v;});
         } else if (step === 1) {
             field(parent, "Targets", draft.target_mode, v => {
-                draft.target_mode = v; draft.phases.forEach(p => {p.parameters = {};}); renderBuilder();
+                draft.target_mode = v; if (v === "fixed") {draft.phases = draft.phases.filter(p => !autoAdded.has(p.id)); autoAdded.clear();} else {commonTarget = ""; inherited.clear(); ensureAuto();} renderBuilder();
             }, [{value: "auto", label: "Auto Discovery"}, {value: "fixed", label: "Custom / Fixed Targets"}]);
             node("p", "Auto Discovery uses fresh campaign inventories and checks phase dependencies. Fixed Targets requires private lab addresses and phase-specific settings.", parent);
         } else if (step === 2) {
             const options = capabilities.filter(c => !draft.phases.some(p => p.id === c.id));
             const select = field(parent, "Add phase", "", () => {}, [{value: "", label: "Select a phase"}, ...options.map(c => ({value: c.id, label: `P${c.id} · ${c.name}`}))]);
-            button(parent, "Add", () => {if (select.value) draft.phases.push({id: select.value, enabled: true, parameters: {}, timing: {}}); renderBuilder();});
+            button(parent, "Add", () => {if (select.value) {draft.phases.push(phase(select.value)); autoAdded.delete(select.value); ensureAuto(); if (draft.target_mode === "fixed") setCommon(commonTarget);} renderBuilder();});
             draft.phases.forEach((phase, index) => {
                 const row = node("div", undefined, parent, "planning-row");
-                const input = node("input", undefined, row); input.type = "checkbox"; input.checked = phase.enabled;
-                input.addEventListener("change", () => {phase.enabled = input.checked;});
+                const input = node("input", undefined, row); input.type = "checkbox"; input.checked = phase.enabled !== false; input.disabled = required(phase.id);
+                input.addEventListener("change", () => {if (!required(phase.id)) {phase.enabled = input.checked; ensureAuto();} renderBuilder();});
                 node("span", `P${phase.id} · ${capabilities.find(c => c.id === phase.id)?.name}`, row);
-                for (const [label, delta] of [["↑", -1], ["↓", 1]]) button(row, label, () => {
-                    const next = index + delta; if (next >= 0 && next < draft.phases.length) [draft.phases[index], draft.phases[next]] = [draft.phases[next], draft.phases[index]];
-                    renderBuilder();
-                });
-                button(row, "Remove", () => {draft.phases.splice(index, 1); renderBuilder();});
+                if (required(phase.id)) node("span", "Required", row, "planning-badge");
+                if (autoAdded.has(phase.id)) node("span", "Auto-added prerequisite", row, "planning-badge");
+                if (draft.target_mode === "auto") node("p", dataHint(phase.id), row, "muted");
+                for (const [label, delta] of [["↑", -1], ["↓", 1]]) {
+                    const control = button(row, label, () => {move(index, delta, true); renderBuilder();});
+                    control.disabled = !move(index, delta);
+                }
+                button(row, "Remove", () => {if (!required(phase.id)) {draft.phases.splice(index, 1); autoAdded.delete(phase.id); inherited.delete(phase.id);} renderBuilder();}).disabled = required(phase.id);
             });
         } else if (step === 3 || step === 4) {
+            if (step === 3 && draft.target_mode === "fixed") field(parent, "Common Target (optional)", commonTarget, value => {setCommon(value); renderBuilder();});
             if (step === 4) profileForm(parent, draft.profile, renderBuilder);
-            draft.phases.filter(p => p.enabled).forEach(phase => {
+            enabled().forEach(phase => {
                 const panel = node("div", undefined, parent, "panel"); node("h3", `P${phase.id} · ${capabilities.find(c => c.id === phase.id)?.name}`, panel);
-                if (step === 3) parameterForm(panel, phase, draft.target_mode);
+                if (step === 3) parameterForm(panel, phase, draft.target_mode, true);
                 else timingForm(panel, phase, draft.profile);
             });
         } else if (step === 5) scheduleForm(parent, draft.schedule);
         else {
-            node("pre", JSON.stringify(definition(), null, 2), parent, "planning-review");
-            node("p", `Schedule: ${draft.schedule.mode}${draft.schedule.at ? " · " + draft.schedule.at : ""}`, parent);
+            review(parent);
             readBuilderCredentials = credentials(parent, definition());
             button(parent, draft.schedule.mode === "now" ? "Save" : "Save scenario + schedule", () => saveDraft(false));
             if (draft.schedule.mode === "now") button(parent, "Save + Run Now", () => saveDraft(true));
-            if (draft.phases.some(p => p.enabled && p.id === "08")) node("p", "For a wordlist campaign, save first, then use RUN in Scenarios to upload the wordlist through the existing execution form.", parent, "muted");
+            if (enabled().some(p => p.id === "08") && draft.schedule.mode === "now") {
+                const users = field(parent, "P08 usernames (execution only)", "ubuntu,Administrator", () => {});
+                const upload = field(parent, "P08 wordlist upload (execution only)", "", () => {}); upload.type = "file";
+                node("p", "Upload a wordlist for this run, or use the configured service wordlist. These inputs are never saved in the scenario or schedule.", parent, "muted");
+                readWordlist = () => {if (!users.value.trim()) throw new Error("Enter at least one P08 username for this run."); return {users: users.value.trim(), file: upload.files?.[0]};};
+            }
         }
         const navigation = node("div", undefined, parent, "planning-row");
         if (step > 0) button(navigation, "Back", () => {step--; renderBuilder();});
-        if (step < steps.length - 1) button(navigation, "Next", () => {step++; renderBuilder();});
+        if (step < steps.length - 1) button(navigation, "Next", () => {const error = stepError(step); if (error) {errorBox.textContent = error; return;} step++; renderBuilder();});
     }
     async function saveSchedule(execution, value, id) {
-        if (!value.at) throw new Error("Choose a start date/time");
+        const error = scheduleError(value); if (error) throw new Error(error);
         const result = await api(id ? `/api/schedules/${id}` : "/api/schedules", id ? "PUT" : "POST", {
             version: 1, execution, at: new Date(value.at).toISOString(), interval: value.mode === "recurring" ? value.interval : 0, enabled: true
         });
@@ -178,6 +373,7 @@
         button(parent, "Create custom scenario", () => newDraft());
         custom.forEach(item => {
             const row = node("div", undefined, parent, "planning-row"); node("strong", item.name, row);
+            node("p", `${item.target_mode === "auto" ? "Auto Discovery" : "Fixed Targets"} · ${item.phases.filter(p => p.enabled !== false).map(p => "P" + p.id).join(" → ")} · ${timingSummary(item)} · ${schedules.filter(s => s.execution.type === "custom" && s.execution.id === item.id).length} schedule(s)`, row);
             button(row, "Edit", () => newDraft(item));
             button(row, "Duplicate", () => {const value = copy(item); delete value.id; value.name += " (copy)"; newDraft(value);});
             button(row, "Schedule", () => {showPage("schedules"); scheduleEditor({type: "custom", id: item.id});});
@@ -193,7 +389,7 @@
         field(parent, "Execution", `${spec.type}:${spec.id}`, value => {const [type, id] = value.split(":"); scheduleEditor({type, id, profile: {mode: "normal", duration: 0}}, existing);}, entries);
         if (spec.type !== "custom") {
             spec.profile ||= {mode: "normal", duration: 0};
-            profileForm(parent, spec.profile, () => scheduleEditor(spec, existing));
+            profileForm(parent, spec.profile, () => scheduleEditor(spec, existing), spec.type === "phase" ? ["normal", "slow", "custom"] : spec.id === "full-incident" ? ["normal", "slow"] : ["normal"]);
         } else node("p", "Uses the profile saved in the custom scenario.", parent);
         if (spec.type === "phase") {
             spec.target_mode = spec.id === "01" ? (spec.target_mode || "auto") : "fixed";
@@ -204,7 +400,9 @@
         const when = {mode: existing?.interval ? "recurring" : "once", at: existing ? localDate(existing.next_run || existing.at) : "", interval: existing?.interval || 86400};
         field(parent, "Run Once or Recurring", when.mode, v => {when.mode = v;}, [{value: "once", label: "Run Once"}, {value: "recurring", label: "Recurring"}]);
         field(parent, "Start date/time (browser timezone)", when.at, v => {when.at = v;}).type = "datetime-local";
-        field(parent, "Repeat interval (seconds, used for Recurring)", when.interval, v => {when.interval = Number(v);}).type = "number";
+        recurrenceForm(parent, when);
+        node("p", `Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}. Repeat interval is used for Recurring only.`, parent, "muted");
+        node("p", "Scheduled P08 requires service-side NORDIC_WORDLIST_FILE and NORDIC_WORDLIST_USERS; configure service credentials for unattended runs. Uploaded wordlists are execution-only.", parent, "muted");
         const read = credentials(parent, spec);
         if (existing) button(parent, "Supply credentials without changing schedule", async () => {
             await api(`/api/schedules/${existing.id}/arm`, "POST", read());
@@ -228,7 +426,7 @@
             const scenario = scenarios.find(s => s.id === e.id);
             const executionProfile = e.profile || scenario?.profile || {mode: "normal"};
             node("h3", `${e.type} · ${scenario?.name || capabilities.find(c => c.id === e.id)?.name || e.id}`, row);
-            node("p", `${item.enabled ? "Enabled" : "Disabled"} · Next: ${item.enabled ? new Date(item.next_run).toLocaleString() : "—"} · ${executionProfile.mode} ${executionProfile.duration ? executionProfile.duration + "s" : ""} · ${item.interval ? "Every " + item.interval + "s" : "Run Once"}`, row);
+            node("p", `${item.enabled ? "Enabled" : "Disabled"} · Next: ${item.enabled ? new Date(item.next_run).toLocaleString() : "—"} · ${executionProfile.mode} ${executionProfile.duration ? durationText(executionProfile.duration) : ""} · ${item.interval ? "Every " + intervalText(item.interval) : "Run Once"}`, row);
             node("p", `Last dispatch: ${item.last_status} · Temporary credentials: ${item.credentials_ready ? "available" : "not supplied"}`, row, "muted");
             button(row, "Run Now", async () => {message((await api(`/api/schedules/${item.id}/run`, "POST", {})).status); await refresh();});
             button(row, "Edit / supply credentials", () => scheduleEditor(e, item));
@@ -247,12 +445,12 @@
         document.querySelectorAll('[data-page="schedules"], [data-page="scenarios"]').forEach(b => b.addEventListener("click", () => refresh().catch(e => message(e.message))));
         refresh().catch(error => message(error.message));
     });
-    // Expose pure helpers for DOM-based regression tests and existing GUI hooks.
+    // Existing GUI hooks and DOM-based regression tests use the same builder.
     async function runCustom(id) {
         if (!custom.some(s => s.id === id)) await refresh();
         const saved = custom.find(s => s.id === id);
         if (!saved) throw new Error("Custom scenario not found");
-        newDraft(saved); step = steps.length - 1; renderBuilder();
+        newDraft(saved); step = 0; while (step < 6 && !stepError(step)) step++; renderBuilder();
     }
     window.MrnPlanning = {newDraft, refresh, localDate, runCustom};
 })();

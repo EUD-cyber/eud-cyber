@@ -4,6 +4,7 @@ No network scanning, authentication, staging, exfiltration or impact is executed
 """
 import copy
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -35,6 +36,27 @@ def definition(mode='auto', ids=('01', '02')):
 
 
 class Model(unittest.TestCase):
+    def test_gui_metadata_matches_validation_contract(self):
+        self.assertEqual(CAPS['06']['dependencies'], ['03', '05'])
+        self.assertEqual(CAPS['08']['dependencies'], ['01', '03'])
+        self.assertEqual(CAPS['04']['required_fields'], ['source', 'target'])
+        self.assertEqual(CAPS['06']['required_fields'], ['file', 'target'])
+        for pid, cap in CAPS.items():
+            self.assertTrue(set(cap['required_fields']) <= set(cap['fields']))
+            if pid == '01':
+                continue
+            chain = []
+            def add(current):
+                for dependency in CAPS[current]['dependencies']:
+                    add(dependency)
+                if current not in chain:
+                    chain.append(current)
+            add(pid)
+            validate(definition(ids=chain), CAPS)
+            for required in cap['dependencies']:
+                with self.assertRaises(ValueError):
+                    validate(definition(ids=[p for p in chain if p != required]), CAPS)
+
     def test_modes_order_and_dependencies(self):
         value = definition('fixed', ('04', '03'))
         for phase in value['phases']:
@@ -132,6 +154,25 @@ class API(unittest.TestCase):
         self.assertTrue(kwargs['env']['NORDIC_INCIDENT_ID'].startswith('MRN-'))
         self.assertEqual(self.client.post('/api/executions/run', json={'execution': {'type': 'custom', 'id': saved['id']}}).status_code, 409)
         self.assertNotIn('SUPER_SECRET', web.CAMPAIGN_LOG.read_text())
+
+    def test_builder_p08_existing_multipart_upload_is_runtime_only(self):
+        patch.object(web, 'UPLOAD_DIR', self.base / 'runtime' / 'uploads').start()
+        saved = self.save(definition(ids=('01', '03', '08')))
+        schedule = {'version': 1, 'execution': {'type': 'custom', 'id': saved['id']},
+                    'at': '2099-11-01T12:00:00Z', 'interval': 86400, 'enabled': True}
+        self.assertEqual(self.client.post('/api/schedules', json=schedule).status_code, 201)
+        response = self.client.post(f'/api/scenario/{saved["id"]}/start', data={
+            'ssh_password': 'SSH_RUNTIME_SECRET', 'rdp_password': 'RDP_RUNTIME_SECRET',
+            'wordlist_users': 'runtime-user',
+            'wordlist_file': (io.BytesIO(b'WORDLIST_RUNTIME_SECRET\n'), 'wordlist.txt')})
+        self.assertEqual(response.status_code, 200, response.json)
+        env = self.launch.call_args.kwargs['env']
+        self.assertEqual(env['NORDIC_WORDLIST_USERS'], 'runtime-user')
+        self.assertEqual(Path(env['NORDIC_WORDLIST_FILE']).read_bytes(), b'WORDLIST_RUNTIME_SECRET\n')
+        for secret in ('SSH_RUNTIME_SECRET', 'RDP_RUNTIME_SECRET', 'WORDLIST_RUNTIME_SECRET', 'runtime-user'):
+            self.assertNotIn(secret.encode(), web.planning.store.path.read_bytes())
+            self.assertNotIn(secret, env['MRN_EXECUTION'])
+            self.assertNotIn(secret, web.CAMPAIGN_LOG.read_text())
 
     def test_schedules_restart_crud_and_actions(self):
         saved = self.save()
