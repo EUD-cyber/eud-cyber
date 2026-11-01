@@ -337,7 +337,8 @@ def run_phase(base, phase_id, script, environ=None):
     if not re.fullmatch(r"\d+", phase_id):
         raise ValueError("Invalid phase ID")
     env = dict(os.environ if environ is None else environ)
-    incident_id = "MRN-" + datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:12]
+    requested_id = env.get('NORDIC_INCIDENT_ID', '') if env.get('MRN_OVERVIEW') else ''
+    incident_id = requested_id if INCIDENT_ID.fullmatch(requested_id) else "MRN-" + datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:12]
     env["NORDIC_INCIDENT_ID"] = incident_id
     started = datetime.now(timezone.utc).isoformat()
     received = []

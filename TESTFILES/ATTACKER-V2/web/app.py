@@ -5,6 +5,8 @@ import sys
 import time
 import uuid
 from planning_api import install, launch, BusyError
+from execution import snapshot
+from scheduler import current_schedule
 from scenario_model import needs_password
 import json
 import os
@@ -661,6 +663,7 @@ def api_run_phase(phase_id):
     # --------------------------------------------------------
 
     phase_env = os.environ.copy()
+    phase_env["NORDIC_INCIDENT_ID"] = "MRN-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:12]
     phase_env['MRNOBODY_PASSWORD'] = str(data.get('password', ''))
     if "profile" in data:
         try:
@@ -845,6 +848,11 @@ def api_run_phase(phase_id):
 
         log_handle.flush()
 
+        phase_env['MRN_OVERVIEW'] = json.dumps(dict(
+            json.loads(phase_env.get('MRN_EXECUTION', '{}')),
+            type='phase', id=phase_id, name=metadata.get('ATTACK_NAME', phase_id),
+            phases=json.loads(phase_env.get('MRN_EXECUTION', '{}')).get('phases', [{'id': phase_id}]),
+            trigger='scheduler' if current_schedule.get() else 'manual', schedule_id=current_schedule.get()))
         global campaign_process
         process = launch(BASE_DIR,
             command,
@@ -893,6 +901,11 @@ def api_run_phase(phase_id):
 # ============================================================
 # ROUTES - STATUS
 # ============================================================
+
+@app.route("/api/execution-status")
+def api_execution_status():
+    return jsonify(snapshot(BASE_DIR, planning.capabilities(), campaign_process))
+
 
 @app.route("/api/status")
 def api_status():
@@ -1669,6 +1682,11 @@ def api_start(scenario_id="full-incident"):
 
             log_handle.flush()
 
+            env['MRN_OVERVIEW'] = json.dumps(dict(
+                execution_plan or {}, type='custom' if planning.custom(scenario_id) else 'campaign',
+                id=scenario_id, name=scenario_name,
+                phases=(execution_plan or {}).get('phases', [{'id': p.strip()} for p in scenario['metadata'].get('SCENARIO_PHASES', '').split(',') if p.strip() and (p.strip() != '08' or wordlist_enabled)]),
+                trigger='scheduler' if current_schedule.get() else 'manual', schedule_id=current_schedule.get()))
             campaign_process = launch(BASE_DIR,
                 [
                     "/usr/bin/env",

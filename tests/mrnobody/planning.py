@@ -150,6 +150,13 @@ class API(unittest.TestCase):
         _, kwargs = self.launch.call_args
         plan_value = json.loads(kwargs['env']['MRN_EXECUTION'])
         self.assertEqual(plan_value['id'], saved['id'])
+        from execution import record
+        env = kwargs['env']
+        record(self.base, env, 12345)
+        overview = self.client.get('/api/execution-status').json
+        self.assertEqual(overview['execution']['type'], 'custom')
+        self.assertEqual(overview['execution']['id'], saved['id'])
+        self.assertNotIn('SUPER_SECRET', json.dumps(overview))
         self.assertNotIn('SUPER_SECRET', json.dumps(plan_value))
         self.assertTrue(kwargs['env']['NORDIC_INCIDENT_ID'].startswith('MRN-'))
         self.assertEqual(self.client.post('/api/executions/run', json={'execution': {'type': 'custom', 'id': saved['id']}}).status_code, 409)
@@ -187,6 +194,9 @@ class API(unittest.TestCase):
         self.assertFalse(self.client.get('/api/schedules').json['schedules'][0]['enabled'])
         self.assertEqual(self.client.post(f'/api/schedules/{sid}/enable', json={}).status_code, 200)
         self.assertEqual(self.client.post(f'/api/schedules/{sid}/run', json={}).json['status'], 'started')
+        metadata = json.loads(self.launch.call_args.kwargs['env']['MRN_OVERVIEW'])
+        self.assertEqual(metadata['trigger'], 'scheduler')
+        self.assertEqual(metadata['schedule_id'], sid)
         value['interval'] = 0
         self.assertEqual(self.client.put(f'/api/schedules/{sid}', json=value).status_code, 200)
         self.assertNotIn(sid, web.planning.scheduler.credentials)
@@ -199,6 +209,13 @@ class API(unittest.TestCase):
         result = self.client.post('/api/executions/run', json={'execution': spec, 'credentials': {'password': 'SECRET'}})
         self.assertEqual(result.status_code, 200, result.json)
         self.assertIn('run-phase.sh', str(self.launch.call_args.args))
+        from execution import record
+        env = self.launch.call_args.kwargs['env']
+        record(self.base, env, 12345)
+        overview = self.client.get('/api/execution-status').json
+        self.assertEqual(overview['execution']['type'], 'phase')
+        self.assertEqual(overview['current_phase']['id'], '03')
+        self.assertEqual(overview['incident_id'], env['NORDIC_INCIDENT_ID'])
         web.campaign_process = None
         result = self.client.post('/api/executions/run', json={'execution': {'type': 'campaign', 'id': 'full-incident', 'profile': {'mode': 'slow', 'duration': 14400}}, 'credentials': {'ssh_password': 'S', 'rdp_password': 'R'}})
         self.assertEqual(result.status_code, 200, result.json)
@@ -261,6 +278,12 @@ class RunnerIntegration(API):
             self.assertEqual(report['incident']['scenario_name'], saved['name'])
             self.assertEqual(report['execution']['profile']['mode'], 'normal')
             self.assertEqual(report['incident']['status'], 'complete')
+            overview = self.client.get('/api/execution-status').json
+            self.assertEqual(overview['status'], 'complete')
+            self.assertEqual(overview['execution']['schedule_id'], sid)
+            self.assertEqual(overview['execution']['trigger'], 'scheduler')
+            self.assertEqual(overview['progress']['percent'], 100)
+            self.assertEqual(overview['report_id'], report['incident']['id'])
             for format in ('html', 'pdf'):
                 response = self.client.get(f'/api/reports/{report["incident"]["id"]}/export/{format}')
                 self.assertEqual(response.status_code, 200)

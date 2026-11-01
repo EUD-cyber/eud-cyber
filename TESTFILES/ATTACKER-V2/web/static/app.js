@@ -1382,6 +1382,7 @@ async function refreshStatus() {
             await apiGet(
                 "/api/status"
             );
+        if (window.MrnOverview) window.MrnOverview.refresh();
 
         const running =
             Boolean(
@@ -1465,7 +1466,7 @@ if (dashboardCampaignStatus) {
             data.state?.incident_id ||
             data.incident_id;
 
-        if (incidentId) {
+        if (incidentId && !window.MrnOverview) {
 
             if (id) {
 
@@ -3342,3 +3343,92 @@ document.addEventListener(
 
 
 
+
+// MRN_EXECUTION_OVERVIEW
+/* Read-only Dashboard projection. Refresh is driven by the existing status poll. */
+(() => {
+    'use strict';
+    let pending = false;
+    const duration = seconds => {
+        if (!Number.isFinite(seconds)) return 'Unavailable';
+        const hours = Math.floor(seconds / 3600), minutes = Math.floor(seconds % 3600 / 60);
+        return [hours && `${hours} h`, minutes && `${minutes} min`, !hours && !minutes && `${Math.floor(seconds)} s`].filter(Boolean).join(' ');
+    };
+    function node(parent, tag, text, cls) {
+        const value = document.createElement(tag);
+        if (text !== undefined) value.textContent = String(text);
+        if (cls) value.className = cls;
+        parent.appendChild(value);
+        return value;
+    }
+    function render(data) {
+        const root = document.getElementById('executionOverview');
+        if (!root) return;
+        root.replaceChildren();
+        const id = document.getElementById('incidentId');
+        if (id) id.textContent = data.incident_id || 'No active incident';
+        if (typeof setSystemStatus === 'function') setSystemStatus(data.status);
+        const card = document.getElementById('dashboardCampaignStatus');
+        if (card) {
+            card.textContent = String(data.status || 'idle').toUpperCase();
+            card.classList.remove('dashboard-good', 'dashboard-running', 'dashboard-warning', 'dashboard-danger');
+            const cls = {running: 'dashboard-running', complete: 'dashboard-good', failed: 'dashboard-danger', interrupted: 'dashboard-warning'}[data.status];
+            if (cls) card.classList.add(cls);
+        }
+        const execution = data.execution;
+        if (!execution) {node(root, 'p', 'No active execution', 'muted'); return;}
+        const status = data.active ? 'Running' : data.status === 'complete' ? 'Last execution · Complete' : `Last execution · ${data.status}`;
+        node(root, 'p', status, 'overview-status');
+        if (!data.active) node(root, 'p', 'No active execution', 'muted');
+        const fields = node(root, 'dl', undefined, 'overview-fields');
+        const pair = (label, value) => {node(fields, 'dt', label); node(fields, 'dd', value);};
+        pair({campaign: 'Built-in campaign', custom: 'Custom scenario', phase: 'Standalone phase'}[execution.type] || 'Execution', `${execution.name || execution.id} · ${execution.id}`);
+        pair('Execution profile', {normal: 'Normal', slow: 'Slow', custom: 'Custom'}[execution.profile?.mode] || 'Normal');
+        pair('Started', data.started ? new Date(data.started).toLocaleString() : 'Unavailable');
+        pair(data.active ? 'Elapsed' : 'Recorded elapsed', duration(data.elapsed_seconds));
+        if (data.planned_seconds) pair('Target / planned duration', `${duration(data.planned_seconds)} · best-effort`);
+        pair('Triggered by', execution.trigger === 'scheduler' ? `Scheduler · ${execution.schedule_id || 'reference unavailable'}` : 'Manual');
+        if (data.current_phase) pair('Current phase', `P${data.current_phase.id} · ${data.current_phase.name}`);
+        else if (data.active) pair('Current phase', 'Preparing / waiting for phase state');
+        if (data.next_phase) pair('Next planned phase', `P${data.next_phase.id} · ${data.next_phase.name}`);
+        const progress = data.progress;
+        if (progress?.total) {
+            node(root, 'p', `${progress.percent}% · ${progress.complete}/${progress.total} executable phases complete`);
+            const bar = node(root, 'progress'); bar.max = 100; bar.value = progress.percent;
+            bar.setAttribute('aria-label', 'Progress by completed phases');
+        }
+        node(root, 'p', 'Progress reflects phase states. Timing and planned windows are best-effort; actual runtime may extend.', 'muted');
+        const timeline = node(root, 'ol', undefined, 'overview-timeline');
+        (data.timeline || []).forEach(phase => {
+            const row = node(timeline, 'li');
+            node(row, 'span', `P${phase.id} · ${phase.name}`);
+            const allowed = ['complete', 'running', 'pending', 'skipped', 'failed', 'interrupted'];
+            const state = allowed.includes(phase.status) ? phase.status : 'pending';
+            node(row, 'span', state, `overview-phase overview-${state}`);
+            if (execution.profile?.mode !== 'normal' && (phase.start_offset !== undefined || phase.duration !== undefined)) {
+                node(row, 'small', [phase.start_offset !== undefined && `Planned start +${duration(phase.start_offset)}`, phase.duration !== undefined && `activity window ${duration(phase.duration)}`].filter(Boolean).join(' · '), 'muted');
+            }
+        });
+        if (data.logs?.length) {
+            const details = node(root, 'details'); node(details, 'summary', 'Recent lifecycle log');
+            details.open = true; node(details, 'pre', data.logs.join('\n'), 'overview-log');
+        }
+        if (data.report_id && /^(?:MRN|H3)-[A-Za-z0-9_-]+$/.test(data.report_id)) {
+            const link = node(root, 'button', 'Open incident report', 'button'); link.type = 'button';
+            link.addEventListener('click', () => {showPage('reports'); openReport(data.report_id);});
+        }
+    }
+    async function refresh() {
+        if (pending) return;
+        pending = true;
+        try {
+            const response = await fetch('/api/execution-status');
+            if (!response.ok) throw new Error('Status unavailable');
+            render(await response.json());
+        } catch (_) {
+            const root = document.getElementById('executionOverview');
+            if (root) {root.replaceChildren(); node(root, 'p', 'Execution status unavailable · retrying on next refresh', 'muted');}
+        } finally {pending = false;}
+    }
+    window.MrnOverview = {refresh, render};
+})();

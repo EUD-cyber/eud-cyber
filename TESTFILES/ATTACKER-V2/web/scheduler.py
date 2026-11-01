@@ -10,6 +10,9 @@ import threading
 import time
 import uuid
 from contextlib import contextmanager
+from contextvars import ContextVar
+
+current_schedule = ContextVar("mrn_schedule", default=None)
 from datetime import datetime, timezone
 
 
@@ -121,10 +124,13 @@ class Scheduler:
 
     def run(self, sid, definition, credentials=None):
         self.log(sid, 'start requested')
+        token = current_schedule.set(sid)
         try:
             status = self.dispatch(definition['execution'], credentials or self.credentials.get(sid, {}))
         except Exception:
             status = 'failed: execution could not be dispatched'
+        finally:
+            current_schedule.reset(token)
         self.store.finish(sid, status)
         self.log(sid, status)
         if status == 'started' and self.observe is not None:
