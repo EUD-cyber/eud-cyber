@@ -768,7 +768,7 @@ clear 2>/dev/null || true
 echo
 echo "============================================================"
 echo
-echo "        NORDIC MANUFACTURING A/S"
+echo "        MrNobody Lab Simulation"
 echo "        MrNobody Incident Platform"
 echo
 echo "============================================================"

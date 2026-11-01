@@ -44,21 +44,21 @@ def script(env, platform):
         prelude = "$ErrorActionPreference = 'Stop'\n$name = '" + name + "'\n$marker = '" + MARKER + "'\n"
         if method == 'scheduled-task':
             body = r'''
-$old = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+$old = Get-ScheduledTask -TaskName $name -TaskPath '\' -ErrorAction SilentlyContinue
 if ($old -and $old.Description -ne $marker) { throw 'artifact_ownership_conflict' }
 '''
             if action == 'cleanup':
                 body += r'''
-if ($old) { Unregister-ScheduledTask -TaskName $name -Confirm:$false }
-if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) { throw 'cleanup_verification_failed' }
+if ($old) { Unregister-ScheduledTask -TaskName $name -TaskPath '\' -Confirm:$false }
+if (Get-ScheduledTask -TaskName $name -TaskPath '\' -ErrorAction SilentlyContinue) { throw 'cleanup_verification_failed' }
 '''
             else:
                 body += r'''
 # Harmless fixed action: a process launch once a day; never operator shell input.
 $a = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\cmd.exe" -Argument '/c echo MrNobody controlled lab P11'
 $t = New-ScheduledTaskTrigger -Daily -At '12:00'
-Register-ScheduledTask -TaskName $name -Description $marker -Action $a -Trigger $t -Force | Out-Null
-if (-not (Get-ScheduledTask -TaskName $name -ErrorAction Stop)) { throw 'create_verification_failed' }
+Register-ScheduledTask -TaskName $name -TaskPath '\' -Description $marker -Action $a -Trigger $t -Force | Out-Null
+if (-not (Get-ScheduledTask -TaskName $name -TaskPath '\' -ErrorAction Stop)) { throw 'create_verification_failed' }
 '''
         else:
             body = r'''

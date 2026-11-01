@@ -101,5 +101,5 @@ package or automatic installation/deployment has been introduced.
 
 Tests use fake transports, isolated home directories and inert campaign phases;
 they never contact the running VM or any lab host. Real Windows artifact creation
-requires a later authorized lab smoke test; mock responses and static checks do
+requires a later authorized lab smoke test; compile-only Windows service verification, mock responses and static checks do
 not prove target-specific privilege or service availability.
