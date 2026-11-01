@@ -1911,3 +1911,12 @@ footer {
 .report-view-controls button[aria-pressed="true"] { background: #245b85; color: white; border-color: #80c7ff; }
 .report-export-controls a { padding: .5rem .8rem; border: 1px solid #55758e; border-radius: .35rem; }
 .report-view-controls button:focus-visible, .report-export-controls a:focus-visible { outline: 3px solid #80c7ff; outline-offset: 3px; }
+
+/* Structured scenario planning */
+.planning-field {display:flex;flex-direction:column;gap:8px;margin:14px 0;max-width:680px;color:var(--text-primary,#dce4ef)}
+.planning-field input,.planning-field select {background:#101722;color:#dce4ef;border:1px solid #334259;border-radius:6px;padding:10px;font:inherit}
+.planning-row {display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0}
+.planning-review {max-height:420px;overflow:auto;padding:16px;background:#101722;color:#c9d6e8;white-space:pre-wrap}
+.planning-steps {line-height:1.8}
+#planningMessage:not(:empty) {position:sticky;bottom:16px;padding:14px;border:1px solid #55799c;background:#162437;color:#e6effb;border-radius:8px;z-index:10}
+#scheduleList .button,#customLibrary .button,#builderBody .button,#scheduleEditor .button {margin:6px}

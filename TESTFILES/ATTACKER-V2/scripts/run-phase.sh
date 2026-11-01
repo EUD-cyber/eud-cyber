@@ -501,7 +501,7 @@ run_attack() {
     export MRNOBODY_PORT="$PORT"
     export MRNOBODY_PROTOCOL="$PROTOCOL"
     export MRNOBODY_USERNAME="$USERNAME"
-    export MRNOBODY_PASSWORD="$PASSWORD"
+    export MRNOBODY_PASSWORD="${PASSWORD:-${MRNOBODY_PASSWORD:-}}"
     export MRNOBODY_FILE="$FILE"
 
     export MRNOBODY_SUBNET="$SUBNET"
@@ -543,6 +543,12 @@ run_attack() {
         source "$BASE_DIR/config/defaults.conf"
     fi
     set +a
+    mkdir -p "$BASE_DIR/runtime"
+    if [[ -z "${MRN_LOCK_FD:-}" ]]; then
+        exec 9>>"$BASE_DIR/runtime/execution.lock"
+        flock -n 9 || { echo "[SKIP] An execution is already running."; exit 75; }
+        export MRN_LOCK_FD=9
+    fi
     exec python3 "$BASE_DIR/web/reports.py" --base-dir "$BASE_DIR" \
         --run-phase "$id" --script "$file"
 }

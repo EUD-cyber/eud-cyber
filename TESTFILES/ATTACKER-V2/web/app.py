@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 
 import ipaddress
+import sys
+import time
+import uuid
+from planning_api import install, launch, BusyError
+from scenario_model import needs_password
 import json
 import os
 import signal
@@ -18,7 +23,7 @@ from report_exports import VIEWS, export_html, export_pdf
 # PATHS
 # ============================================================
 
-BASE_DIR = Path("/opt/nordic-attack")
+BASE_DIR = Path(os.environ.get("NORDIC_BASE_DIR", "/opt/nordic-attack"))
 CONFIG_FILE = BASE_DIR / "config" / "defaults.conf"
 STATE_DIR = BASE_DIR / "state"
 LOG_DIR = BASE_DIR / "logs"
@@ -178,6 +183,10 @@ def find_scenario(
     """
     Find an installed scenario by SCENARIO_ID.
     """
+
+    custom = planning.custom(scenario_id)
+    if custom is not None:
+        return {"path": SCENARIO_DIR / "full-incident.sh", "metadata": {"SCENARIO_ID": custom["id"], "SCENARIO_NAME": custom["name"]}}
 
     if not SCENARIO_DIR.exists():
         return None
@@ -651,6 +660,27 @@ def api_run_phase(phase_id):
     # Dry run
     # --------------------------------------------------------
 
+    phase_env = os.environ.copy()
+    phase_env['MRNOBODY_PASSWORD'] = str(data.get('password', ''))
+    if "profile" in data:
+        try:
+            from scenario_model import keys
+            keys(data, set(allowed_phase_fields(phase_id)) | {"profile", "timing", "target_mode", "password", "dry_run", "auto"}, "phase execution")
+            spec = {"type": "phase", "id": phase_id, "profile": data["profile"],
+                    "parameters": {k: v for k, v in data.items() if k in allowed_phase_fields(phase_id)},
+                    "timing": data.get("timing", {}), "target_mode": data.get("target_mode", "fixed")}
+            planning.execution(spec)
+            from scenario_model import plan
+            from scenario_model import profile
+            definition = plan({"target_mode": spec["target_mode"], "profile": profile(spec["profile"]),
+                               "phases": [{"id": phase_id, "parameters": spec["parameters"], "timing": spec["timing"]}]})
+            phase_env["MRN_EXECUTION"] = json.dumps(definition)
+            phase_env["MRN_STARTED"] = str(time.time())
+            phase_env["NORDIC_SSH_PASSWORD"] = str(data.get("password", ""))
+            phase_env["NORDIC_RDP_PASSWORD"] = str(data.get("password", ""))
+        except (ValueError, TypeError, KeyError) as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 400
+
     dry_run_raw = str(
         data.get(
             "dry_run",
@@ -708,7 +738,6 @@ def api_run_phase(phase_id):
         "port": "--port",
         "protocol": "--protocol",
         "username": "--user",
-        "password": "--password",
         "file": "--file",
     }
 
@@ -816,14 +845,22 @@ def api_run_phase(phase_id):
 
         log_handle.flush()
 
-        process = subprocess.Popen(
+        global campaign_process
+        process = launch(BASE_DIR,
             command,
+            env=phase_env,
             cwd=str(BASE_DIR),
             stdout=log_handle,
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
 
+        campaign_process = process
+        log_handle.close()
+
+    except BusyError:
+        log_handle.close()
+        return jsonify({"status": "error", "message": "An execution is already running."}), 409
     except Exception as exc:
 
         return jsonify(
@@ -1043,7 +1080,7 @@ def api_update():
 )
 def api_scenarios():
 
-    scenarios = []
+    scenarios = [dict(x, custom=True, phases=[p["id"] for p in x["phases"] if p.get("enabled", True)]) for x in planning.store.scenarios()]
 
     if not SCENARIO_DIR.exists():
 
@@ -1178,6 +1215,10 @@ def api_start(scenario_id="full-incident"):
 
             data = request.form.to_dict()
 
+        try:
+            execution_plan = planning.definition(scenario_id, data)
+        except (ValueError, TypeError, KeyError) as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 400
         defaults = read_defaults()
 
         # ----------------------------------------------------
@@ -1293,6 +1334,9 @@ def api_start(scenario_id="full-incident"):
             )
         )
 
+        if execution_plan is not None:
+            wordlist_enabled = any(p["id"] == "08" for p in execution_plan["phases"])
+
         wordlist_users = str(
             data.get(
                 "wordlist_users",
@@ -1360,7 +1404,7 @@ def api_start(scenario_id="full-incident"):
             ), 400
 
 
-        if not ssh_password:
+        if not ssh_password and needs_password(execution_plan):
             return jsonify(
                 {
                     "status": "error",
@@ -1393,7 +1437,7 @@ def api_start(scenario_id="full-incident"):
             ), 400
 
 
-        if not rdp_password:
+        if not rdp_password and needs_password(execution_plan, windows=True):
             return jsonify(
                 {
                     "status": "error",
@@ -1422,7 +1466,7 @@ def api_start(scenario_id="full-incident"):
             if (
                 wordlist_upload is None
                 or not wordlist_upload.filename
-            ):
+            ) and not os.environ.get("NORDIC_WORDLIST_FILE"):
 
                 return jsonify(
                     {
@@ -1453,9 +1497,9 @@ def api_start(scenario_id="full-incident"):
         # WORDLIST UPLOAD
         # ====================================================
 
-        wordlist_path = None
+        wordlist_path = Path(os.environ["NORDIC_WORDLIST_FILE"]) if wordlist_enabled and os.environ.get("NORDIC_WORDLIST_FILE") else None
 
-        if wordlist_enabled:
+        if wordlist_enabled and wordlist_upload is not None:
 
             UPLOAD_DIR.mkdir(
                 parents=True,
@@ -1472,6 +1516,7 @@ def api_start(scenario_id="full-incident"):
                 wordlist_upload.save(
                     str(wordlist_path)
                 )
+                os.chmod(wordlist_path, 0o600)
 
             except Exception as exc:
 
@@ -1527,6 +1572,11 @@ def api_start(scenario_id="full-incident"):
         # ====================================================
 
         env = os.environ.copy()
+        if execution_plan is not None:
+            env["MRN_EXECUTION"] = json.dumps(execution_plan)
+            env["MRN_STARTED"] = str(time.time())
+            env["NORDIC_WORDLIST_ENABLED"] = "1" if any(p["id"] == "08" for p in execution_plan["phases"]) else "0"
+        env["NORDIC_INCIDENT_ID"] = "MRN-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:12]
 
         env["NORDIC_INCIDENT_IP"] = incident_ip
         env["NORDIC_WEB_PORTS"] = web_ports
@@ -1619,7 +1669,7 @@ def api_start(scenario_id="full-incident"):
 
             log_handle.flush()
 
-            campaign_process = subprocess.Popen(
+            campaign_process = launch(BASE_DIR,
                 [
                     "/usr/bin/env",
                     "bash",
@@ -1632,6 +1682,10 @@ def api_start(scenario_id="full-incident"):
                 start_new_session=True,
             )
 
+            log_handle.close()
+        except BusyError:
+            log_handle.close()
+            return jsonify({"status": "error", "message": "An execution is already running."}), 409
         except Exception as exc:
             return jsonify(
                 {
@@ -1755,7 +1809,14 @@ def internal_error(_error):
 # MAIN
 # ============================================================
 
+def allowed_phase_fields(phase_id):
+    return planning.capabilities().get(phase_id, {}).get("fields", {})
+
+
+planning = install(sys.modules[__name__] if __name__ in sys.modules else type("ModuleProxy", (), {"__getattr__": lambda self, key: globals()[key]})())
+
 if __name__ == "__main__":
+    planning.start()
     defaults = read_defaults()
 
     host = defaults.get(

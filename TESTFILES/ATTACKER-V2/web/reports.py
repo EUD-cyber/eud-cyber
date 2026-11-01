@@ -230,7 +230,9 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
     log = Path(environ.get("NORDIC_GROUND_TRUTH_LOG", base / "logs" / "incident-ground-truth.log"))
     events = read_events(log, incident_id, campaign.get("started"), warnings)
     phases = []
-    for phase_id in ([standalone["phase_id"]] if standalone is not None else PHASE_ORDER):
+    selected = [p['id'] for p in campaign.get('execution', {}).get('phases', [])]
+    order = selected + [pid for pid in PHASE_ORDER if pid not in selected]
+    for phase_id in ([standalone["phase_id"]] if standalone is not None else order):
         script = next(iter(sorted((base / "scripts").glob(phase_id + "-*.sh"))), None)
         metadata = read_metadata(script) if script else {}
         technique_ids = [x.strip() for x in metadata.get("MITRE_TECHNIQUES", "").split(",") if x.strip()]
@@ -260,9 +262,11 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
         "schema_version": 1, "generated_at": now,
         "report_type": "standalone_phase" if standalone is not None else "campaign",
         "incident": {"id": incident_id, "scenario": campaign.get("scenario", "full-incident"),
+                     "scenario_name": campaign.get("scenario_name"),
                      "started": campaign.get("started"), "ended": campaign.get("completed") or now,
                      "status": status, "exit_code": exit_code},
         "campaign": redact(campaign), "phases": phases,
+        "execution": redact(json.loads(environ["MRN_EXECUTION"])) if environ.get("MRN_EXECUTION") else campaign.get("execution"),
         "inventory": snapshots["inventory"], "compromised_hosts": snapshots["compromised"],
         "evidence": snapshots, "events": events, "sources": sources, "warnings": warnings,
     }
@@ -346,6 +350,9 @@ def run_phase(base, phase_id, script, environ=None):
     code = 1
     try:
         try:
+            if env.get("MRN_EXECUTION"):
+                from execution import phase_environment
+                env = phase_environment(phase_id, env)
             child = subprocess.Popen([str(script)], env=env)
             code = child.wait()
             code = 128 + received[-1] if received else (128 - code if code < 0 else code)
