@@ -1707,6 +1707,9 @@ async function startCampaign() {
             .trim() || "";
 
 
+    const wordlistSource = document.getElementById("wordlistSource")?.value || "upload";
+    const wordlistPath = document.getElementById("wordlistPath")?.value.trim() || "";
+
     const wordlistFile =
         document
             .getElementById(
@@ -1839,7 +1842,13 @@ async function startCampaign() {
         }
 
 
-        if (!wordlistFile) {
+        if (wordlistSource === "server" && !wordlistPath.startsWith("/")) {
+            showMessage("Enter an absolute wordlist path on the MrNobody server.", "error"); return;
+        }
+        if (!["upload", "server"].includes(wordlistSource)) {
+            showMessage("Choose a wordlist source.", "error"); return;
+        }
+        if (wordlistSource === "upload" && !wordlistFile) {
 
             showMessage(
                 "A password wordlist file is required.",
@@ -1987,7 +1996,7 @@ async function startCampaign() {
         );
 
         if (
-            wordlistEnabled &&
+            wordlistEnabled && wordlistSource === "upload" &&
             wordlistFile
         ) {
 
@@ -2001,6 +2010,7 @@ async function startCampaign() {
         // --------------------------------------------------
         // Exfiltration
         // --------------------------------------------------
+        if (wordlistEnabled && wordlistSource === "server") formData.append("wordlist_path", wordlistPath);
 
         formData.append(
             "exfil_port",
@@ -3245,6 +3255,18 @@ const wordlistFileField =
 
 
 function updateWordlistFields() {
+    const enabledP08 = wordlistEnabledField?.checked === true;
+    const fields = document.getElementById("wordlistFields");
+    const source = document.getElementById("wordlistSource");
+    const path = document.getElementById("wordlistPath");
+    const server = source?.value === "server";
+    if (fields) {fields.hidden = !enabledP08; fields.classList.toggle("hidden", !enabledP08);}
+    if (source) source.disabled = !enabledP08;
+    if (path) path.disabled = !enabledP08 || !server;
+    const uploadFields = document.getElementById("wordlistUploadFields");
+    const serverFields = document.getElementById("wordlistServerFields");
+    if (uploadFields) uploadFields.hidden = server;
+    if (serverFields) serverFields.hidden = !server;
 
     const enabled =
         wordlistEnabledField?.checked === true;
@@ -3258,7 +3280,7 @@ function updateWordlistFields() {
     if (wordlistFileField) {
 
         wordlistFileField.disabled =
-            !enabled;
+            !enabled || server;
     }
 }
 
@@ -3269,6 +3291,8 @@ if (updateButton) {
         runUpdate
     );
 }
+
+document.getElementById("wordlistSource")?.addEventListener("change", updateWordlistFields);
 
 if (wordlistEnabledField) {
 

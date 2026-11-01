@@ -1472,6 +1472,10 @@ def api_start(scenario_id="full-incident"):
         # Wordlist validation
         # ----------------------------------------------------
 
+        server_wordlist = str(data.get("wordlist_path", "")).strip()
+        has_upload = wordlist_upload is not None and bool(wordlist_upload.filename)
+        if wordlist_enabled and server_wordlist and has_upload:
+            return jsonify({"status": "error", "message": "Choose either an upload or a server wordlist path."}), 400
         if wordlist_enabled:
 
             if not wordlist_users:
@@ -1489,7 +1493,7 @@ def api_start(scenario_id="full-incident"):
             if (
                 wordlist_upload is None
                 or not wordlist_upload.filename
-            ) and not os.environ.get("NORDIC_WORDLIST_FILE"):
+            ) and not server_wordlist and not os.environ.get("NORDIC_WORDLIST_FILE"):
 
                 return jsonify(
                     {
@@ -1520,9 +1524,24 @@ def api_start(scenario_id="full-incident"):
         # WORDLIST UPLOAD
         # ====================================================
 
-        wordlist_path = Path(os.environ["NORDIC_WORDLIST_FILE"]) if wordlist_enabled and os.environ.get("NORDIC_WORDLIST_FILE") else None
+        wordlist_path = None
+        existing_wordlist = server_wordlist or os.environ.get("NORDIC_WORDLIST_FILE", "")
+        if wordlist_enabled and existing_wordlist and not has_upload:
+            try:
+                candidate = Path(existing_wordlist)
+                if not candidate.is_absolute():
+                    raise ValueError()
+                candidate = candidate.resolve(strict=True)
+                if not candidate.is_file() or candidate.stat().st_size == 0:
+                    raise ValueError()
+                with candidate.open('rb') as handle:
+                    if not handle.read(1):
+                        raise ValueError()
+                wordlist_path = candidate
+            except (OSError, ValueError):
+                return jsonify({"status": "error", "message": "Server wordlist must be an absolute path to an existing, readable, non-empty regular file."}), 400
 
-        if wordlist_enabled and wordlist_upload is not None:
+        if wordlist_enabled and has_upload:
 
             UPLOAD_DIR.mkdir(
                 parents=True,
