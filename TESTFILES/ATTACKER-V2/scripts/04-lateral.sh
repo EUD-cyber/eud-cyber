@@ -53,6 +53,7 @@ set -u
 
 # MITRE_TACTIC="Discovery"
 # MITRE_TECHNIQUES="T1082,T1016,T1018"
+# MITRE_TECHNIQUE_NAMES="System Information Discovery|System Network Configuration Discovery|Remote System Discovery"
 
 BASE_DIR="/opt/nordic-attack"
 CONFIG_FILE="$BASE_DIR/config/defaults.conf"

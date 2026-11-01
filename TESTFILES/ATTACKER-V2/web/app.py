@@ -10,6 +10,8 @@ from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request
 
+from reports import list_reports, load_report, read_metadata
+
 
 # ============================================================
 # PATHS
@@ -105,60 +107,8 @@ def read_attack_metadata(path):
     Read ATTACK_* and MITRE_* metadata from a phase script.
     """
 
-    metadata_keys = {
-        "ATTACK_ID",
-        "ATTACK_NAME",
-        "ATTACK_ALIAS",
-        "ATTACK_STANDALONE",
-        "ATTACK_PARAMETERS",
-        "ATTACK_CAMPAIGN_STATE",
-        "MITRE_TACTIC",
-        "MITRE_TECHNIQUES",
-    }
+    return read_metadata(path)
 
-    result = {}
-
-    try:
-        with path.open(
-            "r",
-            encoding="utf-8",
-            errors="replace"
-        ) as handle:
-
-            for raw_line in handle:
-
-                line = raw_line.strip()
-
-                if not line.startswith("#"):
-                    continue
-
-                line = line.lstrip("#").strip()
-
-                if "=" not in line:
-                    continue
-
-                key, value = line.split("=", 1)
-
-                key = key.strip()
-
-                if key not in metadata_keys:
-                    continue
-
-                value = value.strip()
-
-                if (
-                    len(value) >= 2
-                    and value[0] == value[-1]
-                    and value[0] in ("'", '"')
-                ):
-                    value = value[1:-1]
-
-                result[key] = value
-
-    except Exception:
-        return {}
-
-    return result
 
 def read_scenario_metadata(path):
     """
@@ -925,6 +875,22 @@ def api_status():
 # ============================================================
 # ROUTES - INVENTORY
 # ============================================================
+
+@app.route("/api/reports")
+def api_reports():
+    reports = list_reports(BASE_DIR / "reports")
+    return jsonify({"count": len(reports), "reports": reports})
+
+
+@app.route("/api/reports/<incident_id>")
+def api_report(incident_id):
+    try:
+        return jsonify(load_report(BASE_DIR / "reports", incident_id))
+    except FileNotFoundError:
+        return jsonify({"error": "Report not found"}), 404
+    except (OSError, ValueError, TypeError, AttributeError):
+        return jsonify({"error": "Invalid or unreadable report"}), 404
+
 
 @app.route("/api/inventory")
 def api_inventory():

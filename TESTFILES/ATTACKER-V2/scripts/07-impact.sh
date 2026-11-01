@@ -39,6 +39,7 @@ set -u
 
 # MITRE_TACTIC="Impact"
 # MITRE_TECHNIQUES="T1486"
+# MITRE_TECHNIQUE_NAMES="Data Encrypted for Impact"
 
 # ============================================================
 # PATHS / CONFIG

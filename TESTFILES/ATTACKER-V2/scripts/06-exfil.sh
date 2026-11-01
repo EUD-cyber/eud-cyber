@@ -32,6 +32,7 @@ set -u
 
 # MITRE_TACTIC="Exfiltration"
 # MITRE_TECHNIQUES="T1041"
+# MITRE_TECHNIQUE_NAMES="Exfiltration Over C2 Channel"
 
 # ============================================================
 # PATHS / CONFIG

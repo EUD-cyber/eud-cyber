@@ -254,6 +254,10 @@ write_files:
           "$INSTALL_DIR/web/app.py"
 
       download_file \
+          "web/reports.py" \
+          "$INSTALL_DIR/web/reports.py"
+
+      download_file \
           "web/templates/index.html" \
           "$INSTALL_DIR/web/templates/index.html"
 
@@ -335,6 +339,9 @@ write_files:
           "${INSTALL_DIR}/web/app.py"
 
       chmod 644 \
+          "${INSTALL_DIR}/web/reports.py"
+
+      chmod 644 \
           "${INSTALL_DIR}/web/templates/index.html"
 
       chmod 644 \
@@ -389,7 +396,8 @@ write_files:
 
       /usr/bin/python3 \
           -m py_compile \
-          "${INSTALL_DIR}/web/app.py"
+          "${INSTALL_DIR}/web/app.py" \
+          "${INSTALL_DIR}/web/reports.py"
 
 
       # ======================================================

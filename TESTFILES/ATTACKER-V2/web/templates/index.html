@@ -1345,7 +1345,7 @@
         </p>
 
         <p class="muted">
-            Reports will combine campaign state, phase execution,
+            Reports combine campaign state, phase execution,
             discovered hosts, compromise evidence, exfiltration and impact.
         </p>
 
@@ -1359,6 +1359,7 @@
             <h2>
                 Incident Reports
             </h2>
+            <button type="button" onclick="refreshReports()">Refresh reports</button>
 
             <span class="panel-tag">
                 History
@@ -1472,7 +1473,7 @@
                 </thead>
 
 
-                <tbody id="reportTable">
+                <tbody id="reportTable" aria-live="polite">
 
                     <tr>
 
@@ -1511,6 +1512,7 @@
 
         <div
             id="reportDetail"
+            aria-live="polite"
             class="phase-detail"
         >
 

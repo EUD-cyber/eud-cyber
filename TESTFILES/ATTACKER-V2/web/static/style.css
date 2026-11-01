@@ -1839,3 +1839,8 @@ footer {
 .dashboard-danger {
     color: var(--red);
 }
+#reportDetail { min-width: 0; }
+#reportDetail details { margin: 1rem 0; }
+#reportDetail summary { cursor: pointer; font-weight: 600; }
+#reportDetail pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+#reportDetail td { vertical-align: top; overflow-wrap: anywhere; }

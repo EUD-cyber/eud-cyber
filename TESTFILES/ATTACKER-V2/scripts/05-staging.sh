@@ -35,6 +35,7 @@ set -u
 # ATTACK_CAMPAIGN_STATE="compromised-hosts"
 # MITRE_TACTIC="Collection"
 # MITRE_TECHNIQUES="T1074"
+# MITRE_TECHNIQUE_NAMES="Data Staged"
 
 # ============================================================
 # PATHS / CONFIG

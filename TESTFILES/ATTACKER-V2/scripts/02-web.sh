@@ -39,6 +39,7 @@ set -u
 
 # MITRE_TACTIC="Discovery"
 # MITRE_TECHNIQUES="T1046"
+# MITRE_TECHNIQUE_NAMES="Network Service Discovery"
 
 # ============================================================
 # PATHS / CONFIG
