@@ -24,6 +24,14 @@ def mitre_url(technique_id):
 
 # Recommendations, never observations. Sensors/auditing must be configured in the lab.
 PHASE_GUIDANCE = {
+    "09": (
+        "On the selected lab DC, correlate Security 4720 (account created), 4728 (member added to a global security group), 4738 (account changed) and 4624/4672 logons. Domain Admins is RID 512. In Wazuh filter win.system.eventID, subject account, target account/SID and time; auditing and collection must be enabled.",
+        "Was mrnobody created disabled or already present? Was membership added or already present? Confirm the subject, domain/DC, group SID and partial failures. Existing membership need not generate a new 4728. P03 access alone does not grant rights to change AD.",
+        "Restrict Domain Admin membership and WinRM, separate administrative accounts, alert on privileged group changes and review delegated AD rights. After the exercise remove only lab membership/account changes verified in ground truth; never delete a pre-existing account blindly."),
+    "10": (
+        "Correlate WinRM Operational and PowerShell Operational 4103/4104 with Security 4688 and 4624 where enabled. In Wazuh compare win.system.eventID, host, subject and timestamp. Script block logs on the target may contain sensitive command content.",
+        "Identify the configured custom action and its recorded transport/exit result. Command and output content are deliberately omitted from MrNobody logs. Byte counts are evidence of returned data, not proof of the intended side effect. Verify target-side artifacts independently.",
+        "Restrict WinRM management paths, apply least privilege and application control, enable protected PowerShell logging and alert on unexpected remote script execution."),
     "01": (
         "Correlate Suricata eve.json flow/scan alerts with firewall logs for one source contacting many hosts. Wazuh can ingest these logs; discovery need not create an authentication event.",
         "Compare observed targets and timestamps with the asset inventory. Which probes crossed a segment boundary, and which were blocked?",
@@ -95,7 +103,7 @@ def add_analysis(report):
 
 
 INCIDENT_ID = re.compile(r"(?:MRN|H3)-[A-Za-z0-9][A-Za-z0-9_-]{0,100}\Z")
-PHASE_ORDER = ("01", "02", "03", "08", "04", "05", "06", "07")
+PHASE_ORDER = ("01", "02", "03", "08", "09", "10", "04", "05", "06", "07")
 STATE_FILES = {
     "networks": ("networks.json", "NORDIC_NETWORK_STATE"),
     "inventory": ("discovered-hosts.json", "NORDIC_DISCOVERED_STATE"),
@@ -231,7 +239,9 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
     events = read_events(log, incident_id, campaign.get("started"), warnings)
     phases = []
     selected = [p['id'] for p in campaign.get('execution', {}).get('phases', [])]
-    order = selected + [pid for pid in PHASE_ORDER if pid not in selected]
+    # Opt-in phases must not appear as new pending actions in legacy campaigns.
+    known = set(campaign.get('phases', {})) | {e['phase'] for e in events}
+    order = selected + [pid for pid in PHASE_ORDER if pid not in selected and (pid not in {'09', '10'} or pid in known)]
     for phase_id in ([standalone["phase_id"]] if standalone is not None else order):
         script = next(iter(sorted((base / "scripts").glob(phase_id + "-*.sh"))), None)
         metadata = read_metadata(script) if script else {}

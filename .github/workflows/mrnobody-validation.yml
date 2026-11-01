@@ -39,6 +39,7 @@ jobs:
         run: |
           python tests/mrnobody/backend.py
           python tests/mrnobody/planning.py --bash
+          python tests/mrnobody/windows_actions.py
           node tests/mrnobody/planning.cjs
           python tests/mrnobody/overview.py
           node tests/mrnobody/overview.cjs

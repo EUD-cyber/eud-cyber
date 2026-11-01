@@ -108,6 +108,7 @@
                     if (!spec) return `P${p.id}: unsupported field ${key}.`;
                     if (spec.type === "ipv4" && !privateAddress(value)) return `P${p.id}: ${spec.label} must be a private lab IPv4 address.`;
                     if (spec.type === "networks" && !String(value).split(',').every(v => privateAddress(v.trim(), true))) return `P${p.id}: enter private lab subnets of /24 or smaller.`;
+                    if (spec.type === "timeout" && (!Number.isInteger(Number(value)) || value < 5 || value > 300)) return `P${p.id}: timeout must be 5–300 seconds.`;
                     if (spec.type === "port" && (!Number.isInteger(Number(value)) || value < 1 || value > 65535)) return `P${p.id}: port must be 1–65535.`;
                     if (spec.options && !spec.options.includes(value)) return `P${p.id}: choose a supported protocol.`;
                     if (key === "username" && !/^[A-Za-z0-9_.@\\-]{1,128}$/.test(value)) return `P${p.id}: enter a valid username.`;
@@ -127,7 +128,7 @@
         return "";
     }
     function dataHint(id) {
-        return {"01": "Discovers hosts on configured lab networks.", "02": "Uses hosts discovered by P01.", "03": "Uses hosts discovered by P01.", "04": "Uses compromised hosts from P03 as source and target.", "05": "Uses compromised hosts from P03.", "06": "Uses compromised hosts from P03 and staged data from P05.", "07": "Uses compromised hosts from P03.", "08": "Uses discovery from P01 and access results from P03; wordlist is supplied only at execution."}[id] || "";
+        return {"01": "Discovers hosts on configured lab networks.", "02": "Uses hosts discovered by P01.", "03": "Uses hosts discovered by P01.", "04": "Uses compromised hosts from P03 as source and target.", "05": "Uses compromised hosts from P03.", "06": "Uses compromised hosts from P03 and staged data from P05.", "07": "Uses compromised hosts from P03.", "09": "Requires Windows access from P03. Select a lab DC with AD management rights; P03 authentication alone does not grant them.", "10": "Requires Windows access from P03; executes through WinRM. PowerShell command is supplied at run time only.", "08": "Uses discovery from P01 and access results from P03; wordlist is supplied only at execution."}[id] || "";
     }
     function scheduleSummary(value) {
         return value.mode === "now" ? "Run now / save only" : `${value.mode === "recurring" ? "Repeat every " + intervalText(value.interval) : "Run once"} · ${new Date(value.at).toLocaleString()} · ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
@@ -196,6 +197,7 @@
         node("p", "Credentials are supplied only when running or arming a schedule. They are never saved in scenario definitions.", parent, "muted");
         let model = execution?.type === "custom" ? custom.find(s => s.id === execution.id) : execution;
         if (model?.type === "phase") model = {target_mode: model.target_mode, phases: [{id: model.id, parameters: model.parameters || {}}]};
+        if (model?.type === "campaign" && model.id === "full-incident") model = {target_mode: "auto", phases: capabilities.filter(c => ["03", "09", ...(execution.powershell_enabled ? ["10"] : [])].includes(c.id)).map(c => ({id: c.id}))};
         const required = new Set();
         if (!model?.phases) {required.add("ssh"); required.add("rdp");}
         else model.phases.filter(p => p.enabled !== false).forEach(p => {
@@ -208,6 +210,14 @@
         for (const protocol of required) {
             const input = field(parent, protocol === "ssh" ? "Linux / SSH password" : "Windows / RDP / WinRM password", "", () => {});
             input.type = "password"; input.autocomplete = "new-password"; inputs[protocol + "_password"] = input;
+        }
+        if (model?.phases?.some(p => p.id === "10" && p.enabled !== false)) {
+            const wrap = node("label", undefined, parent, "planning-field");
+            node("span", "P10 PowerShell command (runtime only, never saved)", wrap);
+            const input = node("textarea", undefined, wrap);
+            input.rows = 5; input.autocomplete = "off"; input.maxLength = 16384;
+            inputs.powershell = input;
+            node("p", "Required for P10 runs. Schedules keep this input only in memory until restart or edit. Command/output content is omitted from reports.", parent, "muted");
         }
         return () => Object.fromEntries(Object.entries(inputs).map(([key, input]) => {const value = input.value; input.value = ""; return [key, value];}));
     }
@@ -227,6 +237,8 @@
     function parameterForm(parent, phase, mode, common = false) {
         const cap = capabilities.find(c => c.id === phase.id);
         if (!cap) return;
+        if (cap.runtime_powershell) node("p", "P10 PowerShell command is requested on Review or when arming the schedule; it is never stored in the definition.", parent, "muted");
+        if (phase.id === "09") node("p", "P09 requires a lab domain controller and AD management rights. New mrnobody accounts are disabled; existing account state is preserved.", parent, "muted");
         if (mode === "auto") {
             node("p", dataHint(phase.id), parent, "muted");
             return;
@@ -235,13 +247,14 @@
             const opts = spec.options ? [{value: "", label: "Choose protocol"}, ...spec.options] : undefined;
             let hint;
             const input = field(parent, spec.label, phase.parameters[key], v => {
-                if (v === "") delete phase.parameters[key]; else phase.parameters[key] = spec.type === "port" ? Number(v) : v;
+                if (v === "") delete phase.parameters[key]; else phase.parameters[key] = ["port", "timeout"].includes(spec.type) ? Number(v) : v;
                 if (key === "target" && common) {inherited.delete(phase.id); if (hint) hint.textContent = "Local override";}
             }, opts);
             if (key === "target" && common && commonTarget) {
                 hint = node("span", inherited.has(phase.id) ? "Inherited from Common Target" : "Local override", parent, "muted");
                 button(parent, "Use Common Target", () => {phase.parameters.target = commonTarget; inherited.add(phase.id); renderBuilder();});
             }
+            if (spec.type === "timeout") {input.type = "number"; input.min = "5"; input.max = "300";}
             if (spec.type === "port") { input.type = "number"; input.min = "1"; input.max = "65535"; }
         });
         if (cap.credentials) node("p", "Password will be requested when running. It is not part of this definition.", parent, "muted");
@@ -396,6 +409,9 @@
             if (spec.id === "01") field(parent, "Targets", spec.target_mode, value => {spec.target_mode = value; spec.parameters = {}; scheduleEditor(spec, existing);}, [{value: "auto", label: "Auto Discovery"}, {value: "fixed", label: "Fixed subnets"}]);
             const phase = {id: spec.id, parameters: spec.parameters ||= {}, timing: spec.timing ||= {}};
             parameterForm(parent, phase, spec.target_mode); timingForm(parent, phase, spec.profile);
+        }
+        if (spec.type === "campaign" && spec.id === "full-incident") {
+            field(parent, "P10 custom PowerShell", spec.powershell_enabled ? "1" : "0", value => {spec.powershell_enabled = value === "1"; scheduleEditor(spec, existing);}, [{value:"0",label:"Disabled"},{value:"1",label:"Enabled"}]);
         }
         const when = {mode: existing?.interval ? "recurring" : "once", at: existing ? localDate(existing.next_run || existing.at) : "", interval: existing?.interval || 86400};
         field(parent, "Run Once or Recurring", when.mode, v => {when.mode = v;}, [{value: "once", label: "Run Once"}, {value: "recurring", label: "Recurring"}]);

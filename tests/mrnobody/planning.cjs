@@ -11,7 +11,7 @@ function element(tag = 'div') {
     };
 }
 for (const id of ['builderBody','planningMessage','customLibrary','scheduleEditor','scheduleList','newCustomScenario']) elements.set(id, element());
-const dependencyMap = {'01':[], '02':['01'], '03':['01'], '04':['03'], '05':['03'], '06':['03','05'], '07':['03'], '08':['01','03']};
+const dependencyMap = {'01':[], '02':['01'], '03':['01'], '04':['03'], '05':['03'], '06':['03','05'], '07':['03'], '08':['01','03'], '09':['03'], '10':['03']};
 const caps = Object.entries(dependencyMap).map(([id, dependencies]) => ({
     id, dependencies, name:{'01':'Discovery','02':'Web Discovery','03':'Initial Access','04':'Lateral Movement','05':'Staging','06':'Exfiltration','07':'Impact','08':'Wordlist Authentication'}[id],
     fields: id === '01' ? {subnet:{label:'Subnets',type:'networks'}} : {
@@ -20,8 +20,15 @@ const caps = Object.entries(dependencyMap).map(([id, dependencies]) => ({
         ...(id === '06' ? {file:{label:'Synthetic staged file',type:'path'}} : {})},
     required_fields: id === '01' ? ['subnet'] : ['target', ...(['03','08'].includes(id) ? ['protocol'] : []), ...(id === '04' ? ['source'] : []), ...(id === '06' ? ['file'] : [])],
     timing: ['01','02'].includes(id) ? ['start_offset','duration','delay_min','delay_max','jitter'] : ['start_offset'],
-    credentials:['03','04','05','06','07'].includes(id), wordlist:id === '08', standalone:true
+    credentials:['03','04','05','06','07','09','10'].includes(id), wordlist:id === '08', standalone:true,
+    runtime_powershell:id === '10'
 }));
+for (const cap of caps.filter(c=>['09','10'].includes(c.id))) {
+    cap.name = cap.id === '09' ? 'AD Privilege Escalation' : 'Custom PowerShell';
+    cap.fields.protocol.options = ['winrm-http','winrm-https'];
+    cap.fields.timeout = {label:'Windows action timeout',type:'timeout'};
+    cap.required_fields = ['target','protocol'];
+}
 const definitions = [], plans = [], requests = [];
 const context = vm.createContext({document:{getElementById:id=>elements.get(id) || [...elements.values()].flatMap(walk).find(n=>n.id===id), createElement:element, querySelectorAll:()=>[],addEventListener(){}},
     window:{}, Date, Intl, console, FormData, showPage:page=>{context.page=page;}, confirm:()=>true,
@@ -153,6 +160,34 @@ async function main() {
     const editor=elements.get('scheduleEditor');set('Run Once or Recurring','recurring',editor);set('Repeat every','4',editor);set('Repeat unit','hour',editor);set('Start date/time (browser timezone)','2099-11-03T12:00',editor);
     await click(editor,'Save schedule');assert.equal(plans.at(-1).interval,14400);
     await click(elements.get('customLibrary'),'Duplicate');assert.match(field(body(),'Name').value,/\(copy\)$/);
-    console.log('Builder DOM tests passed: dependencies, protected actions, target modes, common targets, validation, review, friendly units, P08 and library summaries.');
+    for (const pid of ['09','10']) {
+        await select(); await add(pid); assert.deepEqual(ids(),['01','03',pid]);
+        assert.ok(row('03').children.find(n=>n.type==='checkbox').disabled);
+        assert.ok(textButton(row(pid),'↑').disabled);
+    }
+    await select('fixed'); await add('10'); await next();
+    assert.match(text(body()),/PowerShell command is requested on Review/);
+    set('Common Target (optional)','192.168.1.10'); set('Protocol','rdp'); await next(); assert.match(error(),/supported protocol/);
+    set('Protocol','winrm-https'); set('Windows action timeout','301'); await next(); assert.match(error(),/5–300/);
+    set('Windows action timeout','60'); await next(); await next(); await next();
+    const command=field(body(),'P10 PowerShell command (runtime only, never saved)');
+    assert.equal(command.tag,'textarea'); command.value='Write-Output "COMMAND_SECRET"';
+    await click(body(),'Save + Run Now');
+    const dispatched=requests.filter(r=>r.url==='/api/executions/run').at(-1);
+    assert.equal(dispatched.data.credentials.powershell,'Write-Output "COMMAND_SECRET"');
+    assert.equal(command.value,'');
+    assert.ok(!JSON.stringify(definitions).includes('COMMAND_SECRET'));
+    assert.ok(!JSON.stringify(plans).includes('COMMAND_SECRET'));
+    await click(elements.get('scheduleList'),'New schedule / Run Now');
+    const fullEditor=elements.get('scheduleEditor');
+    assert.ok(!text(fullEditor).includes('P10 PowerShell command (runtime only, never saved)'));
+    set('P10 custom PowerShell','1',fullEditor);
+    field(fullEditor,'P10 PowerShell command (runtime only, never saved)').value='Get-Date';
+    set('Linux / SSH password','S',fullEditor);set('Windows / RDP / WinRM password','R',fullEditor);
+    await click(fullEditor,'Run Now');
+    const fullRun=requests.filter(r=>r.url==='/api/executions/run').at(-1);
+    assert.equal(fullRun.data.execution.powershell_enabled,true);
+    assert.equal(fullRun.data.credentials.powershell,'Get-Date');
+    console.log('Builder DOM tests passed: dependencies, protected actions, target modes, common targets, validation, review, friendly units, P08/P09/P10 runtime inputs, Full Incident toggle and library summaries.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

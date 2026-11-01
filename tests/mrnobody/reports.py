@@ -227,7 +227,7 @@ exit "${FIXTURE_EXIT:-0}"
                 (base / "config/defaults.conf").write_text(defaults, encoding="utf8", newline="\n")
                 if not broken_reporter:
                     shutil.copy(PLATFORM / "web/reports.py", base / "web/reports.py")
-                for source in (PLATFORM / "scripts").glob("0*.sh"):
+                for source in (PLATFORM / "scripts").glob("[0-9][0-9]-*.sh"):
                     script = base / "scripts" / source.name
                     action = 'kill -TERM "$PPID"\nexit 0' if failure == "interrupt" and source.name.startswith("03") else (
                         "exit " + ("7" if failure and source.name.startswith("03") else "0"))
@@ -241,7 +241,7 @@ exit "${FIXTURE_EXIT:-0}"
                 wordlist_path.write_text("fixture\n", encoding="utf8")
                 env = {k: v for k, v in os.environ.items() if not k.startswith("NORDIC_")}
                 env.update(REPORT_FIXTURE_BASE=base.as_posix(), NORDIC_INCIDENT_ID="MRN-fixture",
-                           NORDIC_SSH_PASSWORD="fixture", NORDIC_RDP_PASSWORD="fixture", NORDIC_INCIDENT_IP="192.168.1.254",
+                           MRN_POWERSHELL_SECRET="Write-Output fixture", NORDIC_SSH_PASSWORD="fixture", NORDIC_RDP_PASSWORD="fixture", NORDIC_INCIDENT_IP="192.168.1.254",
                            NORDIC_PHASE_DELAY_MIN="0", NORDIC_PHASE_DELAY_MAX="0", NORDIC_WORDLIST_ENABLED=str(int(wordlist)),
                            NORDIC_WORDLIST_FILE=wordlist_path.as_posix(), PATH=str(base / "bin") + os.pathsep + os.environ["PATH"])
                 result = subprocess.run([shell, str(base / "scenario.sh")], env=env, stdin=subprocess.DEVNULL,

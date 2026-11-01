@@ -16,7 +16,7 @@ function element(id = "") {
 }
 for (const id of ["startButton", "scenarioDetail", "messageBox", "incidentIp",
                   "webPorts", "exfilPort", "sshUser", "sshPassword", "sshPort",
-                  "rdpUser", "rdpPassword", "rdpPort"]) {
+                  "rdpUser", "rdpPassword", "rdpPort", "powershellEnabled", "campaignPowershell"]) {
     elements.set(id, element(id));
 }
 elements.get("startButton").parentElement = element();
@@ -69,6 +69,17 @@ async function main() {
     elements.get("rdpPassword").value = "rdp-test";
     await vm.runInContext("startCampaign()", context);
     assert.equal(context.submissions[1].url, "/api/start");
+    assert.equal(context.submissions[1].form.get("powershell_enabled"), "0");
+    elements.get("powershellEnabled").checked = true;
+    elements.get("sshPassword").value = "ssh-test";
+    elements.get("rdpPassword").value = "rdp-test";
+    await vm.runInContext("startCampaign()", context);
+    assert.equal(context.submissions.length, 2); // Enabled P10 needs runtime content.
+    elements.get("campaignPowershell").value = "Get-Date";
+    await vm.runInContext("startCampaign()", context);
+    assert.equal(context.submissions[2].form.get("powershell_enabled"), "1");
+    assert.equal(context.submissions[2].form.get("powershell"), "Get-Date");
+    assert.equal(elements.get("campaignPowershell").value, "");
     console.log("JavaScript syntax and isolated frontend checks passed; no network requests sent.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

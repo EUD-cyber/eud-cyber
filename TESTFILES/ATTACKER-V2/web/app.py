@@ -665,10 +665,19 @@ def api_run_phase(phase_id):
     phase_env = os.environ.copy()
     phase_env["NORDIC_INCIDENT_ID"] = "MRN-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:12]
     phase_env['MRNOBODY_PASSWORD'] = str(data.get('password', ''))
+    if phase_id in {'09', '10'}:
+        try:
+            from windows_actions import runtime_command
+            # Validate even legacy standalone callers without a profile.
+            data.setdefault('profile', {'mode': 'normal', 'duration': 0})
+            if phase_id == '10':
+                phase_env['MRN_POWERSHELL_SECRET'] = runtime_command(data.get('powershell') or phase_env.get('MRN_POWERSHELL_SECRET', ''))
+        except ValueError as exc:
+            return jsonify({'status': 'error', 'message': str(exc)}), 400
     if "profile" in data:
         try:
             from scenario_model import keys
-            keys(data, set(allowed_phase_fields(phase_id)) | {"profile", "timing", "target_mode", "password", "dry_run", "auto"}, "phase execution")
+            keys(data, set(allowed_phase_fields(phase_id)) | {"profile", "timing", "target_mode", "password", "dry_run", "auto", "powershell"}, "phase execution")
             spec = {"type": "phase", "id": phase_id, "profile": data["profile"],
                     "parameters": {k: v for k, v in data.items() if k in allowed_phase_fields(phase_id)},
                     "timing": data.get("timing", {}), "target_mode": data.get("target_mode", "fixed")}
@@ -742,6 +751,7 @@ def api_run_phase(phase_id):
         "protocol": "--protocol",
         "username": "--user",
         "file": "--file",
+        "timeout": "--timeout",
     }
 
 
@@ -1585,6 +1595,14 @@ def api_start(scenario_id="full-incident"):
         # ====================================================
 
         env = os.environ.copy()
+        powershell_enabled = str(data.get('powershell_enabled', '0')).lower() in {'1', 'true', 'yes', 'on'}
+        env['MRN_POWERSHELL_ENABLED'] = '1' if powershell_enabled else '0'
+        if (execution_plan and any(p['id'] == '10' for p in execution_plan['phases'])) or (execution_plan is None and powershell_enabled and '10' in scenario['metadata'].get('SCENARIO_PHASES', '').split(',')):
+            try:
+                from windows_actions import runtime_command
+                env['MRN_POWERSHELL_SECRET'] = runtime_command(data.get('powershell') or env.get('MRN_POWERSHELL_SECRET', ''))
+            except ValueError as exc:
+                return jsonify({'status': 'error', 'message': str(exc)}), 400
         if execution_plan is not None:
             env["MRN_EXECUTION"] = json.dumps(execution_plan)
             env["MRN_STARTED"] = str(time.time())
@@ -1685,7 +1703,7 @@ def api_start(scenario_id="full-incident"):
             env['MRN_OVERVIEW'] = json.dumps(dict(
                 execution_plan or {}, type='custom' if planning.custom(scenario_id) else 'campaign',
                 id=scenario_id, name=scenario_name,
-                phases=(execution_plan or {}).get('phases', [{'id': p.strip()} for p in scenario['metadata'].get('SCENARIO_PHASES', '').split(',') if p.strip() and (p.strip() != '08' or wordlist_enabled)]),
+                phases=(execution_plan or {}).get('phases', [{'id': p.strip()} for p in scenario['metadata'].get('SCENARIO_PHASES', '').split(',') if p.strip() and (p.strip() != '08' or wordlist_enabled) and (p.strip() != '10' or powershell_enabled)]),
                 trigger='scheduler' if current_schedule.get() else 'manual', schedule_id=current_schedule.get()))
             campaign_process = launch(BASE_DIR,
                 [

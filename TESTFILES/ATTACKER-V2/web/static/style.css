@@ -315,7 +315,12 @@ input {
     letter-spacing: 0.03em;
 }
 
-.form-group input {
+.form-group[hidden] {
+    display: none;
+}
+
+.form-group input,
+.form-group textarea {
     width: 100%;
 
     padding: 11px 12px;
