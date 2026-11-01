@@ -47,7 +47,7 @@ event. Custom metadata without names remains valid and yields null names.
 
 Credentials are removed recursively from state snapshots, including passwords in
 wordlist-generated compromised hosts. Original state/log files are never rewritten.
-The existing ground-truth event messages are retained; phase implementations must
+Ground-truth messages are reconstructed from redacted parsed fields; phase implementations must
 continue to avoid logging credentials. No wordlist contents or credential cache
 files are read. Missing optional phase 08 evidence is permitted.
 
@@ -80,3 +80,63 @@ temporary installation. It covers optional wordlist enable/disable, success,
 failure, TERM interruption and reporting failure, as well as snapshot isolation,
 redaction, immutable publication, malformed evidence, timestamps and outcomes.
 The PR validation workflow runs these checks automatically.
+
+## Reports V2: additive student analysis
+
+The ground-truth schema remains `schema_version: 1`; existing fields and atomic
+first-writer-wins publication remain compatible. New documents additionally carry:
+
+| Field | Meaning |
+| --- | --- |
+| `report_type` | `campaign` or `standalone_phase` |
+| `phase_id` | Selected phase for standalone reports only |
+| `analysis_version` | `2`, the educational extension version |
+| `phases[].analysis` | Recorded status, event-derived findings, evidence path/line references, detection, investigation tasks and prevention guidance |
+| `phases[].mitre.techniques[].url` | Validated direct technique/sub-technique URL, or null for invalid metadata |
+| `mitre_summary` | Deduplicated phase metadata mappings, mapped phases and phases with action-level events |
+
+`observed_phases` in the MITRE summary means action-level events exist for that
+phase. It does **not** establish that every mapped technique ran or succeeded.
+The GUI labels this distinction. Recommendations are static per phase, separately
+labelled as educational guidance; they do not claim the CyberLab detected the
+activity. Wazuh, Suricata, auth/journal, Windows audit, web, firewall, FIM/EDR and
+egress evidence are suggested only where relevant and available. Findings come
+only from recorded events. Missing/foreign state is excluded with warnings.
+
+Historical JSON files are never rewritten. The default detail API adds the same
+student view in memory to historical schema-1 reports, with `campaign` as the
+default type. `GET /api/reports/<id>?raw=1` returns the stored technical document
+without read-time educational enrichment (credential redaction still applies).
+New stored documents already include their educational extension. The list API
+adds `report_type` and `phase_id`; routes, IDs and existing list fields are retained.
+GUI details retain the event table, state evidence and JSON link while adding
+expandable student sections and a MITRE summary with safe direct links.
+
+## Standalone phases
+
+Existing individual-run flows (GUI Run phase, `mrnobody run 03`, or
+`run-phase.sh 03 --target <host>`) are wrapped by `web/reports.py`. Every actual
+individual invocation gets a fresh `MRN-YYYYMMDD-HHMMSS-<random-suffix>` ID,
+exported to the unchanged phase implementation. Both explicit standalone
+parameters and state-consuming individual runs are covered; their execution mode
+and inputs remain as before. `--dry-run`, listing and full campaign routing are
+unchanged and do not create an individual report.
+
+After success, failure or catchable INT/TERM, a permanent
+`/opt/nordic-attack/reports/<id>.json` contains exactly the selected phase.
+Wrapper start/end timestamps record the invocation; action events still come from
+the ground-truth log. Return codes are preserved and report-generation errors
+produce a warning. No campaign.json is created, cleared or overwritten by the
+wrapper. Phase scripts retain their existing state-file behavior. State-consuming
+phases may read earlier state, but only snapshots carrying the fresh report ID
+are attributed to the new report. Missing evidence remains unavailable, never
+relabelled. SIGKILL/power loss cannot guarantee a final report.
+
+Full Incident continues using its existing finalizer and incident ID and produces
+one combined report in campaign phase order, including skipped/not-run sections.
+It does not produce one standalone report per campaign phase.
+
+No dependencies or install payload paths were added: `MRNOBODY/mrnobody_userdata.yaml`
+already installs `web/reports.py`. The normal manifest includes every modified
+runtime file and continues excluding generated reports, logs and state. No VM
+deployment or changes to a running installation are part of this repository update.

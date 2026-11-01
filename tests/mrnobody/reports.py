@@ -7,11 +7,12 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch, Mock
 
 ROOT = Path(__file__).resolve().parents[2]
 PLATFORM = ROOT / "TESTFILES/ATTACKER-V2"
 sys.path.insert(0, str(PLATFORM / "web"))
-from reports import build_report, save_report, load_report, list_reports, read_metadata
+from reports import build_report, save_report, load_report, list_reports, read_metadata, mitre_url, redact, run_phase
 
 
 class Reports(unittest.TestCase):
@@ -56,7 +57,7 @@ class Reports(unittest.TestCase):
         self.assertEqual(phase["outcomes"]["failure"], 1)
         self.assertEqual(phase["outcomes"]["skipped"], 1)
         self.assertIsNotNone(phase["started"])  # Second-resolution logs versus subsecond state.
-        self.assertEqual(phase["mitre"]["techniques"], [{"id": "T1078", "name": "Valid Accounts"}])
+        self.assertEqual(phase["mitre"]["techniques"], [{"id": "T1078", "name": "Valid Accounts", "url": mitre_url("T1078")}])
         self.assertEqual(phase["events"][1]["protocol"], "ssh")
         self.assertEqual(phase["events"][1]["fields"]["os"], "Ubuntu Linux")
         self.assertEqual(phase["events"][1]["mitre_technique_ids"], ["T1078"])
@@ -106,9 +107,109 @@ class Reports(unittest.TestCase):
         self.assertEqual(read_metadata(path)["ATTACK_ID"], "09")
         self.assertEqual(read_metadata(path)["ATTACK_NAME"], "Custom")
 
+    def test_educational_sections_and_mitre(self):
+        report = build_report(self.base, self.id)
+        phase = report["phases"][2]
+        analysis = phase["analysis"]
+        self.assertIn("ACCESS_FAILED", " ".join(analysis["findings"]))
+        self.assertIn("RDP_AUTH_SKIPPED", " ".join(analysis["findings"]))
+        for key in ["what_happened", "findings", "evidence", "detection", "investigation_tasks", "prevention", "guidance_notice", "mitre_notice"]:
+            self.assertTrue(analysis[key], key)
+        self.assertIn("Wazuh", analysis["detection"][0])
+        self.assertIn("No action-level evidence", report["phases"][3]["analysis"]["findings"][0])
+        self.assertEqual(report["mitre_summary"][0]["mapping"], "phase_metadata")
+        self.assertEqual(mitre_url("T1110.001"), "https://attack.mitre.org/techniques/T1110/001/")
+        for invalid in [None, "T1078/../../", "javascript:alert(1)", "T1234.1"]:
+            self.assertIsNone(mitre_url(invalid))
+
+    def test_redaction_and_historical_view(self):
+        dirty = {"password": "SECRET", "ssh_password": "SECRET", "candidate_passwords": ["SECRET"],
+                 "wordlist_contents": "SECRET", "credential_method": "wordlist",
+                 "message": "ACTION password=SECRET WITH SPACES target=host", "url": "https://user:SECRET@host/"}
+        self.assertNotIn("SECRET", json.dumps(redact(dirty)))
+        self.assertEqual(redact({"candidate_passwords": 12}), {"candidate_passwords": 12})
+        old = {"schema_version": 1, "incident": {"id": self.id}, "phases": [], "message": "password=SECRET"}
+        path = save_report(self.base, old)
+        before = path.read_bytes()
+        self.assertEqual(load_report(path.parent, self.id)["report_type"], "campaign")
+        self.assertNotIn("analysis_version", load_report(path.parent, self.id, enrich=False))
+        self.assertNotIn("SECRET", json.dumps(load_report(path.parent, self.id)))
+        self.assertEqual(path.read_bytes(), before)
+
+    def test_standalone_wrapper_status_isolation_and_failures(self):
+        before = (self.base / "state/campaign.json").read_bytes()
+        for code in [0, 7, -15]:
+            child = Mock()
+            child.wait.return_value = code
+            with patch("reports.subprocess.Popen", return_value=child) as launch:
+                self.assertEqual(run_phase(self.base, "03", self.base / "scripts/03-access.sh", {}), 143 if code == -15 else code)
+            env = launch.call_args.kwargs["env"]
+            self.assertRegex(env["NORDIC_INCIDENT_ID"], r"^MRN-\d{8}-\d{6}-[a-f0-9]{12}$")
+            report = load_report(self.base / "reports", env["NORDIC_INCIDENT_ID"])
+            self.assertEqual(report["report_type"], "standalone_phase")
+            self.assertEqual(report["phase_id"], "03")
+            self.assertEqual(len(report["phases"]), 1)
+            self.assertIsNone(report["inventory"])  # Foreign incident state is not attributed to this run.
+            self.assertEqual(report["events"], [])
+            self.assertTrue(report["phases"][0]["started"])
+        self.assertEqual(len(list_reports(self.base / "reports")), 3)
+        self.assertEqual((self.base / "state/campaign.json").read_bytes(), before)
+        with patch("reports.subprocess.Popen", return_value=child), patch("reports.save_report", side_effect=OSError):
+            self.assertEqual(run_phase(self.base, "03", Path("fixture"), {}), 143)
+
 
 @unittest.skipUnless("--bash" in sys.argv or os.environ.get("REPORT_TEST_BASH"), "Bash orchestration enabled explicitly")
 class CampaignIntegration(unittest.TestCase):
+    def test_standalone_runner_with_mock_phase(self):
+        shell = os.environ.get("REPORT_TEST_BASH", "bash")
+        with tempfile.TemporaryDirectory(dir=ROOT) as temporary:
+            base = Path(temporary).resolve()
+            for directory in ["scripts", "web", "config", "state", "logs", "bin"]:
+                (base / directory).mkdir()
+            shutil.copy(PLATFORM / "scripts/run-phase.sh", base / "scripts/run-phase.sh")
+            shutil.copy(PLATFORM / "web/reports.py", base / "web/reports.py")
+            (base / "config/defaults.conf").write_text(
+                'NORDIC_STATE_DIR="$NORDIC_BASE_DIR/state"\nNORDIC_GROUND_TRUTH_LOG="$NORDIC_BASE_DIR/logs/incident-ground-truth.log"\n', encoding="utf8")
+            campaign = base / "state/campaign.json"
+            campaign.write_text('{"incident_id":"MRN-campaign","status":"complete"}', encoding="utf8")
+            before = campaign.read_bytes()
+            script = base / "scripts/03-access.sh"
+            script.write_text('''#!/usr/bin/env bash
+# ATTACK_ID="03"
+# ATTACK_NAME="Fixture access"
+# ATTACK_ALIAS="access"
+# MITRE_TECHNIQUES="T1078,T1110.001"
+printf '%s INCIDENT=%s PHASE=03 ACCESS_FAILED target=fixture protocol=ssh password=SECRET\\n' "$(date --iso-8601=seconds)" "$NORDIC_INCIDENT_ID" >> "$NORDIC_GROUND_TRUTH_LOG"
+if [[ "${FIXTURE_EXIT:-0}" == signal ]]; then kill -TERM "$PPID"; exit 0; fi
+exit "${FIXTURE_EXIT:-0}"
+''', encoding="utf8", newline="\n")
+            script.chmod(0o755)
+            wrapper = base / "bin/python3"
+            wrapper.write_text('#!/bin/sh\nexec "' + Path(sys.executable).as_posix() + '" "$@"\n', encoding="utf8", newline="\n")
+            wrapper.chmod(0o755)
+            env = {**os.environ, "NORDIC_BASE_DIR": base.as_posix(), "NORDIC_INCIDENT_ID": "MRN-campaign",
+                   "PATH": str(base / "bin") + os.pathsep + os.environ["PATH"]}
+            runner = [shell, str(base / "scripts/run-phase.sh"), "03"]
+            dry = subprocess.run(runner + ["--dry-run"], env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(dry.returncode, 0, dry.stderr)
+            self.assertFalse((base / "reports").exists())
+            for exit_code, options in [("0", []), ("7", ["--target", "fixture"]), ("signal", [])]:
+                result = subprocess.run(runner + options, env={**env, "FIXTURE_EXIT": exit_code}, capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 143 if exit_code == "signal" else int(exit_code), result.stdout + result.stderr)
+            rows = list_reports(base / "reports")
+            self.assertEqual(len(rows), 3)
+            self.assertEqual({r["status"] for r in rows}, {"complete", "failed", "interrupted"})
+            self.assertEqual(len({r["id"] for r in rows}), 3)
+            for row in rows:
+                report = load_report(base / "reports", row["id"])
+                self.assertEqual(row["report_type"], "standalone_phase")
+                self.assertEqual([p["id"] for p in report["phases"]], ["03"])
+                self.assertEqual(len(report["events"]), 1)
+                self.assertIn("ACCESS_FAILED", report["phases"][0]["analysis"]["findings"][0])
+                self.assertNotIn("SECRET", json.dumps(report))
+                self.assertEqual(report["phases"][0]["mitre"]["techniques"][1]["url"], mitre_url("T1110.001"))
+            self.assertEqual(campaign.read_bytes(), before)
+
     def test_campaigns_with_mock_phases(self):
         shell = os.environ.get("REPORT_TEST_BASH", "bash")
         for failure, wordlist, broken_reporter in [(False, False, False), (False, True, False), (True, False, False), ("interrupt", False, False), (False, False, True)]:
