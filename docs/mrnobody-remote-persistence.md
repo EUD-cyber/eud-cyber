@@ -87,17 +87,24 @@ Detection guidance covers Security 4698/4702/4699/4697, TaskScheduler Operationa
 System 7045/7036, cron/syslog, user-systemd journal, process/audit and FIM/Wazuh
 sources. This is investigation guidance, not a claim that sensors observed them.
 
-## Deliberately deferred installation batch
+## Fresh installation
 
-**`MRNOBODY/mrnobody_userdata.yaml` and all cloud-init/userdata remain unchanged.**
-The frozen fresh installer has an explicit download list. The four new runtime
-files (`web/remote_actions.py`, `web/ssh_actions.py`, `web/persistence_actions.py`,
-`scripts/11-persistence.sh`) must be added to that list in the user's later install
-batch. Until then a fresh install must run the existing manifest-based Update
-before P10/P11 or Full Incident. The release test checks this exact deferred set
-and verifies the complete runtime after the manifest overlay. Existing OpenSSH,
-sshpass, Bash, pywinrm/NTLM and optional target facilities are used; no new Python
-package or automatic installation/deployment has been introduced.
+`MRNOBODY/mrnobody_userdata.yaml` downloads the remote-action, SSH and
+persistence helpers and the P11/P13 phase scripts before service startup. The
+existing manifest already distributes these files for later updates; it is
+unchanged. Fresh installation no longer needs an initial Update for these files.
+
+The existing WinRM venv (pywinrm/requests-ntlm), system Flask/ReportLab, OpenSSH
+and sshpass already cover the completed stack; no packages are added. Planning
+creates `data/planning` (0700) and its SQLite database (0600) automatically.
+Runtime uploads and incident-specific directories are created on demand under
+the existing root-owned runtime, state, logs and reports directories. Remote
+cron/systemd/Windows facilities remain target prerequisites.
+
+The install test parses cloud-config, requires each manifest runtime file to
+be downloaded exactly once, stages only those downloads, and checks application
+imports, health, phase discovery, planning storage, report/live endpoints and
+static assets. It never runs the installer, starts campaigns or contacts targets.
 
 Tests use fake transports, isolated home directories and inert campaign phases;
 they never contact the running VM or any lab host. Real Windows artifact creation
