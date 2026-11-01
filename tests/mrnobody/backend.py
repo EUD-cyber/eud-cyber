@@ -29,6 +29,7 @@ fake_flask.jsonify = lambda data: data
 fake_flask.render_template = Mock()
 fake_flask.request = request
 source = Path(__file__).resolve().parents[2] / "TESTFILES/ATTACKER-V2/web/app.py"
+sys.path.insert(0, str(source.parent))
 ast.parse(source.read_text(encoding="utf-8"))
 with patch.dict(sys.modules, {"flask": fake_flask}):
     spec = importlib.util.spec_from_file_location("application", source)
@@ -96,5 +97,22 @@ with tempfile.TemporaryDirectory(dir=source.parent.parent.resolve()) as temporar
     assert historical in module.api_log()["log"]
     request.args = {"lines": "invalid"}
     assert historical in module.api_log()["log"]
+
+with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[2]) as temporary:
+    from reports import save_report
+    module.BASE_DIR = Path(temporary)
+    assert module.api_reports() == {"count": 0, "reports": []}
+    report = {"schema_version": 1, "incident": {"id": "MRN-fixture", "status": "complete", "started": "2026-11-01"},
+              "summary": {"hosts": 2}}
+    save_report(module.BASE_DIR, report)
+    assert module.api_reports()["reports"][0]["summary"]["hosts"] == 2
+    assert module.api_report("MRN-fixture") == report
+    for identifier in ["MRN-missing", "../campaign", "MRN-../outside"]:
+        assert module.api_report(identifier)[1] == 404
+    (module.BASE_DIR / "reports/MRN-corrupt.json").write_text("{broken", encoding="utf8")
+    (module.BASE_DIR / "reports/MRN-invalid.json").write_text('{"schema_version":1,"incident":[]}', encoding="utf8")
+    assert module.api_reports()["count"] == 1
+    assert module.api_report("MRN-corrupt")[1] == 404
+    assert module.api_report("MRN-invalid")[1] == 404
 
 print("Python syntax and isolated backend checks passed; no processes launched.")

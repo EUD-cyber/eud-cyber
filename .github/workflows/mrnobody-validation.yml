@@ -31,6 +31,8 @@ jobs:
       - name: Check routing, live output, incident IDs and historical compatibility with isolated fixtures
         run: |
           python tests/mrnobody/backend.py
+          python tests/mrnobody/reports.py --bash
           python tests/mrnobody/runtime.py --bash
           node tests/mrnobody/scenarios.cjs
           node tests/mrnobody/logs.cjs
+          node tests/mrnobody/reports.cjs

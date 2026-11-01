@@ -2690,6 +2690,8 @@ async function runUpdate() {
 
 function showPage(pageName) {
 
+    if (pageName === "reports") refreshReports();
+
     if (pageName) refreshLog();
 
     if (!pageName) {
@@ -2738,6 +2740,109 @@ function showPage(pageName) {
             item.dataset.page === pageName
         );
     });
+}
+
+// Ground truth is rendered as text: evidence can contain host-supplied markup.
+function reportNode(tag, text, parent) {
+    const node = document.createElement(tag);
+    if (text !== undefined && text !== null) node.textContent = String(text);
+    if (parent) parent.appendChild(node);
+    return node;
+}
+
+function reportTable(parent, headers, rows) {
+    const container = reportNode("div", null, parent);
+    container.className = "table-container";
+    const table = reportNode("table", null, container);
+    table.className = "inventory-table";
+    const heading = reportNode("tr", null, reportNode("thead", null, table));
+    headers.forEach(text => reportNode("th", text, heading));
+    const body = reportNode("tbody", null, table);
+    rows.forEach(values => {
+        const row = reportNode("tr", null, body);
+        values.forEach(value => reportNode("td", value ?? "Unavailable", row));
+    });
+    if (!rows.length) {
+        const cell = reportNode("td", "No recorded evidence.", reportNode("tr", null, body));
+        cell.colSpan = headers.length;
+    }
+}
+
+async function refreshReports() {
+    const table = document.getElementById("reportTable");
+    if (!table) return;
+    try {
+        const data = await apiGet("/api/reports");
+        table.replaceChildren();
+        const reports = data.reports || [];
+        for (const [id, key] of [["reportIncidentCount", null], ["reportCompromisedCount", "compromised"],
+                                 ["reportExfilCount", "exfiltration"], ["reportImpactCount", "impact"]]) {
+            const node = document.getElementById(id);
+            if (node) node.textContent = String(key ? reports.reduce((n, r) => n + (r.summary?.[key] || 0), 0) : reports.length);
+        }
+        reports.forEach(report => {
+            const row = reportNode("tr", null, table);
+            [report.id, report.status, report.started, report.summary?.hosts, report.summary?.compromised]
+                .forEach(value => reportNode("td", value ?? "Unavailable", row));
+            const button = reportNode("button", "Open report", reportNode("td", null, row));
+            button.type = "button";
+            button.addEventListener("click", () => openReport(report.id));
+        });
+        if (!reports.length) {
+            const cell = reportNode("td", "No incident reports available. Run a Full Incident campaign to create one.", reportNode("tr", null, table));
+            cell.colSpan = 6;
+        }
+    } catch (error) {
+        table.replaceChildren();
+        const cell = reportNode("td", `Could not load reports: ${error.message}`, reportNode("tr", null, table));
+        cell.colSpan = 6;
+    }
+}
+
+async function openReport(id) {
+    const detail = document.getElementById("reportDetail");
+    if (!detail) return;
+    detail.replaceChildren();
+    reportNode("p", "Loading report…", detail);
+    try {
+        const report = await apiGet(`/api/reports/${encodeURIComponent(id)}`);
+        detail.replaceChildren();
+        const incident = report.incident;
+        reportNode("h3", incident.id, detail);
+        reportNode("p", `${incident.scenario} · ${incident.status} · ${incident.started || "Unknown start"} → ${incident.ended || "Unknown end"}`, detail);
+        const download = reportNode("a", "Open JSON report", detail);
+        download.href = `/api/reports/${encodeURIComponent(id)}`;
+        download.target = "_blank";
+        download.rel = "noopener";
+        reportNode("h3", "Discovered hosts", detail);
+        reportTable(detail, ["Host", "Hostname", "Platform", "Status"], (report.inventory?.hosts || [])
+            .map(host => [host.ip, host.hostname, host.platform || host.os, host.status]));
+        reportNode("h3", "Compromised hosts", detail);
+        reportTable(detail, ["Host", "Platform", "Access"], (report.compromised_hosts?.hosts || [])
+            .map(host => [host.ip, host.platform, host.primary_access || host.access]));
+        reportNode("h3", "Phase results", detail);
+        (report.phases || []).forEach(phase => {
+            const section = reportNode("details", null, detail);
+            reportNode("summary", `${phase.id} · ${phase.name} · ${phase.status}`, section);
+            reportNode("p", `${phase.started || "No recorded start"} → ${phase.ended || "No recorded end"}`, section);
+            reportNode("p", (phase.mitre?.techniques || []).map(t => `${t.id}${t.name ? " · " + t.name : ""}`).join(", ") || "No MITRE metadata", section);
+            reportTable(section, ["Timestamp", "Action", "Source", "Target", "Protocol / method", "Outcome", "Evidence"],
+                (phase.events || []).map(event => [event.timestamp, event.event, event.source, event.target,
+                    [event.protocol, event.method].filter(Boolean).join(" / "), event.outcome, event.message]));
+        });
+        for (const key of ["staging", "exfiltration", "impact", "wordlist"]) {
+            const section = reportNode("details", null, detail);
+            reportNode("summary", `${key[0].toUpperCase() + key.slice(1)} evidence`, section);
+            reportNode("pre", JSON.stringify(report.evidence?.[key] ?? "Unavailable", null, 2), section);
+        }
+        if (report.warnings?.length) {
+            reportNode("h3", "Evidence availability", detail);
+            report.warnings.forEach(warning => reportNode("p", warning, detail));
+        }
+    } catch (error) {
+        detail.replaceChildren();
+        reportNode("p", `Could not load report: ${error.message}`, detail);
+    }
 }
 
 

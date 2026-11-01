@@ -973,6 +973,8 @@ data = {
 
     "campaign": "MrNobody Incident Platform",
 
+    "scenario": "full-incident",
+
     "mode": "dynamic-discovery",
 
     "started": datetime.now(
@@ -1036,6 +1038,25 @@ with open(output, "w", encoding="utf-8") as f:
 
 PY
 
+
+# Publish a snapshot on success, failure, or a catchable stop, before another run
+# clears shared state. Do not let a reporting failure change campaign exit status.
+finalize_report() {
+    local RESULT=$?
+    trap - EXIT INT TERM
+    export NORDIC_CAMPAIGN_STATE NORDIC_STATE_DIR NORDIC_NETWORK_STATE
+    export NORDIC_DISCOVERED_STATE NORDIC_WEB_STATE NORDIC_COMPROMISED_STATE
+    export NORDIC_STAGING_STATE NORDIC_EXFIL_STATE NORDIC_IMPACT_STATE
+    export NORDIC_GROUND_TRUTH_LOG
+    if ! python3 "$BASE_DIR/web/reports.py" \
+        --base-dir "$BASE_DIR" --incident-id "$INCIDENT_ID" --exit-code "$RESULT"; then
+        log "[WARN] Ground-truth report could not be generated for $INCIDENT_ID"
+    fi
+    exit "$RESULT"
+}
+trap finalize_report EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # ============================================================
 # UPDATE CAMPAIGN STATE

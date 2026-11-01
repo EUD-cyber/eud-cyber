@@ -35,6 +35,7 @@
 
 # MITRE_TACTIC="Discovery"
 # MITRE_TECHNIQUES="T1018,T1049"
+# MITRE_TECHNIQUE_NAMES="Remote System Discovery|System Network Connections Discovery"
 
 set -u
 

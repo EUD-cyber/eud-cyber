@@ -42,6 +42,7 @@ set -u
 
 # MITRE_TACTIC="Credential Access"
 # MITRE_TECHNIQUES="T1110,T1110.001"
+# MITRE_TECHNIQUE_NAMES="Brute Force|Password Guessing"
 
 # ============================================================
 # PATHS

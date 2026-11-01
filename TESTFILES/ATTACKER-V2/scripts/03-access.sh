@@ -43,6 +43,7 @@ set -u
 
 # MITRE_TACTIC="Initial Access"
 # MITRE_TECHNIQUES="T1078"
+# MITRE_TECHNIQUE_NAMES="Valid Accounts"
 
 # ============================================================
 # PATHS / CONFIG
