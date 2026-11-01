@@ -105,6 +105,20 @@ def add_analysis(report):
             phase['prerequisite_evidence'] = details
             phase['analysis']['what_happened'] = phase['prerequisite_outcome']
             phase['analysis']['findings'] = details or [phase['prerequisite_outcome']]
+        if phase['id'] == '10':
+            details = [e['message'] for e in events if e['event'].startswith('WINDOWS_ACTION_') and e['event'] != 'WINDOWS_ACTION_START']
+            phase['action_evidence'] = details
+            phase['action_result'] = ('infrastructure_error' if phase.get('status') == 'failure'
+                else 'command_error' if any(e['event'] == 'WINDOWS_ACTION_ERROR' for e in events)
+                else 'success_with_warning' if any(e['fields'].get('execution_status') == 'success_with_warning' for e in events)
+                else 'success' if phase.get('status') == 'success' else None)
+            phase['action_outcome'] = ('Custom PowerShell command failed' if any(e['event'] == 'WINDOWS_ACTION_ERROR' for e in events)
+                else 'Custom PowerShell completed with nonfatal stderr/warnings' if any(e['fields'].get('execution_status') == 'success_with_warning' for e in events)
+                else 'Custom PowerShell completed' if phase.get('status') == 'success'
+                else 'Custom PowerShell transport/authentication or infrastructure failure' if phase.get('status') == 'failure'
+                else 'Custom PowerShell not executed')
+            phase['analysis']['what_happened'] = phase['action_outcome']
+            phase['analysis']['findings'] = details or [phase['action_outcome']]
     report["analysis_version"] = 2
     report["mitre_summary"] = list(summary.values())
     report.setdefault("report_type", "campaign")
@@ -181,7 +195,7 @@ def outcome(event):
     upper = event.upper()
     if any(word in upper for word in ("SKIPPED", "EXCLUDED")):
         return "skipped"
-    if any(word in upper for word in ("FAILED", "REJECTED", "INVALID")):
+    if any(word in upper for word in ("FAILED", "REJECTED", "INVALID", "ACTION_ERROR")):
         return "failure"
     if any(word in upper for word in ("SUCCESS", "COMPLETE", "DISCOVERED")) or upper in {"WEB_TARGET", "INTERNAL_DISCOVERY"}:
         return "success"
@@ -380,10 +394,10 @@ def run_phase(base, phase_id, script, environ=None):
         except OSError:
             print("[WARN] Phase could not be started", flush=True)
         finally:
-            skipped = phase_id == '09' and code == 78
+            skipped = (phase_id == '09' and code == 78) or (phase_id == '10' and code == 79)
             state = {"incident_id": incident_id, "scenario": "standalone-phase", "phase_id": phase_id,
                      "started": started, "completed": datetime.now(timezone.utc).isoformat(),
-                     "status": "complete" if code == 0 or skipped else "failed",
+                     "status": "complete" if code == 0 or (phase_id == '09' and skipped) else "failed",
                      "phases": {phase_id: "skipped" if skipped else "complete" if code == 0 else "running" if code in {130, 137, 143} else "failed"}}
             try:
                 path = save_report(base, build_report(base, incident_id, code, env, standalone=state))

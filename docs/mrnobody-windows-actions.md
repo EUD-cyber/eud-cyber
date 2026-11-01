@@ -103,6 +103,41 @@ WinRM runs the operator's supplied PowerShell. Endpoint scope validation limits
 the connection target; it is not a PowerShell language sandbox. Operators remain
 responsible for limiting the command's effects to the controlled lab.
 
+## P10 result and exit semantics
+
+P10 uses the remote execution exit/error result, never stderr byte count alone.
+The runtime parses the supplied text inside a protected ScriptBlock invocation;
+syntax errors, unknown commands, terminating errors and default nonterminating
+PowerShell errors become a controlled command error. Warnings/information do not
+fail the action. A nonzero native executable exit is also a command error.
+PowerShell error records use ErrorActionPreference=Stop by default; an operator
+can still explicitly handle errors inside their own script. See
+[PowerShell preference semantics](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_preference_variables?view=powershell-5.1)
+and [exit-code semantics](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_automatic_variables?view=powershell-5.1).
+
+- Exit 0: PHASE_COMPLETE, including success with nonfatal stderr/warnings.
+- Exit 79: WINDOWS_ACTION_ERROR and PHASE_SKIPPED with
+  `Custom PowerShell command failed`. Full Incident and custom campaign runners
+  handle this exit, store phase skipped, and continue to the next selected phase.
+  Standalone CLI retains exit 79 and a failed incident with phase skipped, making
+  the command error visible to its caller. Direct script callers must handle 79.
+- Exit 1: hard infrastructure/configuration/runtime failure. All candidate
+  transports/authentication failing, no Windows targets, missing required runtime
+  input, timeouts and internal worker errors remain hard failures.
+
+A failed transport candidate does not invalidate another candidate's successful
+execution. A command error on any reachable target remains explicit even if
+another target succeeded; it is a controlled action error rather than a silent
+success. Infrastructure/internal errors cannot be masked by another success.
+
+Both report views and HTML/PDF exports retain operational P10 action results,
+target, protocol/method, timestamp, redacted command label, exit code where known
+and output byte counts. Raw command/output/error content remains completely
+omitted. The live timeline shows skipped plus the command-error explanation,
+or complete plus nonfatal warning metadata; campaign progression uses the
+existing skipped state. Dependencies, timing profiles, scheduling, MITRE metadata,
+and runtime-only command/credential handling are unchanged.
+
 ## Timing, locking and evidence
 
 Normal/Slow/Custom profiles use the existing execution plan and absolute phase

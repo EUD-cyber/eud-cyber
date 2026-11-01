@@ -3032,6 +3032,10 @@ function renderReportPhase(parent, phase, groundTruth = true) {
     section.className = "report-phase-detail";
     reportNode("h3", `${phase.id} · ${phase.name}`, section);
     reportBadge(section, phase.status);
+    if (phase.action_outcome) {
+        reportNode('p', phase.action_outcome, section);
+        reportArray(phase.action_evidence).forEach(detail => reportNode('p', detail, section));
+    }
     if (phase.prerequisite_outcome) {
         reportNode('p', phase.prerequisite_outcome, section);
         reportArray(phase.prerequisite_evidence).forEach(detail => reportNode('p', detail, section));
@@ -3468,6 +3472,8 @@ document.addEventListener(
             const allowed = ['complete', 'running', 'pending', 'skipped', 'failed', 'interrupted'];
             const state = allowed.includes(phase.status) ? phase.status : 'pending';
             node(row, 'span', state, `overview-phase overview-${state}`);
+            if (phase.action_result === 'command_error') node(row, 'small', 'Custom PowerShell command failed', 'muted');
+            if (phase.action_result === 'success_with_warning') node(row, 'small', 'Completed with nonfatal stderr/warnings', 'muted');
             if (execution.profile?.mode !== 'normal' && (phase.start_offset !== undefined || phase.duration !== undefined)) {
                 node(row, 'small', [phase.start_offset !== undefined && `Planned start +${duration(phase.start_offset)}`, phase.duration !== undefined && `activity window ${duration(phase.duration)}`].filter(Boolean).join(' · '), 'muted');
             }

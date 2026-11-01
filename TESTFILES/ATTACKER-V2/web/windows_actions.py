@@ -3,6 +3,7 @@
 Only fixed-format evidence leaves the worker. Arbitrary PowerShell and its output
 are runtime-only, including errors: output byte counts are safe to retain.
 """
+import base64
 import json
 import os
 from pathlib import Path
@@ -62,6 +63,31 @@ def runtime_command(value):
     return value
 
 
+def custom_script(value):
+    """Parse operator input inside try/catch, keeping syntax errors off the wire.
+
+    Base64 is only quoting for the remote script, never a persisted representation.
+    Error records fail the action; warning/information streams do not.
+    """
+    encoded = base64.b64encode(runtime_command(value).encode('utf-16-le')).decode('ascii')
+    return r"""
+$ErrorActionPreference = 'Stop'
+$global:LASTEXITCODE = 0
+try {
+    $source = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('__SOURCE__'))
+    $action = [ScriptBlock]::Create($source)
+    & $action
+    $succeeded = $?
+    if (-not $succeeded) { exit 1 }
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    exit 0
+} catch {
+    # No exception/command/output text leaves this handler.
+    exit 1
+}
+""".replace('__SOURCE__', encoded)
+
+
 def timeout_value(value):
     if isinstance(value, bool) or not str(value).isdigit() or not 5 <= int(value) <= 300:
         raise ValueError('Windows action timeout must be 5–300 seconds')
@@ -112,13 +138,20 @@ def perform(pid, target, env, session_factory=None):
                               auth=(target['username'], password), transport='ntlm',
                               server_cert_validation='ignore', operation_timeout_sec=limit,
                               read_timeout_sec=limit + 10)
-    command = AD_ACTION if pid == '09' else runtime_command(env.get('MRN_POWERSHELL_SECRET', ''))
+    command = AD_ACTION if pid == '09' else custom_script(env.get('MRN_POWERSHELL_SECRET', ''))
     response = session.run_ps(command)
     stdout, stderr = response.std_out, response.std_err
     result = {'result': 'success' if response.status_code == 0 else 'failed',
               'exit_code': int(response.status_code), 'stdout_bytes': len(stdout), 'stderr_bytes': len(stderr),
               'command': 'ad_account_and_domain_admins' if pid == '09' else 'custom_powershell_content_omitted',
               'warning': 'output_omitted_may_contain_secrets' if pid == '10' else 'none'}
+    if pid == '10':
+        result['result'] = 'success' if response.status_code == 0 else 'action_error'
+        result['execution_status'] = ('success_with_warning' if stderr else 'success') if response.status_code == 0 else 'command_error'
+        result['warning'] = 'nonfatal_stderr_output_omitted' if stderr and response.status_code == 0 else result['warning']
+        result['output'] = 'omitted_may_contain_secrets'
+        if response.status_code != 0:
+            result['reason'] = 'Custom PowerShell command failed'
     if pid == '09':
         try:
             data = json.loads(stdout.decode('utf-8-sig')) if len(stdout) <= 8192 else {}
@@ -166,8 +199,8 @@ def run(pid, env, invoke=subprocess.run):
             runtime_command(env.get('MRN_POWERSHELL_SECRET', ''))
         selected_targets = targets(env)
         if not selected_targets:
-            emit(base, env, pid, 'WINDOWS_ACTION_SKIPPED', warning='no_windows_rdp_access_targets', method='winrm_ntlm')
-            outcomes.append('skipped')
+            emit(base, env, pid, 'WINDOWS_ACTION_SKIPPED' if pid == '09' else 'WINDOWS_ACTION_FAILED', warning='no_windows_rdp_access_targets', method='winrm_ntlm')
+            outcomes.append('skipped' if pid == '09' else 'failed')
         for target in selected_targets:
             emit(base, env, pid, 'WINDOWS_ACTION_START', target=target['target'], protocol=target['protocol'], method='winrm_ntlm')
             child_env = dict(env, MRN_WINDOWS_TARGET=json.dumps(target))
@@ -175,22 +208,27 @@ def run(pid, env, invoke=subprocess.run):
                 child = invoke([sys.executable, str(Path(__file__).resolve()), pid, '--worker'],
                                env=child_env, capture_output=True, timeout=limit, check=False)
                 result = json.loads(child.stdout) if child.returncode == 0 else {'result': 'failed', 'warning': 'worker_execution_failed'}
-                if not isinstance(result, dict) or result.get('result') not in {'success', 'failed', 'skipped'}:
+                if not isinstance(result, dict) or result.get('result') not in {'success', 'failed', 'skipped', 'action_error'}:
                     raise ValueError('Invalid worker response')
             except subprocess.TimeoutExpired:
                 result = {'result': 'failed', 'warning': 'timeout_remote_action_may_still_be_running'}
             except OSError:
                 result = {'result': 'failed', 'warning': 'worker_execution_failed'}
             except ValueError:
-                result = {'result': 'failed', 'warning': 'invalid_ad_response'}
+                result = {'result': 'failed', 'warning': 'invalid_worker_response'}
             outcome = result.pop('result', 'failed')
-            # Only an authenticated P09 prerequisite response may be nonfatal.
+            if pid == '10':
+                result.setdefault('command', 'custom_powershell_content_omitted')
+                result.setdefault('execution_status', 'transport_auth_error' if result.get('warning') == 'transport_error_details_omitted' else 'infrastructure_error' if outcome == 'failed' else outcome)
+            # Only P09 prerequisites and P10 command errors have controlled exits.
+            if outcome == 'action_error' and (pid != '10' or not isinstance(result.get('exit_code'), int) or result['exit_code'] == 0):
+                outcome = 'failed'
             if outcome == 'skipped' and pid != '09':
                 outcome = 'failed'
             outcomes.append('transport' if outcome == 'failed' and result.get('warning') == 'transport_error_details_omitted' else outcome)
             if outcome == 'skipped':
                 result['reason'] = 'Target is not an Active Directory Domain Controller; privileged AD action not attempted'
-            emit(base, env, pid, {'success': 'WINDOWS_ACTION_SUCCESS', 'skipped': 'WINDOWS_ACTION_SKIPPED'}.get(outcome, 'WINDOWS_ACTION_FAILED'),
+            emit(base, env, pid, {'success': 'WINDOWS_ACTION_SUCCESS', 'skipped': 'WINDOWS_ACTION_SKIPPED', 'action_error': 'WINDOWS_ACTION_ERROR'}.get(outcome, 'WINDOWS_ACTION_FAILED'),
                  target=target['target'], protocol=target['protocol'], method='winrm_ntlm', **result)
     except (ValueError, OSError, KeyError, TypeError):
         outcomes.append('failed')
@@ -201,7 +239,17 @@ def run(pid, env, invoke=subprocess.run):
         emit(base, env, pid, 'PHASE_SKIPPED', phase=pid, reason='No Active Directory Domain Controller discovered',
              account='not_attempted', group='not_attempted')
         return 78  # Internal prerequisite exit; campaign/CLI wrappers handle explicitly.
-    success = all(x in {'success', 'skipped'} for x in outcomes)
+    if pid == '10':
+        # Transport/auth failures are candidate failures. A later reachable target
+        # establishes the action result; internal/configuration failures stay fatal.
+        hard_failure = 'failed' in outcomes or not any(x in {'success', 'action_error'} for x in outcomes)
+        if not hard_failure and 'action_error' in outcomes:
+            emit(base, env, pid, 'PHASE_SKIPPED', phase=pid, execution_status='command_error',
+                 reason='Custom PowerShell command failed')
+            return 79  # Campaign handles this; standalone retains a nonzero exit.
+        success = not hard_failure and 'success' in outcomes
+    else:
+        success = all(x in {'success', 'skipped'} for x in outcomes)
     emit(base, env, pid, 'PHASE_COMPLETE' if success else 'PHASE_FAILED', phase=pid)
     return 0 if success else 1
 
@@ -210,11 +258,19 @@ if __name__ == '__main__':
     phase = sys.argv[1]
     if '--worker' in sys.argv:
         try:
+            import winrm
+            from requests.exceptions import RequestException
+        except ImportError:
+            print(json.dumps({'result': 'failed', 'warning': 'invalid_or_missing_runtime_configuration'}))
+            raise SystemExit(0)
+        try:
             print(json.dumps(perform(phase, json.loads(os.environ['MRN_WINDOWS_TARGET']), os.environ)))
         except (ImportError, ValueError, KeyError, TypeError):
             print(json.dumps({'result': 'failed', 'warning': 'invalid_or_missing_runtime_configuration'}))
-        except Exception:
-            # Transport exceptions may echo auth/command content. Never emit them.
+        except (winrm.exceptions.WinRMError, RequestException):
+            # Transport/auth exceptions may echo credentials or command content.
             print(json.dumps({'result': 'failed', 'warning': 'transport_error_details_omitted'}))
+        except Exception:
+            print(json.dumps({'result': 'failed', 'warning': 'worker_execution_failed'}))
     else:
         raise SystemExit(run(phase, os.environ))

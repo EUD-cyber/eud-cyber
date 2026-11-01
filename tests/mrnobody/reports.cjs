@@ -81,6 +81,17 @@ async function main() {
     for (const expected of ["Standalone phase 03", "What happened", "Findings", "Evidence references", "Detection in the CyberLab", "Investigation tasks", "Prevention / Mitigation", "Wazuh", "Educational recommendations", "/logs/truth"])
         assert.ok(text(elements.get("reportDetail")).includes(expected), expected);
 
+    for (const [result, status] of [['Custom PowerShell command failed', 'skipped'], ['Custom PowerShell completed with nonfatal stderr/warnings', 'success']]) {
+        response = {incident:{id:'MRN-p10-' + status, status:'complete'}, phases:[{id:'10', status, action_outcome:result,
+            action_evidence:['target=192.168.2.200 protocol=winrm-http exit_code=0 stderr_bytes=906 command=custom_powershell_content_omitted <script>unsafe</script>']}]};
+        await vm.runInContext("openReport('MRN-p10-" + status + "')", context);
+        for (const label of ['Investigation View', 'Ground Truth View']) {
+            switchView(label);
+            assert.ok(text(reportRoot).includes(result));
+            assert.ok(text(reportRoot).includes('stderr_bytes=906'));
+            assert.equal(descendants(reportRoot).filter(n=>n.tag === 'script').length, 0);
+        }
+    }
     const phase = (id, status, name = `Phase ${id}`) => ({id, name, status,
         started: `2026-11-01T12:${id}:00Z`, ended: `2026-11-01T12:${id}:30Z`,
         mitre: {techniques: [{id: "T1078", name: "Valid Accounts"}, "T1110.001", {id: "javascript:attack()"}]},

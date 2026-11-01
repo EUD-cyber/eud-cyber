@@ -82,13 +82,13 @@ class Worker(unittest.TestCase):
             factory = Mock()
             factory.return_value.run_ps.return_value = Mock(status_code=code, std_out=b'TOKEN_DO_NOT_PERSIST', std_err=b'WIN_SECRET')
             result = actions.perform('10', self.target, self.env, factory)
-            self.assertEqual(result['result'], 'success' if code == 0 else 'failed')
+            self.assertEqual(result['result'], 'success' if code == 0 else 'action_error')
             self.assertEqual(result['stdout_bytes'], 20)
             self.assertNotIn('TOKEN_DO_NOT_PERSIST', json.dumps(result))
             self.assertNotIn('WIN_SECRET', json.dumps(result))
             self.assertEqual(factory.call_args.args[0], 'https://192.168.1.10:5986/wsman')
             self.assertEqual(factory.call_args.kwargs['transport'], 'ntlm')
-            factory.return_value.run_ps.assert_called_once_with(COMMAND)
+            factory.return_value.run_ps.assert_called_once_with(actions.custom_script(COMMAND))
 
     def test_ad_idempotence_and_partial_failure_evidence(self):
         for account, group, outcome in [('created_disabled', 'added', 'success'), ('already_exists_unchanged', 'already_member', 'success'), ('created_disabled', 'not_attempted', 'failed')]:
@@ -232,12 +232,15 @@ class ShellIntegration(unittest.TestCase):
             # Only this fixture module is imported as winrm; no network exists.
             (base / 'fake/winrm.py').write_text('''
 import json, os
+from types import SimpleNamespace
+class WinRMError(Exception): pass
+exceptions = SimpleNamespace(WinRMError=WinRMError)
 class Session:
     def __init__(self, endpoint, **kw): self.endpoint = endpoint
     def run_ps(self, command):
         mode = os.environ.get('FIXTURE_AD', 'dc')
         if mode == 'unreachable' or (mode == 'mixed' and '192.168.1.10:' in self.endpoint):
-            raise RuntimeError('inert transport failure')
+            raise WinRMError('inert transport failure')
         class Response:
             status_code = 0
             std_err = b'WIN_SECRET'
@@ -246,6 +249,8 @@ class Session:
             Response.std_out = json.dumps({'result':'skipped', 'account':'not_attempted', 'group':'not_attempted', 'domain':'WORKGROUP', 'dc':'unknown', 'warning':'target_must_be_domain_controller'}).encode()
         if 'Get-ADDomain' in command and mode == 'dc-error':
             Response.std_out = json.dumps({'result':'failed', 'account':'created_disabled', 'group':'not_attempted', 'domain':'lab.example', 'dc':'dc.lab.example', 'warning':'ad_action_failed_check_rights_module_and_dc_logs'}).encode()
+        if 'Get-ADDomain' not in command and os.environ.get('FIXTURE_P10') == 'invalid':
+            Response.status_code = 1
         return Response()
 ''')
             env = dict(os.environ, NORDIC_BASE_DIR=tmp, MRN_POWERSHELL_SECRET=COMMAND,
@@ -322,6 +327,24 @@ class Session:
                 if expected == 'skipped':
                     self.assertNotIn('PHASE_COMPLETE', events)
                     self.assertNotIn('PHASE_FAILED', events)
+            # Controlled P10 errors must continue through both actual campaign paths.
+            env.update(FIXTURE_AD='dc', FIXTURE_P10='invalid')
+            result = subprocess.run(['bash', str(base / 'scripts/run-phase.sh'), '10', '--target', '192.168.1.10', '--protocol', 'winrm-http'], env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 79, result.stdout + result.stderr)
+            for custom_mode in (False, True):
+                env.update(NORDIC_INCIDENT_ID='MRN-p10-error-' + str(custom_mode), MRN_POWERSHELL_ENABLED='1')
+                env.pop('MRN_EXECUTION', None)
+                if custom_mode:
+                    spec = definition(('10', '04'))
+                    spec['phases'][1]['parameters']['source'] = '192.168.1.10'
+                    value = plan(validate(spec, CAPS)); value['id'] = 'custom-' + 'c' * 32
+                    env['MRN_EXECUTION'] = json.dumps(value)
+                result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                report = load_report(base / 'reports', env['NORDIC_INCIDENT_ID'])
+                self.assertEqual(next(p for p in report['phases'] if p['id'] == '10')['status'], 'skipped')
+                self.assertEqual(next(p for p in report['phases'] if p['id'] == '04')['status'], 'success')
+                self.assertIn('Custom PowerShell command failed', json.dumps(report))
             for path in [*paths, *(base / 'logs').glob('*')]:
                 self.assertNotIn(b'TOKEN_DO_NOT_PERSIST', path.read_bytes())
                 self.assertNotIn(b'WIN_SECRET', path.read_bytes())
