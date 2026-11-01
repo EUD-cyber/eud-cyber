@@ -1036,6 +1036,10 @@ function renderPhaseDetail(phase) {
             input = document.createElement("select");
             const choices = {platform: ["auto", "windows", "linux"], method: ["auto", "scheduled-task", "service", "cron", "systemd"], action: ["create", "cleanup"], protocol: ["", "ssh", "winrm-http", "winrm-https"]}[parameter];
             choices.forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value || "Choose transport"; input.appendChild(option);});
+        } else if (phase.id === "13" && ["behavior", "protocol"].includes(parameter)) {
+            input = document.createElement("select");
+            const choices = parameter === "behavior" ? ["encoded-powershell", "certutil-decode", "bits-job"] : ["winrm-http", "winrm-https"];
+            choices.forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value; input.appendChild(option);});
         } else if (parameter === "powershell") {
             input = document.createElement("textarea");
             input.rows = 5; input.maxLength = 16384; input.autocomplete = "off";
@@ -1317,11 +1321,14 @@ async function runStandalonePhase(
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    for (const id of ["campaignPowershell", "campaignBash"]) document.getElementById(id)?.addEventListener("input", updateCampaignP10Review);
+    updateCampaignP10Review();
     const toggle = document.getElementById("powershellEnabled");
     const fields = document.getElementById("campaignPowershellFields");
     if (toggle && fields) toggle.addEventListener("change", () => {
         fields.hidden = !toggle.checked;
-        if (!toggle.checked) document.getElementById("campaignPowershell").value = "";
+        if (!toggle.checked) {document.getElementById("campaignPowershell").value = ""; document.getElementById("campaignBash").value = "";}
+        updateCampaignP10Review();
     });
 });
 
@@ -1607,17 +1614,24 @@ if (dashboardCampaignStatus) {
 // START CAMPAIGN
 // ==========================================================
 
+function campaignP10Summary(powershell, bash) {
+    return `P10: PowerShell ${powershell.trim() ? "configured" : "not configured"} / Bash ${bash.trim() ? "configured" : "not configured"}${!powershell.trim() && !bash.trim() ? " - skipped (NOT_CONFIGURED)" : ""}`;
+}
+function updateCampaignP10Review() {
+    const summary = document.getElementById("campaignP10Review");
+    if (summary) summary.textContent = campaignP10Summary(document.getElementById("campaignPowershell")?.value || "", document.getElementById("campaignBash")?.value || "");
+}
+
 async function startCampaign() {
 
     // Keep the selected scenario stable throughout this submission.
     const scenario = selectedScenario;
     const powershell = document.getElementById("campaignPowershell")?.value || "";
+    const bash = document.getElementById("campaignBash")?.value || "";
     const powershellEnabled = !!document.getElementById("powershellEnabled")?.checked;
 
     hideMessage();
-    if (((!scenario || scenario.id === "full-incident") ? powershellEnabled : scenario.phases?.includes("10")) && !powershell.trim()) {
-        showMessage("Full Incident requires a runtime P10 remote command (PowerShell / Bash).", "error"); return;
-    }
+
 
 
     // ------------------------------------------------------
@@ -1918,6 +1932,7 @@ async function startCampaign() {
         "and execute the configured simulation phases.\n\n" +
         "Linux targets will use SSH credentials.\n" +
         "Windows targets will use RDP credentials.\n" +
+        campaignP10Summary(powershellEnabled ? powershell : "", powershellEnabled ? bash : "") + "\n" +
         (
             wordlistEnabled
                 ? "Wordlist authentication is ENABLED."
@@ -1989,7 +2004,8 @@ async function startCampaign() {
         // --------------------------------------------------
         formData.append("powershell_enabled", powershellEnabled ? "1" : "0");
         if (powershellEnabled || scenario?.id !== "full-incident" && scenario?.phases?.includes("10")) {
-            if (powershell) formData.append("powershell", powershell);
+            formData.append("powershell_windows", powershell);
+            formData.append("bash", bash);
         }
 
         formData.append(
@@ -2057,6 +2073,9 @@ async function startCampaign() {
         // --------------------------------------------------
         const powershellField = document.getElementById("campaignPowershell");
         if (powershellField) powershellField.value = "";
+        const bashField = document.getElementById("campaignBash");
+        if (bashField) bashField.value = "";
+        updateCampaignP10Review();
         // Remove passwords immediately after successful
         // submission.
         // --------------------------------------------------

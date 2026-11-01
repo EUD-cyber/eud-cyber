@@ -87,11 +87,15 @@ async function main() {
     elements.get("sshPassword").value = "ssh-test";
     elements.get("rdpPassword").value = "rdp-test";
     await vm.runInContext("startCampaign()", context);
-    assert.equal(context.submissions.length, 2); // Enabled P10 needs runtime content.
+    assert.equal(context.submissions.length, 3); // Enabled P10 with both commands blank is a nonfatal skip.
+    assert.equal(context.submissions.at(-1).form.get("powershell_windows"), "");
+    assert.equal(context.submissions.at(-1).form.get("bash"), "");
+    elements.get("sshPassword").value = "ssh-test";
+    elements.get("rdpPassword").value = "rdp-test";
     elements.get("campaignPowershell").value = "Get-Date";
     await vm.runInContext("startCampaign()", context);
-    assert.equal(context.submissions[2].form.get("powershell_enabled"), "1");
-    assert.equal(context.submissions[2].form.get("powershell"), "Get-Date");
+    assert.equal(context.submissions.at(-1).form.get("powershell_enabled"), "1");
+    assert.equal(context.submissions.at(-1).form.get("powershell_windows"), "Get-Date");
     assert.equal(elements.get("campaignPowershell").value, "");
     elements.get('powershellEnabled').checked = false;
     elements.get('wordlistEnabled').checked = true;

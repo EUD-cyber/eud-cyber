@@ -214,7 +214,7 @@ def emit(base, env, pid, event, **fields):
     stamp = datetime.now(timezone.utc).isoformat()
     iid = env['NORDIC_INCIDENT_ID']
     safe = redact_environment(fields, env)
-    if pid == '10':
+    if pid in {'10', '13'}:
         # JSON quoting keeps multiline output and forged key=value/event text
         # inside one field on one physical log line. Scrub BEFORE encoding.
         for key in ('stdout_preview', 'stderr_preview'):

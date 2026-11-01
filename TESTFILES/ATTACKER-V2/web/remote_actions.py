@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 import persistence_actions as persistence
+import native_actions as native
 from reports import INCIDENT_ID, p10_output_preview, redact_environment
 from scenario_model import private
 from windows_actions import emit, perform as windows_command, runtime_command, timeout_value
@@ -64,6 +65,19 @@ def perform(pid, target, env, session_factory=None, ssh=None):
     if env.get('MRNOBODY_RUN_MODE') != 'standalone':
         env['MRNOBODY_PASSWORD'] = env.get('NORDIC_SSH_PASSWORD' if platform == 'linux' else 'NORDIC_RDP_PASSWORD', '')
     limit = timeout_value(env.get('MRNOBODY_TIMEOUT') or 60)
+    if pid == '13':
+        result = windows_command('10', target, dict(env, MRN_POWERSHELL_SECRET=native.script(env)), session_factory)
+        result['command'] = native.metadata(env)['behavior']
+        preview = result.get('stdout_preview', '')
+        artifact = re.search(r'(?m)^artifact_path=([^\r\n]{1,260})$', preview)
+        if artifact:
+            result['artifact_path'] = artifact[1]
+        job = re.search(r'(?m)^job_name=(MrNobody-P13-[A-Za-z0-9-]{1,100})$', preview)
+        if job:
+            result['job_name'] = job[1]
+        result['cleanup'] = 'complete' if 'cleanup=complete' in preview else 'required_or_unverified'
+        result['cleanup_required'] = 'false' if result['cleanup'] == 'complete' and result.get('result') == 'success' else 'true'
+        return result
     if pid == '10' and platform == 'windows':
         return windows_command('10', target, env, session_factory)
     source = runtime_command(env.get('MRN_POWERSHELL_SECRET', '')) if pid == '10' else persistence.script(env, platform)
@@ -90,7 +104,7 @@ def perform(pid, target, env, session_factory=None, ssh=None):
         return dict(result='failed', warning='invalid_worker_response')
     if code != 0:
         return dict(result='failed', warning='transport_error_details_omitted')
-    result = dict(result='success' if action_code == 0 else 'skipped' if pid == '11' and action_code == 78 else 'action_error' if pid == '10' else 'failed',
+    result = dict(result='success' if action_code == 0 else 'skipped' if pid in {'11', '13'} and action_code == 78 else 'action_error' if pid == '10' else 'failed',
                   exit_code=action_code, stdout_bytes=stdout[1], stderr_bytes=stderr[1],
                   execution_status='command_error' if action_code else 'success_with_warning' if stderr[1] else 'success',
                   warning='target_method_unsupported' if action_code == 78 and pid == '11' else 'action_failed_check_target_logs' if action_code else 'nonfatal_stderr' if stderr[1] else 'none')
@@ -110,33 +124,80 @@ def framed_ssh(target, source, env, timeout):
     return ssh_execute(target, wrapped, env, timeout)
 
 
+def command_inputs(env):
+    explicit = any(k in env for k in ('MRN_POWERSHELL_WINDOWS_SECRET', 'MRN_BASH_SECRET'))
+    if explicit:
+        values = {'windows': env.get('MRN_POWERSHELL_WINDOWS_SECRET', ''), 'linux': env.get('MRN_BASH_SECRET', '')}
+        return {p: runtime_command(v.strip()) for p, v in values.items() if isinstance(v, str) and v.strip()}
+    value = env.get('MRN_POWERSHELL_SECRET', '')
+    if not value.strip():
+        return {}
+    value = runtime_command(value)
+    # Legacy Auto semantics: try the same command on the first compatible host.
+    platform = 'linux' if env.get('MRNOBODY_PROTOCOL') == 'ssh' or env.get('MRNOBODY_PLATFORM') == 'linux' else 'windows' if env.get('MRNOBODY_PROTOCOL') or env.get('MRNOBODY_PLATFORM') == 'windows' else None
+    return {platform: value} if platform else {'windows': value, 'linux': value}
+
+
+def command_environment(data, env, full=False):
+    """Runtime-only inputs; explicitly blank values never inherit old commands."""
+    explicit = full or any(k in data for k in ('powershell_windows', 'bash'))
+    if explicit:
+        for field, key in (('powershell_windows', 'MRN_POWERSHELL_WINDOWS_SECRET'), ('bash', 'MRN_BASH_SECRET')):
+            value = data.get(field, data.get('powershell', '') if field == 'powershell_windows' else '')
+            if not isinstance(value, str):
+                raise ValueError('Remote commands must be text')
+            env[key] = runtime_command(value.strip()) if value.strip() else ''
+        env.pop('MRN_POWERSHELL_SECRET', None)
+    else:
+        for key in ('MRN_POWERSHELL_WINDOWS_SECRET', 'MRN_BASH_SECRET'):
+            env.pop(key, None)
+        env['MRN_POWERSHELL_SECRET'] = runtime_command(data.get('powershell') or env.get('MRN_POWERSHELL_SECRET', ''))
+    return env
+
+
 def run(pid, env, invoke=subprocess.run):
-    if pid not in {'10', '11'} or not INCIDENT_ID.fullmatch(env.get('NORDIC_INCIDENT_ID', '')):
+    if pid not in {'10', '11', '13'} or not INCIDENT_ID.fullmatch(env.get('NORDIC_INCIDENT_ID', '')):
         raise ValueError('Invalid phase/incident')
     base = Path(env.get('NORDIC_BASE_DIR', '/opt/nordic-attack'))
     emit(base, env, pid, 'PHASE_START', phase=pid)
     outcomes = []
+    candidates, completed, dual = [], set(), False
     try:
         limit = timeout_value(env.get('MRNOBODY_TIMEOUT') or 60)
         if pid == '10':
-            runtime_command(env.get('MRN_POWERSHELL_SECRET', ''))
+            commands = command_inputs(env)
+            if not commands:
+                emit(base, env, pid, 'PHASE_SKIPPED', phase=pid, reason='NOT_CONFIGURED')
+                return 78
+        if pid == '13':
+            native.metadata(env)
+            env = dict(env, MRNOBODY_PLATFORM='windows')
         if pid == '11':
             method = env.get('MRNOBODY_METHOD') or 'auto'
             persistence.configuration(env, persistence.METHODS.get(method, ('linux',))[0])
         candidates = targets(env if pid == '11' else {k: v for k, v in env.items() if k != 'MRNOBODY_METHOD'})
+        dual = pid == '10' and any(k in env for k in ('MRN_POWERSHELL_WINDOWS_SECRET', 'MRN_BASH_SECRET'))
+        configured = set(commands) if pid == '10' else None
+        completed = set()
+        if configured is not None:
+            candidates = [t for t in candidates if t['platform'] in configured]
         for target in candidates:
+            if target['platform'] in completed:
+                continue
             fields = dict(platform=target['platform'], target=target['target'], username=target['username'], protocol=target['protocol'],
                           method='ssh' if target['platform'] == 'linux' else 'winrm_ntlm',
                           interpreter='bash' if target['platform'] == 'linux' else 'powershell')
-            if pid == '11':
+            if pid == '13':
+                fields.update(native.metadata(env))
+            elif pid == '11':
                 fields.update(persistence.metadata(env, target['platform']))
             else:
                 fields['mitre'] = 'T1059.004' if target['platform'] == 'linux' else 'T1059.001'
-            prefix = 'WINDOWS_ACTION' if pid == '10' and target['platform'] == 'windows' else 'REMOTE_ACTION' if pid == '10' else 'PERSISTENCE_ACTION'
+            prefix = 'WINDOWS_ACTION' if pid == '10' and target['platform'] == 'windows' else 'REMOTE_ACTION' if pid == '10' else 'NATIVE_ACTION' if pid == '13' else 'PERSISTENCE_ACTION'
             emit(base, env, pid, prefix + '_START', **fields)
             try:
                 child = invoke([sys.executable, str(Path(__file__).resolve()), pid, '--worker'],
-                               env=dict(env, MRN_REMOTE_TARGET=json.dumps(target)),
+                               env=dict(env, MRN_REMOTE_TARGET=json.dumps(target), **({'MRN_POWERSHELL_SECRET': commands[target['platform']]} if pid == '10' else {})),
                                capture_output=True, timeout=limit + 15, check=False)
                 result = json.loads(child.stdout) if child.returncode == 0 else {}
                 if not isinstance(result, dict) or result.get('result') not in {'success', 'action_error', 'skipped', 'failed'}:
@@ -146,32 +207,44 @@ def run(pid, env, invoke=subprocess.run):
             except (OSError, ValueError):
                 result = dict(result='failed', warning='worker_execution_failed')
             outcome = result.pop('result')
-            if outcome == 'action_error' and (pid != '10' or type(result.get('exit_code')) is not int or result['exit_code'] == 0):
+            if outcome == 'action_error' and (pid not in {'10', '13'} or type(result.get('exit_code')) is not int or result['exit_code'] == 0):
                 outcome = 'failed'
             if outcome == 'skipped' and pid != '11':
                 outcome = 'failed'
-            if pid == '11' and outcome != 'success':
+            if pid in {'11', '13'} and outcome != 'success':
                 fields['cleanup_required'] = 'true'
             emit(base, env, pid, prefix + '_' + {'success': 'SUCCESS', 'action_error': 'ERROR', 'skipped': 'SKIPPED', 'failed': 'FAILED'}[outcome], **{**fields, **result})
             outcomes.append('transport' if result.get('warning') == 'transport_error_details_omitted' else outcome)
-            if outcome in {'success', 'action_error'}:
-                break  # One compatible host; retry only candidate access failures.
-            if outcome == 'failed' and outcomes[-1] != 'transport':
-                break
-        if not candidates:
-            outcomes.append('skipped' if pid == '11' and env.get('MRNOBODY_RUN_MODE') == 'campaign' else 'failed')
+            if outcome in {'success', 'action_error'} or outcome == 'failed' and outcomes[-1] != 'transport':
+                completed.add(target['platform'])
+                if pid != '10' or not dual:
+                    break
+        if configured is not None:
+            available = {t['platform'] for t in candidates}
+            for platform in sorted(configured - available if dual else set()):
+                emit(base, env, pid, 'REMOTE_ACTION_SKIPPED', platform=platform, warning='no_compatible_access_targets')
+                outcomes.append('skipped')
+        if not candidates and configured is not None and not dual:
+            outcomes.append('failed')
+            emit(base, env, pid, 'REMOTE_ACTION_FAILED', warning='no_compatible_access_targets')
+        if not candidates and configured is None:
+            outcomes.append('skipped' if pid in {'11', '13'} and env.get('MRNOBODY_RUN_MODE') == 'campaign' else 'failed')
             emit(base, env, pid, 'REMOTE_ACTION_SKIPPED' if outcomes[-1] == 'skipped' else 'REMOTE_ACTION_FAILED', warning='no_compatible_access_targets')
     except Exception:
         outcomes.append('failed')
         emit(base, env, pid, 'REMOTE_ACTION_FAILED', warning='invalid_or_missing_runtime_configuration')
-    if 'success' in outcomes and 'failed' not in outcomes:
+    # A failed candidate followed by successful fallback is not a failure.
+    unresolved_transport = ({t['platform'] for t in candidates} - completed if candidates else set()) if dual or not completed else set()
+    if 'success' in outcomes and 'failed' not in outcomes and not unresolved_transport:
+        if any(x in outcomes for x in ('action_error', 'skipped')):
+            emit(base, env, pid, 'REMOTE_ACTION_PARTIAL', execution_status='partial', warning='some_configured_actions_did_not_complete')
         emit(base, env, pid, 'PHASE_COMPLETE', phase=pid)
         return 0
-    if 'action_error' in outcomes and 'failed' not in outcomes:
-        emit(base, env, pid, 'PHASE_SKIPPED', phase=pid, execution_status='command_error', reason='Custom_remote_command_failed')
+    if 'action_error' in outcomes and 'failed' not in outcomes and not unresolved_transport:
+        emit(base, env, pid, 'PHASE_SKIPPED', phase=pid, execution_status='command_error', reason='Native_tool_behavior_failed' if pid == '13' else 'Custom_remote_command_failed')
         return 79
     if outcomes and set(outcomes) == {'skipped'}:
-        emit(base, env, pid, 'PHASE_SKIPPED', phase=pid, reason='No_supported_persistence_target_or_method')
+        emit(base, env, pid, 'PHASE_SKIPPED', phase=pid, reason='No_compatible_target_or_supported_method')
         return 78
     emit(base, env, pid, 'PHASE_FAILED', phase=pid)
     return 1

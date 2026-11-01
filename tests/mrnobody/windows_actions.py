@@ -154,7 +154,8 @@ class Endpoints(API):
                 spec = {'type': 'campaign', 'id': 'full-incident', 'profile': {'mode': mode}, 'powershell_enabled': enabled}
                 if enabled:
                     response = self.client.post('/api/executions/run', json={'execution': spec, 'credentials': {'ssh_password': 'S', 'rdp_password': 'R'}})
-                    self.assertEqual(response.status_code, 400)
+                    self.assertEqual(response.status_code, 200)  # Both optional commands blank: dispatch a nonfatal skip.
+                    web.campaign_process = None
                 response = self.client.post('/api/executions/run', json={'execution': spec, 'credentials': {'ssh_password': 'S', 'rdp_password': 'R', **({'powershell': COMMAND} if enabled else {})}})
                 self.assertEqual(response.status_code, 200, response.json)
                 env = self.launch.call_args.kwargs['env']

@@ -17,11 +17,11 @@
             dependencies(id).forEach(visit);
             let item = draft.phases.find(p => p.id === id);
             if (!item) {item = phase(id); autoAdded.add(id);}
-            item.enabled = true; if (!["10", "11"].includes(id)) item.parameters = {};
+            item.enabled = true; if (!["10", "11", "13"].includes(id)) item.parameters = {};
             seen.add(id); result.push(item);
         };
         visit("01"); enabled().forEach(p => visit(p.id));
-        draft.phases.filter(p => !seen.has(p.id)).forEach(p => {if (!["10", "11"].includes(p.id)) p.parameters = {}; result.push(p);});
+        draft.phases.filter(p => !seen.has(p.id)).forEach(p => {if (!["10", "11", "13"].includes(p.id)) p.parameters = {}; result.push(p);});
         draft.phases = result;
     }
     function required(id) {
@@ -203,13 +203,13 @@
         node("p", "Credentials are supplied only when running or arming a schedule. They are never saved in scenario definitions.", parent, "muted");
         let model = execution?.type === "custom" ? custom.find(s => s.id === execution.id) : execution;
         if (model?.type === "phase") model = {target_mode: model.target_mode, phases: [{id: model.id, parameters: model.parameters || {}}]};
-        if (model?.type === "campaign" && model.id === "full-incident") model = {target_mode: "auto", phases: capabilities.filter(c => ["03", "09", "11", ...(execution.powershell_enabled ? ["10"] : [])].includes(c.id)).map(c => ({id: c.id}))};
+        if (model?.type === "campaign" && model.id === "full-incident") model = {target_mode: "auto", phases: capabilities.filter(c => ["03", "09", "11", "13", ...(execution.powershell_enabled ? ["10"] : [])].includes(c.id)).map(c => ({id: c.id}))};
         const required = new Set();
         if (!model?.phases) {required.add("ssh"); required.add("rdp");}
         else model.phases.filter(p => p.enabled !== false).forEach(p => {
             if (!capabilities.find(c => c.id === p.id)?.credentials) return;
             if (model.target_mode === "auto") {required.add("ssh"); required.add("rdp");}
-            else if (["10", "11"].includes(p.id) && !p.parameters?.protocol && (!p.parameters?.platform || p.parameters.platform === "auto")) {required.add("ssh"); required.add("rdp");}
+            else if (["10", "11", "13"].includes(p.id) && !p.parameters?.protocol && (!p.parameters?.platform || p.parameters.platform === "auto")) {required.add("ssh"); required.add("rdp");}
             else required.add(/^(rdp|winrm)/.test(p.parameters?.protocol || (p.parameters?.platform === "windows" ? "winrm-http" : "ssh")) ? "rdp" : "ssh");
         });
         node("p", `Required runtime credentials: ${required.size ? [...required].map(p => p === "ssh" ? "Linux / SSH" : "Windows / RDP / WinRM").join(", ") : "None"}`, parent);
@@ -219,12 +219,18 @@
             input.type = "password"; input.autocomplete = "new-password"; inputs[protocol + "_password"] = input;
         }
         if (model?.phases?.some(p => p.id === "10" && p.enabled !== false)) {
-            const wrap = node("label", undefined, parent, "planning-field");
-            node("span", "P10 remote command (PowerShell / Bash) (runtime only, never saved)", wrap);
-            const input = node("textarea", undefined, wrap);
-            input.rows = 5; input.autocomplete = "off"; input.maxLength = 16384;
-            inputs.powershell = input;
-            node("p", "Required for P10 runs. Schedules keep this input only in memory until restart or edit. Command/output content is omitted from reports.", parent, "muted");
+            const wrap = node("div", undefined, parent, "planning-field");
+            for (const [key, label] of [["powershell_windows", "PowerShell command (Windows, optional)"], ["bash", "Bash command (Linux, optional)"]]) {
+                const labelNode = node("label", undefined, wrap);
+                node("span", label, labelNode);
+                const input = node("textarea", undefined, labelNode);
+                input.rows = 5; input.autocomplete = "off"; input.maxLength = 16384;
+                inputs[key] = input;
+            }
+            const summary = node("p", "", parent, "muted");
+            const update = () => {summary.textContent = `P10 Review: PowerShell ${inputs.powershell_windows.value.trim() ? "configured" : "not configured"} / Bash ${inputs.bash.value.trim() ? "configured" : "not configured"}. Both blank: skipped (NOT_CONFIGURED).`;};
+            Object.values(inputs).forEach(input => input.addEventListener("input", update)); update();
+            node("p", "Commands are optional and run independently on compatible targets. Schedules hold them only in memory until restart or edit. Reports show bounded redacted output.", parent, "muted");
         }
         return () => Object.fromEntries(Object.entries(inputs).map(([key, input]) => {const value = input.value; input.value = ""; return [key, value];}));
     }
@@ -246,15 +252,16 @@
         if (!cap) return;
         if (!existing) parent = node("div", undefined, parent, "phase-parameters");
         if (cap.runtime_powershell) node("p", "P10 remote command (PowerShell / Bash) is requested on Review or when arming the schedule; it is never stored in the definition.", parent, "muted");
+        if (phase.id === "13") node("p", "Windows only. Choose encoded PowerShell, local certutil decode, or an empty BITS job that is cancelled. No arbitrary command or URL is accepted. Default: encoded PowerShell.", parent, "muted");
         if (phase.id === "09") node("p", "P09 requires a lab domain controller and AD management rights. New or disabled mrnobody accounts are enabled using the runtime Windows password; an already enabled account keeps its password. Domain Admins membership is verified.", parent, "muted");
         if (mode === "auto") {
             node("p", dataHint(phase.id), parent, "muted");
-            if (!["10", "11"].includes(phase.id)) return;
+            if (!["10", "11", "13"].includes(phase.id)) return;
         }
         Object.entries(cap.fields).forEach(([key, spec]) => {
             const platform = phase.parameters.platform || "auto";
             let options = spec.options;
-            if (["10", "11"].includes(phase.id)) {
+            if (["10", "11", "13"].includes(phase.id)) {
                 if (key === "protocol") options = options.filter(v => platform === "auto" || (v === "ssh") === (platform === "linux"));
                 if (key === "method") options = options.filter(v => v === "auto" || platform === "auto" || (["cron", "systemd"].includes(v)) === (platform === "linux"));
                 if (key === "source" || key === "subnet" || key === "file") return;
