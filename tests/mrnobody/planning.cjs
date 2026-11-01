@@ -228,6 +228,21 @@ async function main() {
     assert.match(text(body()),/192.168.1.55/);
     await click(body(),'Save + Run Now');
     assert.equal(requests.filter(r=>r.url==='/api/executions/run').at(-1).data.execution.type,'custom');
+    await click(elements.get('scheduleList'),'New schedule / Run Now');
+    const p11Editor=elements.get('scheduleEditor');
+    set('Execution','phase:11',p11Editor);
+    set('Start date/time (browser timezone)','2099-11-03T12:00',p11Editor);
+    set('Execution platform','windows',p11Editor);
+    assert.ok(textButton(p11Editor,'Save schedule')); assert.equal(field(p11Editor,'Execution').value,'phase:11');
+    assert.equal(field(p11Editor,'Start date/time (browser timezone)').value,'2099-11-03T12:00');
+    set('Protocol','winrm-http',p11Editor);
+    assert.ok(field(p11Editor,'Windows / RDP / WinRM password'));
+    set('Execution platform','linux',p11Editor); set('Protocol','ssh',p11Editor);
+    assert.ok(field(p11Editor,'Linux / SSH password'));
+    set('Target IPv4','192.168.1.55',p11Editor); set('Persistence method','cron',p11Editor);
+    await click(p11Editor,'Save schedule');
+    assert.equal(plans.at(-1).execution.parameters.platform,'linux');
+    assert.equal(plans.at(-1).execution.parameters.method,'cron');
     console.log('Builder DOM tests passed: dependencies, protected actions, target modes, common targets, validation, review, friendly units, P08/P09/P10 runtime inputs, Full Incident toggle and library summaries.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

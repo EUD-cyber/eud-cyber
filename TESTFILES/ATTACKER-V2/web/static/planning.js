@@ -209,7 +209,8 @@
         else model.phases.filter(p => p.enabled !== false).forEach(p => {
             if (!capabilities.find(c => c.id === p.id)?.credentials) return;
             if (model.target_mode === "auto") {required.add("ssh"); required.add("rdp");}
-            else required.add(/^(rdp|winrm)/.test(p.parameters?.protocol || "ssh") ? "rdp" : "ssh");
+            else if (["10", "11"].includes(p.id) && !p.parameters?.protocol && (!p.parameters?.platform || p.parameters.platform === "auto")) {required.add("ssh"); required.add("rdp");}
+            else required.add(/^(rdp|winrm)/.test(p.parameters?.protocol || (p.parameters?.platform === "windows" ? "winrm-http" : "ssh")) ? "rdp" : "ssh");
         });
         node("p", `Required runtime credentials: ${required.size ? [...required].map(p => p === "ssh" ? "Linux / SSH" : "Windows / RDP / WinRM").join(", ") : "None"}`, parent);
         const inputs = {};
@@ -240,9 +241,10 @@
         if (value.mode !== "normal") durationForm(parent, "Target duration", value.duration, v => {value.duration = v;});
         if (value.mode === "slow") node("p", "Discovery spreads host probes across its time slot. Web discovery spaces host/port checks. Other phases use absolute start offsets. Work can run longer than the target duration.", parent, "muted");
     }
-    function parameterForm(parent, phase, mode, common = false) {
+    function parameterForm(parent, phase, mode, common = false, existing = false, onChange = () => {}) {
         const cap = capabilities.find(c => c.id === phase.id);
         if (!cap) return;
+        if (!existing) parent = node("div", undefined, parent, "phase-parameters");
         if (cap.runtime_powershell) node("p", "P10 remote command (PowerShell / Bash) is requested on Review or when arming the schedule; it is never stored in the definition.", parent, "muted");
         if (phase.id === "09") node("p", "P09 requires a lab domain controller and AD management rights. New or disabled mrnobody accounts are enabled using the runtime Windows password; an already enabled account keeps its password. Domain Admins membership is verified.", parent, "muted");
         if (mode === "auto") {
@@ -264,8 +266,9 @@
                 if (key === "platform") {
                     delete phase.parameters.protocol; delete phase.parameters.port; delete phase.parameters.username;
                     if (phase.id === "11") delete phase.parameters.method;
-                    parent.replaceChildren(); parameterForm(parent, phase, mode, common);
+                    parent.replaceChildren(); parameterForm(parent, phase, mode, common, true, onChange);
                 }
+                if (["platform", "protocol"].includes(key)) onChange();
                 if (key === "target" && common) {inherited.delete(phase.id); if (hint) hint.textContent = "Local override";}
             }, opts);
             if (key === "target" && common && commonTarget) {
@@ -430,11 +433,12 @@
             spec.profile ||= {mode: "normal", duration: 0};
             profileForm(parent, spec.profile, () => scheduleEditor(spec, existing), spec.type === "phase" ? ["normal", "slow", "custom"] : spec.id === "full-incident" ? ["normal", "slow"] : ["normal"]);
         } else node("p", "Uses the profile saved in the custom scenario.", parent);
+        let refreshCredentials = () => {};
         if (spec.type === "phase") {
             spec.target_mode = spec.id === "01" ? (spec.target_mode || "auto") : "fixed";
             if (spec.id === "01") field(parent, "Targets", spec.target_mode, value => {spec.target_mode = value; spec.parameters = {}; scheduleEditor(spec, existing);}, [{value: "auto", label: "Auto Discovery"}, {value: "fixed", label: "Fixed subnets"}]);
             const phase = {id: spec.id, parameters: spec.parameters ||= {}, timing: spec.timing ||= {}};
-            parameterForm(parent, phase, spec.target_mode); timingForm(parent, phase, spec.profile);
+            parameterForm(parent, phase, spec.target_mode, false, false, () => refreshCredentials()); timingForm(parent, phase, spec.profile);
         }
         if (spec.type === "campaign" && spec.id === "full-incident") {
             field(parent, "P10 Custom Remote Command", spec.powershell_enabled ? "1" : "0", value => {spec.powershell_enabled = value === "1"; scheduleEditor(spec, existing);}, [{value:"0",label:"Disabled"},{value:"1",label:"Enabled"}]);
@@ -445,7 +449,10 @@
         recurrenceForm(parent, when);
         node("p", `Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}. Repeat interval is used for Recurring only.`, parent, "muted");
         node("p", "Scheduled P08 requires service-side NORDIC_WORDLIST_FILE and NORDIC_WORDLIST_USERS; configure service credentials for unattended runs. Uploaded wordlists are execution-only.", parent, "muted");
-        const read = credentials(parent, spec);
+        const credentialPanel = node("div", undefined, parent);
+        let read;
+        refreshCredentials = () => {credentialPanel.replaceChildren(); read = credentials(credentialPanel, spec);};
+        refreshCredentials();
         if (existing) button(parent, "Supply credentials without changing schedule", async () => {
             await api(`/api/schedules/${existing.id}/arm`, "POST", read());
             message("Temporary credentials supplied until service restart."); parent.replaceChildren(); await refresh();
