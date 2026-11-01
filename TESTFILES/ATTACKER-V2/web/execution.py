@@ -159,6 +159,7 @@ def snapshot(base, capabilities, process=None, now=None):
     # Only fixed-format lifecycle lines are exposed. Raw stdout, command lines,
     # usernames, target parameters and wordlist contents never enter this API.
     logs = []
+    action_result = None
     try:
         with (base / 'logs/incident-ground-truth.log').open('rb') as handle:
             handle.seek(0, 2)
@@ -168,12 +169,23 @@ def snapshot(base, capabilities, process=None, now=None):
         for line in tail.splitlines():
             if f'INCIDENT={iid} ' not in line:
                 continue
+            if 'PHASE=10 ' in line:
+                if 'WINDOWS_ACTION_ERROR ' in line:
+                    action_result = 'command_error'
+                    logs.append('P10 · Custom PowerShell command failed')
+                elif 'WINDOWS_ACTION_SUCCESS ' in line and 'execution_status=success_with_warning' in line:
+                    if action_result != 'command_error':
+                        action_result = 'success_with_warning'
+                    logs.append('P10 · Completed with nonfatal stderr/warnings')
             match = re.search(r'\b(PHASE_START|PHASE_COMPLETE|PHASE_FAILED|PHASE_SKIPPED|CAMPAIGN_START|CAMPAIGN_COMPLETE)\b', line)
             if match:
                 phase = re.search(r'\bphase=(\d{2,4})\b', line)
                 logs.append(match[1].replace('_', ' ').title() + (' · P' + phase[1] if phase else ''))
     except OSError:
         pass
+    for phase in timeline:
+        if phase['id'] == '10':
+            phase['action_result'] = reported.get('10', {}).get('action_result') or action_result
     return redact_environment({'version': 1, 'active': bool(active), 'status': status, 'incident_id': iid,
             'execution': meta, 'started': launch.get('started'), 'elapsed_seconds': round(elapsed),
             'planned_seconds': span or None, 'timing_best_effort': True, 'timeline': timeline,

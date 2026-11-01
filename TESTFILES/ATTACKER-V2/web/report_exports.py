@@ -127,6 +127,10 @@ def report_document(report, view="investigation"):
     for phase in phases:
         add("h3", f"{text(phase.get('id'))} - {text(phase.get('name'))}")
         add("p", f"Phase status: {text(phase.get('status'))}")
+        if phase.get('action_outcome'):
+            add('p', phase['action_outcome'])
+            for detail in array(phase.get('action_evidence')):
+                add('p', detail)
         if phase.get('prerequisite_outcome'):
             add('p', phase['prerequisite_outcome'])
             for detail in array(phase.get('prerequisite_evidence')):

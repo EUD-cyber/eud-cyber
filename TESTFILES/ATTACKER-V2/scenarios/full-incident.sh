@@ -711,6 +711,13 @@ run_phase() {
         return 0
     fi
 
+    if [[ "$NUMBER" == "10" && $RESULT -eq 79 ]]; then
+        RUN_PHASE_STATUS="skipped"
+        update_phase_state "$NUMBER" "skipped"
+        log "[PHASE $NUMBER] ACTION_ERROR - Custom PowerShell command failed; campaign continues"
+        return 0
+    fi
+
     if [[ $RESULT -ne 0 ]]; then
 
         echo
