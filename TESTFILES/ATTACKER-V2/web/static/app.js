@@ -750,6 +750,8 @@ function renderScenarios(scenarios) {
 function renderScenarioDetail(
     scenario
 ) {
+    const originalScenario = scenario;
+    scenario = {...scenario, ...Object.fromEntries(["name","id","description","script"].map(key => [key, String(scenario[key] || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c])]))};
 
     const scenarioDetail =
         document.getElementById(
@@ -809,7 +811,7 @@ function renderScenarioDetail(
     runButton.className = "button button-start";
     runButton.textContent = "RUN";
     runButton.addEventListener("click", () => {
-        configureScenario(scenario);
+        configureScenario(originalScenario);
     });
     scenarioDetail.appendChild(runButton);
 
@@ -817,6 +819,10 @@ function renderScenarioDetail(
 
 
 function configureScenario(scenario) {
+    if (scenario?.custom && window.MrnPlanning && !scenario.phases?.includes("08")) {
+        window.MrnPlanning.runCustom(scenario.id).catch(error => showMessage(error.message, "error"));
+        return;
+    }
     selectedScenario = scenario;
 
     if (startButton) {
@@ -3036,7 +3042,8 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
     const techniques = reportTechniques(report);
     reportNode("h2", "Incident overview", detail);
     reportNode("h3", incident.id || id, detail);
-    reportNode("p", `${reportType(report)} · ${incident.scenario || "Unknown scenario"}`, detail);
+    reportNode("p", `${reportType(report)} · ${incident.scenario_name || incident.scenario || "Unknown scenario"}`, detail);
+    if (report.execution) reportNode("p", `Profile: ${report.execution.profile?.mode || "normal"} · Target duration: ${report.execution.profile?.duration || 0}s · Scenario ID: ${incident.scenario}`, detail);
     reportBadge(detail, incident.status);
     reportNode("p", `Started: ${incident.started || "Unavailable"} · Ended: ${incident.ended || "Unavailable"}`, detail);
     const metrics = reportNode("div", null, detail);

@@ -32,7 +32,15 @@ set -u
 # PATHS
 # ============================================================
 
-BASE_DIR="/opt/nordic-attack"
+BASE_DIR="${NORDIC_BASE_DIR:-/opt/nordic-attack}"
+
+# Lock before clearing state; GUI children inherit the same open descriptor.
+mkdir -p "$BASE_DIR/runtime"
+if [[ -z "${MRN_LOCK_FD:-}" ]]; then
+    exec 9>>"$BASE_DIR/runtime/execution.lock"
+    flock -n 9 || { echo "[SKIP] An execution is already running."; exit 75; }
+    export MRN_LOCK_FD=9
+fi
 
 CONFIG_FILE="$BASE_DIR/config/defaults.conf"
 SCRIPT_DIR="$BASE_DIR/scripts"
@@ -678,10 +686,14 @@ run_phase() {
         "PHASE_START phase=$NUMBER name=\"$NAME\""
 
 
-    "$SCRIPT" 2>&1 | tee -a "$MASTER_LOG"
-
-
-    local RESULT=${PIPESTATUS[0]}
+    local RESULT
+    if [[ -n "${MRN_EXECUTION:-}" ]]; then
+        python3 "$BASE_DIR/web/execution.py" --phase "$NUMBER" --script "$SCRIPT" 2>&1 | tee -a "$MASTER_LOG"
+        RESULT=${PIPESTATUS[0]}
+    else
+        "$SCRIPT" 2>&1 | tee -a "$MASTER_LOG"
+        RESULT=${PIPESTATUS[0]}
+    fi
 
 
     if [[ $RESULT -ne 0 ]]; then
@@ -1032,6 +1044,15 @@ data = {
 }
 
 
+import os
+if os.environ.get("MRN_EXECUTION"):
+    execution = json.loads(os.environ["MRN_EXECUTION"])
+    data["scenario"] = execution.get("id", "full-incident")
+    data["scenario_name"] = execution["name"]
+    data["execution"] = execution
+    data["phases"] = {p: "disabled" for p in data["phases"]}
+    data["phases"].update({p["id"]: "pending" for p in execution["phases"]})
+
 with open(output, "w", encoding="utf-8") as f:
 
     json.dump(data, f, indent=2)
@@ -1109,6 +1130,17 @@ PY
 }
 
 
+if [[ -n "${MRN_EXECUTION:-}" ]]; then
+    while read -r PHASE; do
+        SCRIPT="$(find "$SCRIPT_DIR" -maxdepth 1 -name "$PHASE-*.sh" -print -quit)"
+        update_phase_state "$PHASE" "running"
+        if ! run_phase "$PHASE" "$PHASE" "$SCRIPT"; then
+            update_phase_state "$PHASE" "failed"
+            exit 1
+        fi
+        update_phase_state "$PHASE" "complete"
+    done < <(python3 "$BASE_DIR/web/execution.py" --list)
+else
 # ============================================================
 # PHASE 01
 # ============================================================
@@ -1325,6 +1357,8 @@ fi
 update_phase_state "07" "complete"
 
 
+
+fi
 
 # ============================================================
 # COMPLETE CAMPAIGN

@@ -63,7 +63,7 @@ with tempfile.TemporaryDirectory(dir=source.parent.parent.resolve()) as temporar
                "rdp_password": "rdp-test-secret"}
     request.get_json = lambda **kwargs: payload.copy()
     with patch.object(module, "determine_incident_ip", return_value="192.168.1.254"), patch.object(
-        module.subprocess, "Popen"
+        module, "launch"
     ) as launch:
         launch.return_value.pid = 123
         launch.return_value.poll.return_value = None
@@ -73,7 +73,7 @@ with tempfile.TemporaryDirectory(dir=source.parent.parent.resolve()) as temporar
             assert result["scenario_id"] == scenario_id
             assert result["pid"] == 123
             args, kwargs = launch.call_args
-            assert args[0][-1] == str(module.SCENARIO_DIR / (filename + ".sh"))
+            assert args[1][-1] == str(module.SCENARIO_DIR / (filename + ".sh"))
             assert kwargs["env"]["NORDIC_SSH_PASSWORD"] == payload["ssh_password"]
             assert kwargs["env"]["NORDIC_RDP_PASSWORD"] == payload["rdp_password"]
             kwargs["stdout"].close()

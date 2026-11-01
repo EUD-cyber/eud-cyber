@@ -219,7 +219,7 @@ exit "${FIXTURE_EXIT:-0}"
                     (base / directory).mkdir()
                 # Only the scenario orchestrator runs. Every numbered phase is a harmless fixture.
                 scenario = (PLATFORM / "scenarios/full-incident.sh").read_text(encoding="utf8")
-                scenario = scenario.replace('BASE_DIR="/opt/nordic-attack"', 'BASE_DIR="$REPORT_FIXTURE_BASE"', 1)
+                scenario = scenario.replace('BASE_DIR="${NORDIC_BASE_DIR:-/opt/nordic-attack}"', 'BASE_DIR="$REPORT_FIXTURE_BASE"', 1)
                 (base / "scenario.sh").write_text(scenario, encoding="utf8", newline="\n")
                 defaults = (PLATFORM / "config/defaults.conf").read_text(encoding="utf8")
                 defaults = defaults.replace('NORDIC_BASE_DIR="/opt/nordic-attack"', 'NORDIC_BASE_DIR="$REPORT_FIXTURE_BASE"')

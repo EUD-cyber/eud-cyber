@@ -81,6 +81,10 @@ while IFS= read -r -d '' FILE; do
             continue
             ;;
 
+        data/*)
+            continue
+            ;;
+
         config/local.conf)
             continue
             ;;

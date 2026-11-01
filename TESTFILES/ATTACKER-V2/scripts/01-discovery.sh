@@ -560,6 +560,13 @@ log "[INFO] Starting host discovery..."
 
 TOTAL_HOSTS=0
 
+# Build paced results from the same already-filtered networks. The existing
+# parser below retains inventory limits, self-host exclusion and output format.
+PACED_RESULTS="$TMP_DIR/paced-results.txt"
+if [[ -n "${MRN_TIMING:-}" && "${MRN_TIMING:-}" != "{}" ]]; then
+    python3 "$BASE_DIR/web/execution.py" --discovery "$NETWORK_TMP" > "$PACED_RESULTS" || exit 1
+fi
+
 
 while IFS='|' read -r network interface; do
 
@@ -635,6 +642,10 @@ while IFS='|' read -r network interface; do
 
     done < <(
 
+        if [[ -f "$PACED_RESULTS" ]]; then
+            awk '/Status: Up/ {print $2}' "$PACED_RESULTS" |
+                python3 -c 'import ipaddress,sys; n=ipaddress.ip_network(sys.argv[1]); print("\n".join(x.strip() for x in sys.stdin if ipaddress.ip_address(x.strip()) in n))' "$network"
+        else
         timeout 20s \
             nmap \
                 -sn \
@@ -643,6 +654,7 @@ while IFS='|' read -r network interface; do
                 -oG - \
                 2>/dev/null \
         | awk '/Status: Up/ {print $2}'
+        fi
 
             )
 

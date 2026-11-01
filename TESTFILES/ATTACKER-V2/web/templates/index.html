@@ -11,7 +11,7 @@
     >
 
     <title>
-        Nordic Manufacturing - MrNobody Incident Platform
+        MrNobody Incident Platform
     </title>
 
     <link
@@ -39,7 +39,7 @@
         <div>
 
             <h1>
-                Nordic Manufacturing A/S
+                MrNobody Incident Platform
             </h1>
 
             <div class="subtitle">
@@ -97,6 +97,7 @@
 
 
         <nav class="sidebar-nav">
+<button class="nav-item" type="button" data-page="schedules"><span class="nav-icon">◷</span><span>Schedules</span></button>
 
             <button
                 class="nav-item nav-active"
@@ -1022,6 +1023,7 @@
         </div>
 
 
+<div class="panel" id="customLibrary"></div><button id="newCustomScenario" class="button" type="button">Custom Scenario Builder</button>
         <div
             id="scenarioGrid"
             class="phase-grid"
@@ -1681,6 +1683,9 @@
 </section>
 
             
+<section id="page-builder" class="app-page"><section class="panel"><h1>Custom Scenario Builder</h1><div id="builderBody"></div></section></section>
+<section id="page-schedules" class="app-page"><section class="panel"><h1>Schedules</h1><p class="muted">Schedules survive restarts. Missed recurring runs coalesce into one execution. Busy runs are skipped. Temporary credentials must be supplied again after a service restart.</p><div id="scheduleList"></div><div id="scheduleEditor"></div></section></section>
+<div id="planningMessage" role="status" aria-live="polite"></div>
     </main>
 
 </div>
@@ -1692,7 +1697,7 @@
 
 <footer>
 
-    Nordic Manufacturing A/S
+    MrNobody Incident Platform
     · MrNobody Incident Platform
 
 </footer>
@@ -1707,6 +1712,7 @@
 ></script>
 
 
+<script src="{{ url_for('static', filename='planning.js') }}"></script>
 </body>
 
 </html>

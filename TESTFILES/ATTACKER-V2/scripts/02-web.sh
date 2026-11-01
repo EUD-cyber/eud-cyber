@@ -346,6 +346,8 @@ TMP_RESULTS="$NORDIC_STATE_DIR/.web-targets.tmp"
 # WEB DISCOVERY
 # ============================================================
 
+PACE_INDEX=0
+PACE_COUNT=$(( ${#HOSTS[@]} * ${#PORTS[@]} ))
 for HOST in "${HOSTS[@]}"; do
 
     echo
@@ -355,6 +357,10 @@ for HOST in "${HOSTS[@]}"; do
     echo
 
     for PORT in "${PORTS[@]}"; do
+        if [[ -n "${MRN_TIMING:-}" && "${MRN_TIMING:-}" != "{}" ]]; then
+            python3 "$BASE_DIR/web/execution.py" --pace "$PACE_INDEX" "$PACE_COUNT" || exit 1
+            PACE_INDEX=$((PACE_INDEX + 1))
+        fi
 
         # ----------------------------------------------------
         # First determine whether TCP is reachable.

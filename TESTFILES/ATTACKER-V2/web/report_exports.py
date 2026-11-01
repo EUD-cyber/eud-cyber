@@ -77,7 +77,13 @@ def report_document(report, view="investigation"):
     add("p", incident.get("id"))
     add("p", f"{report_type} | {VIEWS[view]}")
     heading("Incident overview")
-    for label, value in [("Scenario", incident.get("scenario")), ("Status", incident.get("status")),
+    execution = obj(report.get("execution"))
+    timing_profile = obj(execution.get("profile"))
+    for label, value in [("Scenario", incident.get("scenario_name") or incident.get("scenario")),
+                         ("Scenario ID", incident.get("scenario")),
+                         ("Execution profile", timing_profile.get("mode", "normal")),
+                         ("Target duration (seconds)", timing_profile.get("duration", 0)),
+                         ("Status", incident.get("status")),
                          ("Start", incident.get("started")), ("End", incident.get("ended"))]:
         add("p", f"{label}: {text(value)}")
     add("p", "Recorded phase status describes the run, not proof that every action succeeded. Missing evidence is not proof of an unaffected asset.")
