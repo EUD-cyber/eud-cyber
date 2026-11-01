@@ -31,6 +31,19 @@ TIMING = {'start_offset': 'Start offset (seconds)', 'duration': 'Target duration
           'delay_min': 'Minimum action delay (seconds)', 'delay_max': 'Maximum action delay (seconds)',
           'jitter': 'Jitter fraction (0–1)'}
 PRIVATE = [ipaddress.ip_network(x) for x in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16')]
+DEPENDENCIES = {'02': ['01'], '03': ['01'], '04': ['03'], '05': ['03'],
+                '06': ['03', '05'], '07': ['03'], '08': ['01', '03']}
+
+
+def required_fields(pid):
+    required = {'subnet'} if pid == '01' else {'target'}
+    if pid in {'03', '08'}:
+        required.add('protocol')
+    if pid == '06':
+        required.add('file')
+    if pid == '04':
+        required.add('source')
+    return required
 
 
 def keys(value, allowed, label):
@@ -70,6 +83,8 @@ def catalogue(script_dir, read_metadata):
         if 'protocol' in fields:
             fields['protocol']['options'] = PROTOCOLS.get(pid, [])
         result[pid] = {'id': pid, 'name': meta.get('ATTACK_NAME', script.stem),
+                       'dependencies': DEPENDENCIES.get(pid, []),
+                       'required_fields': sorted(required_fields(pid)),
                        'script': script.name, 'fields': fields, 'auto': 'auto' in supported,
                        'credentials': 'password' in supported,
                        'wordlist': pid == '08',
@@ -158,13 +173,7 @@ def validate(value, capabilities):
         if phase.get('enabled', True):
             enabled.append(pid)
             if mode == 'fixed':
-                required = {'subnet'} if pid == '01' else {'target'}
-                if pid in {'03', '08'}:
-                    required.add('protocol')
-                if pid == '06':
-                    required.add('file')
-                if pid == '04':
-                    required.add('source')
+                required = required_fields(pid)
                 if not required <= set(params):
                     raise ValueError(f'Phase {pid} needs: {", ".join(sorted(required))}')
     if not enabled:
@@ -173,7 +182,7 @@ def validate(value, capabilities):
     if mode == 'auto':
         prior = set()
         for pid in enabled:
-            needed = {'02': {'01'}, '03': {'01'}, '04': {'03'}, '05': {'03'}, '06': {'03', '05'}, '07': {'03'}, '08': {'01', '03'}}.get(pid, set())
+            needed = set(DEPENDENCIES.get(pid, []))
             if not needed <= prior:
                 raise ValueError(f'Phase {pid} requires earlier phases: {", ".join(sorted(needed))}')
             prior.add(pid)

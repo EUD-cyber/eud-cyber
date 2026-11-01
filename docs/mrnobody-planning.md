@@ -8,10 +8,44 @@ products, change coverage/comparison features, or deploy to a running VM.
 
 Open **Scenarios → Custom Scenario Builder**. The workflow is basics → target
 mode → phase selection/order → phase configuration → profile/timing → schedule
-→ review/save/run. Phases can be disabled without losing their configuration.
+→ review/save/run. Completed, current and upcoming steps are marked separately.
+Each Next validates the current step and keeps actionable errors beside the
+controls. Review is reachable only after valid basics, targets, phase order,
+phase configuration, timing and schedule; save is revalidated by the server.
 The library supports edit, duplicate, schedule and delete for custom definitions;
 built-in scripts are protected. Saved custom scenarios also appear alongside
-built-ins and use the existing RUN/configuration form, including wordlist upload.
+built-ins. RUN opens the builder's readable review, including runtime credentials
+and P08 wordlist upload. Library cards summarize target mode, enabled phase flow,
+profile, planned duration and schedule count. Edit/duplicate/schedule/delete and
+built-in protection remain unchanged.
+
+**Auto Discovery** inserts and enables P01 first, including when switching an
+existing draft from fixed targets. Adding a phase recursively inserts missing
+prerequisites without duplicates: P02/P03 need P01; P04/P05/P07 need P03; P06
+needs P03 and P05; P08 needs P01 and P03. Capability metadata and backend
+validation use the same dependency table. Required phases cannot be disabled or
+removed, and reorder controls cannot break dependencies or move P01 from first.
+Cards mark Required/Auto-added prerequisite and explain which discovery,
+compromised-host or staged-data output they consume. Fixed-only parameters are
+cleared when entering Auto and their controls are hidden.
+
+**Custom / Fixed Targets** adds no phases automatically. Switching from Auto
+removes prerequisites inserted during the current editing session, retaining
+explicit selections; reopening a saved definition treats its saved phases as
+explicit. The optional Common Target fills only ordinary `target` fields,
+including phases added later. It never fills P01 subnet or P04 source. Editing
+a phase target makes it a local override; later Common Target changes preserve
+overrides. Use Common Target restores inheritance. Clearing Common Target clears
+inherited targets only. This convenience state is local to the draft: saved
+definitions contain the resolved per-phase targets with the existing schema.
+Required fields, private lab addresses, protocols, ports and synthetic-file
+paths are checked before leaving Phase Configuration.
+
+Review shows name/description, target mode, ordered phase flow, prerequisite
+marks, fixed/common targets, required runtime credentials, profile/planned span
+and local schedule. Raw definition JSON is available under **Advanced / Show
+JSON**, collapsed by default. Save, Save + Run Now and Save scenario + schedule
+retain their existing execution/persistence paths.
 
 Fields come from installed `ATTACK_PARAMETERS` metadata, constrained by adapters
 for the current scripts. Fixed mode exposes supported source/target, subnet,
@@ -76,8 +110,13 @@ Scheduler start, skip, completion, interruption and failure are appended to
 
 Scenario and schedule JSON never contain passwords, wordlist contents or upload
 paths. Phase passwords travel in the subprocess environment rather than command
-arguments. The existing multipart campaign form remains available for uploads;
+arguments. Builder Review offers execution-only P08 usernames and a wordlist
+upload for Save + Run Now, reusing the existing multipart campaign endpoint;
 uploaded files are restricted to mode 0600.
+Saving a definition alone never submits the upload. Scheduled P08 uses the
+existing service-side wordlist source; the Schedule step explains this explicitly.
+The builder can arm a newly saved schedule with temporary runtime passwords,
+using the same in-memory credential lease as the Schedules editor.
 
 Schedules can be armed with temporary passwords through Schedules. Those values
 exist only in service memory; editing/deleting the schedule or restarting the
@@ -100,7 +139,18 @@ configuration and deployment remain the VM administrator's responsibility.
 
 Normal with no timing config retains existing activity and phase delays.
 Structured Normal custom runs use the selected order without adding delays.
-Slow defaults to 14,400 seconds (four hours). Discovery gets 40% of weighted
+Slow defaults to four hours. The GUI uses Hours/Minutes/Seconds controls for
+campaign target duration and custom per-phase offsets/activity durations.
+Delay min/max remain clearly labelled seconds; jitter is displayed as 0–100%
+and converted to the existing 0–1 fraction. Recurrence uses Repeat every plus
+minute/hour/day/week units, converted to whole seconds (1 minute–365 days).
+Existing fractional durations and second-based recurrence values load without
+rounding or schema migration. Date/time input and Review show browser timezone
+and the computed local start. Normal, Slow and Custom plans retain seconds in
+the backend schema. Review states that target duration/planned span is best-effort
+and actual runtime may extend beyond it.
+
+Discovery gets 40% of weighted
 time, web discovery 25%, and later phases get absolute start offsets in the
 remaining slots; weights are normalized over the enabled phases. Discovery
 enumerates the same filtered network list and spaces bounded `nmap -sn` host
@@ -131,8 +181,12 @@ With `--bash`, Linux CI runs the actual campaign and scheduler against inert
 phase fixtures, verifies the POSIX lock and checks reports plus HTML/PDF export.
 No real numbered phase payload executes in these tests.
 
-`tests/mrnobody/planning.cjs` exercises dynamic builder fields, reorder, profile
-controls, text-safe rendering, save/duplicate, schedule creation and Run Now.
+`tests/mrnobody/planning.cjs` exercises automatic P01, recursive prerequisites,
+protected reorder/disable/remove, mode switches, Common Target inheritance and
+overrides, per-step validation, readable review/Advanced JSON, friendly timing
+and recurrence conversions, library summaries and runtime-only P08 multipart.
+Backend tests verify advertised dependencies/required fields against validation
+and exercise the reused multipart upload with no secrets in planning storage.
 Existing frontend, backend, Full Incident, standalone, historical report and
 export tests remain in the validation workflow. Fresh-install userdata fetches
 the new modules and GUI asset; the updater manifest includes their checksums.

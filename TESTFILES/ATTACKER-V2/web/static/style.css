@@ -1917,6 +1917,14 @@ footer {
 .planning-field input,.planning-field select {background:#101722;color:#dce4ef;border:1px solid #334259;border-radius:6px;padding:10px;font:inherit}
 .planning-row {display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:12px 0}
 .planning-review {max-height:420px;overflow:auto;padding:16px;background:#101722;color:#c9d6e8;white-space:pre-wrap}
-.planning-steps {line-height:1.8}
+.planning-steps {display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0;line-height:1.8}
+.planning-steps li {padding:6px 10px;border:1px solid #334259;border-radius:6px}
+.planning-steps .completed {color:#83d9a5;border-color:#387851}
+.planning-steps .current {color:#fff;background:#274a75;border-color:#70aaf0;font-weight:700}
+.planning-steps .upcoming {color:#96a5b9}
+.planning-error {color:#ffb7b7;white-space:pre-wrap}
+.planning-error:empty {display:none}
+.planning-badge {padding:3px 7px;border-radius:5px;background:#263e55;color:#c8e6ff;font-size:.85em}
+.planning-row button:disabled {opacity:.45;cursor:not-allowed}
 #planningMessage:not(:empty) {position:sticky;bottom:16px;padding:14px;border:1px solid #55799c;background:#162437;color:#e6effb;border-radius:8px;z-index:10}
 #scheduleList .button,#customLibrary .button,#builderBody .button,#scheduleEditor .button {margin:6px}
