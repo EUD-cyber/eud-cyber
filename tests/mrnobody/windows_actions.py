@@ -226,6 +226,7 @@ class ShellIntegration(unittest.TestCase):
             shutil.copy(PLATFORM / 'scripts/run-phase.sh', base / 'scripts/run-phase.sh')
             shutil.copy(PLATFORM / 'scenarios/full-incident.sh', base / 'scenarios/full-incident.sh')
             config = (PLATFORM / 'config/defaults.conf').read_text().replace('NORDIC_BASE_DIR="/opt/nordic-attack"', f'NORDIC_BASE_DIR="{base}"')
+            config += '\nNORDIC_PHASE_DELAY_MIN=0\nNORDIC_PHASE_DELAY_MAX=0\n'
             (base / 'config/defaults.conf').write_text(config)
             (base / 'venv/bin/python').symlink_to(sys.executable)
             # Only this fixture module is imported as winrm; no network exists.
@@ -241,6 +242,7 @@ class Session:
         return Response()
 ''')
             env = dict(os.environ, NORDIC_BASE_DIR=tmp, MRN_POWERSHELL_SECRET=COMMAND,
+                       NORDIC_COMPROMISED_STATE=str(base / 'state/compromised-hosts.json'),
                        MRNOBODY_PASSWORD='WIN_SECRET', NORDIC_RDP_PASSWORD='WIN_SECRET',
                        PYTHONPATH=str(base / 'fake'), NORDIC_PHASE_DELAY_MIN='0', NORDIC_PHASE_DELAY_MAX='0')
             for pid in ('09', '10'):
