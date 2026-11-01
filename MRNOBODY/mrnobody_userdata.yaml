@@ -41,6 +41,7 @@ packages:
   - python3-pip
   - python3-venv
   - python3-flask
+  - python3-reportlab
   - nginx
   - openssl
   - nmap
@@ -258,6 +259,10 @@ write_files:
           "$INSTALL_DIR/web/reports.py"
 
       download_file \
+          "web/report_exports.py" \
+          "$INSTALL_DIR/web/report_exports.py"
+
+      download_file \
           "web/templates/index.html" \
           "$INSTALL_DIR/web/templates/index.html"
 
@@ -341,6 +346,8 @@ write_files:
       chmod 644 \
           "${INSTALL_DIR}/web/reports.py"
 
+      chmod 0644 "${INSTALL_DIR}/web/report_exports.py"
+
       chmod 644 \
           "${INSTALL_DIR}/web/templates/index.html"
 
@@ -397,7 +404,8 @@ write_files:
       /usr/bin/python3 \
           -m py_compile \
           "${INSTALL_DIR}/web/app.py" \
-          "${INSTALL_DIR}/web/reports.py"
+          "${INSTALL_DIR}/web/reports.py" \
+          "${INSTALL_DIR}/web/report_exports.py"
 
 
       # ======================================================
@@ -730,3 +738,4 @@ power_state:
   message: "MrNobody Incident Platform installation completed - powering off"
   timeout: 30
   condition: true
+

@@ -8,9 +8,10 @@ import subprocess
 import threading
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 
 from reports import list_reports, load_report, read_metadata
+from report_exports import VIEWS, export_html, export_pdf
 
 
 # ============================================================
@@ -892,6 +893,27 @@ def api_report(incident_id):
         return jsonify({"error": "Invalid or unreadable report"}), 404
 
 
+@app.route("/api/reports/<incident_id>/export/<format>")
+def api_report_export(incident_id, format):
+    view = request.args.get("view", "investigation")
+    if format not in {"html", "pdf"} or view not in VIEWS:
+        return jsonify({"error": "Unsupported export format or report view"}), 400
+    try:
+        report = load_report(BASE_DIR / "reports", incident_id)
+    except (OSError, ValueError, TypeError, AttributeError):
+        return jsonify({"error": "Report not found or unreadable"}), 404
+    try:
+        content = export_html(report, view) if format == "html" else export_pdf(report, view)
+    except ImportError:
+        return jsonify({"error": "PDF support unavailable. Install python3-reportlab on the server, then retry."}), 503
+    response = Response(content, mimetype="text/html" if format == "html" else "application/pdf")
+    response.headers["Content-Disposition"] = f'attachment; filename="{incident_id}-{view}.{format}"'
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Content-Security-Policy"] = "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"
+    return response
+
+
 @app.route("/api/inventory")
 def api_inventory():
     inventory = read_json(
@@ -1757,3 +1779,4 @@ if __name__ == "__main__":
         debug=False,
         threaded=True,
     )
+

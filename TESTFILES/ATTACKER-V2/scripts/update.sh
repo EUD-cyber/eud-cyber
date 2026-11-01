@@ -221,6 +221,16 @@ if (( FAILED > 0 )); then
     die "Update aborted because one or more files failed validation"
 fi
 
+# Check before the no-change exit: this also repairs PDF support when an older
+# updater installed the new files without knowing about this dependency.
+if [[ -f "${DOWNLOAD_DIR}/web/report_exports.py" || -f "${INSTALL_DIR}/web/report_exports.py" ]] &&
+   ! /usr/bin/python3 -c 'import reportlab' >/dev/null 2>&1; then
+    log "Installing PDF export support (python3-reportlab)..."
+    apt-get update || die "Could not refresh PDF dependency packages"
+    apt-get install -y python3-reportlab || die "Could not install python3-reportlab"
+    /usr/bin/python3 -c 'import reportlab' || die "PDF dependency validation failed"
+fi
+
 if (( NEW == 0 && CHANGED == 0 )); then
 
     log

@@ -25,6 +25,7 @@ class FakeFlask:
 request = types.SimpleNamespace(is_json=True, files={})
 fake_flask = types.ModuleType("flask")
 fake_flask.Flask = FakeFlask
+fake_flask.Response = Mock()
 fake_flask.jsonify = lambda data: data
 fake_flask.render_template = Mock()
 fake_flask.request = request
@@ -124,3 +125,4 @@ with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[2]) as tem
     assert module.api_report("MRN-invalid")[1] == 404
 
 print("Python syntax and isolated backend checks passed; no processes launched.")
+

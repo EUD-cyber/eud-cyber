@@ -184,8 +184,75 @@ memory, since published reports are immutable. Failed detail reads can be retrie
 and are reported in the filter notice; stale filter/selection responses cannot
 replace newer results. History totals cover all reports, independent of filters.
 
-No backend, schema, CLI, generation, HTTPS, campaign or update-flow changes are
-required. HTML/PDF export remains roadmap-only. Frontend regression checks in
+The dashboard preserves the existing JSON schema and CLI. Frontend regression checks in
 `tests/mrnobody/reports.cjs` cover metrics, timeline/navigation, MITRE deduplication
 and safe links, asset evidence, filters/search, collapsed raw evidence, historical,
 empty/error states, asynchronous selection and text-safe host-supplied content.
+
+## Investigation View and Ground Truth View
+
+Every report opens in **Investigation View**. The always-visible switch lets
+everyone choose **Ground Truth View** freely, without roles or access control.
+Both use the same cached report; switching preserves the selected phase and does
+not fetch again. These are educational presentation choices, not security boundaries.
+
+Investigation View shows incident status, start/end, aggregate summary metrics,
+phase timeline/status, MITRE mappings, discovered inventory and educational
+detection, investigation and mitigation guidance. Detailed findings are replaced
+with an investigation prompt. Compromise/staging/exfiltration/impact membership,
+action-level outcomes, exact source/target and raw technical evidence are shown
+in Ground Truth View. The history totals/search remain unchanged. Ground Truth
+View retains the complete existing dashboard, evidence tables and raw JSON.
+
+## HTML and PDF exports
+
+The detail toolbar always offers **Download HTML**, **Download PDF**, and
+**Open raw JSON** for campaign and standalone phase reports. Exports follow the
+selected view and contain every recorded phase, independently of the selected
+timeline phase. Existing JSON APIs and `?raw=1` behavior are unchanged.
+
+- `GET /api/reports/<incident-id>/export/html?view=investigation`
+- `GET /api/reports/<incident-id>/export/pdf?view=ground-truth`
+
+Omitting `view` defaults to `investigation`; accepted values are `investigation`
+and `ground-truth`. Unsupported formats/views return 400, absent/invalid reports
+404. PDF dependency unavailable returns a JSON 503 with an installation hint;
+HTML and JSON continue working. Responses are attachments with view-specific
+filenames, no-store caching, nosniff and a restrictive content security policy.
+
+Both formats share a read-only content model: overview, type, status, start/end,
+metrics, timeline, inventory, direct MITRE technique/sub-technique links,
+phase guidance and recommendations. Ground Truth View exports add actual
+compromised hosts, detailed findings and a separately labelled technical appendix
+with phase times, exact outcomes/events, evidence references and stored snapshots.
+Investigation exports explain how to obtain that appendix without embedding it.
+HTML is self-contained with print CSS; PDF is generated on the server with A4
+layout, flowing paragraphs, an appendix page break, footers/page numbers and
+clickable MITRE links. No browser print dialog or external asset fetch is used.
+
+Exports reapply credential redaction and additionally omit credential/wordlist
+containers, API keys, authorization headers and labelled free-form secrets.
+Host text is escaped for both renderers; MITRE URLs are constructed from validated
+IDs, never trusted stored URLs. As with capture-time redaction, arbitrary unlabelled
+secrets cannot be identified reliably; never record secrets in free-form evidence.
+Stored/historical JSON is never rewritten, and exports do not create report files.
+
+### Dependencies and installation
+
+PDF uses the maintained ReportLab Python library (tested with 4.x). Fresh Ubuntu
+userdata installs `python3-reportlab` and downloads `web/report_exports.py`.
+The system service continues to use `/usr/bin/python3`, not the WinRM venv.
+The updated updater installs the distro package when absent, including a no-change
+update. Package installation is not undone by file rollback.
+
+For an existing installation whose updater predates this dependency, install
+`python3-reportlab` with apt before updating, or run `mrnobody update` again after
+the first update to let the new updater install it. A missing dependency does
+not prevent the web service, HTML or JSON from working. No deployment is performed
+by this repository change.
+
+CI installs Flask, ReportLab and pypdf for real export-route/PDF parsing tests.
+`python tests/mrnobody/report_exports.py` covers both views, both report types,
+historical raw compatibility/immutability, links, text safety, redaction, PDF
+pagination/content, long evidence, invalid requests and missing dependency.
+

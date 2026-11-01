@@ -2974,7 +2974,7 @@ async function refreshReports() {
     }
 }
 
-function renderReportPhase(parent, phase) {
+function renderReportPhase(parent, phase, groundTruth = true) {
     const analysis = phase.analysis || {};
     const section = reportNode("section", null, parent);
     section.className = "report-phase-detail";
@@ -2982,21 +2982,24 @@ function renderReportPhase(parent, phase) {
     reportBadge(section, phase.status);
     reportNode("p", `${phase.started || "No recorded start"} → ${phase.ended || "No recorded end"}`, section);
     reportNode("h4", "What happened — recorded facts", section);
-    reportNode("p", analysis.what_happened || "Historical report: no educational analysis recorded. Review the available evidence.", section);
+    reportNode("p", (groundTruth ? analysis.what_happened : "Review collected logs to establish source, target, method and outcome. Phase status describes the run, not the success of each action.") || "Historical report: no educational analysis recorded. Review the available evidence.", section);
     for (const [key, label] of [["findings", "Findings"], ["detection", "Detection in the CyberLab"],
         ["investigation_tasks", "Investigation tasks"], ["prevention", "Prevention / Mitigation"]]) {
         reportNode("h4", label, section);
         const list = reportNode("ul", null, section);
-        const items = reportArray(analysis[key]);
+        const items = key === "findings" && !groundTruth ? ["Compare host and network evidence before concluding which actions succeeded."] : reportArray(analysis[key]);
         (items.length ? items : ["Unavailable in this report."]).forEach(item => reportNode("li", item, list));
     }
     reportNode("p", analysis.guidance_notice || "Educational guidance is separate from recorded evidence.", section).className = "muted";
+    if (groundTruth) {
     reportNode("h4", "Evidence references", section);
     const refs = reportArray(analysis.evidence);
     refs.forEach(e => reportNode("p", `${e.path} · line ${e.line}`, section));
     if (!refs.length) reportNode("p", "No evidence references recorded.", section);
+    }
     reportNode("h4", "MITRE ATT&CK — phase metadata", section);
     reportMitre(section, reportTechniques({phases: [phase]}));
+    if (!groundTruth) return;
     const raw = reportNode("details", null, section);
     reportNode("summary", "Technical ground-truth events", raw);
     reportTable(raw, ["Timestamp", "Action", "Source", "Target", "Protocol / method", "Outcome", "Evidence"],
@@ -3004,7 +3007,30 @@ function renderReportPhase(parent, phase) {
             [e.protocol, e.method].filter(Boolean).join(" / "), e.outcome, e.message]));
 }
 
-function renderReport(detail, report, id) {
+function renderReport(detail, report, id, mode = "investigation", selectedPhase = null) {
+    const groundTruth = mode === "ground-truth";
+    const controls = reportNode("div", null, detail);
+    controls.className = "report-view-controls";
+    controls.setAttribute("role", "group");
+    controls.setAttribute("aria-label", "Report view");
+    for (const [value, label] of [["investigation", "Investigation View"], ["ground-truth", "Ground Truth View"]]) {
+        const toggle = reportNode("button", label, controls);
+        toggle.type = "button";
+        toggle.setAttribute("aria-pressed", String(mode === value));
+        toggle.addEventListener("click", () => {
+            detail.replaceChildren();
+            renderReport(detail, report, id, value, selectedPhase);
+        });
+    }
+    const exports = reportNode("div", null, detail);
+    exports.className = "report-export-controls";
+    for (const [label, suffix] of [["Download HTML", `/export/html?view=${mode}`], ["Download PDF", `/export/pdf?view=${mode}`], ["Open raw JSON", "?raw=1"]]) {
+        const link = reportNode("a", label, exports);
+        link.href = `/api/reports/${encodeURIComponent(id)}${suffix}`;
+        if (label === "Open raw JSON") { link.target = "_blank"; link.rel = "noopener noreferrer"; }
+    }
+    reportNode("p", groundTruth ? "Ground Truth View: recorded answers and technical evidence." : "Investigation View: investigate independently, then switch freely to Ground Truth View to compare answers. Exports follow this selection.", detail);
+
     const incident = report.incident || {};
     const assets = reportAssets(report);
     const techniques = reportTechniques(report);
@@ -3035,7 +3061,8 @@ function renderReport(detail, report, id) {
     const selectPhase = (phase, selected) => {
         buttons.forEach(b => b.setAttribute("aria-pressed", String(b === selected)));
         phaseDetail.replaceChildren();
-        renderReportPhase(phaseDetail, phase);
+        selectedPhase = phase.id;
+        renderReportPhase(phaseDetail, phase, groundTruth);
     };
     const ordered = [...REPORT_PHASES.map(([phaseId, name]) => phases.find(p => p.id === phaseId) ||
         {id: phaseId, name, status: "not_run", absent: true}), ...phases.filter(p => !REPORT_PHASES.some(([phaseId]) => p.id === phaseId))];
@@ -3057,19 +3084,27 @@ function renderReport(detail, report, id) {
     reportNode("p", "Phase metadata mappings describe relevant techniques; they do not prove every technique executed or succeeded. Verify the evidence below.", detail);
     reportMitre(detail, techniques);
     reportNode("h3", "Affected assets", detail);
+    if (groundTruth) {
     reportNode("p", "Recorded states only. — means no supporting evidence, not proof the host was unaffected. Successful transfers mark their source, not the receiver. Snapshot membership records compromise, staging and impact unless explicitly false.", detail);
     const states = ["discovered", "targeted", "compromised", "staged", "exfiltrated", "impacted"];
     reportTable(detail, ["Host", "Hostname", ...states.map(s => s[0].toUpperCase() + s.slice(1)), "Evidence source"],
         assets.map(a => [a.ip, a.hostname || "Unavailable", ...states.map(s => a.states.has(s) ? "Recorded" : "—"), [...a.references].join("; ")]));
+    } else {
+        reportNode("p", "Review the discovered inventory and correlate logs to determine which assets were affected. Confirm compromise, staging, transfer and impact in Ground Truth View after investigating.", detail);
+        const inventory = report.inventory || report.evidence?.inventory;
+        reportTable(detail, ["Host", "Hostname"], reportArray(inventory?.hosts).map(a => [a.ip || a.host, a.hostname || "Unavailable"]));
+    }
     reportNode("h3", "Phase analysis", detail);
     detail.appendChild(phaseDetail);
-    const first = ordered.findIndex(p => !p.absent);
+    const previous = ordered.findIndex(p => !p.absent && p.id === selectedPhase);
+    const first = previous >= 0 ? previous : ordered.findIndex(p => !p.absent);
     if (first >= 0) selectPhase(ordered[first], buttons[first]);
     else reportNode("p", "No phase records available.", phaseDetail);
+    if (groundTruth) {
     const raw = reportNode("details", null, detail);
     raw.className = "report-raw";
     reportNode("summary", "Raw technical evidence and JSON", raw);
-    const download = reportNode("a", "Open JSON report", raw);
+    const download = reportNode("a", "Open raw JSON", raw);
     download.href = `/api/reports/${encodeURIComponent(id)}?raw=1`;
     download.target = "_blank";
     download.rel = "noopener noreferrer";
@@ -3077,6 +3112,7 @@ function renderReport(detail, report, id) {
         const section = reportNode("details", null, raw);
         reportNode("summary", key, section);
         reportNode("pre", JSON.stringify(report[key] ?? "Unavailable", null, 2), section);
+    }
     }
     if (reportArray(report.warnings).length) {
         reportNode("h3", "Evidence availability", detail);
@@ -3296,5 +3332,6 @@ document.addEventListener(
     "DOMContentLoaded",
     initialize
 );
+
 
 
