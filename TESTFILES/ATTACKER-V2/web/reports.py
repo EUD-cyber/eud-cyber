@@ -69,6 +69,18 @@ def mitre_url(technique_id):
 
 # Recommendations, never observations. Sensors/auditing must be configured in the lab.
 PHASE_GUIDANCE = {
+    "15": (
+        "Correlate web access/error logs, app logs, reverse proxy/WAF, Suricata HTTP and Wazuh by source, target, path and time.",
+        "Check profile, fingerprint, validation outcome and fixed safe evidence. SQLi uses an ephemeral synthetic database; traversal reads only a virtual marker. Findings do not establish host compromise.",
+        "Use parameterized queries, canonical path allowlists, least privilege and tested WAF rules; remove the teaching endpoint after the exercise."),
+    "16": (
+        "Correlate Windows 4688/4104/4663 and FIM with Linux audit file/rename/exec events, journal and Wazuh. Service events 7036 and systemd/journal are relevant when investigating real service impairment; these profiles change synthetic artifacts only.",
+        "Compare original/action/restored state and cleanup metadata. Config toggle is an analogue of T1685; reversible synthetic log rename is an analogue of parent T1070, not real log deletion. Re-run cleanup with the same incident and target after interruption.",
+        "Restrict service/config write rights, monitor changes and gaps in telemetry, protect logs remotely and verify restoration."),
+    "17": (
+        "Correlate synthetic source file access, archive creation, process execution, Sysmon 1/11, Windows file auditing, Linux audit and Wazuh FIM; FIM alone cannot prove reads.",
+        "Verify selected dataset/count, partial warnings, archive size/hash and staged-data.json producer_phase=17. P05 retains the archive and P06 consumes the same state. No arbitrary user directories are searched.",
+        "Restrict source/archive access, monitor archive utilities and staging locations, apply DLP and clean up only the recorded MRN archive."),
     "12": (
         "For Windows correlate Security 4663 only with file object auditing/SACL enabled, 4688, PowerShell 4104 and Sysmon 1/11. Sysmon 11 records creation, not reads. On Linux configure auditd file/open rules and inspect audit/journal and Wazuh FIM. FIM alone does not prove a read.",
         "A unique temporary synthetic-credentials.txt is created, inspected or read, verified and removed. No real credential store is searched. Compare target, platform, method, timestamps, outcome and cleanup evidence. T1552.001 is a benign behavioral analogue; metadata-only does not demonstrate credential extraction.",
@@ -197,6 +209,13 @@ def add_analysis(report):
             }.get(phase['action_result'], 'Custom remote command not executed')
             phase['analysis']['what_happened'] = phase['action_outcome']
             phase['analysis']['findings'] = details or [phase['action_outcome']]
+        if phase['id'] in {'15', '16', '17'}:
+            prefix = {'15': 'WEB_ACTION_', '16': 'EVASION_ACTION_', '17': 'COLLECTION_ACTION_'}[phase['id']]
+            phase['actions'] = [dict(timestamp=e['timestamp'], outcome=e['outcome'], **e['fields']) for e in events if e['event'].startswith(prefix)]
+            phase['action_evidence'] = [e['timestamp'] + ' · ' + e['message'] for e in events if e['event'].startswith(prefix)]
+            phase['action_outcome'] = phase['name'] + ': ' + str(phase.get('status', 'not_run'))
+            phase['analysis']['what_happened'] = phase['action_outcome']
+            phase['analysis']['findings'] = phase['action_evidence'] or ['No action evidence recorded']
         if phase['id'] in {'12', '14'}:
             prefix = 'CREDENTIAL_ACTION_' if phase['id'] == '12' else 'BEACON_ACTION_'
             actions = [dict(timestamp=e['timestamp'], outcome=e['outcome'], **e['fields']) for e in events if e['event'].startswith(prefix)]
@@ -219,7 +238,7 @@ def add_analysis(report):
 
 
 INCIDENT_ID = re.compile(r"(?:MRN|H3)-[A-Za-z0-9][A-Za-z0-9_-]{0,100}\Z")
-PHASE_ORDER = ("01", "02", "03", "08", "09", "10", "11", "12", "13", "14", "04", "05", "06", "07")
+PHASE_ORDER = ("01", "02", "15", "03", "08", "09", "10", "11", "12", "13", "14", "16", "04", "17", "05", "06", "07")
 STATE_FILES = {
     "networks": ("networks.json", "NORDIC_NETWORK_STATE"),
     "inventory": ("discovered-hosts.json", "NORDIC_DISCOVERED_STATE"),
@@ -366,19 +385,29 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
     selected = [p['id'] for p in campaign.get('execution', {}).get('phases', [])]
     # Opt-in phases must not appear as new pending actions in legacy campaigns.
     known = set(campaign.get('phases', {})) | {e['phase'] for e in events}
-    order = selected + [pid for pid in PHASE_ORDER if pid not in selected and (pid not in {'09', '10', '11', '12', '13', '14'} or pid in known)]
+    order = selected + [pid for pid in PHASE_ORDER if pid not in selected and (pid not in {'09', '10', '11', '12', '13', '14', '15', '16', '17'} or pid in known)]
     for phase_id in ([standalone["phase_id"]] if standalone is not None else order):
         script = next(iter(sorted((base / "scripts").glob(phase_id + "-*.sh"))), None)
         metadata = read_metadata(script) if script else {}
         technique_ids = [x.strip() for x in metadata.get("MITRE_TECHNIQUES", "").split(",") if x.strip()]
         names = metadata.get("MITRE_TECHNIQUE_NAMES", "").split("|")
         phase_events = [event for event in events if event["phase"] == phase_id]
+        if phase_id in {'15', '16', '17'}:
+            # New actions record technique sets per behavior/platform, including Windows library archiving.
+            technique_ids = list(dict.fromkeys(t for e in phase_events for t in e['fields'].get('mitre', '').split(',') if mitre_url(t))) or technique_ids
+            technique_names = {'T1190': 'Exploit Public-Facing Application', 'T1005': 'Data from Local System', 'T1685': 'Disable or Modify Tools', 'T1070': 'Indicator Removal', 'T1560.001': 'Archive via Utility', 'T1560.002': 'Archive via Library'}
+            names = [technique_names.get(t, '') for t in technique_ids]
         recorded = {e['fields'].get('mitre') for e in phase_events} & set(technique_ids)
         if phase_id == '13' or phase_id in {'10', '11'} and recorded:
             named = dict(zip(technique_ids, names))
             technique_ids = [tid for tid in technique_ids if tid in recorded]
             names = [named.get(tid, '') for tid in technique_ids]
         for event in phase_events:
+            if phase_id in {'15', '16', '17'}:
+                tids = [t for t in event['fields'].get('mitre', '').split(',') if mitre_url(t)]
+                event['mitre_technique_ids'] = tids
+                event['mitre_mapping'] = 'action_metadata' if tids else 'phase_metadata'
+                continue
             action_tid = event['fields'].get('mitre')
             event["mitre_technique_ids"] = [action_tid] if action_tid in technique_ids else technique_ids
             event["mitre_mapping"] = "action_metadata" if action_tid in technique_ids else "phase_metadata"
@@ -397,7 +426,7 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
             "events": phase_events,
         })
     now = datetime.now(timezone.utc).isoformat()
-    prerequisite_skip = standalone is not None and standalone['phase_id'] in {'09', '10', '11', '12', '13', '14'} and exit_code == 78
+    prerequisite_skip = standalone is not None and standalone['phase_id'] in {'09', '10', '11', '12', '13', '14', '15', '16', '17'} and exit_code == 78
     status = "complete" if campaign.get("status") == "complete" and (exit_code == 0 or prerequisite_skip) else (
         "interrupted" if exit_code in {130, 137, 143} else "failed")
     report = {
@@ -502,10 +531,10 @@ def run_phase(base, phase_id, script, environ=None):
         except OSError:
             print("[WARN] Phase could not be started", flush=True)
         finally:
-            skipped = (phase_id in {'09', '10', '11', '12', '13', '14'} and code == 78) or (phase_id in {'10', '13'} and code == 79)
+            skipped = (phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17'} and code == 78) or (phase_id in {'10', '13'} and code == 79)
             state = {"incident_id": incident_id, "scenario": "standalone-phase", "phase_id": phase_id,
                      "started": started, "completed": datetime.now(timezone.utc).isoformat(),
-                     "status": "complete" if code == 0 or (phase_id in {'09', '10', '11', '12', '13', '14'} and code == 78) else "failed",
+                     "status": "complete" if code == 0 or (phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17'} and code == 78) else "failed",
                      "phases": {phase_id: "skipped" if skipped else "complete" if code == 0 else "running" if code in {130, 137, 143} else "failed"}}
             try:
                 path = save_report(base, build_report(base, incident_id, code, env, standalone=state))
@@ -518,7 +547,7 @@ def run_phase(base, phase_id, script, environ=None):
             signal.signal(sig, handler)
     # CLI/scheduler conventions: a handled prerequisite skip is nonfatal. Keep
     # the worker's exit 78 in the report and the phase itself explicitly skipped.
-    return 0 if phase_id in {'09', '10', '11', '12', '13', '14'} and code == 78 else code
+    return 0 if phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17'} and code == 78 else code
 
 
 def main():

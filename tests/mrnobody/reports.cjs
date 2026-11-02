@@ -253,6 +253,10 @@ async function main() {
         for (const expected of ['skipped','No Active Directory Domain Controller discovered','192.168.2.200','domain=WORKGROUP','dc=unknown','account=not_attempted','group=not_attempted'])
             assert.ok(text(root).includes(expected));
     }
+    context.newPhaseReport = {incident:{id:'MRN-new'},phases:['01','02','15','03','13','14','16','04','17','05','06','07'].map(id=>({id,name:'Phase '+id,status:'success'}))};
+    root.replaceChildren();vm.runInContext("renderReport(document.getElementById('reportDetail'), newPhaseReport, 'MRN-new')",context);
+    const newIds=descendants(root).filter(n=>n.className?.includes('report-timeline-step')).map(n=>n.children[0].textContent.split(' · ')[0]);
+    for(const [a,b] of [['02','15'],['15','03'],['13','16'],['16','17'],['17','05'],['05','06']])assert.ok(newIds.indexOf(a)<newIds.indexOf(b));
     console.log("Reports UI passed: overview, canonical timeline/status/navigation, P09/P10, MITRE dedupe/trusted links, evidence-based assets, filters/host search, collapsed raw evidence, historical/empty/error states, response races and text-safe rendering.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

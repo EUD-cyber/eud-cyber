@@ -618,6 +618,9 @@ Options:
   --method <auto|scheduled-task|service|cron|systemd> (P11)
   --action <create|cleanup> (P11)
   --artifact <suffix> (P11, default telemetry)
+  --web-profile <sqli|traversal> --web-path </mrn-lab> (P15)
+  --behavior <config-toggle|log-rename> --action <run|cleanup> (P16)
+  --dataset <finance|engineering> --archive-name <suffix> --action <run|cleanup> (P17)
   --transport <http|https> --beacon-interval <seconds> --beacon-jitter <0-0.5> --beacon-count <1-20> --uri-profile <heartbeat|status> (P14)
   --behavior <encoded-powershell|certutil-decode|bits-job> (P13)
   --timeout <seconds> (P09/P10/P11, 5–300)
@@ -775,7 +778,7 @@ case "$COMMAND" in
                     shift 2
                     ;;
 
-                --transport|--beacon-interval|--beacon-jitter|--beacon-count|--uri-profile)
+                --web-profile|--web-path|--dataset|--archive-name|--transport|--beacon-interval|--beacon-jitter|--beacon-count|--uri-profile)
                     [[ $# -ge 2 ]] || die "$1 requires a value"
                     key="${1#--}"
                     key="${key//-/_}"

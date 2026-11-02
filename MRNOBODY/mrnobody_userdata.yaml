@@ -180,6 +180,34 @@ write_files:
       }
 
 
+      download_file \
+          "scripts/15-web-app.sh" \
+          "$INSTALL_DIR/scripts/15-web-app.sh"
+
+      download_file \
+          "scripts/16-defense-evasion.sh" \
+          "$INSTALL_DIR/scripts/16-defense-evasion.sh"
+
+      download_file \
+          "scripts/17-collection.sh" \
+          "$INSTALL_DIR/scripts/17-collection.sh"
+
+      download_file \
+          "web/exercise_actions.py" \
+          "$INSTALL_DIR/web/exercise_actions.py"
+
+      download_file \
+          "web/collection_state.py" \
+          "$INSTALL_DIR/web/collection_state.py"
+
+      download_file \
+          "web/web_profiles.py" \
+          "$INSTALL_DIR/web/web_profiles.py"
+
+      download_file \
+          "web/web_lab.py" \
+          "$INSTALL_DIR/web/web_lab.py"
+
       # ------------------------------------------------------
       # CONFIG
       # ------------------------------------------------------

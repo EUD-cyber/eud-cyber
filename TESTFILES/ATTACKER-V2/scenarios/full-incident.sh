@@ -3,7 +3,7 @@
 # SCENARIO_ID="full-incident"
 # SCENARIO_NAME="Full Incident"
 # SCENARIO_DESCRIPTION="Complete incident simulation from discovery through impact."
-# SCENARIO_PHASES="01,02,03,08,09,10,11,12,13,14,04,05,06,07"
+# SCENARIO_PHASES="01,02,15,03,08,09,10,11,12,13,14,16,04,17,05,06,07"
 
 set -u
 
@@ -70,6 +70,7 @@ source "$CONFIG_FILE"
 if [[ -z "${MRN_EXECUTION:-}" ]]; then
     export MRNOBODY_RUN_MODE=campaign
     unset MRNOBODY_TARGET MRNOBODY_SOURCE MRNOBODY_PORT MRNOBODY_PROTOCOL MRNOBODY_USERNAME
+    unset MRNOBODY_WEB_PROFILE MRNOBODY_WEB_PATH MRNOBODY_DATASET MRNOBODY_ARCHIVE_NAME MRNOBODY_BEHAVIOR
     unset MRNOBODY_PLATFORM MRNOBODY_METHOD MRNOBODY_ACTION MRNOBODY_ARTIFACT
 fi
 
@@ -705,7 +706,7 @@ run_phase() {
     fi
 
 
-    if [[ ( "$NUMBER" == "10" || "$NUMBER" == "11" || "$NUMBER" == "13" || "$NUMBER" == "12" || "$NUMBER" == "14" ) && $RESULT -eq 78 ]]; then
+    if [[ ( "$NUMBER" == "10" || "$NUMBER" == "11" || "$NUMBER" == "13" || "$NUMBER" == "12" || "$NUMBER" == "14" || "$NUMBER" == "15" || "$NUMBER" == "16" || "$NUMBER" == "17" ) && $RESULT -eq 78 ]]; then
         RUN_PHASE_STATUS="skipped"
         update_phase_state "$NUMBER" "skipped"
         log "[PHASE $NUMBER] SKIPPED - Not configured or no compatible target/method"
@@ -835,6 +836,9 @@ echo "  P11 Persistence"
 echo "  P12 Credential Access Simulation"
 echo "  P13 Windows Native Tools / LOLBins Simulation"
 echo "  P14 Command & Control Simulation"
+echo "  P15 Application Security (after P02)"
+echo "  P16 Defense Evasion Simulation"
+echo "  P17 Collection / Archive (before P05)"
 echo "  P4  Internal Discovery / Lateral Activity"
 echo "  P5  Data Staging"
 echo "  P6  Exfiltration"
@@ -899,6 +903,9 @@ PHASE_10="$SCRIPT_DIR/10-powershell.sh"
 PHASE_11="$SCRIPT_DIR/11-persistence.sh"
 PHASE_12="$SCRIPT_DIR/12-credential-access.sh"
 PHASE_14="$SCRIPT_DIR/14-c2.sh"
+PHASE_15="$SCRIPT_DIR/15-web-app.sh"
+PHASE_16="$SCRIPT_DIR/16-defense-evasion.sh"
+PHASE_17="$SCRIPT_DIR/17-collection.sh"
 PHASE_13="$SCRIPT_DIR/13-native-tools.sh"
 
 
@@ -919,7 +926,10 @@ for SCRIPT in \
     "$PHASE_11" \
     "$PHASE_13" \
     "$PHASE_12" \
-    "$PHASE_14"
+    "$PHASE_14" \
+    "$PHASE_15" \
+    "$PHASE_16" \
+    "$PHASE_17"
 
 do
 
@@ -1087,6 +1097,9 @@ data = {
         "12": "pending",
         "13": "pending",
         "14": "pending",
+        "15": "pending",
+        "16": "pending",
+        "17": "pending",
         "10": "pending" if os.environ.get("MRN_POWERSHELL_ENABLED") == "1" else "disabled",
 
         "08": (
@@ -1276,6 +1289,14 @@ update_phase_state "02" "complete"
 phase_delay
 
 
+# New phase uses the same lifecycle and state adapter as all other phases.
+update_phase_state "15" "running"
+if ! run_phase "15" "Web Exploitation / Application Security Simulation" "$PHASE_15"; then
+    update_phase_state "15" "failed"
+    exit 1
+fi
+update_phase_state "15" "$RUN_PHASE_STATUS"
+
 # ============================================================
 # PHASE 03
 # ============================================================
@@ -1343,7 +1364,7 @@ phase_delay
 # ============================================================
 # PHASE 09 / 10: Windows actions after established access, before staging.
 # ============================================================
-for NUMBER in 09 10 11 12 13 14; do
+for NUMBER in 09 10 11 12 13 14 16; do
     if [[ "$NUMBER" == "09" ]] && ! windows_access_available; then
         update_phase_state "09" "disabled"
         ground_truth "PHASE_SKIPPED phase=09 reason=no_windows_rdp_access"
@@ -1369,6 +1390,7 @@ for NUMBER in 09 10 11 12 13 14; do
     fi
     if [[ "$NUMBER" == "12" ]]; then SCRIPT="$PHASE_12"; NAME="Credential Access Simulation"; fi
     if [[ "$NUMBER" == "14" ]]; then SCRIPT="$PHASE_14"; NAME="Command & Control Simulation"; fi
+    if [[ "$NUMBER" == "16" ]]; then SCRIPT="$PHASE_16"; NAME="Defense Evasion Simulation"; fi
     update_phase_state "$NUMBER" "running"
     if ! run_phase "$NUMBER" "$NAME" "$SCRIPT"; then
         update_phase_state "$NUMBER" "failed"
@@ -1402,6 +1424,14 @@ fi
 update_phase_state "04" "complete"
 
 phase_delay
+# New phase uses the same lifecycle and state adapter as all other phases.
+update_phase_state "17" "running"
+if ! run_phase "17" "Collection / Archive" "$PHASE_17"; then
+    update_phase_state "17" "failed"
+    exit 1
+fi
+update_phase_state "17" "$RUN_PHASE_STATUS"
+
 # ============================================================
 # PHASE 05
 # ============================================================

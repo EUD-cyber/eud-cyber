@@ -17,17 +17,25 @@
             dependencies(id).forEach(visit);
             let item = draft.phases.find(p => p.id === id);
             if (!item) {item = phase(id); autoAdded.add(id);}
-            item.enabled = true; if (!["10", "11", "12", "13", "14"].includes(id)) item.parameters = {};
+            item.enabled = true; if (!["10", "11", "12", "13", "14", "15", "16", "17"].includes(id)) item.parameters = {};
             seen.add(id); result.push(item);
         };
         visit("01"); enabled().forEach(p => visit(p.id));
-        draft.phases.filter(p => !seen.has(p.id)).forEach(p => {if (!["10", "11", "12", "13", "14"].includes(p.id)) p.parameters = {}; result.push(p);});
+        draft.phases.filter(p => !seen.has(p.id)).forEach(p => {if (!["10", "11", "12", "13", "14", "15", "16", "17"].includes(p.id)) p.parameters = {}; result.push(p);});
+        const edges = [["02","15"],["15","03"],["10","16"],["11","16"],["12","16"],["13","16"],["14","16"],["16","17"],["17","05"],["17","06"],["17","07"],["16","05"],["16","06"],["16","07"]];
+        for (let pass = 0; pass < result.length; pass++) for (const [a,b] of edges) {
+            const i = result.findIndex(p => p.id === a), j = result.findIndex(p => p.id === b);
+            if (i >= 0 && j >= 0 && i > j) result.splice(j, 0, result.splice(i, 1)[0]);
+        }
         draft.phases = result;
     }
     function required(id) {
         return draft.target_mode === "auto" && (id === "01" || enabled().some(p => dependencies(p.id).includes(id)));
     }
     function validOrder(phases) {
+        const ids = phases.filter(p => p.enabled !== false).map(p => p.id);
+        const edges = [["02","15"],["15","03"],["10","16"],["11","16"],["12","16"],["13","16"],["14","16"],["16","17"],["17","05"],["17","06"],["17","07"],["16","05"],["16","06"],["16","07"]];
+        if (edges.some(([a,b]) => ids.includes(a) && ids.includes(b) && ids.indexOf(a) > ids.indexOf(b))) return false;
         if (draft.target_mode !== "auto") return true;
         const prior = new Set();
         return phases.filter(p => p.enabled !== false).every(p => {
@@ -105,7 +113,7 @@
                 for (const key of draft.target_mode === "fixed" ? cap.required_fields || [] : []) if (!params[key]) return `P${p.id}: enter ${cap.fields[key]?.label || key}.`;
                 const platform = params.platform || "auto";
                 const effective = params.protocol === "ssh" ? "linux" : params.protocol ? "windows" : platform;
-                if (["10", "11", "12", "14"].includes(p.id) && platform !== "auto" && platform !== effective) return `P${p.id}: platform and protocol must match.`;
+                if (["10", "11", "12", "14", "16", "17"].includes(p.id) && platform !== "auto" && platform !== effective) return `P${p.id}: platform and protocol must match.`;
                 const methodPlatform = {"scheduled-task":"windows", service:"windows", cron:"linux", systemd:"linux"}[params.method];
                 if (p.id === "11" && methodPlatform && effective !== "auto" && effective !== methodPlatform) return "P11: method and platform must match.";
                 if (p.id === "14") {
@@ -122,6 +130,7 @@
                     if (spec.options && !spec.options.includes(value)) return `P${p.id}: choose a supported protocol.`;
                     if (key === "artifact" && !/^[a-z0-9][a-z0-9-]{0,31}$/.test(value)) return "P11: invalid artifact suffix.";
                     if (key === "username" && !/^[A-Za-z0-9_.@\\-]{1,128}$/.test(value)) return `P${p.id}: enter a valid username.`;
+                    if (key === "web_path" && !/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(value)) return "P15: use a simple absolute base path.";
                     if (key === "file" && value !== "@staged" && !/^(?:\/tmp\/\.nordic-(?:MRN|H3)-[A-Za-z0-9_-]+\/nordic-data-(?:MRN|H3)-[A-Za-z0-9_-]+\.txt|C:\\NordicIncident\\(?:MRN|H3)-[A-Za-z0-9_-]+\\staging\\nordic-data-(?:MRN|H3)-[A-Za-z0-9_-]+\.txt)$/.test(value)) return `P${p.id}: use @staged or a synthetic staging file path.`;
                 }
             }
@@ -207,13 +216,13 @@
         node("p", "Credentials are supplied only when running or arming a schedule. They are never saved in scenario definitions.", parent, "muted");
         let model = execution?.type === "custom" ? custom.find(s => s.id === execution.id) : execution;
         if (model?.type === "phase") model = {target_mode: model.target_mode, phases: [{id: model.id, parameters: model.parameters || {}}]};
-        if (model?.type === "campaign" && model.id === "full-incident") model = {target_mode: "auto", phases: capabilities.filter(c => ["03", "09", "11", "12", "13", "14", ...(execution.powershell_enabled ? ["10"] : [])].includes(c.id)).map(c => ({id: c.id}))};
+        if (model?.type === "campaign" && model.id === "full-incident") model = {target_mode: "auto", phases: capabilities.filter(c => ["03", "09", "11", "12", "13", "14", "16", "17", ...(execution.powershell_enabled ? ["10"] : [])].includes(c.id)).map(c => ({id: c.id}))};
         const required = new Set();
         if (!model?.phases) {required.add("ssh"); required.add("rdp");}
         else model.phases.filter(p => p.enabled !== false).forEach(p => {
             if (!capabilities.find(c => c.id === p.id)?.credentials) return;
             if (model.target_mode === "auto") {required.add("ssh"); required.add("rdp");}
-            else if (["10", "11", "12", "13", "14"].includes(p.id) && !p.parameters?.protocol && (!p.parameters?.platform || p.parameters.platform === "auto")) {required.add("ssh"); required.add("rdp");}
+            else if (["10", "11", "12", "13", "14", "16", "17"].includes(p.id) && !p.parameters?.protocol && (!p.parameters?.platform || p.parameters.platform === "auto")) {required.add("ssh"); required.add("rdp");}
             else required.add(/^(rdp|winrm)/.test(p.parameters?.protocol || (p.parameters?.platform === "windows" ? "winrm-http" : "ssh")) ? "rdp" : "ssh");
         });
         node("p", `Required runtime credentials: ${required.size ? [...required].map(p => p === "ssh" ? "Linux / SSH" : "Windows / RDP / WinRM").join(", ") : "None"}`, parent);
@@ -256,18 +265,19 @@
         if (!cap) return;
         if (!existing) parent = node("div", undefined, parent, "phase-parameters");
         if (cap.runtime_powershell) node("p", "P10 remote command (PowerShell / Bash) is requested on Review or when arming the schedule; it is never stored in the definition.", parent, "muted");
+        if (["15", "16", "17"].includes(phase.id)) node("p", {"15": "Fingerprint required: dedicated MrNobody Web Lab endpoint. Auto uses P02 web services; no compromise is invented.", "16": "Only synthetic monitor.conf or exercise.log in the MRN exercise directory; original state is restored. Cleanup recovers an interrupted run.", "17": "Only fixed marker-verified finance/engineering files. Archives feed staged-data.json for P05/P06. Cleanup removes the selected archive."}[phase.id], parent, "muted");
         if (phase.id === "12") node("p", "Synthetic temporary test file only: inspect metadata or verify its fixed lab marker, then clean up. Auto requires prior P03 access.", parent, "muted");
         if (phase.id === "14") node("p", "Beacons to this MrNobody instance only. Internal interval/count is independent of the phase start offset. Default: HTTP, 5 seconds, 0% jitter, 5 check-ins. Maximum execution budget: 240 seconds. HTTPS uses the lab self-signed certificate policy.", parent, "muted");
         if (phase.id === "13") node("p", "Windows only. Choose encoded PowerShell, local certutil decode, or an empty BITS job that is cancelled. No arbitrary command or URL is accepted. Default: encoded PowerShell.", parent, "muted");
         if (phase.id === "09") node("p", "P09 requires a lab domain controller and AD management rights. New or disabled mrnobody accounts are enabled using the runtime Windows password; an already enabled account keeps its password. Domain Admins membership is verified.", parent, "muted");
         if (mode === "auto") {
             node("p", dataHint(phase.id), parent, "muted");
-            if (!["10", "11", "12", "13", "14"].includes(phase.id)) return;
+            if (!["10", "11", "12", "13", "14", "15", "16", "17"].includes(phase.id)) return;
         }
         Object.entries(cap.fields).forEach(([key, spec]) => {
             const platform = phase.parameters.platform || "auto";
             let options = spec.options;
-            if (["10", "11", "12", "13", "14"].includes(phase.id)) {
+            if (["10", "11", "12", "13", "14", "16", "17"].includes(phase.id)) {
                 if (key === "protocol") options = options.filter(v => platform === "auto" || (v === "ssh") === (platform === "linux"));
                 if (key === "method" && phase.id === "11") options = options.filter(v => v === "auto" || platform === "auto" || (["cron", "systemd"].includes(v)) === (platform === "linux"));
                 if (key === "source" || key === "subnet" || key === "file") return;
