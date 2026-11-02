@@ -17,11 +17,11 @@
             dependencies(id).forEach(visit);
             let item = draft.phases.find(p => p.id === id);
             if (!item) {item = phase(id); autoAdded.add(id);}
-            item.enabled = true; if (!["10", "11", "13"].includes(id)) item.parameters = {};
+            item.enabled = true; if (!["10", "11", "12", "13", "14"].includes(id)) item.parameters = {};
             seen.add(id); result.push(item);
         };
         visit("01"); enabled().forEach(p => visit(p.id));
-        draft.phases.filter(p => !seen.has(p.id)).forEach(p => {if (!["10", "11", "13"].includes(p.id)) p.parameters = {}; result.push(p);});
+        draft.phases.filter(p => !seen.has(p.id)).forEach(p => {if (!["10", "11", "12", "13", "14"].includes(p.id)) p.parameters = {}; result.push(p);});
         draft.phases = result;
     }
     function required(id) {
@@ -105,9 +105,13 @@
                 for (const key of draft.target_mode === "fixed" ? cap.required_fields || [] : []) if (!params[key]) return `P${p.id}: enter ${cap.fields[key]?.label || key}.`;
                 const platform = params.platform || "auto";
                 const effective = params.protocol === "ssh" ? "linux" : params.protocol ? "windows" : platform;
-                if (["10", "11"].includes(p.id) && platform !== "auto" && platform !== effective) return `P${p.id}: platform and protocol must match.`;
+                if (["10", "11", "12", "14"].includes(p.id) && platform !== "auto" && platform !== effective) return `P${p.id}: platform and protocol must match.`;
                 const methodPlatform = {"scheduled-task":"windows", service:"windows", cron:"linux", systemd:"linux"}[params.method];
                 if (p.id === "11" && methodPlatform && effective !== "auto" && effective !== methodPlatform) return "P11: method and platform must match.";
+                if (p.id === "14") {
+                    const interval = Number(params.beacon_interval ?? 5), jitter = Number(params.beacon_jitter ?? 0), count = Number(params.beacon_count ?? 5);
+                    if (!Number.isFinite(interval) || interval < 1 || interval > 60 || !Number.isFinite(jitter) || jitter < 0 || jitter > .5 || !Number.isInteger(count) || count < 1 || count > 20 || (count - 1) * interval * (1 + jitter) + count * 3 > 240) return "P14: interval 1-60 seconds, jitter 0-50%, count 1-20; total bounded execution must fit 240 seconds.";
+                }
                 for (const [key, value] of Object.entries(params)) {
                     const spec = cap.fields[key];
                     if (!spec) return `P${p.id}: unsupported field ${key}.`;
@@ -203,13 +207,13 @@
         node("p", "Credentials are supplied only when running or arming a schedule. They are never saved in scenario definitions.", parent, "muted");
         let model = execution?.type === "custom" ? custom.find(s => s.id === execution.id) : execution;
         if (model?.type === "phase") model = {target_mode: model.target_mode, phases: [{id: model.id, parameters: model.parameters || {}}]};
-        if (model?.type === "campaign" && model.id === "full-incident") model = {target_mode: "auto", phases: capabilities.filter(c => ["03", "09", "11", "13", ...(execution.powershell_enabled ? ["10"] : [])].includes(c.id)).map(c => ({id: c.id}))};
+        if (model?.type === "campaign" && model.id === "full-incident") model = {target_mode: "auto", phases: capabilities.filter(c => ["03", "09", "11", "12", "13", "14", ...(execution.powershell_enabled ? ["10"] : [])].includes(c.id)).map(c => ({id: c.id}))};
         const required = new Set();
         if (!model?.phases) {required.add("ssh"); required.add("rdp");}
         else model.phases.filter(p => p.enabled !== false).forEach(p => {
             if (!capabilities.find(c => c.id === p.id)?.credentials) return;
             if (model.target_mode === "auto") {required.add("ssh"); required.add("rdp");}
-            else if (["10", "11", "13"].includes(p.id) && !p.parameters?.protocol && (!p.parameters?.platform || p.parameters.platform === "auto")) {required.add("ssh"); required.add("rdp");}
+            else if (["10", "11", "12", "13", "14"].includes(p.id) && !p.parameters?.protocol && (!p.parameters?.platform || p.parameters.platform === "auto")) {required.add("ssh"); required.add("rdp");}
             else required.add(/^(rdp|winrm)/.test(p.parameters?.protocol || (p.parameters?.platform === "windows" ? "winrm-http" : "ssh")) ? "rdp" : "ssh");
         });
         node("p", `Required runtime credentials: ${required.size ? [...required].map(p => p === "ssh" ? "Linux / SSH" : "Windows / RDP / WinRM").join(", ") : "None"}`, parent);
@@ -252,24 +256,33 @@
         if (!cap) return;
         if (!existing) parent = node("div", undefined, parent, "phase-parameters");
         if (cap.runtime_powershell) node("p", "P10 remote command (PowerShell / Bash) is requested on Review or when arming the schedule; it is never stored in the definition.", parent, "muted");
+        if (phase.id === "12") node("p", "Synthetic temporary test file only: inspect metadata or verify its fixed lab marker, then clean up. Auto requires prior P03 access.", parent, "muted");
+        if (phase.id === "14") node("p", "Beacons to this MrNobody instance only. Internal interval/count is independent of the phase start offset. Default: HTTP, 5 seconds, 0% jitter, 5 check-ins. Maximum execution budget: 240 seconds. HTTPS uses the lab self-signed certificate policy.", parent, "muted");
         if (phase.id === "13") node("p", "Windows only. Choose encoded PowerShell, local certutil decode, or an empty BITS job that is cancelled. No arbitrary command or URL is accepted. Default: encoded PowerShell.", parent, "muted");
         if (phase.id === "09") node("p", "P09 requires a lab domain controller and AD management rights. New or disabled mrnobody accounts are enabled using the runtime Windows password; an already enabled account keeps its password. Domain Admins membership is verified.", parent, "muted");
         if (mode === "auto") {
             node("p", dataHint(phase.id), parent, "muted");
-            if (!["10", "11", "13"].includes(phase.id)) return;
+            if (!["10", "11", "12", "13", "14"].includes(phase.id)) return;
         }
         Object.entries(cap.fields).forEach(([key, spec]) => {
             const platform = phase.parameters.platform || "auto";
             let options = spec.options;
-            if (["10", "11", "13"].includes(phase.id)) {
+            if (["10", "11", "12", "13", "14"].includes(phase.id)) {
                 if (key === "protocol") options = options.filter(v => platform === "auto" || (v === "ssh") === (platform === "linux"));
-                if (key === "method") options = options.filter(v => v === "auto" || platform === "auto" || (["cron", "systemd"].includes(v)) === (platform === "linux"));
+                if (key === "method" && phase.id === "11") options = options.filter(v => v === "auto" || platform === "auto" || (["cron", "systemd"].includes(v)) === (platform === "linux"));
                 if (key === "source" || key === "subnet" || key === "file") return;
+            }
+            if (spec.type === "seconds") {
+                durationForm(parent, spec.label, phase.parameters[key] ?? spec.default, v => {phase.parameters[key] = v;}); return;
+            }
+            if (spec.type === "fraction") {
+                const input = field(parent, spec.label, (phase.parameters[key] ?? spec.default) * 100, v => {phase.parameters[key] = Number(v) / 100;});
+                input.type = "number"; input.min = "0"; input.max = "50"; return;
             }
             const opts = options ? [{value: "", label: "Automatic / choose"}, ...options] : undefined;
             let hint;
-            const input = field(parent, spec.label, phase.parameters[key], v => {
-                if (v === "") delete phase.parameters[key]; else phase.parameters[key] = ["port", "timeout"].includes(spec.type) ? Number(v) : v;
+            const input = field(parent, spec.label, phase.parameters[key] ?? spec.default, v => {
+                if (v === "") delete phase.parameters[key]; else phase.parameters[key] = ["port", "timeout", "number"].includes(spec.type) ? Number(v) : v;
                 if (key === "platform") {
                     delete phase.parameters.protocol; delete phase.parameters.port; delete phase.parameters.username;
                     if (phase.id === "11") delete phase.parameters.method;

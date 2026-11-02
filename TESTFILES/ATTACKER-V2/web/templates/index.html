@@ -710,7 +710,7 @@
 
         </div>
         <div class="config-section">
-            <div class="config-section-title">P09 / P10 remote actions · P11 Persistence and P13 Native Tools are included</div>
+            <div class="config-section-title">P09 / P10 remote actions · P11 Persistence, P12 Credential Access, P13 Native Tools and P14 Beaconing are included</div>
             <p>P09 changes mrnobody membership in Domain Admins on the lab DC. P09 runs only when Windows/RDP access is available; otherwise it is skipped. AD management rights are required for domain changes.</p>
             <label class="checkbox-label" for="powershellEnabled"><input id="powershellEnabled" type="checkbox" checked> Enable P10 Custom Remote Command</label>
             <div class="form-group" id="campaignPowershellFields">
@@ -889,7 +889,7 @@
             </h2>
 
             <span class="panel-tag">
-                P01 through P13
+                P01 through P14
             </span>
 
         </div>
@@ -1407,7 +1407,7 @@
         <div class="report-filters" aria-label="Report history filters">
             <label>Report type<select id="reportTypeFilter"><option value="">All types</option><option value="campaign">Campaign</option><option value="standalone_phase">Standalone phase</option></select></label>
             <label>Status<select id="reportStatusFilter"><option value="">All statuses</option><option value="complete">Complete</option><option value="failed">Failed</option><option value="interrupted">Interrupted</option></select></label>
-            <label>Recorded phase<select id="reportPhaseFilter"><option value="">All phases</option><option value="01">Phase 01</option><option value="02">Phase 02</option><option value="03">Phase 03</option><option value="08">Phase 08</option><option value="04">Phase 04</option><option value="05">Phase 05</option><option value="06">Phase 06</option><option value="07">Phase 07</option><option value="09">Phase 09</option><option value="10">Phase 10</option><option value="11">Phase 11</option><option value="13">Phase 13</option></select></label>
+            <label>Recorded phase<select id="reportPhaseFilter"><option value="">All phases</option><option value="01">Phase 01</option><option value="02">Phase 02</option><option value="03">Phase 03</option><option value="08">Phase 08</option><option value="04">Phase 04</option><option value="05">Phase 05</option><option value="06">Phase 06</option><option value="07">Phase 07</option><option value="09">Phase 09</option><option value="10">Phase 10</option><option value="11">Phase 11</option><option value="12">Phase 12</option><option value="13">Phase 13</option><option value="14">Phase 14</option></select></label>
             <label>Incident ID or host<input id="reportSearch" type="search" placeholder="Search ID, IP or hostname"></label>
         </div>
         <p id="reportFilterNotice" class="muted" aria-live="polite">History totals above cover all reports. Filters apply to the list below.</p>

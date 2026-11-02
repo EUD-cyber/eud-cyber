@@ -618,6 +618,7 @@ Options:
   --method <auto|scheduled-task|service|cron|systemd> (P11)
   --action <create|cleanup> (P11)
   --artifact <suffix> (P11, default telemetry)
+  --transport <http|https> --beacon-interval <seconds> --beacon-jitter <0-0.5> --beacon-count <1-20> --uri-profile <heartbeat|status> (P14)
   --behavior <encoded-powershell|certutil-decode|bits-job> (P13)
   --timeout <seconds> (P09/P10/P11, 5–300)
   P10 command: MRN_POWERSHELL_SECRET environment input only; never a CLI argument.
@@ -771,6 +772,15 @@ case "$COMMAND" in
                         --artifact) ARTIFACT="$2" ;;
                         --behavior) BEHAVIOR="$2" ;;
                     esac
+                    shift 2
+                    ;;
+
+                --transport|--beacon-interval|--beacon-jitter|--beacon-count|--uri-profile)
+                    [[ $# -ge 2 ]] || die "$1 requires a value"
+                    key="${1#--}"
+                    key="${key//-/_}"
+                    printf -v "MRNOBODY_${key^^}" '%s' "$2"
+                    export "MRNOBODY_${key^^}"
                     shift 2
                     ;;
 

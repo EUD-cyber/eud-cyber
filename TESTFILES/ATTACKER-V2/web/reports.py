@@ -69,6 +69,14 @@ def mitre_url(technique_id):
 
 # Recommendations, never observations. Sensors/auditing must be configured in the lab.
 PHASE_GUIDANCE = {
+    "12": (
+        "For Windows correlate Security 4663 only with file object auditing/SACL enabled, 4688, PowerShell 4104 and Sysmon 1/11. Sysmon 11 records creation, not reads. On Linux configure auditd file/open rules and inspect audit/journal and Wazuh FIM. FIM alone does not prove a read.",
+        "A unique temporary synthetic-credentials.txt is created, inspected or read, verified and removed. No real credential store is searched. Compare target, platform, method, timestamps, outcome and cleanup evidence. T1552.001 is a benign behavioral analogue; metadata-only does not demonstrate credential extraction.",
+        "Avoid plaintext credentials, restrict file permissions, use a secret manager and least privilege. Verify cleanup after interruption; remove only confirmed MrNobody artifacts."),
+    "14": (
+        "Compare periodic source/destination flows and timestamps in Suricata eve.json, firewall/proxy and nginx access logs. Correlate Windows Sysmon 3/PowerShell 4104/4688 or Linux audit exec and SSH logs where enabled. HTTPS hides URI content from passive network sensors.",
+        "Bounded HTTP(S) beacon telemetry. Compare destination, interval, jitter, count, duration bound and success/failure counts. Only HTTP 204 counts as success; partial success remains a failed phase. Response content is discarded. Lab HTTPS uses a self-signed certificate policy in the short-lived client process.",
+        "Restrict outbound destinations, baseline periodic traffic, correlate host and network logs, and alert on unusual repeated web connections."),
     "13": (
         "Correlate WinRM, PowerShell Operational 4103/4104, Security 4688 and Sysmon 1 (process), 7 (image load) and 11 (file create) where enabled. For BITS inspect Microsoft-Windows-Bits-Client/Operational. In Wazuh correlate host, win.system.eventID, parent process, command line and timestamps. Check marker.b64/marker.txt and cleanup evidence for certutil.",
         "Which predefined behavior and executable ran? Encoded PowerShell emits a fixed marker; certutil decodes local synthetic text; BITS creates and cancels an empty job. Attackers abuse these native tools to obscure script intent, decode payloads or manage background transfers/persistence. This exercise delivers no malware and demonstrates no transfer or persistent execution. Compare native exit code, artifact path, safe output and cleanup result with target logs. Which telemetry distinguished this action from administration?",
@@ -189,6 +197,14 @@ def add_analysis(report):
             }.get(phase['action_result'], 'Custom remote command not executed')
             phase['analysis']['what_happened'] = phase['action_outcome']
             phase['analysis']['findings'] = details or [phase['action_outcome']]
+        if phase['id'] in {'12', '14'}:
+            prefix = 'CREDENTIAL_ACTION_' if phase['id'] == '12' else 'BEACON_ACTION_'
+            actions = [dict(timestamp=e['timestamp'], outcome=e['outcome'], **e['fields']) for e in events if e['event'].startswith(prefix)]
+            phase['actions'] = actions
+            phase['action_evidence'] = [e['timestamp'] + ' · ' + e['message'] for e in events if e['event'].startswith(prefix)]
+            phase['action_outcome'] = ('Synthetic Credential Access: ' if phase['id'] == '12' else 'HTTP(S) Beacon Simulation: ') + str(phase.get('status', 'not_run'))
+            phase['analysis']['what_happened'] = phase['action_outcome']
+            phase['analysis']['findings'] = phase['action_evidence'] or ['No lab action evidence recorded']
         if phase['id'] in {'11', '13'}:
             details = [e['timestamp'] + ' · ' + e['message'] for e in events
                        if e['event'].startswith('PERSISTENCE_ACTION_' if phase['id'] == '11' else 'NATIVE_ACTION_')]
@@ -203,7 +219,7 @@ def add_analysis(report):
 
 
 INCIDENT_ID = re.compile(r"(?:MRN|H3)-[A-Za-z0-9][A-Za-z0-9_-]{0,100}\Z")
-PHASE_ORDER = ("01", "02", "03", "08", "09", "10", "11", "13", "04", "05", "06", "07")
+PHASE_ORDER = ("01", "02", "03", "08", "09", "10", "11", "12", "13", "14", "04", "05", "06", "07")
 STATE_FILES = {
     "networks": ("networks.json", "NORDIC_NETWORK_STATE"),
     "inventory": ("discovered-hosts.json", "NORDIC_DISCOVERED_STATE"),
@@ -350,7 +366,7 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
     selected = [p['id'] for p in campaign.get('execution', {}).get('phases', [])]
     # Opt-in phases must not appear as new pending actions in legacy campaigns.
     known = set(campaign.get('phases', {})) | {e['phase'] for e in events}
-    order = selected + [pid for pid in PHASE_ORDER if pid not in selected and (pid not in {'09', '10', '11', '13'} or pid in known)]
+    order = selected + [pid for pid in PHASE_ORDER if pid not in selected and (pid not in {'09', '10', '11', '12', '13', '14'} or pid in known)]
     for phase_id in ([standalone["phase_id"]] if standalone is not None else order):
         script = next(iter(sorted((base / "scripts").glob(phase_id + "-*.sh"))), None)
         metadata = read_metadata(script) if script else {}
@@ -381,7 +397,7 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
             "events": phase_events,
         })
     now = datetime.now(timezone.utc).isoformat()
-    prerequisite_skip = standalone is not None and standalone['phase_id'] in {'09', '10', '11', '13'} and exit_code == 78
+    prerequisite_skip = standalone is not None and standalone['phase_id'] in {'09', '10', '11', '12', '13', '14'} and exit_code == 78
     status = "complete" if campaign.get("status") == "complete" and (exit_code == 0 or prerequisite_skip) else (
         "interrupted" if exit_code in {130, 137, 143} else "failed")
     report = {
@@ -486,10 +502,10 @@ def run_phase(base, phase_id, script, environ=None):
         except OSError:
             print("[WARN] Phase could not be started", flush=True)
         finally:
-            skipped = (phase_id in {'09', '10', '11', '13'} and code == 78) or (phase_id in {'10', '13'} and code == 79)
+            skipped = (phase_id in {'09', '10', '11', '12', '13', '14'} and code == 78) or (phase_id in {'10', '13'} and code == 79)
             state = {"incident_id": incident_id, "scenario": "standalone-phase", "phase_id": phase_id,
                      "started": started, "completed": datetime.now(timezone.utc).isoformat(),
-                     "status": "complete" if code == 0 or (phase_id in {'09', '10', '11', '13'} and code == 78) else "failed",
+                     "status": "complete" if code == 0 or (phase_id in {'09', '10', '11', '12', '13', '14'} and code == 78) else "failed",
                      "phases": {phase_id: "skipped" if skipped else "complete" if code == 0 else "running" if code in {130, 137, 143} else "failed"}}
             try:
                 path = save_report(base, build_report(base, incident_id, code, env, standalone=state))
@@ -502,7 +518,7 @@ def run_phase(base, phase_id, script, environ=None):
             signal.signal(sig, handler)
     # CLI/scheduler conventions: a handled prerequisite skip is nonfatal. Keep
     # the worker's exit 78 in the report and the phase itself explicitly skipped.
-    return 0 if phase_id in {'09', '10', '11', '13'} and code == 78 else code
+    return 0 if phase_id in {'09', '10', '11', '12', '13', '14'} and code == 78 else code
 
 
 def main():

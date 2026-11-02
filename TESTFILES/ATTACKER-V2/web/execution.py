@@ -204,7 +204,7 @@ def phase_environment(pid, environ=None, sleep=time.sleep, clock=time.time):
     timing = phase.get('timing', {})
     offset = timing.get('start_offset', 0)
     sleep(max(0, float(env['MRN_STARTED']) + offset - clock()))
-    for key in ('SOURCE', 'TARGET', 'SUBNET', 'PORT', 'PROTOCOL', 'USERNAME', 'FILE', 'AUTO', 'TIMEOUT', 'PLATFORM', 'METHOD', 'ACTION', 'ARTIFACT', 'BEHAVIOR'):
+    for key in ('SOURCE', 'TARGET', 'SUBNET', 'PORT', 'PROTOCOL', 'USERNAME', 'FILE', 'AUTO', 'TIMEOUT', 'PLATFORM', 'METHOD', 'ACTION', 'ARTIFACT', 'BEHAVIOR', 'TRANSPORT', 'BEACON_INTERVAL', 'BEACON_JITTER', 'BEACON_COUNT', 'URI_PROFILE'):
         env.pop('MRNOBODY_' + key, None)
     env['MRNOBODY_RUN_MODE'] = 'campaign' if config['target_mode'] == 'auto' else 'standalone'
     for key, value in phase.get('parameters', {}).items():
@@ -218,7 +218,7 @@ def phase_environment(pid, environ=None, sleep=time.sleep, clock=time.time):
         env['MRNOBODY_FILE'] = host['file']
     if pid == '01':
         env['MRNOBODY_AUTO'] = '1' if config['target_mode'] == 'auto' else '0'
-    protocol = env.get('MRNOBODY_PROTOCOL') or ('winrm-http' if pid in {'09', '10', '13'} else 'ssh')
+    protocol = env.get('MRNOBODY_PROTOCOL') or ('winrm-http' if env.get('MRNOBODY_PLATFORM') == 'windows' or pid in {'09', '10', '13'} else 'ssh')
     env['MRNOBODY_PASSWORD'] = env.get('NORDIC_RDP_PASSWORD' if protocol.startswith(('winrm', 'rdp')) else 'NORDIC_SSH_PASSWORD', '')
     env['MRN_TIMING'] = json.dumps(timing)
     env['MRN_PHASE_STARTED'] = str(clock())

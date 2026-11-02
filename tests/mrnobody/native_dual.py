@@ -215,7 +215,7 @@ class NativeDualEndpoints(API):
         env=self.launch.call_args.kwargs['env']
         self.assertEqual(env['MRN_BASH_SECRET'],'BASH_COMMAND_SECRET')
         self.assertNotIn(b'COMMAND_SECRET',web.planning.store.path.read_bytes())
-        self.assertEqual([p['id'] for p in json.loads(env['MRN_EXECUTION'])['phases']][-5:],['13','04','05','06','07'])
+        self.assertEqual([p['id'] for p in json.loads(env['MRN_EXECUTION'])['phases']][-6:],['13','14','04','05','06','07'])
 
 
 @unittest.skipIf(os.name=='nt','Real Bash runners are verified by Linux CI')
@@ -238,6 +238,9 @@ class CampaignRunners(unittest.TestCase):
             status_code=0
             std_out=b'artifact_path=C:\\\\Temp\\\\MrNobody-P13-fixture\\ncleanup=complete\\n'
             std_err=b''
+        import sys
+        if sys.argv[1] == '12': Result.std_out=b'MRN_P12_OK\\n'
+        if sys.argv[1] == '14': Result.std_out=''.join('MRN_BEACON=%d,ok\\n' % i for i in range(1,6)).encode()
         return Result()
 ''')
             for name,source in {'sshpass':'#!/bin/sh\nshift\nexec "$@"\n','ssh':'#!/bin/sh\nexec bash -s\n'}.items():
@@ -258,7 +261,7 @@ class CampaignRunners(unittest.TestCase):
             # Keep P10/P13 runners real. Every other phase is an inert fixture;
             # P03 creates only a synthetic inventory for the local fake transports.
             for path in (base/'scripts').glob('[0-9][0-9]-*.sh'):
-                if path.name[:2] not in {'10','13'}:
+                if path.name[:2] not in {'10','12','13','14'}:
                     metadata='\n'.join(line for line in path.read_text().splitlines() if line.startswith('#'))
                     path.write_text(metadata+'\nexit 0\n')
             access=next((base/'scripts').glob('03-*.sh'))
@@ -286,6 +289,8 @@ PY
                     phases={p['id']:p for p in report['phases']}
                     self.assertEqual(phases['10']['status'],'skipped' if blank else 'success')
                     self.assertEqual(phases['13']['status'],'success')
+                    self.assertEqual(phases['12']['status'],'success')
+                    self.assertEqual(phases['14']['status'],'success')
                     self.assertEqual(phases['04']['status'],'success')
                     if not blank:self.assertEqual({a['platform'] for a in phases['10']['actions']},{'windows','linux'})
                     else:self.assertIn('NOT_CONFIGURED',json.dumps(phases['10']))
