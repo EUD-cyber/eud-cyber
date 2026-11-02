@@ -291,7 +291,8 @@
                 if (key === "source" || key === "subnet" || key === "file") return;
             }
             if (spec.type === "seconds") {
-                durationForm(parent, spec.label, phase.parameters[key] ?? spec.default, v => {phase.parameters[key] = v;}); return;
+                const fallback = phase.id === "18" && key === "dns_interval" ? (phase.parameters.dns_behavior === "low-and-slow" ? 60 : 5) : spec.default;
+                durationForm(parent, spec.label, phase.parameters[key] ?? fallback, v => {phase.parameters[key] = v;}); return;
             }
             if (spec.type === "fraction") {
                 const input = field(parent, spec.label, (phase.parameters[key] ?? spec.default) * 100, v => {phase.parameters[key] = Number(v) / 100;});
@@ -304,6 +305,9 @@
                 if (key === "platform") {
                     delete phase.parameters.protocol; delete phase.parameters.port; delete phase.parameters.username;
                     if (phase.id === "11") delete phase.parameters.method;
+                    parent.replaceChildren(); parameterForm(parent, phase, mode, common, true, onChange);
+                }
+                if (phase.id === "18" && key === "dns_behavior") {
                     parent.replaceChildren(); parameterForm(parent, phase, mode, common, true, onChange);
                 }
                 if (["platform", "protocol"].includes(key)) onChange();

@@ -313,7 +313,8 @@ async function main() {
         assert.deepEqual(ids(),mode==='auto'?['01','03','18']:['18']);
         await next(); set('Execution platform','linux');
         if(mode==='fixed'){set('Common Target (optional)','192.168.1.88');set('Protocol','ssh');}
-        set('DNS behavior','low-and-slow');set('DNS interval · Minutes','1');
+        assert.equal(Number(field(body(),'DNS interval · Seconds').value),5);
+        set('DNS behavior','low-and-slow');assert.equal(Number(field(body(),'DNS interval · Minutes').value),1);set('DNS interval · Minutes','1');
         set('DNS jitter (%)','20');set('Private lab DNS endpoint (UDP 53)','192.168.1.1');
         set('Lab domain','public.example'); await next();assert.match(error(),/P18.*domain/);
         set('Lab domain','mrnobody.test');set('DNS interval · Minutes','0');set('DNS interval · Seconds','5');
