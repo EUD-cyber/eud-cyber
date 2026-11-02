@@ -665,7 +665,7 @@ def api_run_phase(phase_id):
     phase_env = os.environ.copy()
     phase_env["NORDIC_INCIDENT_ID"] = "MRN-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:12]
     phase_env['MRNOBODY_PASSWORD'] = str(data.get('password', ''))
-    if phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17'}:
+    if phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'}:
         try:
             from windows_actions import runtime_command
             # Validate even legacy standalone callers without a profile.

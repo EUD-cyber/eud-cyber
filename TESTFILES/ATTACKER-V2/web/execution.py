@@ -130,7 +130,7 @@ def snapshot(base, capabilities, process=None, now=None):
     identity = process_identity(launch.get('pid'))
     active = not report and (process is not None and code is None or identity is not None and identity == launch.get('process_start'))
     status = 'running' if active else incident.get('status') or ('complete' if state.get('status') == 'complete' or code == 0 else 'failed' if code not in {None, -9, -15, 130, 137, 143} else 'interrupted')
-    if status not in {'running', 'complete', 'failed', 'interrupted'}:
+    if status not in {'running', 'complete', 'partial', 'failed', 'interrupted'}:
         status = 'interrupted'
     phases = meta['phases']
     if not phases:
@@ -143,7 +143,7 @@ def snapshot(base, capabilities, process=None, now=None):
         phase_status = {'success': 'complete', 'failure': 'failed', 'disabled': 'skipped', 'not_run': 'pending'}.get(raw, raw)
         if phase_status == 'running' and not active:
             phase_status = 'failed' if status == 'failed' else 'interrupted'
-        if phase_status not in {'complete', 'running', 'pending', 'skipped', 'failed', 'interrupted'}:
+        if phase_status not in {'complete', 'partial', 'running', 'pending', 'skipped', 'failed', 'interrupted'}:
             phase_status = 'pending'
         timeline.append({'id': pid, 'name': capabilities.get(pid, {}).get('name', 'Phase ' + pid),
                          'status': phase_status, **p['timing']})
@@ -180,7 +180,7 @@ def snapshot(base, capabilities, process=None, now=None):
                     if action_result != 'command_error':
                         action_result = 'success_with_warning'
                     logs.append('P10 · Completed with nonfatal stderr/warnings')
-            match = re.search(r'\b(PHASE_START|PHASE_COMPLETE|PHASE_FAILED|PHASE_SKIPPED|CAMPAIGN_START|CAMPAIGN_COMPLETE)\b', line)
+            match = re.search(r'\b(PHASE_START|PHASE_COMPLETE|PHASE_PARTIAL|PHASE_FAILED|PHASE_SKIPPED|CAMPAIGN_START|CAMPAIGN_COMPLETE)\b', line)
             if match:
                 phase = re.search(r'\bphase=(\d{2,4})\b', line)
                 logs.append(match[1].replace('_', ' ').title() + (' · P' + phase[1] if phase else ''))
@@ -204,7 +204,7 @@ def phase_environment(pid, environ=None, sleep=time.sleep, clock=time.time):
     timing = phase.get('timing', {})
     offset = timing.get('start_offset', 0)
     sleep(max(0, float(env['MRN_STARTED']) + offset - clock()))
-    for key in ('SOURCE', 'TARGET', 'SUBNET', 'PORT', 'PROTOCOL', 'USERNAME', 'FILE', 'AUTO', 'TIMEOUT', 'PLATFORM', 'METHOD', 'ACTION', 'ARTIFACT', 'BEHAVIOR', 'TRANSPORT', 'BEACON_INTERVAL', 'BEACON_JITTER', 'BEACON_COUNT', 'URI_PROFILE', 'WEB_PROFILE', 'WEB_PATH', 'DATASET', 'ARCHIVE_NAME'):
+    for key in ('SOURCE', 'TARGET', 'SUBNET', 'PORT', 'PROTOCOL', 'USERNAME', 'FILE', 'AUTO', 'TIMEOUT', 'PLATFORM', 'METHOD', 'ACTION', 'ARTIFACT', 'BEHAVIOR', 'TRANSPORT', 'BEACON_INTERVAL', 'BEACON_JITTER', 'BEACON_COUNT', 'URI_PROFILE', 'WEB_PROFILE', 'WEB_PATH', 'DATASET', 'ARCHIVE_NAME', 'DNS_BEHAVIOR', 'DNS_ENDPOINT', 'DNS_DOMAIN', 'DNS_PATTERN', 'DNS_INTERVAL', 'DNS_JITTER', 'DNS_COUNT', 'DNS_DURATION'):
         env.pop('MRNOBODY_' + key, None)
     env['MRNOBODY_RUN_MODE'] = 'campaign' if config['target_mode'] == 'auto' else 'standalone'
     for key, value in phase.get('parameters', {}).items():

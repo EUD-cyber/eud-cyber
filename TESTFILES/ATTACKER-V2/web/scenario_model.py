@@ -13,6 +13,14 @@ from pathlib import Path
 VERSION = 1
 SECRET_FIELDS = {'password', 'wordlist', 'wordlist_contents', 'ssh_password', 'rdp_password', 'powershell_windows', 'bash', 'powershell'}
 FIELDS = {
+    'dns_behavior': {'type': 'choice', 'label': 'DNS behavior', 'options': ['standard', 'low-and-slow', 'encoded-marker']},
+    'dns_endpoint': {'type': 'ipv4', 'label': 'Private lab DNS endpoint (UDP 53)'},
+    'dns_domain': {'type': 'text', 'label': 'Lab domain (.test/.internal/.localhost)', 'default': 'mrnobody.test'},
+    'dns_pattern': {'type': 'text', 'label': 'Query label pattern', 'default': 'mrn-{seq}'},
+    'dns_interval': {'type': 'seconds', 'label': 'DNS interval (default standard 5s / slow 60s)'},
+    'dns_jitter': {'type': 'fraction', 'label': 'DNS jitter (%)', 'default': 0},
+    'dns_count': {'type': 'number', 'label': 'DNS query count (1-40)', 'default': 3},
+    'dns_duration': {'type': 'seconds', 'label': 'DNS duration ceiling (max 4 minutes)', 'default': 240},
     'web_profile': {'type': 'choice', 'label': 'Web behavior', 'options': ['sqli', 'traversal']},
     'web_path': {'type': 'text', 'label': 'Lab application base path', 'default': '/mrn-lab'},
     'dataset': {'type': 'choice', 'label': 'Synthetic dataset', 'options': ['finance', 'engineering']},
@@ -41,18 +49,18 @@ PROTOCOLS = {'02': ['http', 'https'], '03': ['ssh', 'rdp'],
              '05': ['ssh', 'winrm', 'winrm-http', 'winrm-https'],
              '06': ['ssh', 'winrm', 'winrm-http', 'winrm-https'],
              '07': ['ssh', 'winrm', 'winrm-http', 'winrm-https'],
-             '08': ['ssh', 'rdp'], '09': ['winrm-http', 'winrm-https'], '10': ['ssh', 'winrm-http', 'winrm-https'], '11': ['ssh', 'winrm-http', 'winrm-https'], '12': ['ssh', 'winrm-http', 'winrm-https'], '14': ['ssh', 'winrm-http', 'winrm-https'], '13': ['winrm-http', 'winrm-https'], '15': ['http', 'https'], '16': ['ssh', 'winrm-http', 'winrm-https'], '17': ['ssh', 'winrm-http', 'winrm-https']}
+             '08': ['ssh', 'rdp'], '09': ['winrm-http', 'winrm-https'], '10': ['ssh', 'winrm-http', 'winrm-https'], '11': ['ssh', 'winrm-http', 'winrm-https'], '12': ['ssh', 'winrm-http', 'winrm-https'], '14': ['ssh', 'winrm-http', 'winrm-https'], '13': ['winrm-http', 'winrm-https'], '15': ['http', 'https'], '16': ['ssh', 'winrm-http', 'winrm-https'], '17': ['ssh', 'winrm-http', 'winrm-https'], '18': ['ssh', 'winrm-http', 'winrm-https']}
 TIMING = {'start_offset': 'Start offset (seconds)', 'duration': 'Target duration (seconds)',
           'delay_min': 'Minimum action delay (seconds)', 'delay_max': 'Maximum action delay (seconds)',
           'jitter': 'Jitter fraction (0–1)'}
 PRIVATE = [ipaddress.ip_network(x) for x in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16')]
 DEPENDENCIES = {'02': ['01'], '03': ['01'], '04': ['03'], '05': ['03'],
-                '06': ['03', '05'], '07': ['03'], '08': ['01', '03'], '09': ['03'], '10': ['03'], '11': ['03'], '12': ['03'], '14': ['03'], '13': ['03'], '15': ['02'], '16': ['03'], '17': ['03']}
+                '06': ['03', '05'], '07': ['03'], '08': ['01', '03'], '09': ['03'], '10': ['03'], '11': ['03'], '12': ['03'], '14': ['03'], '13': ['03'], '15': ['02'], '16': ['03'], '17': ['03'], '18': ['03']}
 
 
 def required_fields(pid):
     required = {'subnet'} if pid == '01' else {'target'}
-    if pid in {'03', '08', '09', '10', '11', '12', '13', '14', '16', '17'}:
+    if pid in {'03', '08', '09', '10', '11', '12', '13', '14', '16', '17', '18'}:
         required.add('protocol')
     if pid == '06':
         required.add('file')
@@ -160,11 +168,15 @@ def validate(value, capabilities):
             raise ValueError('Enabled must be boolean')
         params = phase.setdefault('parameters', {})
         allowed = set(cap['fields'])
-        if mode == 'auto' and pid not in {'10', '11', '12', '13', '14', '15', '16', '17'}:
+        if mode == 'auto' and pid not in {'10', '11', '12', '13', '14', '15', '16', '17', '18'}:
             allowed -= {'target', 'source', 'subnet', 'protocol', 'port', 'username', 'file'}
         keys(params, allowed, 'phase parameter')
         for key, val in list(params.items()):
-            if key in {'source', 'target'}:
+            if key == 'dns_endpoint':
+                params[key] = private(val)
+            elif key.startswith('dns_'):
+                pass  # Full cross-field validation below, shared with CLI.
+            elif key in {'source', 'target'}:
                 params[key] = private(val)
             elif key == 'subnet':
                 params[key] = ','.join(private(x.strip(), True) for x in str(val).split(','))
@@ -197,7 +209,7 @@ def validate(value, capabilities):
             else:
                 if not re.fullmatch(r'[A-Za-z0-9_.@\\-]{1,128}', str(val)):
                     raise ValueError('Invalid username')
-        if pid in {'10', '11', '12', '13', '14', '16', '17'}:
+        if pid in {'10', '11', '12', '13', '14', '16', '17', '18'}:
             platform = params.get('platform', 'auto')
             protocol = params.get('protocol')
             effective = 'linux' if protocol == 'ssh' else 'windows' if protocol else platform
@@ -208,6 +220,9 @@ def validate(value, capabilities):
                 from persistence_actions import METHODS
                 if effective != 'auto' and METHODS[method][0] != effective:
                     raise ValueError('Persistence method/platform mismatch')
+        if pid == '18':
+            from dns_actions import configuration
+            configuration(pid, {'MRNOBODY_' + k.upper(): str(v) for k, v in params.items()})
         if pid in {'16', '17'}:
             from exercise_actions import configuration
             configuration(pid, {'MRNOBODY_' + k.upper(): str(v) for k, v in params.items()})
@@ -243,7 +258,7 @@ def validate(value, capabilities):
                 raise ValueError(f'Phase {pid} requires earlier phases: {", ".join(sorted(needed))}')
             prior.add(pid)
     positions = {pid: i for i, pid in enumerate(enabled)}
-    for first, later in [('02', '15'), ('15', '03'), ('10', '16'), ('11', '16'), ('12', '16'), ('13', '16'), ('14', '16'), ('16', '17'), ('17', '05'), ('17', '06'), ('17', '07'), ('16', '05'), ('16', '06'), ('16', '07')]:
+    for first, later in [('14', '18'), ('18', '16'), ('18', '04'), ('18', '17'), ('18', '05'), ('18', '06'), ('18', '07'), ('02', '15'), ('15', '03'), ('10', '16'), ('11', '16'), ('12', '16'), ('13', '16'), ('14', '16'), ('16', '17'), ('17', '05'), ('17', '06'), ('17', '07'), ('16', '05'), ('16', '06'), ('16', '07')]:
         if first in positions and later in positions and positions[first] > positions[later]:
             raise ValueError(f'Phase {first} must precede {later}')
     return result
@@ -273,11 +288,11 @@ def needs_password(definition, windows=False):
     if definition is None:
         return True  # Preserve the existing Full Incident form contract.
     for p in definition['phases']:
-        if p['id'] not in {'03', '04', '05', '06', '07', '09', '10', '11', '12', '13', '14', '16', '17'}:
+        if p['id'] not in {'03', '04', '05', '06', '07', '09', '10', '11', '12', '13', '14', '16', '17', '18'}:
             continue
         if definition['target_mode'] == 'auto':
             return True
-        protocol = p.get('parameters', {}).get('protocol', 'winrm-http' if p['id'] in {'09', '10', '11', '12', '13', '14', '16', '17'} else 'ssh')
+        protocol = p.get('parameters', {}).get('protocol', 'winrm-http' if p['id'] in {'09', '10', '11', '12', '13', '14', '16', '17', '18'} else 'ssh')
         if protocol.startswith(('rdp', 'winrm')) == windows:
             return True
     return False

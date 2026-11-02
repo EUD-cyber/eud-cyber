@@ -60,6 +60,16 @@ for (const id of ['15','16','17']) {
     if(id==='17')fields.dataset={label:'Synthetic dataset',options:['finance','engineering']};
     caps.push({id,name:'Phase '+id,dependencies:[id==='15'?'02':'03'],fields,required_fields:['target',...(id==='15'?[]:['protocol'])],timing:['start_offset'],credentials:id!=='15',standalone:true});
 }
+const p18fields = {
+    target:{label:'Target IPv4',type:'ipv4'}, protocol:{label:'Protocol',options:['ssh','winrm-http','winrm-https']},
+    platform:{label:'Execution platform',options:['auto','windows','linux']},
+    dns_behavior:{label:'DNS behavior',options:['standard','low-and-slow','encoded-marker']},
+    dns_endpoint:{label:'Private lab DNS endpoint (UDP 53)',type:'ipv4'},
+    dns_domain:{label:'Lab domain',default:'mrnobody.test'}, dns_pattern:{label:'Query label pattern',default:'mrn-{seq}'},
+    dns_interval:{label:'DNS interval',type:'seconds'}, dns_jitter:{label:'DNS jitter (%)',type:'fraction',default:0},
+    dns_count:{label:'DNS count',type:'number',default:3}, dns_duration:{label:'DNS duration ceiling',type:'seconds',default:240}
+};
+caps.push({id:'18',name:'Advanced C2 / DNS Activity',dependencies:['03'],fields:p18fields,required_fields:['target','protocol'],timing:['start_offset'],credentials:true,standalone:true});
 const definitions = [], plans = [], requests = [];
 const context = vm.createContext({document:{getElementById:id=>elements.get(id) || [...elements.values()].flatMap(walk).find(n=>n.id===id), createElement:element, querySelectorAll:()=>[],addEventListener(){}},
     window:{}, Date, Intl, console, FormData, showPage:page=>{context.page=page;}, confirm:()=>true,
@@ -298,6 +308,24 @@ async function main() {
         if(id === '12') assert.equal(params.method,'metadata');
         else {assert.equal(params.beacon_interval,10);assert.equal(params.beacon_jitter,.2);assert.equal(params.beacon_count,3);}
     }
+    for (const mode of ['auto','fixed']) {
+        await select(mode); await add('18');
+        assert.deepEqual(ids(),mode==='auto'?['01','03','18']:['18']);
+        await next(); set('Execution platform','linux');
+        if(mode==='fixed'){set('Common Target (optional)','192.168.1.88');set('Protocol','ssh');}
+        set('DNS behavior','low-and-slow');set('DNS interval · Minutes','1');
+        set('DNS jitter (%)','20');set('Private lab DNS endpoint (UDP 53)','192.168.1.1');
+        set('Lab domain','public.example'); await next();assert.match(error(),/P18.*domain/);
+        set('Lab domain','mrnobody.test');set('DNS interval · Minutes','0');set('DNS interval · Seconds','5');
+        await next();assert.match(error(),/P18.*30 seconds/);
+        set('DNS interval · Minutes','1');set('DNS interval · Seconds','0');
+        await review();await click(body(),'Save');
+        const params=definitions.at(-1).phases.find(p=>p.id==='18').parameters;
+        assert.equal(params.dns_interval,60);assert.equal(params.dns_jitter,.2);assert.equal(params.dns_behavior,'low-and-slow');
+    }
+    await select('auto');await add('06');await add('17');await add('16');await add('18');await add('14');
+    const dnsOrder=ids();
+    for(const [a,b] of [['14','18'],['18','16'],['18','17'],['18','05'],['18','06']])assert.ok(dnsOrder.indexOf(a)<dnsOrder.indexOf(b));
     await select('auto');await add('06');await add('16');await add('14');assert.ok(ids().indexOf('16')<ids().indexOf('05'));assert.ok(ids().indexOf('14')<ids().indexOf('16'));
     await select('auto');await add('17');await add('16');await add('13');await add('15');await add('06');
     const ordered=ids();

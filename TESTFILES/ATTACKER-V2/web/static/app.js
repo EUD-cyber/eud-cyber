@@ -915,6 +915,7 @@ function phaseFieldLabel(parameter) {
         password: "Password",
         powershell: "P10 remote command (PowerShell / Bash) (runtime only, never saved)",
         timeout: "Action timeout (seconds, 5–300)",
+        dns_behavior: "DNS behavior", dns_endpoint: "Private lab DNS endpoint (UDP 53)", dns_domain: "Reserved lab domain (.test/.internal/.localhost)", dns_pattern: "Query label pattern (mrn-{seq})", dns_interval: "DNS interval (seconds)", dns_jitter: "DNS jitter (fraction 0-0.5)", dns_count: "DNS query count (1-40)", dns_duration: "DNS duration ceiling (3-240 seconds)",
         file: "File",
         platform: "Execution platform",
         method: "Method",
@@ -1048,11 +1049,11 @@ function renderPhaseDetail(phase) {
             input = document.createElement("select");
             const choices = parameter === "behavior" ? ["encoded-powershell", "certutil-decode", "bits-job"] : ["winrm-http", "winrm-https"];
             choices.forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value; input.appendChild(option);});
-        } else if (["12", "14"].includes(phase.id) && ["platform", "method", "protocol", "transport", "uri_profile"].includes(parameter)) {
+        } else if (["12", "14", "18"].includes(phase.id) && ["platform", "method", "protocol", "transport", "uri_profile", "dns_behavior"].includes(parameter)) {
             input = document.createElement("select");
-            const choices = {platform: ["auto", "windows", "linux"], method: ["read-test-file", "metadata"], protocol: ["", "ssh", "winrm-http", "winrm-https"], transport: ["http", "https"], uri_profile: ["heartbeat", "status"]}[parameter];
+            const choices = {platform: ["auto", "windows", "linux"], method: ["read-test-file", "metadata"], protocol: ["", "ssh", "winrm-http", "winrm-https"], transport: ["http", "https"], uri_profile: ["heartbeat", "status"], dns_behavior: ["standard", "low-and-slow", "encoded-marker"]}[parameter];
             choices.forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value || "Choose transport"; input.appendChild(option);});
-        } else if (["15", "16", "17"].includes(phase.id) && ["web_profile", "protocol", "platform", "behavior", "dataset", "action"].includes(parameter)) {
+        } else if (["15", "16", "17", "18"].includes(phase.id) && ["web_profile", "protocol", "platform", "behavior", "dataset", "action"].includes(parameter)) {
             input = document.createElement("select");
             const choices = {web_profile: ["sqli", "traversal"], protocol: phase.id === "15" ? ["http", "https"] : ["", "ssh", "winrm-http", "winrm-https"], platform: ["auto", "windows", "linux"], behavior: ["config-toggle", "log-rename"], dataset: ["finance", "engineering"], action: ["run", "cleanup"]}[parameter];
             choices.forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value || "Choose transport"; input.appendChild(option);});
@@ -1103,7 +1104,7 @@ function renderPhaseDetail(phase) {
 
 
     phaseDetail.appendChild(form);
-    if (["10", "11", "12", "14", "16", "17"].includes(phase.id)) {
+    if (["10", "11", "12", "14", "16", "17", "18"].includes(phase.id)) {
         const platform = document.getElementById(`phase-${phase.id}-platform`);
         const adapt = () => {
             const mode = platform?.value || "auto";
@@ -2888,7 +2889,7 @@ function reportType(report) {
 }
 
 const REPORT_PHASES = [
-    ["01", "Discovery"], ["02", "Web"], ["15", "Application Security"], ["03", "Initial Access"], ["08", "Credential Access"], ["09", "AD Privilege Escalation"], ["10", "Custom Remote Command"], ["11", "Persistence"], ["12", "Credential Access"], ["13", "Windows Native Tools / LOLBins"], ["14", "Command & Control"], ["16", "Defense Evasion Simulation"], ["04", "Internal Discovery"], ["17", "Collection / Archive"], ["05", "Staging"], ["06", "Exfiltration"], ["07", "Impact"]
+    ["01", "Discovery"], ["02", "Web"], ["15", "Application Security"], ["03", "Initial Access"], ["08", "Credential Access"], ["09", "AD Privilege Escalation"], ["10", "Custom Remote Command"], ["11", "Persistence"], ["12", "Credential Access"], ["13", "Windows Native Tools / LOLBins"], ["14", "Command & Control"], ["18", "Advanced C2 / DNS Activity"], ["16", "Defense Evasion Simulation"], ["04", "Internal Discovery"], ["17", "Collection / Archive"], ["05", "Staging"], ["06", "Exfiltration"], ["07", "Impact"]
 ];
 const reportArray = value => Array.isArray(value) ? value : [];
 let reportHistory = [];
@@ -2900,7 +2901,7 @@ let reportRefreshVersion = 0;
 function reportStatus(value) {
     const status = ({complete: "success", failed: "failure", disabled: "skipped",
         pending: "not_run", running: "interrupted"})[value] || value;
-    return ["success", "failure", "skipped", "interrupted", "not_run"].includes(status) ? status : "unknown";
+    return ["success", "partial", "failure", "skipped", "interrupted", "not_run"].includes(status) ? status : "unknown";
 }
 
 function reportBadge(parent, value) {
@@ -3186,7 +3187,7 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
         selectedPhase = phase.id;
         renderReportPhase(phaseDetail, phase, groundTruth);
     };
-    const ordered = [...REPORT_PHASES.filter(([phaseId]) => !["09", "10", "11", "12", "13", "14", "15", "16", "17"].includes(phaseId) || phases.some(p => p.id === phaseId)).map(([phaseId, name]) => phases.find(p => p.id === phaseId) ||
+    const ordered = [...REPORT_PHASES.filter(([phaseId]) => !["09", "10", "11", "12", "13", "14", "15", "16", "17", "18"].includes(phaseId) || phases.some(p => p.id === phaseId)).map(([phaseId, name]) => phases.find(p => p.id === phaseId) ||
         {id: phaseId, name, status: "not_run", absent: true}), ...phases.filter(p => !REPORT_PHASES.some(([phaseId]) => p.id === phaseId))];
     ordered.forEach(phase => {
         const button = reportNode("button", null, timeline);
@@ -3500,7 +3501,7 @@ document.addEventListener(
         if (card) {
             card.textContent = String(data.status || 'idle').toUpperCase();
             card.classList.remove('dashboard-good', 'dashboard-running', 'dashboard-warning', 'dashboard-danger');
-            const cls = {running: 'dashboard-running', complete: 'dashboard-good', failed: 'dashboard-danger', interrupted: 'dashboard-warning'}[data.status];
+            const cls = {running: 'dashboard-running', complete: 'dashboard-good', partial: 'dashboard-warning', failed: 'dashboard-danger', interrupted: 'dashboard-warning'}[data.status];
             if (cls) card.classList.add(cls);
         }
         const execution = data.execution;
@@ -3530,7 +3531,7 @@ document.addEventListener(
         (data.timeline || []).forEach(phase => {
             const row = node(timeline, 'li');
             node(row, 'span', `P${phase.id} · ${phase.name}`);
-            const allowed = ['complete', 'running', 'pending', 'skipped', 'failed', 'interrupted'];
+            const allowed = ['complete', 'partial', 'running', 'pending', 'skipped', 'failed', 'interrupted'];
             const state = allowed.includes(phase.status) ? phase.status : 'pending';
             node(row, 'span', state, `overview-phase overview-${state}`);
             if (phase.action_result === 'command_error') node(row, 'small', 'Custom remote command failed', 'muted');

@@ -193,6 +193,14 @@ write_files:
           "$INSTALL_DIR/scripts/17-collection.sh"
 
       download_file \
+          "scripts/18-dns.sh" \
+          "$INSTALL_DIR/scripts/18-dns.sh"
+
+      download_file \
+          "web/dns_actions.py" \
+          "$INSTALL_DIR/web/dns_actions.py"
+
+      download_file \
           "web/exercise_actions.py" \
           "$INSTALL_DIR/web/exercise_actions.py"
 
