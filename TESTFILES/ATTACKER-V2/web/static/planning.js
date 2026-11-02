@@ -17,12 +17,12 @@
             dependencies(id).forEach(visit);
             let item = draft.phases.find(p => p.id === id);
             if (!item) {item = phase(id); autoAdded.add(id);}
-            item.enabled = true; if (!["10", "11", "12", "13", "14", "15", "16", "17"].includes(id)) item.parameters = {};
+            item.enabled = true; if (!["10", "11", "12", "13", "14", "15", "16", "17", "18"].includes(id)) item.parameters = {};
             seen.add(id); result.push(item);
         };
         visit("01"); enabled().forEach(p => visit(p.id));
-        draft.phases.filter(p => !seen.has(p.id)).forEach(p => {if (!["10", "11", "12", "13", "14", "15", "16", "17"].includes(p.id)) p.parameters = {}; result.push(p);});
-        const edges = [["02","15"],["15","03"],["10","16"],["11","16"],["12","16"],["13","16"],["14","16"],["16","17"],["17","05"],["17","06"],["17","07"],["16","05"],["16","06"],["16","07"]];
+        draft.phases.filter(p => !seen.has(p.id)).forEach(p => {if (!["10", "11", "12", "13", "14", "15", "16", "17", "18"].includes(p.id)) p.parameters = {}; result.push(p);});
+        const edges = [["14","18"],["18","16"],["18","04"],["18","17"],["18","05"],["18","06"],["18","07"],["02","15"],["15","03"],["10","16"],["11","16"],["12","16"],["13","16"],["14","16"],["16","17"],["17","05"],["17","06"],["17","07"],["16","05"],["16","06"],["16","07"]];
         for (let pass = 0; pass < result.length; pass++) for (const [a,b] of edges) {
             const i = result.findIndex(p => p.id === a), j = result.findIndex(p => p.id === b);
             if (i >= 0 && j >= 0 && i > j) result.splice(j, 0, result.splice(i, 1)[0]);
@@ -34,7 +34,7 @@
     }
     function validOrder(phases) {
         const ids = phases.filter(p => p.enabled !== false).map(p => p.id);
-        const edges = [["02","15"],["15","03"],["10","16"],["11","16"],["12","16"],["13","16"],["14","16"],["16","17"],["17","05"],["17","06"],["17","07"],["16","05"],["16","06"],["16","07"]];
+        const edges = [["14","18"],["18","16"],["18","04"],["18","17"],["18","05"],["18","06"],["18","07"],["02","15"],["15","03"],["10","16"],["11","16"],["12","16"],["13","16"],["14","16"],["16","17"],["17","05"],["17","06"],["17","07"],["16","05"],["16","06"],["16","07"]];
         if (edges.some(([a,b]) => ids.includes(a) && ids.includes(b) && ids.indexOf(a) > ids.indexOf(b))) return false;
         if (draft.target_mode !== "auto") return true;
         const prior = new Set();
@@ -113,9 +113,16 @@
                 for (const key of draft.target_mode === "fixed" ? cap.required_fields || [] : []) if (!params[key]) return `P${p.id}: enter ${cap.fields[key]?.label || key}.`;
                 const platform = params.platform || "auto";
                 const effective = params.protocol === "ssh" ? "linux" : params.protocol ? "windows" : platform;
-                if (["10", "11", "12", "14", "16", "17"].includes(p.id) && platform !== "auto" && platform !== effective) return `P${p.id}: platform and protocol must match.`;
+                if (["10", "11", "12", "14", "16", "17", "18"].includes(p.id) && platform !== "auto" && platform !== effective) return `P${p.id}: platform and protocol must match.`;
                 const methodPlatform = {"scheduled-task":"windows", service:"windows", cron:"linux", systemd:"linux"}[params.method];
                 if (p.id === "11" && methodPlatform && effective !== "auto" && effective !== methodPlatform) return "P11: method and platform must match.";
+                if (p.id === "18") {
+                    const behavior = params.dns_behavior || "standard";
+                    const interval = Number(params.dns_interval ?? (behavior === "low-and-slow" ? 60 : 5)), jitter = Number(params.dns_jitter ?? 0), count = Number(params.dns_count ?? 3), duration = Number(params.dns_duration ?? 240);
+                    if (!Number.isFinite(interval) || interval < 1 || interval > 180 || behavior === "low-and-slow" && interval < 30 || !Number.isFinite(jitter) || jitter < 0 || jitter > .5 || !Number.isInteger(count) || count < 1 || count > 40 || !Number.isFinite(duration) || duration < 3 || duration > 240 || (count-1)*interval*(1+jitter)+count*3 > duration) return "P18: DNS interval/count/jitter must fit the 3-240 second duration ceiling; low-and-slow requires at least 30 seconds between queries.";
+                    if (params.dns_domain && (params.dns_domain.length > 120 || !/^(?:[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?\.)+(?:test|internal|localhost)$/.test(params.dns_domain))) return "P18: use a reserved lab domain ending .test, .internal or .localhost.";
+                    if (params.dns_pattern && !/^[a-z0-9-]{1,20}\{seq\}[a-z0-9-]{0,20}$/.test(params.dns_pattern)) return "P18: query pattern requires one {seq} placeholder and lowercase letters/digits/hyphens.";
+                }
                 if (p.id === "14") {
                     const interval = Number(params.beacon_interval ?? 5), jitter = Number(params.beacon_jitter ?? 0), count = Number(params.beacon_count ?? 5);
                     if (!Number.isFinite(interval) || interval < 1 || interval > 60 || !Number.isFinite(jitter) || jitter < 0 || jitter > .5 || !Number.isInteger(count) || count < 1 || count > 20 || (count - 1) * interval * (1 + jitter) + count * 3 > 240) return "P14: interval 1-60 seconds, jitter 0-50%, count 1-20; total bounded execution must fit 240 seconds.";
@@ -222,7 +229,7 @@
         else model.phases.filter(p => p.enabled !== false).forEach(p => {
             if (!capabilities.find(c => c.id === p.id)?.credentials) return;
             if (model.target_mode === "auto") {required.add("ssh"); required.add("rdp");}
-            else if (["10", "11", "12", "13", "14", "16", "17"].includes(p.id) && !p.parameters?.protocol && (!p.parameters?.platform || p.parameters.platform === "auto")) {required.add("ssh"); required.add("rdp");}
+            else if (["10", "11", "12", "13", "14", "16", "17", "18"].includes(p.id) && !p.parameters?.protocol && (!p.parameters?.platform || p.parameters.platform === "auto")) {required.add("ssh"); required.add("rdp");}
             else required.add(/^(rdp|winrm)/.test(p.parameters?.protocol || (p.parameters?.platform === "windows" ? "winrm-http" : "ssh")) ? "rdp" : "ssh");
         });
         node("p", `Required runtime credentials: ${required.size ? [...required].map(p => p === "ssh" ? "Linux / SSH" : "Windows / RDP / WinRM").join(", ") : "None"}`, parent);
@@ -267,23 +274,25 @@
         if (cap.runtime_powershell) node("p", "P10 remote command (PowerShell / Bash) is requested on Review or when arming the schedule; it is never stored in the definition.", parent, "muted");
         if (["15", "16", "17"].includes(phase.id)) node("p", {"15": "Fingerprint required: dedicated MrNobody Web Lab endpoint. Auto uses P02 web services; no compromise is invented.", "16": "Only synthetic monitor.conf or exercise.log in the MRN exercise directory; original state is restored. Cleanup recovers an interrupted run.", "17": "Only fixed marker-verified finance/engineering files. Archives feed staged-data.json for P05/P06. Cleanup removes the selected archive."}[phase.id], parent, "muted");
         if (phase.id === "12") node("p", "Synthetic temporary test file only: inspect metadata or verify its fixed lab marker, then clean up. Auto requires prior P03 access.", parent, "muted");
+        if (phase.id === "18") node("p", "DNS only, UDP 53. Private resolver and reserved lab domain; use a non-forwarding lab DNS zone. Standard defaults: 5s; low-and-slow: 60s (minimum 30s). Three queries, 0% jitter, 4 minute duration ceiling. Internal DNS timing is independent of campaign offsets. Fixed marker only; no remote commands or answer processing.", parent, "muted");
         if (phase.id === "14") node("p", "Beacons to this MrNobody instance only. Internal interval/count is independent of the phase start offset. Default: HTTP, 5 seconds, 0% jitter, 5 check-ins. Maximum execution budget: 240 seconds. HTTPS uses the lab self-signed certificate policy.", parent, "muted");
         if (phase.id === "13") node("p", "Windows only. Choose encoded PowerShell, local certutil decode, or an empty BITS job that is cancelled. No arbitrary command or URL is accepted. Default: encoded PowerShell.", parent, "muted");
         if (phase.id === "09") node("p", "P09 requires a lab domain controller and AD management rights. New or disabled mrnobody accounts are enabled using the runtime Windows password; an already enabled account keeps its password. Domain Admins membership is verified.", parent, "muted");
         if (mode === "auto") {
             node("p", dataHint(phase.id), parent, "muted");
-            if (!["10", "11", "12", "13", "14", "15", "16", "17"].includes(phase.id)) return;
+            if (!["10", "11", "12", "13", "14", "15", "16", "17", "18"].includes(phase.id)) return;
         }
         Object.entries(cap.fields).forEach(([key, spec]) => {
             const platform = phase.parameters.platform || "auto";
             let options = spec.options;
-            if (["10", "11", "12", "13", "14", "16", "17"].includes(phase.id)) {
+            if (["10", "11", "12", "13", "14", "16", "17", "18"].includes(phase.id)) {
                 if (key === "protocol") options = options.filter(v => platform === "auto" || (v === "ssh") === (platform === "linux"));
                 if (key === "method" && phase.id === "11") options = options.filter(v => v === "auto" || platform === "auto" || (["cron", "systemd"].includes(v)) === (platform === "linux"));
                 if (key === "source" || key === "subnet" || key === "file") return;
             }
             if (spec.type === "seconds") {
-                durationForm(parent, spec.label, phase.parameters[key] ?? spec.default, v => {phase.parameters[key] = v;}); return;
+                const fallback = phase.id === "18" && key === "dns_interval" ? (phase.parameters.dns_behavior === "low-and-slow" ? 60 : 5) : spec.default;
+                durationForm(parent, spec.label, phase.parameters[key] ?? fallback, v => {phase.parameters[key] = v;}); return;
             }
             if (spec.type === "fraction") {
                 const input = field(parent, spec.label, (phase.parameters[key] ?? spec.default) * 100, v => {phase.parameters[key] = Number(v) / 100;});
@@ -296,6 +305,9 @@
                 if (key === "platform") {
                     delete phase.parameters.protocol; delete phase.parameters.port; delete phase.parameters.username;
                     if (phase.id === "11") delete phase.parameters.method;
+                    parent.replaceChildren(); parameterForm(parent, phase, mode, common, true, onChange);
+                }
+                if (phase.id === "18" && key === "dns_behavior") {
                     parent.replaceChildren(); parameterForm(parent, phase, mode, common, true, onChange);
                 }
                 if (["platform", "protocol"].includes(key)) onChange();

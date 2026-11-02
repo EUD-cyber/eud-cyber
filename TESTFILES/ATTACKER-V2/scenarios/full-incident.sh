@@ -3,7 +3,7 @@
 # SCENARIO_ID="full-incident"
 # SCENARIO_NAME="Full Incident"
 # SCENARIO_DESCRIPTION="Complete incident simulation from discovery through impact."
-# SCENARIO_PHASES="01,02,15,03,08,09,10,11,12,13,14,16,04,17,05,06,07"
+# SCENARIO_PHASES="01,02,15,03,08,09,10,11,12,13,14,18,16,04,17,05,06,07"
 
 set -u
 
@@ -706,7 +706,11 @@ run_phase() {
     fi
 
 
-    if [[ ( "$NUMBER" == "10" || "$NUMBER" == "11" || "$NUMBER" == "13" || "$NUMBER" == "12" || "$NUMBER" == "14" || "$NUMBER" == "15" || "$NUMBER" == "16" || "$NUMBER" == "17" ) && $RESULT -eq 78 ]]; then
+    if [[ "$NUMBER" == "18" && $RESULT -eq 80 ]]; then
+        RUN_PHASE_STATUS="partial"
+        return 0
+    fi
+    if [[ ( "$NUMBER" == "10" || "$NUMBER" == "11" || "$NUMBER" == "13" || "$NUMBER" == "12" || "$NUMBER" == "14" || "$NUMBER" == "15" || "$NUMBER" == "16" || "$NUMBER" == "17" || "$NUMBER" == "18" ) && $RESULT -eq 78 ]]; then
         RUN_PHASE_STATUS="skipped"
         update_phase_state "$NUMBER" "skipped"
         log "[PHASE $NUMBER] SKIPPED - Not configured or no compatible target/method"
@@ -836,6 +840,7 @@ echo "  P11 Persistence"
 echo "  P12 Credential Access Simulation"
 echo "  P13 Windows Native Tools / LOLBins Simulation"
 echo "  P14 Command & Control Simulation"
+echo "  P18 Advanced C2 / DNS Activity"
 echo "  P15 Application Security (after P02)"
 echo "  P16 Defense Evasion Simulation"
 echo "  P17 Collection / Archive (before P05)"
@@ -906,6 +911,7 @@ PHASE_14="$SCRIPT_DIR/14-c2.sh"
 PHASE_15="$SCRIPT_DIR/15-web-app.sh"
 PHASE_16="$SCRIPT_DIR/16-defense-evasion.sh"
 PHASE_17="$SCRIPT_DIR/17-collection.sh"
+PHASE_18="$SCRIPT_DIR/18-dns.sh"
 PHASE_13="$SCRIPT_DIR/13-native-tools.sh"
 
 
@@ -929,7 +935,8 @@ for SCRIPT in \
     "$PHASE_14" \
     "$PHASE_15" \
     "$PHASE_16" \
-    "$PHASE_17"
+    "$PHASE_17" \
+    "$PHASE_18"
 
 do
 
@@ -1097,6 +1104,7 @@ data = {
         "12": "pending",
         "13": "pending",
         "14": "pending",
+        "18": "pending",
         "15": "pending",
         "16": "pending",
         "17": "pending",
@@ -1364,7 +1372,7 @@ phase_delay
 # ============================================================
 # PHASE 09 / 10: Windows actions after established access, before staging.
 # ============================================================
-for NUMBER in 09 10 11 12 13 14 16; do
+for NUMBER in 09 10 11 12 13 14 18 16; do
     if [[ "$NUMBER" == "09" ]] && ! windows_access_available; then
         update_phase_state "09" "disabled"
         ground_truth "PHASE_SKIPPED phase=09 reason=no_windows_rdp_access"
@@ -1390,6 +1398,7 @@ for NUMBER in 09 10 11 12 13 14 16; do
     fi
     if [[ "$NUMBER" == "12" ]]; then SCRIPT="$PHASE_12"; NAME="Credential Access Simulation"; fi
     if [[ "$NUMBER" == "14" ]]; then SCRIPT="$PHASE_14"; NAME="Command & Control Simulation"; fi
+    if [[ "$NUMBER" == "18" ]]; then SCRIPT="$PHASE_18"; NAME="Advanced C2 / DNS Activity"; fi
     if [[ "$NUMBER" == "16" ]]; then SCRIPT="$PHASE_16"; NAME="Defense Evasion Simulation"; fi
     update_phase_state "$NUMBER" "running"
     if ! run_phase "$NUMBER" "$NAME" "$SCRIPT"; then

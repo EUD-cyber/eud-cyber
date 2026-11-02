@@ -621,6 +621,7 @@ Options:
   --web-profile <sqli|traversal> --web-path </mrn-lab> (P15)
   --behavior <config-toggle|log-rename> --action <run|cleanup> (P16)
   --dataset <finance|engineering> --archive-name <suffix> --action <run|cleanup> (P17)
+  --dns-behavior <standard|low-and-slow|encoded-marker> --dns-endpoint <private-ip> --dns-domain <lab.test> --dns-pattern <mrn-{seq}> --dns-interval <seconds> --dns-jitter <0-0.5> --dns-count <1-40> --dns-duration <3-240 seconds> (P18)
   --transport <http|https> --beacon-interval <seconds> --beacon-jitter <0-0.5> --beacon-count <1-20> --uri-profile <heartbeat|status> (P14)
   --behavior <encoded-powershell|certutil-decode|bits-job> (P13)
   --timeout <seconds> (P09/P10/P11, 5–300)
@@ -778,7 +779,7 @@ case "$COMMAND" in
                     shift 2
                     ;;
 
-                --web-profile|--web-path|--dataset|--archive-name|--transport|--beacon-interval|--beacon-jitter|--beacon-count|--uri-profile)
+                --dns-behavior|--dns-endpoint|--dns-domain|--dns-pattern|--dns-interval|--dns-jitter|--dns-count|--dns-duration|--web-profile|--web-path|--dataset|--archive-name|--transport|--beacon-interval|--beacon-jitter|--beacon-count|--uri-profile)
                     [[ $# -ge 2 ]] || die "$1 requires a value"
                     key="${1#--}"
                     key="${key//-/_}"

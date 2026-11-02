@@ -199,7 +199,7 @@ class Phases(unittest.TestCase):
         self.assertEqual((root/'monitor.conf').read_text(),'MrNobody synthetic monitor enabled\n')
 
     def test_full_order_reports_exports_and_live(self):
-        expected=('01','02','15','03','08','09','10','11','12','13','14','16','04','17','05','06','07')
+        expected=('01','02','15','03','08','09','10','11','12','13','14','18','16','04','17','05','06','07')
         self.assertEqual(PHASE_ORDER,expected)
         self.assertEqual(read_metadata(BASE/'scenarios/full-incident.sh')['SCENARIO_PHASES'].split(','),list(expected))
         validate(dict(version=1,name='Full',target_mode='auto',profile={'mode':'normal'},phases=[{'id':p} for p in expected]),CAPS)

@@ -69,6 +69,10 @@ def mitre_url(technique_id):
 
 # Recommendations, never observations. Sensors/auditing must be configured in the lab.
 PHASE_GUIDANCE = {
+    "18": (
+        "Inspect DNS server query logs, Suricata DNS events/flows, firewall UDP 53 and Wazuh host process telemetry (PowerShell/WinRM or Python/SSH). Correlate source, resolver, query labels and timestamps.",
+        "Hunt repeated check-ins, inter-arrival intervals/jitter and low-and-slow patterns over longer windows. Encoded labels contain only the fixed MRN-EXERCISE-ONLY marker. NOERROR or NXDOMAIN with matching transaction/question counts as successful telemetry; answers are discarded. No sensor alert is implied.",
+        "Use a private non-forwarding classroom DNS endpoint, baseline periodic queries and unusual label encoding, restrict outbound DNS and compare success/failure/unattempted counts."),
     "15": (
         "Correlate web access/error logs, app logs, reverse proxy/WAF, Suricata HTTP and Wazuh by source, target, path and time.",
         "Check profile, fingerprint, validation outcome and fixed safe evidence. SQLi uses an ephemeral synthetic database; traversal reads only a virtual marker. Findings do not establish host compromise.",
@@ -209,8 +213,8 @@ def add_analysis(report):
             }.get(phase['action_result'], 'Custom remote command not executed')
             phase['analysis']['what_happened'] = phase['action_outcome']
             phase['analysis']['findings'] = details or [phase['action_outcome']]
-        if phase['id'] in {'15', '16', '17'}:
-            prefix = {'15': 'WEB_ACTION_', '16': 'EVASION_ACTION_', '17': 'COLLECTION_ACTION_'}[phase['id']]
+        if phase['id'] in {'15', '16', '17', '18'}:
+            prefix = {'15': 'WEB_ACTION_', '16': 'EVASION_ACTION_', '17': 'COLLECTION_ACTION_', '18': 'DNS_ACTION_'}[phase['id']]
             phase['actions'] = [dict(timestamp=e['timestamp'], outcome=e['outcome'], **e['fields']) for e in events if e['event'].startswith(prefix)]
             phase['action_evidence'] = [e['timestamp'] + ' · ' + e['message'] for e in events if e['event'].startswith(prefix)]
             phase['action_outcome'] = phase['name'] + ': ' + str(phase.get('status', 'not_run'))
@@ -238,7 +242,7 @@ def add_analysis(report):
 
 
 INCIDENT_ID = re.compile(r"(?:MRN|H3)-[A-Za-z0-9][A-Za-z0-9_-]{0,100}\Z")
-PHASE_ORDER = ("01", "02", "15", "03", "08", "09", "10", "11", "12", "13", "14", "16", "04", "17", "05", "06", "07")
+PHASE_ORDER = ("01", "02", "15", "03", "08", "09", "10", "11", "12", "13", "14", "18", "16", "04", "17", "05", "06", "07")
 STATE_FILES = {
     "networks": ("networks.json", "NORDIC_NETWORK_STATE"),
     "inventory": ("discovered-hosts.json", "NORDIC_DISCOVERED_STATE"),
@@ -305,6 +309,8 @@ def redact_environment(value, environ):
 
 def outcome(event):
     upper = event.upper()
+    if upper in {"DNS_ACTION_PARTIAL", "PHASE_PARTIAL"}:
+        return "partial"
     if any(word in upper for word in ("SKIPPED", "EXCLUDED")):
         return "skipped"
     if any(word in upper for word in ("FAILED", "REJECTED", "INVALID", "ACTION_ERROR")):
@@ -385,17 +391,17 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
     selected = [p['id'] for p in campaign.get('execution', {}).get('phases', [])]
     # Opt-in phases must not appear as new pending actions in legacy campaigns.
     known = set(campaign.get('phases', {})) | {e['phase'] for e in events}
-    order = selected + [pid for pid in PHASE_ORDER if pid not in selected and (pid not in {'09', '10', '11', '12', '13', '14', '15', '16', '17'} or pid in known)]
+    order = selected + [pid for pid in PHASE_ORDER if pid not in selected and (pid not in {'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'} or pid in known)]
     for phase_id in ([standalone["phase_id"]] if standalone is not None else order):
         script = next(iter(sorted((base / "scripts").glob(phase_id + "-*.sh"))), None)
         metadata = read_metadata(script) if script else {}
         technique_ids = [x.strip() for x in metadata.get("MITRE_TECHNIQUES", "").split(",") if x.strip()]
         names = metadata.get("MITRE_TECHNIQUE_NAMES", "").split("|")
         phase_events = [event for event in events if event["phase"] == phase_id]
-        if phase_id in {'15', '16', '17'}:
+        if phase_id in {'15', '16', '17', '18'}:
             # New actions record technique sets per behavior/platform, including Windows library archiving.
             technique_ids = list(dict.fromkeys(t for e in phase_events for t in e['fields'].get('mitre', '').split(',') if mitre_url(t))) or technique_ids
-            technique_names = {'T1190': 'Exploit Public-Facing Application', 'T1005': 'Data from Local System', 'T1685': 'Disable or Modify Tools', 'T1070': 'Indicator Removal', 'T1560.001': 'Archive via Utility', 'T1560.002': 'Archive via Library'}
+            technique_names = {'T1071.004': 'DNS', 'T1132.001': 'Standard Encoding', 'T1190': 'Exploit Public-Facing Application', 'T1005': 'Data from Local System', 'T1685': 'Disable or Modify Tools', 'T1070': 'Indicator Removal', 'T1560.001': 'Archive via Utility', 'T1560.002': 'Archive via Library'}
             names = [technique_names.get(t, '') for t in technique_ids]
         recorded = {e['fields'].get('mitre') for e in phase_events} & set(technique_ids)
         if phase_id == '13' or phase_id in {'10', '11'} and recorded:
@@ -403,7 +409,7 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
             technique_ids = [tid for tid in technique_ids if tid in recorded]
             names = [named.get(tid, '') for tid in technique_ids]
         for event in phase_events:
-            if phase_id in {'15', '16', '17'}:
+            if phase_id in {'15', '16', '17', '18'}:
                 tids = [t for t in event['fields'].get('mitre', '').split(',') if mitre_url(t)]
                 event['mitre_technique_ids'] = tids
                 event['mitre_mapping'] = 'action_metadata' if tids else 'phase_metadata'
@@ -413,12 +419,12 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
             event["mitre_mapping"] = "action_metadata" if action_tid in technique_ids else "phase_metadata"
         state = campaign.get("phases", {}).get(phase_id, "pending")
         status = {"complete": "success", "failed": "failure", "disabled": "skipped",
-                  "pending": "not_run", "running": "interrupted"}.get(state, state)
+                  "partial": "partial", "pending": "not_run", "running": "interrupted"}.get(state, state)
         phases.append({
             "id": phase_id, "name": metadata.get("ATTACK_NAME", script.stem[3:] if script else phase_id),
             "status": status, "runtime_status": state,
             "started": next((e["timestamp"] for e in phase_events if e["event"] == "PHASE_START"), campaign.get("started") if standalone is not None else None),
-            "ended": next((e["timestamp"] for e in reversed(phase_events) if e["event"] in {"PHASE_COMPLETE", "PHASE_FAILED", "PHASE_SKIPPED"}), campaign.get("completed") if standalone is not None else None),
+            "ended": next((e["timestamp"] for e in reversed(phase_events) if e["event"] in {"PHASE_COMPLETE", "PHASE_PARTIAL", "PHASE_FAILED", "PHASE_SKIPPED"}), campaign.get("completed") if standalone is not None else None),
             "mitre": {"tactic": metadata.get("MITRE_TACTIC"), "techniques": [
                 {"id": tid, "name": names[i] if i < len(names) and names[i] else None}
                 for i, tid in enumerate(technique_ids)]},
@@ -426,9 +432,9 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
             "events": phase_events,
         })
     now = datetime.now(timezone.utc).isoformat()
-    prerequisite_skip = standalone is not None and standalone['phase_id'] in {'09', '10', '11', '12', '13', '14', '15', '16', '17'} and exit_code == 78
+    prerequisite_skip = standalone is not None and standalone['phase_id'] in {'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'} and exit_code == 78
     status = "complete" if campaign.get("status") == "complete" and (exit_code == 0 or prerequisite_skip) else (
-        "interrupted" if exit_code in {130, 137, 143} else "failed")
+        "partial" if standalone is not None and standalone["phase_id"] == "18" and exit_code == 80 else "interrupted" if exit_code in {130, 137, 143} else "failed")
     report = {
         "schema_version": 1, "generated_at": now,
         "report_type": "standalone_phase" if standalone is not None else "campaign",
@@ -531,11 +537,11 @@ def run_phase(base, phase_id, script, environ=None):
         except OSError:
             print("[WARN] Phase could not be started", flush=True)
         finally:
-            skipped = (phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17'} and code == 78) or (phase_id in {'10', '13'} and code == 79)
+            skipped = (phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'} and code == 78) or (phase_id in {'10', '13'} and code == 79)
             state = {"incident_id": incident_id, "scenario": "standalone-phase", "phase_id": phase_id,
                      "started": started, "completed": datetime.now(timezone.utc).isoformat(),
-                     "status": "complete" if code == 0 or (phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17'} and code == 78) else "failed",
-                     "phases": {phase_id: "skipped" if skipped else "complete" if code == 0 else "running" if code in {130, 137, 143} else "failed"}}
+                     "status": "partial" if phase_id == "18" and code == 80 else "complete" if code == 0 or (phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'} and code == 78) else "failed",
+                     "phases": {phase_id: "partial" if phase_id == "18" and code == 80 else "skipped" if skipped else "complete" if code == 0 else "running" if code in {130, 137, 143} else "failed"}}
             try:
                 path = save_report(base, build_report(base, incident_id, code, env, standalone=state))
                 print(f"Report: {path}", flush=True)
@@ -547,7 +553,7 @@ def run_phase(base, phase_id, script, environ=None):
             signal.signal(sig, handler)
     # CLI/scheduler conventions: a handled prerequisite skip is nonfatal. Keep
     # the worker's exit 78 in the report and the phase itself explicitly skipped.
-    return 0 if phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17'} and code == 78 else code
+    return 0 if phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'} and code == 78 else code
 
 
 def main():

@@ -31,7 +31,7 @@ for(const mode of ['slow','custom']) {
     assert.match(text(),/Scheduler · schedule-test/);assert.match(text(),/2 h · best-effort/);
     assert.match(text(),/Planned start \+1 h · activity window 2 min/);
 }
-for(const status of ['complete','failed','interrupted']) {
+for(const status of ['complete','partial','failed','interrupted']) {
     render({...run,active:false,status,report_id:'MRN-test'});
     assert.match(text(),/Last execution/);assert.match(text(),/No active execution/);
     walk(root).find(n=>n.tag==='button').listeners.click();assert.equal(context.page,'reports');assert.equal(context.report,'MRN-test');

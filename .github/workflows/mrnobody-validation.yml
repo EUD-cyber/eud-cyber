@@ -41,6 +41,7 @@ jobs:
           python tests/mrnobody/install.py
           python tests/mrnobody/planning.py --bash
           python tests/mrnobody/remote_actions.py
+          python tests/mrnobody/dns_activity.py
           python tests/mrnobody/lab_phases.py
           python tests/mrnobody/application_collection.py
           python tests/mrnobody/native_dual.py
@@ -69,3 +70,7 @@ jobs:
           python-version: '3.12'
       - name: Parse P11 scripts and compile service without executing or installing it
         run: python tests/mrnobody/persistence_static.py
+      - name: Install isolated DNS test dependencies
+        run: python -m pip install 'reportlab>=4,<5' 'flask>=3,<4' 'requests>=2,<3'
+      - name: Verify P18 Windows script parsing and offline DNS contracts
+        run: python tests/mrnobody/dns_activity.py

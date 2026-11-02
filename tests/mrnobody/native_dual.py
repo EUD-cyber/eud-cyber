@@ -215,7 +215,7 @@ class NativeDualEndpoints(API):
         env=self.launch.call_args.kwargs['env']
         self.assertEqual(env['MRN_BASH_SECRET'],'BASH_COMMAND_SECRET')
         self.assertNotIn(b'COMMAND_SECRET',web.planning.store.path.read_bytes())
-        self.assertEqual([p['id'] for p in json.loads(env['MRN_EXECUTION'])['phases']][-8:],['13','14','16','04','17','05','06','07'])
+        self.assertEqual([p['id'] for p in json.loads(env['MRN_EXECUTION'])['phases']][-9:],['13','14','18','16','04','17','05','06','07'])
 
 
 @unittest.skipIf(os.name=='nt','Real Bash runners are verified by Linux CI')
@@ -241,6 +241,10 @@ class CampaignRunners(unittest.TestCase):
         import sys
         if sys.argv[1] == '12': Result.std_out=b'MRN_P12_OK\\n'
         if sys.argv[1] == '14': Result.std_out=''.join('MRN_BEACON=%d,ok\\n' % i for i in range(1,6)).encode()
+        if sys.argv[1] == '18':
+            import os
+            mode=os.environ.get('MRN_DNS_FIXTURE','success')
+            Result.std_out=''.join('MRN_DNS=%d,%s,1793627656000\\n' % (i,'failed' if mode=='failed' or mode=='partial' and i==2 else 'ok') for i in range(1,4)).encode()
         return Result()
 ''')
             for name,source in {'sshpass':'#!/bin/sh\nshift\nexec "$@"\n','ssh':'#!/bin/sh\nexec bash -s\n'}.items():
@@ -249,6 +253,16 @@ class CampaignRunners(unittest.TestCase):
             env=dict(os.environ,NORDIC_BASE_DIR=tmp,NORDIC_INCIDENT_ID='MRN-native-runner',MRNOBODY_PASSWORD='RUNTIME',
                      NORDIC_COMPROMISED_STATE=str(base/'state/compromised-hosts.json'),
                      NORDIC_RDP_PASSWORD='RUNTIME',NORDIC_SSH_PASSWORD='RUNTIME',PYTHONPATH=str(fake),PATH=str(fake)+os.pathsep+os.environ['PATH'])
+            for outcome,code in [('success',0),('partial',80),('failed',1)]:
+                env.update(NORDIC_INCIDENT_ID='MRN-dns-'+outcome,MRN_DNS_FIXTURE=outcome)
+                before=set((base/'reports').glob('*.json'))
+                result=subprocess.run(['bash',str(base/'scripts/run-phase.sh'),'dns','--target','192.168.1.15','--protocol','winrm-http','--dns-behavior','encoded-marker','--dns-endpoint','192.168.1.1'],env=env,capture_output=True,text=True,timeout=30)
+                self.assertEqual(result.returncode,code,result.stdout+result.stderr)
+                created=set((base/'reports').glob('*.json'))-before
+                self.assertEqual(len(created),1,result.stdout+result.stderr)
+                report=json.loads(created.pop().read_text())
+                self.assertEqual(report['phases'][0]['status'],{'success':'success','partial':'partial','failed':'failure'}[outcome])
+            env['MRN_DNS_FIXTURE']='success'
             for behavior,(_,technique,_) in native.BEHAVIORS.items():
                 env['NORDIC_INCIDENT_ID']='MRN-runner-'+behavior
                 before=set((base/'reports').glob('*.json'))
@@ -261,7 +275,7 @@ class CampaignRunners(unittest.TestCase):
             # Keep P10/P13 runners real. Every other phase is an inert fixture;
             # P03 creates only a synthetic inventory for the local fake transports.
             for path in (base/'scripts').glob('[0-9][0-9]-*.sh'):
-                if path.name[:2] not in {'10','12','13','14'}:
+                if path.name[:2] not in {'10','12','13','14','18'}:
                     metadata='\n'.join(line for line in path.read_text().splitlines() if line.startswith('#'))
                     path.write_text(metadata+'\nexit 0\n')
             access=next((base/'scripts').glob('03-*.sh'))
@@ -275,6 +289,7 @@ PY
             full=read_metadata(PLATFORM/'scenarios/full-incident.sh')['SCENARIO_PHASES'].split(',')
             for mode in ('normal','slow','custom'):
                 for blank in (False,True):
+                    env['MRN_DNS_FIXTURE']='partial' if mode=='custom' else 'success'
                     iid='MRN-dual-'+mode+('-blank' if blank else '-both')
                     env.update(NORDIC_INCIDENT_ID=iid,MRN_POWERSHELL_ENABLED='1',MRN_POWERSHELL_WINDOWS_SECRET=' \n ' if blank else 'Get-Date',MRN_BASH_SECRET=' \t ' if blank else 'printf lab')
                     if mode!='normal':
@@ -291,6 +306,7 @@ PY
                     self.assertEqual(phases['13']['status'],'success')
                     self.assertEqual(phases['12']['status'],'success')
                     self.assertEqual(phases['14']['status'],'success')
+                    self.assertEqual(phases['18']['status'],'partial' if mode=='custom' else 'success')
                     self.assertEqual(phases['04']['status'],'success')
                     if not blank:self.assertEqual({a['platform'] for a in phases['10']['actions']},{'windows','linux'})
                     else:self.assertIn('NOT_CONFIGURED',json.dumps(phases['10']))
