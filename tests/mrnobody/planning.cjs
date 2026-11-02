@@ -298,6 +298,7 @@ async function main() {
         if(id === '12') assert.equal(params.method,'metadata');
         else {assert.equal(params.beacon_interval,10);assert.equal(params.beacon_jitter,.2);assert.equal(params.beacon_count,3);}
     }
+    await select('auto');await add('06');await add('16');await add('14');assert.ok(ids().indexOf('16')<ids().indexOf('05'));assert.ok(ids().indexOf('14')<ids().indexOf('16'));
     await select('auto');await add('17');await add('16');await add('13');await add('15');await add('06');
     const ordered=ids();
     for(const [a,b] of [['02','15'],['15','03'],['13','16'],['16','17'],['17','05'],['05','06']])assert.ok(ordered.indexOf(a)<ordered.indexOf(b),a+' before '+b);

@@ -61,6 +61,9 @@ class Phases(unittest.TestCase):
                         self.assertEqual(needs_password(planned, platform == 'windows'), pid != '15')
             bad = definition(pid); bad['phases'][0]['parameters']['target'] = '8.8.8.8'
             with self.assertRaises(ValueError): validate(bad, CAPS)
+        for ids in (['01','03','05','06','16'], ['01','03','07','17'], ['01','03','16','14']):
+            d=definition('16','auto'); d['phases']=[{'id':pid} for pid in ids]
+            with self.assertRaises(ValueError): validate(d,CAPS)
         for params in ({'web_profile':'command'}, {'web_path':'/../etc'}, {'web_path':'https://evil'}):
             d=definition('15'); d['phases'][0]['parameters'].update(params)
             with self.assertRaises(ValueError): validate(d,CAPS)

@@ -243,7 +243,7 @@ def validate(value, capabilities):
                 raise ValueError(f'Phase {pid} requires earlier phases: {", ".join(sorted(needed))}')
             prior.add(pid)
     positions = {pid: i for i, pid in enumerate(enabled)}
-    for first, later in [('02', '15'), ('15', '03'), ('11', '16'), ('13', '16'), ('16', '17'), ('17', '05'), ('17', '06'), ('16', '07')]:
+    for first, later in [('02', '15'), ('15', '03'), ('10', '16'), ('11', '16'), ('12', '16'), ('13', '16'), ('14', '16'), ('16', '17'), ('17', '05'), ('17', '06'), ('17', '07'), ('16', '05'), ('16', '06'), ('16', '07')]:
         if first in positions and later in positions and positions[first] > positions[later]:
             raise ValueError(f'Phase {first} must precede {later}')
     return result

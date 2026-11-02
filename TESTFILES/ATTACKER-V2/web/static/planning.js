@@ -22,7 +22,7 @@
         };
         visit("01"); enabled().forEach(p => visit(p.id));
         draft.phases.filter(p => !seen.has(p.id)).forEach(p => {if (!["10", "11", "12", "13", "14", "15", "16", "17"].includes(p.id)) p.parameters = {}; result.push(p);});
-        const edges = [["02","15"],["15","03"],["11","16"],["13","16"],["16","17"],["17","05"],["17","06"],["16","07"]];
+        const edges = [["02","15"],["15","03"],["10","16"],["11","16"],["12","16"],["13","16"],["14","16"],["16","17"],["17","05"],["17","06"],["17","07"],["16","05"],["16","06"],["16","07"]];
         for (let pass = 0; pass < result.length; pass++) for (const [a,b] of edges) {
             const i = result.findIndex(p => p.id === a), j = result.findIndex(p => p.id === b);
             if (i >= 0 && j >= 0 && i > j) result.splice(j, 0, result.splice(i, 1)[0]);
@@ -34,7 +34,7 @@
     }
     function validOrder(phases) {
         const ids = phases.filter(p => p.enabled !== false).map(p => p.id);
-        const edges = [["02","15"],["15","03"],["11","16"],["13","16"],["16","17"],["17","05"],["17","06"],["16","07"]];
+        const edges = [["02","15"],["15","03"],["10","16"],["11","16"],["12","16"],["13","16"],["14","16"],["16","17"],["17","05"],["17","06"],["17","07"],["16","05"],["16","06"],["16","07"]];
         if (edges.some(([a,b]) => ids.includes(a) && ids.includes(b) && ids.indexOf(a) > ids.indexOf(b))) return false;
         if (draft.target_mode !== "auto") return true;
         const prior = new Set();
