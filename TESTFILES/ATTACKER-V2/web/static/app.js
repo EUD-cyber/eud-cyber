@@ -2888,9 +2888,7 @@ function reportType(report) {
 }
 
 const REPORT_PHASES = [
-    ["01", "Discovery"], ["02", "Web"], ["03", "Initial Access"],
-    ["08", "Credential Access"], ["04", "Internal Discovery"],
-    ["05", "Staging"], ["06", "Exfiltration"], ["07", "Impact"], ["09", "AD Privilege Escalation"], ["10", "Custom Remote Command"], ["11", "Persistence"], ["12", "Credential Access"], ["13", "Windows Native Tools / LOLBins"], ["14", "Command & Control"], ["15", "Application Security"], ["16", "Defense Evasion Simulation"], ["17", "Collection / Archive"]
+    ["01", "Discovery"], ["02", "Web"], ["15", "Application Security"], ["03", "Initial Access"], ["08", "Credential Access"], ["09", "AD Privilege Escalation"], ["10", "Custom Remote Command"], ["11", "Persistence"], ["12", "Credential Access"], ["13", "Windows Native Tools / LOLBins"], ["14", "Command & Control"], ["16", "Defense Evasion Simulation"], ["04", "Internal Discovery"], ["17", "Collection / Archive"], ["05", "Staging"], ["06", "Exfiltration"], ["07", "Impact"]
 ];
 const reportArray = value => Array.isArray(value) ? value : [];
 let reportHistory = [];
