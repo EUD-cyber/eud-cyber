@@ -3,6 +3,7 @@ import contextlib
 import io
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import shutil
@@ -138,10 +139,30 @@ class Phases(unittest.TestCase):
         child,result=self.linux_action('17',MRNOBODY_ACTION='cleanup')
         collection_state.update(dict(self.env,MRNOBODY_ACTION='cleanup'),self.target,result)
         self.assertFalse((root/'collection.tar.gz').exists())
+
         self.assertEqual(json.loads((self.base/'state/staged-data.json').read_text())['hosts'],[])
         (self.base/'datasets/finance/customers.txt').write_text('real unrelated text')
         self.assertNotEqual(self.linux_action('17')[0].returncode,0)
         self.assertFalse((root/'collection.tar.gz').exists())
+
+    def test_actual_p05_merge_and_p06_inventory_consumer(self):
+        self.fixture()
+        _, result = self.linux_action('17')
+        collection_state.update(self.env,self.target,result)
+        staging=self.base/'state/staged-data.json'
+        incoming=self.base/'staging-results.txt'; incoming.write_text('')
+        blocks=re.findall(r"<<'PY'\n(.*?)\nPY",(BASE/'scripts/05-staging.sh').read_text(),re.S)
+        merge=next(code for code in blocks if 'source_file = sys.argv[1]' in code)
+        child=subprocess.run([sys.executable,'-c',merge,str(incoming),str(staging),'MRN-offline'],capture_output=True,text=True)
+        self.assertEqual(child.returncode,0,child.stderr)
+        self.assertEqual(json.loads(staging.read_text())['hosts'][0]['file'],result['file'])
+        inventory=self.base/'access.json'; inventory.write_text(json.dumps({'hosts':[dict(ip=self.target['target'],compromised=True)]}))
+        blocks=re.findall(r"<<'PY'\n(.*?)\nPY",(BASE/'scripts/06-exfil.sh').read_text(),re.S)
+        consume=next(code for code in blocks if 'compromised_by_ip = ' in code)
+        child=subprocess.run([sys.executable,'-c',consume,str(staging),str(inventory)],capture_output=True,text=True)
+        self.assertEqual(child.returncode,0,child.stderr)
+        self.assertIn(result['file'],child.stdout)
+        self.assertIn(result['sha256'],child.stdout)
 
     def test_transport_allowlist_windows_linux_and_worker_skip_failure(self):
         for pid,output in [('16','MRN_EXERCISE=restored'),('17','MRN_ARCHIVE=2,123,'+'a'*64+',customers.txt;invoices.txt')]:

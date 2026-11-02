@@ -52,6 +52,14 @@ p14.fields.beacon_interval = {label:'Beacon interval', type:'seconds', default:5
 p14.fields.beacon_jitter = {label:'Beacon jitter (%)', type:'fraction', default:0};
 p14.fields.beacon_count = {label:'Number of beacons', type:'number', default:5};
 p14.fields.uri_profile = {label:'Benign URI profile', options:['heartbeat','status']};
+for (const id of ['15','16','17']) {
+    const fields = {target:{label:'Target IPv4',type:'ipv4'},protocol:{label:'Protocol',options:id==='15'?['http','https']:['ssh','winrm-http','winrm-https']}};
+    if(id==='15') {fields.web_profile={label:'Web behavior',options:['sqli','traversal']};fields.web_path={label:'Lab application base path',default:'/mrn-lab'};}
+    else {fields.platform={label:'Execution platform',options:['auto','windows','linux']};fields.action={label:'Exercise action',options:['run','cleanup']};}
+    if(id==='16')fields.behavior={label:'Reversible synthetic behavior',options:['config-toggle','log-rename']};
+    if(id==='17')fields.dataset={label:'Synthetic dataset',options:['finance','engineering']};
+    caps.push({id,name:'Phase '+id,dependencies:[id==='15'?'02':'03'],fields,required_fields:['target',...(id==='15'?[]:['protocol'])],timing:['start_offset'],credentials:id!=='15',standalone:true});
+}
 const definitions = [], plans = [], requests = [];
 const context = vm.createContext({document:{getElementById:id=>elements.get(id) || [...elements.values()].flatMap(walk).find(n=>n.id===id), createElement:element, querySelectorAll:()=>[],addEventListener(){}},
     window:{}, Date, Intl, console, FormData, showPage:page=>{context.page=page;}, confirm:()=>true,
@@ -290,6 +298,11 @@ async function main() {
         if(id === '12') assert.equal(params.method,'metadata');
         else {assert.equal(params.beacon_interval,10);assert.equal(params.beacon_jitter,.2);assert.equal(params.beacon_count,3);}
     }
+    await select('auto');await add('17');await add('16');await add('13');await add('15');await add('06');
+    const ordered=ids();
+    for(const [a,b] of [['02','15'],['15','03'],['13','16'],['16','17'],['17','05'],['05','06']])assert.ok(ordered.indexOf(a)<ordered.indexOf(b),a+' before '+b);
+    await next();assert.ok(field(body(),'Web behavior'));assert.ok(field(body(),'Reversible synthetic behavior'));assert.ok(field(body(),'Synthetic dataset'));
+    await select('fixed');await add('15');await next();set('Target IPv4','192.168.1.20');set('Protocol','http');set('Web behavior','traversal');set('Lab application base path','/mrn-lab');await review();assert.match(text(body()),/Required runtime credentials: None/);
     console.log('Builder DOM tests passed: dependencies, protected actions, target modes, common targets, validation, review, friendly units, P08/P09/P10 runtime inputs, Full Incident toggle and library summaries.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
