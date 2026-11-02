@@ -205,6 +205,15 @@ class DNSActivity(unittest.TestCase):
         ssh = Mock(return_value=(255, (b'PASSWORD=PRIVATE', 16), (b'', 0)))
         self.assertEqual(remote.perform('18', target, self.env, ssh=ssh)['result'], 'failed')
 
+    def test_scheduler_observes_partial_without_changing_other_phases(self):
+        from scheduler import Scheduler
+        for pid, expected in [('18', 'partial: some DNS check-ins failed'), ('14', 'failed: runner exited')]:
+            store = Mock()
+            scheduler = Scheduler(store, lambda *args: 'started', Mock(), observe=lambda: Mock(wait=lambda: 80))
+            with patch('scheduler.threading.Thread', side_effect=lambda target, **kwargs: SimpleNamespace(start=target)):
+                scheduler.run('fixture', {'execution': {'type':'phase', 'id':pid}})
+            self.assertEqual(store.finish.call_args.args, ('fixture', expected))
+
     def test_reports_mitre_exports_live_and_historical_compatibility(self):
         (self.base/'scripts').mkdir()
         shutil.copy(BASE/'scripts/18-dns.sh', self.base/'scripts')

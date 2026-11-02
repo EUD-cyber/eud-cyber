@@ -255,9 +255,12 @@ class CampaignRunners(unittest.TestCase):
                      NORDIC_RDP_PASSWORD='RUNTIME',NORDIC_SSH_PASSWORD='RUNTIME',PYTHONPATH=str(fake),PATH=str(fake)+os.pathsep+os.environ['PATH'])
             for outcome,code in [('success',0),('partial',80),('failed',1)]:
                 env.update(NORDIC_INCIDENT_ID='MRN-dns-'+outcome,MRN_DNS_FIXTURE=outcome)
+                before=set((base/'reports').glob('*.json'))
                 result=subprocess.run(['bash',str(base/'scripts/run-phase.sh'),'dns','--target','192.168.1.15','--protocol','winrm-http','--dns-behavior','encoded-marker','--dns-endpoint','192.168.1.1'],env=env,capture_output=True,text=True,timeout=30)
                 self.assertEqual(result.returncode,code,result.stdout+result.stderr)
-                report=json.loads((base/'reports'/('MRN-dns-'+outcome+'.json')).read_text())
+                created=set((base/'reports').glob('*.json'))-before
+                self.assertEqual(len(created),1,result.stdout+result.stderr)
+                report=json.loads(created.pop().read_text())
                 self.assertEqual(report['phases'][0]['status'],{'success':'success','partial':'partial','failed':'failure'}[outcome])
             env['MRN_DNS_FIXTURE']='success'
             for behavior,(_,technique,_) in native.BEHAVIORS.items():
