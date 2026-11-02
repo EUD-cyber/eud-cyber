@@ -215,7 +215,7 @@ class NativeDualEndpoints(API):
         env=self.launch.call_args.kwargs['env']
         self.assertEqual(env['MRN_BASH_SECRET'],'BASH_COMMAND_SECRET')
         self.assertNotIn(b'COMMAND_SECRET',web.planning.store.path.read_bytes())
-        self.assertEqual([p['id'] for p in json.loads(env['MRN_EXECUTION'])['phases']][-6:],['13','14','04','05','06','07'])
+        self.assertEqual([p['id'] for p in json.loads(env['MRN_EXECUTION'])['phases']][-8:],['13','14','16','04','17','05','06','07'])
 
 
 @unittest.skipIf(os.name=='nt','Real Bash runners are verified by Linux CI')

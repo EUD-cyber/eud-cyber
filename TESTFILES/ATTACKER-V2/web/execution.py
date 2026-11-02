@@ -204,7 +204,7 @@ def phase_environment(pid, environ=None, sleep=time.sleep, clock=time.time):
     timing = phase.get('timing', {})
     offset = timing.get('start_offset', 0)
     sleep(max(0, float(env['MRN_STARTED']) + offset - clock()))
-    for key in ('SOURCE', 'TARGET', 'SUBNET', 'PORT', 'PROTOCOL', 'USERNAME', 'FILE', 'AUTO', 'TIMEOUT', 'PLATFORM', 'METHOD', 'ACTION', 'ARTIFACT', 'BEHAVIOR', 'TRANSPORT', 'BEACON_INTERVAL', 'BEACON_JITTER', 'BEACON_COUNT', 'URI_PROFILE'):
+    for key in ('SOURCE', 'TARGET', 'SUBNET', 'PORT', 'PROTOCOL', 'USERNAME', 'FILE', 'AUTO', 'TIMEOUT', 'PLATFORM', 'METHOD', 'ACTION', 'ARTIFACT', 'BEHAVIOR', 'TRANSPORT', 'BEACON_INTERVAL', 'BEACON_JITTER', 'BEACON_COUNT', 'URI_PROFILE', 'WEB_PROFILE', 'WEB_PATH', 'DATASET', 'ARCHIVE_NAME'):
         env.pop('MRNOBODY_' + key, None)
     env['MRNOBODY_RUN_MODE'] = 'campaign' if config['target_mode'] == 'auto' else 'standalone'
     for key, value in phase.get('parameters', {}).items():

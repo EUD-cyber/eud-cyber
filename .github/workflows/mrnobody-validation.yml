@@ -42,6 +42,7 @@ jobs:
           python tests/mrnobody/planning.py --bash
           python tests/mrnobody/remote_actions.py
           python tests/mrnobody/lab_phases.py
+          python tests/mrnobody/application_collection.py
           python tests/mrnobody/native_dual.py
           node tests/mrnobody/dual_review.cjs
           python tests/mrnobody/windows_actions.py

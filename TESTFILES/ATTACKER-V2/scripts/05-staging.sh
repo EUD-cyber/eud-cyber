@@ -467,6 +467,13 @@ for RECORD in "${COMPROMISED[@]}"; do
         ACCESS_PASSWORD \
         <<< "$RECORD"
 
+    # P17 already produced a verified synthetic archive for this incident/host.
+    if "$BASE_DIR/venv/bin/python" "$BASE_DIR/web/collection_state.py" "$STAGING_STATE" "$INCIDENT_ID" "$HOST"; then
+        ground_truth "STAGING_SUCCESS host=$HOST producer_phase=17 linkage=retained_collection_archive"
+        STAGED_COUNT=$(( STAGED_COUNT + 1 ))
+        continue
+    fi
+
     if [[ -z "$ACCESS_PASSWORD" ]]; then
 
     if [[ "$RUN_MODE" == "standalone" ]]; then
@@ -1136,7 +1143,9 @@ source_file = sys.argv[1]
 output_file = sys.argv[2]
 incident_id = sys.argv[3]
 
-hosts = []
+from pathlib import Path
+prior = json.loads(Path(output_file).read_text()) if Path(output_file).exists() else {}
+hosts = [h for h in prior.get('hosts', []) if prior.get('incident_id') == incident_id and h.get('producer_phase') == '17' and h.get('staged') and h.get('data_type') == 'synthetic-training-data']
 
 
 with open(
