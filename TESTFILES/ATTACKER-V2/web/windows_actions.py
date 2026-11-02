@@ -155,7 +155,7 @@ def targets(env):
     return result
 
 
-def perform(pid, target, env, session_factory=None):
+def perform(pid, target, env, session_factory=None, evidence_parser=None):
     if session_factory is None:
         import winrm
         session_factory = winrm.Session
@@ -172,6 +172,12 @@ def perform(pid, target, env, session_factory=None):
     command = ad_script(password) if pid == '09' else custom_script(env.get('MRN_POWERSHELL_SECRET', ''))
     response = session.run_ps(command)
     stdout, stderr = response.std_out, response.std_err
+    if evidence_parser is not None:
+        # Fixed lab protocols are parsed into an allowlisted result, never a P10
+        # free-text preview. The P10 sensitive-command suppression stays intact.
+        if response.status_code != 0 or len(stdout) > 8192:
+            return dict(result='failed', warning='lab_action_failed_output_omitted')
+        return evidence_parser(stdout.decode('utf-8-sig', errors='replace'))
     result = {'result': 'success' if response.status_code == 0 else 'failed',
               'exit_code': int(response.status_code), 'stdout_bytes': len(stdout), 'stderr_bytes': len(stderr),
               'command': 'ad_account_and_domain_admins' if pid == '09' else 'custom_powershell_content_omitted',

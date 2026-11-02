@@ -70,10 +70,8 @@ def perform(pid, target, env, session_factory=None, ssh=None):
         config = lab.configuration(pid, env)
         source = lab.script(pid, platform, env)
         if platform == 'windows':
-            response = windows_command('10', target, dict(env, MRN_POWERSHELL_SECRET=source), session_factory)
-            if response.get('result') != 'success':
-                return dict(result='failed', warning='lab_action_failed_output_omitted')
-            output = response.get('stdout_preview', '')
+            return windows_command('10', target, dict(env, MRN_POWERSHELL_SECRET=source), session_factory,
+                                   evidence_parser=lambda output: lab.evidence(pid, output, config))
         else:
             code, stdout, stderr = ssh(target, source, env, limit)
             if code or b'\nMRN_REMOTE_EXIT=' not in stdout[0] or not stdout[0].rstrip().endswith(b'__MRN_END__'):

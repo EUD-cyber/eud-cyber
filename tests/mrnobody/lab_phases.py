@@ -103,8 +103,9 @@ class LabPhases(unittest.TestCase):
             for platform in ('windows', 'linux'):
                 target = dict(target='192.168.1.15', platform=platform, protocol='ssh' if platform == 'linux' else 'winrm-http', port=22 if platform == 'linux' else 5985, username='lab')
                 ssh = Mock(return_value=(0, ((output + '\nMRN_REMOTE_EXIT=0__MRN_END__\n').encode(), len(output)), (b'SECRET', 6)))
-                with patch.object(remote, 'windows_command', return_value=dict(result='success', stdout_preview=output, stderr_preview='SECRET')):
-                    result = remote.perform(pid, target, env, ssh=ssh)
+                session = Mock()
+                session.run_ps.return_value = SimpleNamespace(status_code=0, std_out=output.encode(), std_err=b'SECRET')
+                result = remote.perform(pid, target, env, session_factory=Mock(return_value=session), ssh=ssh)
                 self.assertEqual(result['result'], 'success')
                 self.assertNotIn('SECRET', json.dumps(result))
                 self.assertNotIn('stdout_preview', result)
