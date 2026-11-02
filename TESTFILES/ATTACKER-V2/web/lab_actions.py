@@ -101,11 +101,12 @@ $ErrorActionPreference = 'Stop'
 # Certificate relaxation is confined to this short-lived lab PowerShell process.
 Add-Type -TypeDefinition @'
 public static class MrNobodyLabTLS {
+    public static readonly System.Net.Security.RemoteCertificateValidationCallback Callback = Accept;
     public static bool Accept(object sender, System.Security.Cryptography.X509Certificates.X509Certificate cert,
         System.Security.Cryptography.X509Certificates.X509Chain chain, System.Net.Security.SslPolicyErrors errors) { return true; }
 }
 '@
-[Net.ServicePointManager]::ServerCertificateValidationCallback = [Net.Security.RemoteCertificateValidationCallback][MrNobodyLabTLS]::Accept
+[Net.ServicePointManager]::ServerCertificateValidationCallback = [MrNobodyLabTLS]::Callback
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 for ($i=1; $i -le __COUNT__; $i++) {
     if ($i -gt 1) { Start-Sleep -Milliseconds ([int](1000 * __INTERVAL__ * (1 + __JITTER__ * ((Get-Random -Minimum 0 -Maximum 2001) / 1000.0 - 1)))) }

@@ -157,6 +157,12 @@ class LabPhases(unittest.TestCase):
                 if platform == 'windows' and shell:
                     result = subprocess.run([shell, '-NoProfile', '-NonInteractive', '-Command', '$s=[Console]::In.ReadToEnd();$t=$null;$e=$null;[System.Management.Automation.Language.Parser]::ParseInput($s,[ref]$t,[ref]$e)|Out-Null;if($e.Count){exit 1}'], input=source, text=True, capture_output=True, timeout=30)
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    if pid == '14':
+                        # Compile the fixed TLS helper and assign its delegate in
+                        # a disposable process. Do not execute the request loop.
+                        prefix = source.split('for ($i=1;', 1)[0]
+                        compiled = subprocess.run([shell, '-NoProfile', '-NonInteractive', '-Command', prefix], text=True, capture_output=True, timeout=30)
+                        self.assertEqual(compiled.returncode, 0, compiled.stdout + compiled.stderr)
 
     @unittest.skipIf(os.name == 'nt', 'Local Bash fixtures run on Linux CI')
     def test_linux_generated_actions_execute_without_lab_connections(self):
