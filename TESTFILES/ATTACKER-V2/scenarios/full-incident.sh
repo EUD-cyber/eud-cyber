@@ -24,7 +24,7 @@ set -u
 #   P7  Impact
 #   P8  Optional Wordlist Authentication
 #
-# P8 runs after P3 when enabled, followed by P09/P10/P11, then P4-P7.
+# P8 runs after P3 when enabled, followed by P09-P14, then P4-P7.
 # P09 performs AD account/group changes; P10 requires runtime PowerShell input.
 # ============================================================
 
@@ -828,6 +828,13 @@ echo
 echo "  P1  Dynamic Discovery"
 echo "  P2  Web Discovery"
 echo "  P3  Initial Access - Linux SSH / Windows RDP"
+echo "  P08 Wordlist (optional)"
+echo "  P09 AD Privilege Escalation (compatible Windows DC only)"
+echo "  P10 Custom Remote Command (optional)"
+echo "  P11 Persistence"
+echo "  P12 Credential Access Simulation"
+echo "  P13 Windows Native Tools / LOLBins Simulation"
+echo "  P14 Command & Control Simulation"
 echo "  P4  Internal Discovery / Lateral Activity"
 echo "  P5  Data Staging"
 echo "  P6  Exfiltration"

@@ -3,7 +3,7 @@
 # ATTACK_NAME="Command & Control Simulation"
 # ATTACK_ALIAS="c2"
 # ATTACK_STANDALONE="true"
-# ATTACK_PARAMETERS="target,port,protocol,username,password,timeout,platform,transport,beacon_interval,beacon_jitter,beacon_count,uri_profile"
+# ATTACK_PARAMETERS="target,port,protocol,username,password,platform,transport,beacon_interval,beacon_jitter,beacon_count,uri_profile"
 # ATTACK_CAMPAIGN_STATE="compromised-hosts"
 # MITRE_TACTIC="Command and Control"
 # MITRE_TECHNIQUES="T1071.001"

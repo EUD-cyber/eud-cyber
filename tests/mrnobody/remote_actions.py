@@ -263,6 +263,7 @@ class BashFixtures(unittest.TestCase):
                 p=fake/name;p.write_text(source);p.chmod(0o755)
             executable('sshpass','#!/bin/sh\nshift\nexec "$@"\n')
             executable('ssh','#!/bin/sh\nexec bash -s\n')
+            executable('curl','#!/bin/sh\nprintf 204\n')
             executable('crontab','''#!/bin/sh
 if [ "$1" = -l ]; then
     if [ -f "$HOME/table" ]; then cat "$HOME/table"; else echo 'no crontab for fixture' >&2; exit 1; fi
@@ -338,11 +339,11 @@ esac
             self.assertEqual(next(p for p in report['phases'] if p['id']=='10')['action_result'],'command_error')
             self.assertEqual(next(p for p in report['phases'] if p['id']=='04')['status'],'success')
             env['MRN_POWERSHELL_SECRET']='printf lab'
-            env.pop('MRN_EXECUTION');env.update(NORDIC_INCIDENT_ID='MRN-full-remote',MRN_POWERSHELL_ENABLED='1',NORDIC_SSH_PASSWORD='SSH_RUNTIME')
+            env.pop('MRN_EXECUTION');env.update(MRNOBODY_BEACON_COUNT='1',NORDIC_INCIDENT_ID='MRN-full-remote',MRN_POWERSHELL_ENABLED='1',NORDIC_SSH_PASSWORD='SSH_RUNTIME')
             result=subprocess.run(['bash',str(base/'scenarios/full-incident.sh')],env=env,capture_output=True,text=True,timeout=30)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
             report=load_report(base/'reports','MRN-full-remote')
-            for pid in ('10','11'):self.assertEqual(next(p for p in report['phases'] if p['id']==pid)['status'],'success')
+            for pid in ('10','11','12','14'):self.assertEqual(next(p for p in report['phases'] if p['id']==pid)['status'],'success')
 
 
 if __name__=='__main__':unittest.main()
