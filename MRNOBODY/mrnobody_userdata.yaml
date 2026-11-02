@@ -253,6 +253,18 @@ write_files:
         "scripts/run-phase.sh" \
         "$INSTALL_DIR/scripts/run-phase.sh"
 
+      download_file \
+          "scripts/12-credential-access.sh" \
+          "$INSTALL_DIR/scripts/12-credential-access.sh"
+
+      download_file \
+          "scripts/14-c2.sh" \
+          "$INSTALL_DIR/scripts/14-c2.sh"
+
+      download_file \
+          "web/lab_actions.py" \
+          "$INSTALL_DIR/web/lab_actions.py"
+
       # ------------------------------------------------------
       # ORCHESTRATOR
       # ------------------------------------------------------

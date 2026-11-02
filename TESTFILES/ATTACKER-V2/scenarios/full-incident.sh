@@ -3,7 +3,7 @@
 # SCENARIO_ID="full-incident"
 # SCENARIO_NAME="Full Incident"
 # SCENARIO_DESCRIPTION="Complete incident simulation from discovery through impact."
-# SCENARIO_PHASES="01,02,03,08,09,10,11,13,04,05,06,07"
+# SCENARIO_PHASES="01,02,03,08,09,10,11,12,13,14,04,05,06,07"
 
 set -u
 
@@ -24,7 +24,7 @@ set -u
 #   P7  Impact
 #   P8  Optional Wordlist Authentication
 #
-# P8 runs after P3 when enabled, followed by P09/P10/P11, then P4-P7.
+# P8 runs after P3 when enabled, followed by P09-P14, then P4-P7.
 # P09 performs AD account/group changes; P10 requires runtime PowerShell input.
 # ============================================================
 
@@ -705,7 +705,7 @@ run_phase() {
     fi
 
 
-    if [[ ( "$NUMBER" == "10" || "$NUMBER" == "11" || "$NUMBER" == "13" ) && $RESULT -eq 78 ]]; then
+    if [[ ( "$NUMBER" == "10" || "$NUMBER" == "11" || "$NUMBER" == "13" || "$NUMBER" == "12" || "$NUMBER" == "14" ) && $RESULT -eq 78 ]]; then
         RUN_PHASE_STATUS="skipped"
         update_phase_state "$NUMBER" "skipped"
         log "[PHASE $NUMBER] SKIPPED - Not configured or no compatible target/method"
@@ -828,6 +828,13 @@ echo
 echo "  P1  Dynamic Discovery"
 echo "  P2  Web Discovery"
 echo "  P3  Initial Access - Linux SSH / Windows RDP"
+echo "  P08 Wordlist (optional)"
+echo "  P09 AD Privilege Escalation (compatible Windows DC only)"
+echo "  P10 Custom Remote Command (optional)"
+echo "  P11 Persistence"
+echo "  P12 Credential Access Simulation"
+echo "  P13 Windows Native Tools / LOLBins Simulation"
+echo "  P14 Command & Control Simulation"
 echo "  P4  Internal Discovery / Lateral Activity"
 echo "  P5  Data Staging"
 echo "  P6  Exfiltration"
@@ -890,6 +897,8 @@ PHASE_08="$SCRIPT_DIR/08-wordlist.sh"
 PHASE_09="$SCRIPT_DIR/09-ad-privilege.sh"
 PHASE_10="$SCRIPT_DIR/10-powershell.sh"
 PHASE_11="$SCRIPT_DIR/11-persistence.sh"
+PHASE_12="$SCRIPT_DIR/12-credential-access.sh"
+PHASE_14="$SCRIPT_DIR/14-c2.sh"
 PHASE_13="$SCRIPT_DIR/13-native-tools.sh"
 
 
@@ -908,7 +917,9 @@ for SCRIPT in \
     "$PHASE_09" \
     "$PHASE_10" \
     "$PHASE_11" \
-    "$PHASE_13"
+    "$PHASE_13" \
+    "$PHASE_12" \
+    "$PHASE_14"
 
 do
 
@@ -1073,7 +1084,9 @@ data = {
         "07": "pending",
         "09": "pending",
         "11": "pending",
+        "12": "pending",
         "13": "pending",
+        "14": "pending",
         "10": "pending" if os.environ.get("MRN_POWERSHELL_ENABLED") == "1" else "disabled",
 
         "08": (
@@ -1330,7 +1343,7 @@ phase_delay
 # ============================================================
 # PHASE 09 / 10: Windows actions after established access, before staging.
 # ============================================================
-for NUMBER in 09 10 11 13; do
+for NUMBER in 09 10 11 12 13 14; do
     if [[ "$NUMBER" == "09" ]] && ! windows_access_available; then
         update_phase_state "09" "disabled"
         ground_truth "PHASE_SKIPPED phase=09 reason=no_windows_rdp_access"
@@ -1354,6 +1367,8 @@ for NUMBER in 09 10 11 13; do
         SCRIPT="$PHASE_13"
         NAME="Windows Native Tools / LOLBins Simulation"
     fi
+    if [[ "$NUMBER" == "12" ]]; then SCRIPT="$PHASE_12"; NAME="Credential Access Simulation"; fi
+    if [[ "$NUMBER" == "14" ]]; then SCRIPT="$PHASE_14"; NAME="Command & Control Simulation"; fi
     update_phase_state "$NUMBER" "running"
     if ! run_phase "$NUMBER" "$NAME" "$SCRIPT"; then
         update_phase_state "$NUMBER" "failed"

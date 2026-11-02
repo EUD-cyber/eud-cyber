@@ -916,6 +916,14 @@ function phaseFieldLabel(parameter) {
         powershell: "P10 remote command (PowerShell / Bash) (runtime only, never saved)",
         timeout: "Action timeout (seconds, 5–300)",
         file: "File",
+        platform: "Execution platform",
+        method: "Method",
+        behavior: "Native tool behavior",
+        transport: "Beacon transport",
+        beacon_interval: "Beacon interval (seconds)",
+        beacon_jitter: "Beacon jitter (fraction, 0–0.5)",
+        beacon_count: "Number of beacons (1–20)",
+        uri_profile: "Benign URI profile",
     };
 
     return labels[parameter] || parameter;
@@ -1040,6 +1048,10 @@ function renderPhaseDetail(phase) {
             input = document.createElement("select");
             const choices = parameter === "behavior" ? ["encoded-powershell", "certutil-decode", "bits-job"] : ["winrm-http", "winrm-https"];
             choices.forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value; input.appendChild(option);});
+        } else if (["12", "14"].includes(phase.id) && ["platform", "method", "protocol", "transport", "uri_profile"].includes(parameter)) {
+            input = document.createElement("select");
+            const choices = {platform: ["auto", "windows", "linux"], method: ["read-test-file", "metadata"], protocol: ["", "ssh", "winrm-http", "winrm-https"], transport: ["http", "https"], uri_profile: ["heartbeat", "status"]}[parameter];
+            choices.forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value || "Choose transport"; input.appendChild(option);});
         } else if (parameter === "powershell") {
             input = document.createElement("textarea");
             input.rows = 5; input.maxLength = 16384; input.autocomplete = "off";
@@ -1064,6 +1076,12 @@ function renderPhaseDetail(phase) {
         }
 
 
+        if (["beacon_interval", "beacon_jitter", "beacon_count"].includes(parameter)) {
+            input.type = "number"; input.value = {beacon_interval: 5, beacon_jitter: 0, beacon_count: 5}[parameter];
+            input.min = parameter === "beacon_jitter" ? 0 : 1;
+            input.max = {beacon_interval: 60, beacon_jitter: .5, beacon_count: 20}[parameter];
+            input.step = parameter === "beacon_count" ? 1 : "any";
+        }
         input.dataset.parameter =
             parameter;
 
@@ -1079,13 +1097,13 @@ function renderPhaseDetail(phase) {
 
 
     phaseDetail.appendChild(form);
-    if (["10", "11"].includes(phase.id)) {
+    if (["10", "11", "12", "14"].includes(phase.id)) {
         const platform = document.getElementById(`phase-${phase.id}-platform`);
         const adapt = () => {
             const mode = platform?.value || "auto";
             for (const key of ["protocol", "method"]) {
                 const input = document.getElementById(`phase-${phase.id}-${key}`);
-                if (!input) continue;
+                if (!input || phase.id === "12" && key === "method") continue;
                 for (const option of input.options) {
                     option.hidden = !!option.value && option.value !== "auto" && mode !== "auto" && (["ssh", "cron", "systemd"].includes(option.value)) !== (mode === "linux");
                     option.disabled = option.hidden;
@@ -2866,7 +2884,7 @@ function reportType(report) {
 const REPORT_PHASES = [
     ["01", "Discovery"], ["02", "Web"], ["03", "Initial Access"],
     ["08", "Credential Access"], ["04", "Internal Discovery"],
-    ["05", "Staging"], ["06", "Exfiltration"], ["07", "Impact"], ["09", "AD Privilege Escalation"], ["10", "Custom Remote Command"], ["11", "Persistence"]
+    ["05", "Staging"], ["06", "Exfiltration"], ["07", "Impact"], ["09", "AD Privilege Escalation"], ["10", "Custom Remote Command"], ["11", "Persistence"], ["12", "Credential Access"], ["13", "Windows Native Tools / LOLBins"], ["14", "Command & Control"]
 ];
 const reportArray = value => Array.isArray(value) ? value : [];
 let reportHistory = [];
@@ -3164,7 +3182,7 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
         selectedPhase = phase.id;
         renderReportPhase(phaseDetail, phase, groundTruth);
     };
-    const ordered = [...REPORT_PHASES.filter(([phaseId]) => !["09", "10", "11"].includes(phaseId) || phases.some(p => p.id === phaseId)).map(([phaseId, name]) => phases.find(p => p.id === phaseId) ||
+    const ordered = [...REPORT_PHASES.filter(([phaseId]) => !["09", "10", "11", "12", "13", "14"].includes(phaseId) || phases.some(p => p.id === phaseId)).map(([phaseId, name]) => phases.find(p => p.id === phaseId) ||
         {id: phaseId, name, status: "not_run", absent: true}), ...phases.filter(p => !REPORT_PHASES.some(([phaseId]) => p.id === phaseId))];
     ordered.forEach(phase => {
         const button = reportNode("button", null, timeline);

@@ -47,7 +47,7 @@ class FreshInstall(unittest.TestCase):
             for path in (base / 'web').glob('*.py'):
                 ast.parse(path.read_text(encoding='utf-8'), filename=path.name)
             caps = catalogue(base / 'scripts', read_metadata)
-            self.assertTrue({'09', '10', '11', '13'} <= set(caps))
+            self.assertTrue({'09', '10', '11', '12', '13', '14'} <= set(caps))
             self.assertTrue((base / 'web/windows_actions.py').is_file())
             phases = read_metadata(base / 'scenarios/full-incident.sh')['SCENARIO_PHASES'].split(',')
             self.assertTrue(set(phases) <= set(caps))
@@ -62,6 +62,7 @@ class FreshInstall(unittest.TestCase):
             smoke = '''
 import app
 import remote_actions
+import lab_actions
 import reportlab
 from pathlib import Path
 import os
@@ -76,7 +77,7 @@ for url in ('/', '/api/health', '/api/phases', '/api/planning/capabilities',
     response = client.get(url)
     assert response.status_code == 200, (url, response.status_code)
 assert client.get('/api/health').get_json()['status'] == 'ok'
-assert {'09', '10', '11', '13'} <= set(app.planning.capabilities())
+assert {'09', '10', '11', '12', '13', '14'} <= set(app.planning.capabilities())
 assert app.planning.store.path == base / 'data/planning/execution.sqlite3'
 assert app.planning.store.path.is_file()
 if os.name != 'nt':
