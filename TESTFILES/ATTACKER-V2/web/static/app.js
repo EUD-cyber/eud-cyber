@@ -489,7 +489,11 @@ const MrnUI = (() => {
         showPage('phases'); renderList(); byId('techniqueTactic')?.focus();
     }
     function coverage() {
-        const counts = byId('catalogTactics'); if (counts) counts.replaceChildren();
+        const counts = byId('catalogTactics');
+        if (counts) {
+            counts.replaceChildren();
+            action(counts, `All tactics · ${techniques.length}`, () => applyTactic(''), 'tactic-count');
+        }
         const root = byId('mitreCoverage'); if (root) root.replaceChildren();
         const total = byId('mitreSummary'); if (total) {
             total.replaceChildren();

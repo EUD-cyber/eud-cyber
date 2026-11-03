@@ -39,6 +39,12 @@ async function main() {
         assert.equal(await page.locator('#phaseGrid .technique-card').count(),catalogue.phases.filter(x=>x.education.platforms.includes('Windows')).length);
         await page.locator('#techniqueTactic').selectOption('Persistence');
         assert.equal(await page.locator('#phaseGrid .technique-card').count(),catalogue.phases.filter(x=>x.education.platforms.includes('Windows')&&x.education.tactics.includes('Persistence')).length);
+        const allTactics = page.locator('#catalogTactics .tactic-count').first();
+        assert.equal(await allTactics.textContent(), `All tactics · ${catalogue.count}`);
+        await allTactics.click();
+        assert.equal(await page.locator('#techniqueTactic').inputValue(), '');
+        assert.equal(await page.locator('#phaseGrid .technique-card').count(), catalogue.count);
+        assert.ok(await page.locator('#catalogTactics').getByRole('button', {name: /^Collection ·/}).count());
         await page.locator('#techniqueMode').selectOption('Scheduler');
         await page.locator('#techniqueReadiness').selectOption('Installed');
         await page.locator('#techniqueSearch').fill('does-not-exist');
