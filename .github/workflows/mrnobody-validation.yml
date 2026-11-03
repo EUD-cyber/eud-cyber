@@ -32,6 +32,34 @@ jobs:
           bash -n TESTFILES/ATTACKER/attackctl
       - name: Install isolated export test dependencies
         run: python -m pip install 'reportlab>=4,<5' 'flask>=3,<4' 'pypdf>=5,<7' 'requests>=2,<3' 'PyYAML>=6,<7'
+      - name: Validate bootstrap WinRM venv and nginx/systemd configuration in isolation
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends nginx
+          python - <<'PY'
+          import os, pathlib, re, subprocess, tempfile, yaml
+          root = pathlib.Path.cwd()
+          config = yaml.safe_load((root / 'MRNOBODY/mrnobody_userdata.yaml').read_text())
+          script = next(x['content'] for x in config['write_files'] if x['path'] == '/usr/local/sbin/install-mrnobody')
+          with tempfile.TemporaryDirectory() as tmp:
+              base = pathlib.Path(tmp)
+              subprocess.run(['python', '-m', 'venv', str(base / 'venv')], check=True)
+              commands = re.findall(r'"\$\{INSTALL_DIR\}/venv/bin/pip"\s*\\\s*\n\s*install\s*\\\s*\n\s*pywinrm\s*\\\s*\n\s*requests-ntlm', script)
+              assert len(commands) == 1, 'Bootstrap WinRM dependency command drifted'
+              subprocess.run([str(base / 'venv/bin/pip'), 'install', 'pywinrm', 'requests-ntlm'], check=True)
+              subprocess.run([str(base / 'venv/bin/python'), '-c', 'import winrm, requests_ntlm, spnego, requests'], check=True)
+              assert {'python3-flask', 'python3-reportlab', 'nginx', 'openssl', 'python3-venv'} <= set(config['packages'])
+              subprocess.run(['openssl', 'req', '-x509', '-nodes', '-newkey', 'rsa:2048',
+                              '-keyout', str(base / 'incident.key'), '-out', str(base / 'incident.crt'),
+                              '-days', '1', '-subj', '/CN=localhost'], check=True, capture_output=True)
+              site = (root / 'TESTFILES/ATTACKER-V2/nginx/nordic-incident.conf').read_text()
+              site = site.replace('/etc/nordic-incident/tls/', str(base) + '/').replace('/var/log/nginx/', str(base) + '/')
+              (base / 'site.conf').write_text(site)
+              (base / 'nginx.conf').write_text('pid ' + str(base / 'nginx.pid') + ';\nerror_log ' + str(base / 'error.log') + ';\nevents {}\nhttp { include ' + str(base / 'site.conf') + '; }\n')
+              subprocess.run(['sudo', 'nginx', '-t', '-c', str(base / 'nginx.conf')], check=True)
+          subprocess.run(['systemd-analyze', 'verify', str(root / 'TESTFILES/ATTACKER-V2/systemd/nordic-incident-web.service')], check=True)
+          print('Bootstrap dependency imports, nginx TLS configuration and systemd unit verification passed; no MrNobody service or campaign started.')
+          PY
       - name: Verify distributed update manifest
         run: |
           bash TESTFILES/ATTACKER-V2/tools/build-manifest.sh
