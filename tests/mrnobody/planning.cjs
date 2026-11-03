@@ -79,6 +79,10 @@ const context = vm.createContext({document:{getElementById:id=>elements.get(id) 
         const data = options.body instanceof FormData ? options.body : options.body ? JSON.parse(options.body) : null;
         requests.push({url, method:options.method,data});
         let value = {};
+        if (url === '/api/custom-scenarios/import') {
+            value = {scenario:{...data,id:'custom-imported'},readiness:'Compatible · Ready',notes:[],message:'Imported. No execution or schedules were created.'};
+            definitions.push(value.scenario);
+        }
         if (url.startsWith('/api/scenario-presets/')) value=presetFixture.templates[url.split('/').at(-1)];
         if (url === '/api/planning/capabilities') value={phases:caps};
         if (url === '/api/custom-scenarios') {
@@ -118,6 +122,31 @@ async function select(mode='auto') {context.window.MrnPlanning.newDraft();await 
 async function review() {while(textButton(body(),'Next')) {await next();assert.equal(error(),'');}}
 async function main() {
     await context.window.MrnPlanning.refresh();
+    // JSON upload controls and exact preservation when editing imported flows.
+    {
+    const library = elements.get('customLibrary');
+    assert.ok(textButton(library, 'Import Scenario'));
+    assert.match(text(library), /Schedules are kept separate/);
+    const upload = walk(library).find(n=>n.type==='file');
+    assert.equal(upload.accept, '.json,application/json');
+    await click(library, 'Import Scenario');
+    assert.match(elements.get('planningMessage').textContent, /Choose a scenario JSON/);
+    upload.files = [{size:128*1024+1}];
+    await click(library, 'Import Scenario');
+    assert.match(elements.get('planningMessage').textContent, /128 KiB/);
+    const imported = {version:1,name:'Imported Lab',description:'Portable',target_mode:'auto',profile:{mode:'normal',duration:0},phases:[{id:'01',enabled:true,parameters:{},timing:{}},{id:'02',enabled:false,parameters:{},timing:{}}]};
+    upload.files = [{size:500,text:async()=>JSON.stringify(imported)}];
+    const previousRuns = requests.filter(r=>r.url==='/api/executions/run'||r.url==='/api/schedules'&&r.method==='POST').length;
+    await click(library, 'Import Scenario');
+    assert.match(elements.get('planningMessage').textContent, /Compatible.*No execution or schedules/);
+    assert.ok(textButton(library, 'Export'));
+    assert.equal(requests.filter(r=>r.url==='/api/executions/run'||r.url==='/api/schedules'&&r.method==='POST').length,previousRuns);
+    const importedRow = library.children.find(n=>n.className==='planning-row'&&text(n).includes('Imported Lab'));
+    await click(importedRow,'Edit'); await next(); await next();
+    assert.equal(row('02').children.find(n=>n.type==='checkbox').checked,false);
+    definitions.length = 0;
+    await context.window.MrnPlanning.refresh();
+    }
     for (const card of presetFixture.cards) {
         await context.window.MrnPlanning.openPreset(card.id);
         assert.match(title(), /^1\./);

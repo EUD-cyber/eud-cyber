@@ -8,9 +8,11 @@ import time
 import uuid
 from pathlib import Path
 
-from flask import jsonify, request
+from flask import jsonify, request, Response
 from reports import read_metadata
-from scenario_model import catalogue, keys, plan, profile, validate, preset_definition
+from scenario_model import (VERSION, MAX_SCENARIO_BYTES, catalogue, keys, plan, profile,
+                            validate, preset_definition, import_scenario, export_scenario,
+                            scenario_readiness, secret_free)
 from scheduler import Scheduler, Store, timestamp
 
 
@@ -113,6 +115,7 @@ class Planning:
             definition = self.custom(spec['id'])
             if definition is None:
                 raise ValueError('Custom scenario not found')
+            validate(definition, self.capabilities())
             if set(spec) & {'parameters', 'timing', 'target_mode'}:
                 raise ValueError('Edit custom scenario phase configuration in the builder')
             if 'profile' in spec:
@@ -214,7 +217,47 @@ def install(module):
 
     @app.route('/api/planning/capabilities')
     def planning_capabilities():
-        return jsonify({'version': 1, 'phases': list(service.capabilities().values())})
+        return jsonify({'version': VERSION, 'max_scenario_bytes': MAX_SCENARIO_BYTES, 'phases': list(service.capabilities().values())})
+
+    @app.route('/api/custom-scenarios/import', methods=['POST'])
+    @guarded
+    def scenario_import():
+        # Read at most limit + 1 even if Content-Length is absent or misleading.
+        if request.content_length is not None and request.content_length > MAX_SCENARIO_BYTES:
+            return jsonify({'status': 'error', 'message': 'Scenario JSON exceeds the 128 KiB limit'}), 413
+        raw = request.stream.read(MAX_SCENARIO_BYTES + 1)
+        if len(raw) > MAX_SCENARIO_BYTES:
+            return jsonify({'status': 'error', 'message': 'Scenario JSON exceeds the 128 KiB limit'}), 413
+        definition, notes, readiness = import_scenario(raw, service.capabilities())
+        definition.pop('id', None)  # Never replace a local custom scenario or preset.
+        definition = service.store.save_scenario(definition)
+        return jsonify({'scenario': definition, 'readiness': readiness, 'notes': notes,
+                        'message': 'Imported as an editable custom scenario. No execution or schedules were created.'}), 201
+
+    @app.route('/api/custom-scenarios/<sid>/export')
+    @guarded
+    def scenario_export(sid):
+        definition = service.custom(sid)
+        if definition is None:
+            raise ValueError('Custom scenario not found')
+        raw, filename = export_scenario(definition, service.capabilities())
+        return Response(raw, mimetype='application/json', headers={
+            'Content-Disposition': f'attachment; filename="{filename}"', 'Cache-Control': 'no-store',
+            'X-Content-Type-Options': 'nosniff'})
+
+    @app.route('/api/custom-scenarios/<sid>/review', methods=['POST'])
+    @guarded
+    def scenario_review(sid):
+        definition = service.custom(sid)
+        if definition is None:
+            raise ValueError('Custom scenario not found')
+        data = request.get_json()
+        keys(data, ['acknowledged'], 'review')
+        if data.get('acknowledged') is not True:
+            raise ValueError('Explicit review acknowledgement is required')
+        definition.pop('needs_review', None)
+        definition = validate(definition, service.capabilities())
+        return jsonify(service.store.save_scenario(definition))
 
     @app.route('/api/scenario-presets/<sid>')
     @guarded
@@ -228,8 +271,11 @@ def install(module):
     @guarded
     def custom_scenarios():
         if request.method == 'GET':
-            return jsonify({'scenarios': service.store.scenarios()})
-        definition = validate(request.get_json(), service.capabilities())
+            rows = service.store.scenarios()
+            return jsonify({'scenarios': rows, 'readiness': {
+                row['id']: scenario_readiness(row, service.capabilities()) for row in rows}})
+        secret_free(request.get_json())
+        definition = validate(request.get_json(), service.capabilities(), template=bool(request.get_json().get('needs_review')))
         definition.pop('id', None)
         return jsonify(service.store.save_scenario(definition)), 201
 
@@ -241,7 +287,11 @@ def install(module):
         if request.method == 'DELETE':
             service.store.delete_scenario(sid)
             return jsonify({'status': 'deleted'})
-        definition = validate(dict(request.get_json(), id=sid), service.capabilities())
+        value = dict(request.get_json(), id=sid)
+        secret_free(value)
+        if service.custom(sid).get('needs_review'):
+            value['needs_review'] = True
+        definition = validate(value, service.capabilities(), template=bool(value.get('needs_review')))
         return jsonify(service.store.save_scenario(definition))
 
     @app.route('/api/executions/run', methods=['POST'])

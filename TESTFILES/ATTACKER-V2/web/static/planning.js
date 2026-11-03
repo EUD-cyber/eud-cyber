@@ -2,6 +2,7 @@
 (() => {
     "use strict";
     let capabilities = [], scenarios = [], custom = [], schedules = [];
+    let readiness = {}, schemaVersion = 1, maxScenarioBytes = 128 * 1024;
     let draft = null, step = 0, editingSchedule = null;
     let autoAdded = new Set(), inherited = new Set(), commonTarget = "";
     let readWordlist = () => null;
@@ -194,7 +195,15 @@
         if (draft.profile.mode !== "normal") node("p", "Timing is best-effort. Actual runtime may extend beyond the target duration / planned span.", parent, "muted");
         node("p", scheduleSummary(draft.schedule), parent);
         const details = node("details", undefined, parent); node("summary", "Advanced / Show JSON", details);
+        node("p", `Scenario schema version: ${draft.version}`, details, "muted");
         node("pre", JSON.stringify(definition(), null, 2), details, "planning-review");
+        if (draft.id) button(details, "Export saved scenario", () => exportScenario(draft.id));
+        if (draft.needs_review) {
+            node("p", "Needs review: this legacy scenario was migrated using current defaults. Inspect targets, Attack Technique order and timing. Save any edits, then acknowledge before running or scheduling.", parent, "planning-error");
+            button(parent, "Save and acknowledge migration review", async () => {
+                await saveDraft(false, true);
+            });
+        }
     }
     const steps = ["Scenario basics", "Target mode", "Attack Techniques / order", "Technique configuration", "Execution profile / timing", "Schedule", "Review / Save / Run"];
     const byId = id => document.getElementById(id);
@@ -263,10 +272,12 @@
         return () => Object.fromEntries(Object.entries(inputs).map(([key, input]) => {const value = input.value; input.value = ""; return [key, value];}));
     }
     function newDraft(definition) {
-        draft = definition ? copy(definition) : {version: 1, name: "Custom Incident", description: "", target_mode: "auto", phases: [], profile: {mode: "normal", duration: 0}};
+        draft = definition ? copy(definition) : {version: schemaVersion, name: "Custom Incident", description: "", target_mode: "auto", phases: [], profile: {mode: "normal", duration: 0}};
         if (draft.teaching_objective) draft.teaching_objective = String(draft.teaching_objective);
         draft.schedule = {mode: "now", at: "", interval: 86400};
-        autoAdded = new Set(); inherited = new Set(); commonTarget = ""; ensureAuto();
+        autoAdded = new Set(); inherited = new Set(); commonTarget = "";
+        // Existing/imported definitions retain their exact order and enabled flags.
+        if (!definition) ensureAuto();
         step = 0; renderBuilder(); showPage("builder");
     }
     function profileForm(parent, value, rerender, modes = ["normal", "slow", "custom"]) {
@@ -360,12 +371,17 @@
         if (value.profile.mode !== "custom") value.phases.forEach(p => {p.timing = {};});
         return value;
     }
-    async function saveDraft(run) {
+    async function saveDraft(run, acknowledge = false) {
         for (let i = 0; i < 6; i++) {const error = stepError(i); if (error) {step = i; renderBuilder(); byId("builderError").textContent = error; return;}}
         const wordlist = run ? readWordlist() : null;
         const value = definition();
+        if (value.needs_review && (run || draft.schedule.mode !== "now")) throw new Error("Acknowledge migration review before running or scheduling.");
         const saved = await api(value.id ? `/api/custom-scenarios/${value.id}` : "/api/custom-scenarios", value.id ? "PUT" : "POST", value);
         draft.id = saved.id;
+        if (acknowledge) {
+            await api(`/api/custom-scenarios/${saved.id}/review`, "POST", {acknowledged: true});
+            delete draft.needs_review;
+        }
         const execution = {type: "custom", id: saved.id};
         if (draft.schedule.mode !== "now") {
             const id = await saveSchedule(execution, draft.schedule);
@@ -487,17 +503,41 @@
     function library() {
         const parent = byId("customLibrary"); parent.replaceChildren();
         node("h2", "Custom scenarios", parent);
+        const upload = node("input", undefined, parent); upload.type = "file"; upload.accept = ".json,application/json";
+        upload.setAttribute?.("aria-label", "Scenario JSON file");
+        button(parent, "Import Scenario", async () => {
+            const file = upload.files?.[0];
+            if (!file) throw new Error("Choose a scenario JSON file first.");
+            if (file.size > maxScenarioBytes) throw new Error("Scenario JSON exceeds the 128 KiB limit.");
+            const response = await fetch("/api/custom-scenarios/import", {method: "POST", headers: {"Content-Type": "application/json"}, body: await file.text()});
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.message || "Scenario import failed. Nothing was saved.");
+            await refresh();
+            message(`${result.readiness}: ${result.message} ${(result.notes || []).join(" ")}`);
+        });
+        node("p", "JSON only · maximum 128 KiB. Imports create editable custom scenarios. Credentials and P10 commands must be supplied at execution time. Schedules are kept separate and are never recreated by import.", parent, "muted");
         if (!custom.length) node("p", "No custom scenarios saved. Use Scenario Builder to create one.", parent, "empty-state");
         custom.forEach(item => {
             const row = node("div", undefined, parent, "planning-row"); node("strong", item.name, row);
             node("p", item.description || "Custom incident scenario", row);
+            node("span", readiness[item.id] || (item.needs_review ? "Needs review" : "Custom scenario"), row, "planning-badge");
             node("p", `${item.target_mode === "auto" ? "Auto Discovery" : "Fixed Targets"} · ${item.phases.filter(p => p.enabled !== false).map(p => "P" + p.id).join(" → ")} · ${timingSummary(item)} · ${schedules.filter(s => s.execution.type === "custom" && s.execution.id === item.id).length} schedule(s)`, row);
             button(row, "Run", () => runCustom(item.id));
             button(row, "Edit", () => newDraft(item));
+            button(row, "Export", () => exportScenario(item.id));
             button(row, "Duplicate", () => {const value = copy(item); delete value.id; value.name += " (copy)"; newDraft(value);});
             button(row, "Schedule", () => {showPage("schedules"); scheduleEditor({type: "custom", id: item.id});});
             button(row, "Delete", async () => {if (!confirm(`Delete ${item.name}?`)) return; await api(`/api/custom-scenarios/${item.id}`, "DELETE"); await refresh();});
         });
+    }
+    async function exportScenario(id) {
+        // A native JSON download uses the server's validated document/filename.
+        const response = await fetch(`/api/custom-scenarios/${encodeURIComponent(id)}/export`);
+        if (!response.ok) {const result = await response.json(); throw new Error(result.message || "Scenario export failed.");}
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement("a"); link.href = url;
+        link.download = response.headers.get("Content-Disposition")?.match(/filename="([^"]+)"/)?.[1] || "mrnobody-scenario.json";
+        link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
     function scheduleEditor(initial, existing) {
         editingSchedule = existing || null;
@@ -563,7 +603,8 @@
     }
     async function refresh() {
         const [caps, all, saved, planned] = await Promise.all([api("/api/planning/capabilities"), api("/api/scenarios"), api("/api/custom-scenarios"), api("/api/schedules")]);
-        capabilities = caps.phases; scenarios = all.scenarios; custom = saved.scenarios; schedules = planned.schedules;
+        capabilities = caps.phases; schemaVersion = caps.version || 1; maxScenarioBytes = caps.max_scenario_bytes || 128 * 1024;
+        scenarios = all.scenarios; custom = saved.scenarios; readiness = saved.readiness || {}; schedules = planned.schedules;
         library(); scheduleTable();
         if (typeof loadScenarios === "function") await loadScenarios();
         window.MrnUI?.refreshDashboard(true);

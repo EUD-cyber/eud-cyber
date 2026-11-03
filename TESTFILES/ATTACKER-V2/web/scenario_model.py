@@ -11,6 +11,8 @@ import re
 from pathlib import Path
 
 VERSION = 1
+# The existing `version` field is the canonical scenario schema version.
+MAX_SCENARIO_BYTES = 128 * 1024
 SECRET_FIELDS = {'password', 'wordlist', 'wordlist_contents', 'ssh_password', 'rdp_password', 'powershell_windows', 'bash', 'powershell'}
 FIELDS = {
     'dns_behavior': {'type': 'choice', 'label': 'DNS behavior', 'options': ['standard', 'low-and-slow', 'encoded-marker']},
@@ -180,11 +182,113 @@ def profile(value):
     return {'mode': mode, 'duration': duration}
 
 
+def secret_free(value, depth=0):
+    """Reject secrets, never strip them or echo their values in an error/log."""
+    if depth > 16:
+        raise ValueError('Scenario JSON is nested too deeply')
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if key.lower() in SECRET_FIELDS or re.search(
+                    r'password|passwd|credential|secret|token|private.?key|wordlist|^commands?$|^shell$|^cron$', key, re.I):
+                raise ValueError('Scenario definitions cannot contain secrets, wordlists or runtime commands')
+            secret_free(item, depth + 1)
+    elif isinstance(value, list):
+        for item in value:
+            secret_free(item, depth + 1)
+    elif isinstance(value, str):
+        try:
+            value.encode('utf-8')
+        except UnicodeError:
+            raise ValueError('Scenario text must contain valid UTF-8 characters') from None
+        if re.search(
+                r'-----BEGIN .*PRIVATE KEY-----|\bBearer\s+\S+|\b(?:password|passwd|token|secret)\s*[:=]\s*\S+|[a-z]+://[^\s/:]+:[^\s/@]+@|\bgh[pousr]_[A-Za-z0-9]{20,}|\bAKIA[A-Z0-9]{16}\b', value, re.I):
+            raise ValueError('Remove embedded credentials or private keys from scenario text')
+
+
+def parse_scenario(raw):
+    """Strict, bounded JSON. Duplicate keys and non-finite numbers fail closed."""
+    if len(raw) > MAX_SCENARIO_BYTES:
+        raise ValueError('Scenario JSON exceeds the 128 KiB limit')
+
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise ValueError('Scenario JSON contains duplicate fields')
+            result[key] = value
+        return result
+
+    def constant(_):
+        raise ValueError('Scenario JSON must contain finite numbers')
+
+    try:
+        value = json.loads(raw.decode('utf-8'), object_pairs_hook=pairs, parse_constant=constant)
+    except (json.JSONDecodeError, UnicodeError, RecursionError):
+        raise ValueError('Malformed scenario JSON; upload a UTF-8 JSON object') from None
+    if not isinstance(value, dict):
+        raise ValueError('Scenario JSON must be an object')
+    secret_free(value)
+    return value
+
+
+def migrate_scenario(value):
+    """Only the legacy unversioned/v0 form of this model is supported.
+
+    There is no inferred technique mapping, reordering or removal. Materialize
+    the old model defaults deterministically and require an explicit review.
+    """
+    value = copy.deepcopy(value)
+    version = value.get('version', 0)
+    if type(version) is not int or version not in (0, VERSION):
+        raise ValueError(f'Incompatible scenario version; this installation supports version {VERSION} and legacy version 0')
+    notes = []
+    if version == 0:
+        value['version'] = VERSION
+        value.setdefault('description', '')
+        value.setdefault('profile', {'mode': 'normal', 'duration': 0})
+        value['needs_review'] = True
+        notes.append('Legacy version 0 migrated to version 1 using current defaults. Review targets, technique order and timing before acknowledging.')
+    return value, notes
+
+
+def import_scenario(raw, capabilities):
+    value, notes = migrate_scenario(parse_scenario(raw))
+    # Validate the whole document before creating any persistent state.
+    value = validate(value, capabilities, template=True)
+    readiness = scenario_readiness(value, capabilities)
+    return value, notes, readiness
+
+
+def scenario_readiness(value, capabilities):
+    if value.get('needs_review'):
+        return 'Needs review'
+    try:
+        validate(value, capabilities)
+    except ValueError:
+        return 'Needs configuration'
+    return 'Compatible · Ready'
+
+
+def export_scenario(value, capabilities):
+    secret_free(value)
+    value = validate(value, capabilities, template=True)
+    raw = (json.dumps(value, indent=2, ensure_ascii=False, allow_nan=False) + '\n').encode('utf-8')
+    if len(raw) > MAX_SCENARIO_BYTES:
+        raise ValueError('Scenario JSON exceeds the 128 KiB limit')
+    safe_name = re.sub(r'[^a-z0-9]+', '-', value['name'].lower()).strip('-')[:80] or 'custom'
+    return raw, f'mrnobody-scenario-{safe_name}-v{VERSION}.json'
+
+
 def validate(value, capabilities, *, template=False):
-    keys(value, ['version', 'id', 'name', 'description', 'target_mode', 'phases', 'profile', 'preset', 'teaching_objective'], 'scenario')
-    if value.get('version') != VERSION:
+    keys(value, ['version', 'id', 'name', 'description', 'target_mode', 'phases', 'profile', 'preset', 'teaching_objective', 'needs_review'], 'scenario')
+    if type(value.get('version')) is not int or value.get('version') != VERSION:
         raise ValueError('Unsupported scenario version')
+    if type(value.get('needs_review', False)) is not bool:
+        raise ValueError('Needs review must be boolean')
+    if value.get('needs_review') and not template:
+        raise ValueError('Needs review: inspect and acknowledge the migrated scenario before running or scheduling')
     result = copy.deepcopy(value)
+    value = result  # Normalization must never mutate the caller's definition.
     if 'preset' in value:
         origin = value['preset']
         keys(origin, ['id', 'version', 'name'], 'preset origin')
@@ -196,7 +300,7 @@ def validate(value, capabilities, *, template=False):
     result['name'] = text(value.get('name'))
     description = value.get('description', '')
     result['description'] = text(description, 2000) if description else ''
-    if 'id' in value and not re.fullmatch(r'custom-[a-f0-9]{32}', value['id']):
+    if 'id' in value and (not isinstance(value['id'], str) or not re.fullmatch(r'custom-[a-f0-9]{32}', value['id'])):
         raise ValueError('Invalid custom scenario ID')
     mode = value.get('target_mode')
     if mode not in {'auto', 'fixed'}:
@@ -210,8 +314,11 @@ def validate(value, capabilities, *, template=False):
     for phase in phases:
         keys(phase, ['id', 'enabled', 'parameters', 'timing'], 'phase')
         pid = phase.get('id')
-        if pid not in capabilities or pid in seen:
-            raise ValueError('Unknown or duplicate phase')
+        if not isinstance(pid, str) or pid not in capabilities:
+            label = 'P' + pid if isinstance(pid, str) and re.fullmatch(r'\d{2}', pid) else 'invalid ID'
+            raise ValueError(f'Unknown or deferred Attack Technique {label}; resolve it before importing. No techniques were removed.')
+        if pid in seen:
+            raise ValueError(f'Duplicate Attack Technique P{pid}')
         seen.add(pid)
         cap = capabilities[pid]
         if type(phase.get('enabled', True)) is not bool:
