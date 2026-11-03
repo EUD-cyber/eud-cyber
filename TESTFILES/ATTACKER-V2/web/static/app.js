@@ -3055,7 +3055,7 @@ function reportMitre(parent, techniques) {
         link.href = `https://attack.mitre.org/techniques/${technique.id.replace(".", "/")}/`;
         link.target = "_blank";
         link.rel = "noopener noreferrer";
-        reportNode("p", `Mapped phases: ${reportArray(technique.phases).join(", ") || "Unrecorded"}`, card);
+        reportNode("p", `Mapped Attack Techniques: ${reportArray(technique.phases).join(", ") || "Unrecorded"}`, card);
     });
     if (!techniques.length) reportNode("p", "No technique mappings recorded.", cards);
 }
