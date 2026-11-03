@@ -42,6 +42,7 @@ jobs:
           python tests/mrnobody/ui.py
           python tests/mrnobody/install.py
           python tests/mrnobody/scenario_presets.py
+          python tests/mrnobody/scenario_portability.py
           python tests/mrnobody/planning.py --bash
           python tests/mrnobody/remote_actions.py
           python tests/mrnobody/dns_activity.py
