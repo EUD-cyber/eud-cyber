@@ -147,6 +147,8 @@ async function main() {
         assert.ok(text(analysis()).includes(heading));
     const mitreGrid = nodes().find(n => n.className === "report-mitre-grid");
     assert.equal(mitreGrid.children.length, 2);
+    assert.match(text(mitreGrid), /Mapped Attack Techniques:/);
+    assert.ok(!text(mitreGrid).includes("Mapped phases:"));
     const summaryLinks = descendants(mitreGrid).filter(n => n.href);
     assert.deepEqual(summaryLinks.map(n => n.href), ["https://attack.mitre.org/techniques/T1078/", "https://attack.mitre.org/techniques/T1110/001/"]);
     assert.ok(summaryLinks.every(n => n.rel === "noopener noreferrer"));
