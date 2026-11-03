@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 # ATTACK_ID="15"
+# ATTACK_DESCRIPTION="Exercise SQL injection or path traversal against the fingerprinted MrNobody Web Lab."
+# ATTACK_TEACHING_PURPOSE="Correlate application requests with a verified synthetic application response."
+# ATTACK_DETECTION_FOCUS="Web request patterns|Lab application access logs|Synthetic response markers"
+# ATTACK_PLATFORMS="Web"
+# ATTACK_PREREQUISITES="Dedicated fingerprinted MrNobody Web Lab endpoint; auto mode consumes P02 web services. General web services are not treated as exploitable."
+# ATTACK_TARGET_TYPE="MrNobody Web Lab"
+# ATTACK_CLEANUP="Requests use the dedicated synthetic lab endpoint; local response evidence is retained."
 # ATTACK_NAME="Web Exploitation / Application Security Simulation"
 # ATTACK_ALIAS="web-app"
 # ATTACK_STANDALONE="true"

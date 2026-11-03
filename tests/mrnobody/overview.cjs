@@ -20,10 +20,10 @@ const run={active:true,status:'running',incident_id:'MRN-test',started:'2026-11-
     current_phase:{id:'03',name:'Access'},next_phase:{id:'07',name:'Impact'},
     progress:{percent:50,complete:1,total:2},timeline:[{id:'03',name:'Access',status:'running'},{id:'07',name:'Impact',status:'pending'}]};
 render(run);assert.equal(id.textContent,'MRN-test');assert.match(text(),/Built-in campaign/);assert.match(text(),/Normal/);
-assert.match(text(),/50% · 1\/2 executable/);assert.match(text(),/Next planned phase/);assert.match(text(),/phase states/);
+assert.match(text(),/50% · 1\/2 executable/);assert.match(text(),/Next planned attack technique/);assert.match(text(),/attack technique states/);
 for(const type of ['custom','phase']) {
     render({...run,execution:{...run.execution,type}});
-    assert.match(text(),type==='custom'?/Custom scenario/:/Standalone phase/);
+    assert.match(text(),type==='custom'?/Custom scenario/:/Standalone Attack Technique/);
 }
 for(const mode of ['slow','custom']) {
     render({...run,planned_seconds:7200,execution:{...run.execution,profile:{mode},trigger:'scheduler',schedule_id:'schedule-test'},
@@ -62,13 +62,13 @@ context.updatePhases({'09':'skipped','04':'running'});
 assert.equal(cards[0].status.textContent,'SKIPPED');
 assert.equal(cards[0].classList.value,'phase-skipped');
 assert.equal(cards[1].status.textContent,'RUNNING');
-const nav=html.match(/<nav class="sidebar-nav">([\s\S]*?)<\/nav>/)[1];
+const nav=html.match(/<nav class="sidebar-nav"[^>]*>([\s\S]*?)<\/nav>/)[1];
 const order=[...nav.matchAll(/data-page="([^"]+)"/g)].map(m=>m[1]);
-assert.deepEqual(order,['dashboard','campaigns','scenarios','phases','schedules','inventory','reports','system']);
-const navItems=order.map(page=>({dataset:{page},classList:{toggle(cls,active){this.active=active;}}}));
+assert.deepEqual(order,['dashboard','phases','scenarios','schedules','reports','mitre','system']);
+const navItems=order.map(page=>({dataset:{page},setAttribute(){},removeAttribute(){},classList:{toggle(cls,active){this.active=active;}}}));
 context.document.querySelectorAll=s=>s==='.nav-item'?navItems:[];
 context.document.getElementById=()=>({classList:{add(){}}});
-context.refreshLog=()=>{};context.refreshReports=()=>{};
+context.MrnUI={refreshDashboard(){}};context.refreshLog=()=>{};context.refreshReports=()=>{};
 const app=fs.readFileSync('TESTFILES/ATTACKER-V2/web/static/app.js','utf8');
 vm.runInContext(app.slice(app.indexOf('function showPage('),app.indexOf('// Ground truth is rendered')),context);
 for(const page of order) {context.showPage(page);assert.equal(navItems.filter(n=>n.classList.active).length,1);assert.equal(navItems.find(n=>n.classList.active).dataset.page,page);}

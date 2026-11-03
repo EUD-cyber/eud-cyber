@@ -499,7 +499,10 @@ def list_reports(directory):
         try:
             report = load_report(directory, path.stem)
             result.append({**report["incident"], "summary": report.get("summary", {}),
-                           "report_type": report.get("report_type", "campaign"), "phase_id": report.get("phase_id")})
+                           "report_type": report.get("report_type", "campaign"), "phase_id": report.get("phase_id"),
+                           "techniques": [{"id": p.get("id"), "name": p.get("name", "Unknown"),
+                                           "status": p.get("status", "unknown")}
+                                          for p in (report.get("phases") or []) if isinstance(p, dict)]})
         except (OSError, ValueError, TypeError, AttributeError):
             continue
     return sorted(result, key=lambda item: item.get("started") or "", reverse=True)

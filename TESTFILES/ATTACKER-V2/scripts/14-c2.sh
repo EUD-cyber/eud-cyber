@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 # ATTACK_ID="14"
+# ATTACK_DESCRIPTION="Emit bounded HTTP or HTTPS marker check-ins to this MrNobody instance."
+# ATTACK_TEACHING_PURPOSE="Investigate repeated web check-ins and compare timing with configured interval and jitter."
+# ATTACK_DETECTION_FOCUS="HTTP or HTTPS check-ins|Beacon timing|Receiver correlation"
+# ATTACK_PLATFORMS="Windows|Linux"
+# ATTACK_PREREQUISITES="Authenticated compatible remote access and connectivity to this MrNobody receiver."
+# ATTACK_TARGET_TYPE="Authenticated lab hosts"
+# ATTACK_CLEANUP="Bounded marker check-ins stop after execution; receiver and report evidence remain."
 # ATTACK_NAME="Command & Control Simulation"
 # ATTACK_ALIAS="c2"
 # ATTACK_STANDALONE="true"

@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 # ATTACK_ID="09"
+# ATTACK_DESCRIPTION="Create or enable the lab mrnobody domain account and verify Domain Admins membership."
+# ATTACK_TEACHING_PURPOSE="Correlate domain account changes with privilege and group membership events."
+# ATTACK_DETECTION_FOCUS="Domain account creation or enablement|Domain group membership changes|AD management sessions"
+# ATTACK_PLATFORMS="Windows"
+# ATTACK_PREREQUISITES="A lab domain controller with AD management tools and credentials with account and group management rights. P03 authentication alone does not grant those rights."
+# ATTACK_TARGET_TYPE="Lab domain controller"
+# ATTACK_CLEANUP="Account and group changes persist. No automated AD rollback is provided; restore the lab account and group state separately."
 # ATTACK_NAME="Active Directory Privilege Escalation"
 # ATTACK_ALIAS="ad-privilege"
 # ATTACK_STANDALONE="true"

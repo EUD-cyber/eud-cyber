@@ -28,6 +28,13 @@ set -u
 # ============================================================
 
 # ATTACK_ID="05"
+# ATTACK_DESCRIPTION="Stage synthetic training data on authenticated lab hosts and record staging paths."
+# ATTACK_TEACHING_PURPOSE="Follow synthetic data preparation into collection and exfiltration evidence."
+# ATTACK_DETECTION_FOCUS="Remote file creation|Staging directory activity|Synthetic data markers"
+# ATTACK_PLATFORMS="Linux|Windows"
+# ATTACK_PREREQUISITES="Authenticated remote access; auto mode uses P03 access and can consume P17 collection artifacts."
+# ATTACK_TARGET_TYPE="Authenticated lab hosts"
+# ATTACK_CLEANUP="Synthetic staging artifacts are retained for downstream exfiltration; no cleanup action is exposed here."
 # ATTACK_NAME="Data Staging"
 # ATTACK_ALIAS="staging"
 # ATTACK_STANDALONE="true"

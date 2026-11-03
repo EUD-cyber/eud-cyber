@@ -7,7 +7,7 @@ import uuid
 from planning_api import install, launch, BusyError
 from execution import snapshot
 from scheduler import current_schedule
-from scenario_model import needs_password
+from scenario_model import needs_password, technique_metadata, profile as scenario_profile
 import json
 import os
 import signal
@@ -447,6 +447,9 @@ def api_config():
 def api_phases():
 
     phases = []
+    capabilities = planning.capabilities()
+    full_incident = find_scenario('full-incident')
+    full_incident_ids = (full_incident or {}).get('metadata', {}).get('SCENARIO_PHASES', '').split(',')
 
     if not SCRIPT_DIR.exists():
         return jsonify(
@@ -528,6 +531,7 @@ def api_phases():
                 "standalone": standalone,
                 "parameters": parameters,
                 "campaign_state": campaign_state,
+                "education": technique_metadata(metadata, capabilities.get(phase_id, {}), full_incident_ids),
                 "mitre": {
                     "tactic": metadata.get(
                         "MITRE_TACTIC",
@@ -1111,14 +1115,22 @@ def api_update():
 )
 def api_scenarios():
 
-    scenarios = [dict(x, custom=True, phases=[p["id"] for p in x["phases"] if p.get("enabled", True)]) for x in planning.store.scenarios()]
+    schedules = planning.store.schedules()
+
+    def schedule_counts(scenario_id, execution_type):
+        jobs = [job for job in schedules if job.get('execution', {}).get('type') == execution_type
+                and job['execution'].get('id') == scenario_id]
+        return {'schedule_count': len(jobs), 'enabled_schedule_count': sum(bool(job.get('enabled')) for job in jobs)}
+
+    scenarios = [dict(x, custom=True, phases=[p["id"] for p in x["phases"] if p.get("enabled", True)],
+                      **schedule_counts(x['id'], 'custom')) for x in planning.store.scenarios()]
 
     if not SCENARIO_DIR.exists():
 
         return jsonify(
             {
-                "count": 0,
-                "scenarios": [],
+                "count": len(scenarios),
+                "scenarios": scenarios,
             }
         )
 
@@ -1170,6 +1182,10 @@ def api_scenarios():
                 "description": description,
                 "script": path.name,
                 "phases": phases,
+                # Built-in scripts use discovery; this is the existing default profile.
+                "target_mode": "auto",
+                "profile": scenario_profile({}),
+                **schedule_counts(scenario_id, 'campaign'),
             }
         )
 

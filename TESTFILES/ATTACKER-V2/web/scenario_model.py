@@ -123,6 +123,48 @@ def catalogue(script_dir, read_metadata):
     return result
 
 
+def technique_metadata(meta, capability, full_incident_ids=()):
+    """Add presentation metadata without changing execution or historical reports.
+
+    Script comments own educational text. Planning adapters own dependencies and
+    configuration; installed scenario metadata owns Full Incident membership.
+    Missing metadata stays explicitly unknown, including for future scripts.
+    """
+    split = lambda value: [x.strip() for x in re.split(r'[,|]', value) if x.strip()]
+    pid = meta.get('ATTACK_ID', '')
+    modes = []
+    if capability.get('standalone'):
+        modes.append('Standalone')
+    if capability:
+        modes.append('Custom Scenario')
+    if pid in full_incident_ids:
+        modes.append('Full Incident')
+    if capability.get('standalone'):
+        modes.append('Scheduler')
+    ids = split(meta.get('MITRE_TECHNIQUES', ''))
+    names = meta.get('MITRE_TECHNIQUE_NAMES', '').split('|')
+    return {
+        'description': meta.get('ATTACK_DESCRIPTION', ''),
+        'teaching_purpose': meta.get('ATTACK_TEACHING_PURPOSE', ''),
+        'detection_focus': split(meta.get('ATTACK_DETECTION_FOCUS', '')),
+        'platforms': split(meta.get('ATTACK_PLATFORMS', '')),
+        'supported_modes': modes,
+        'prerequisites': meta.get('ATTACK_PREREQUISITES', ''),
+        'dependencies': capability.get('dependencies', []),
+        'required_fields': capability.get('required_fields', []),
+        'configuration': capability.get('fields', {}),
+        'target_type': meta.get('ATTACK_TARGET_TYPE', ''),
+        'cleanup': meta.get('ATTACK_CLEANUP', ''),
+        'readiness': meta.get('ATTACK_STATUS', 'Installed'),
+        'tactics': split(meta.get('MITRE_TACTIC', '')),
+        'technique_details': [
+            {'id': tid, 'name': names[i].strip() if i < len(names) else '',
+             'url': 'https://attack.mitre.org/techniques/' + tid.replace('.', '/') + '/'}
+            for i, tid in enumerate(ids) if re.fullmatch(r'T\d{4}(?:\.\d{3})?', tid)
+        ],
+    }
+
+
 def profile(value):
     keys(value, ['mode', 'duration'], 'profile')
     if value.get('mode', 'normal') not in {'normal', 'slow', 'custom'}:

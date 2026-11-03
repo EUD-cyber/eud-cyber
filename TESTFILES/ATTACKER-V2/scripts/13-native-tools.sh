@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 # ATTACK_ID="13"
+# ATTACK_DESCRIPTION="Simulate encoded PowerShell, local certutil decode or an empty BITS job on Windows."
+# ATTACK_TEACHING_PURPOSE="Recognize native tool activity and correlate it with bounded lab evidence."
+# ATTACK_DETECTION_FOCUS="PowerShell process activity|Certutil decoding|BITS job lifecycle"
+# ATTACK_PLATFORMS="Windows"
+# ATTACK_PREREQUISITES="Authenticated WinRM access on Windows with the selected native tool available."
+# ATTACK_TARGET_TYPE="Windows lab host"
+# ATTACK_CLEANUP="Temporary native-tool artifacts are removed and empty BITS jobs are cancelled; inspect cleanup evidence for interrupted runs."
 # ATTACK_NAME="Windows Native Tools / LOLBins Simulation"
 # ATTACK_ALIAS="native-tools"
 # ATTACK_STANDALONE="true"

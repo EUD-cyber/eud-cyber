@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 # ATTACK_ID="18"
+# ATTACK_DESCRIPTION="Emit bounded UDP DNS marker queries using a private resolver and reserved lab domain."
+# ATTACK_TEACHING_PURPOSE="Compare DNS patterns and timing for standard, low-and-slow and encoded-marker behaviors."
+# ATTACK_DETECTION_FOCUS="UDP DNS queries|Reserved domain lookups|Query interval and jitter"
+# ATTACK_PLATFORMS="Windows|Linux"
+# ATTACK_PREREQUISITES="Authenticated compatible remote access and a private non-forwarding lab DNS resolver for a .test, .internal or .localhost zone."
+# ATTACK_TARGET_TYPE="Lab hosts and private DNS resolver"
+# ATTACK_CLEANUP="Queries stop at the configured count or duration ceiling. No remote command is carried in DNS answers; DNS and report evidence remain."
 # ATTACK_NAME="Advanced C2 / DNS Activity"
 # ATTACK_ALIAS="dns"
 # ATTACK_STANDALONE="true"

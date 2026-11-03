@@ -35,6 +35,13 @@ set -u
 # ============================================================
 
 # ATTACK_ID="03"
+# ATTACK_DESCRIPTION="Attempt SSH or RDP authentication with supplied lab credentials and record verified access."
+# ATTACK_TEACHING_PURPOSE="Separate discovered assets from hosts with successful authenticated access."
+# ATTACK_DETECTION_FOCUS="Authentication successes and failures|SSH sessions|RDP logons"
+# ATTACK_PLATFORMS="Linux|Windows"
+# ATTACK_PREREQUISITES="Reachable SSH or RDP service and valid lab credentials; auto mode uses P01 discovery."
+# ATTACK_TARGET_TYPE="Lab hosts"
+# ATTACK_CLEANUP="Authentication evidence is retained. No account rollback action is provided."
 # ATTACK_NAME="Initial Access"
 # ATTACK_ALIAS="access"
 # ATTACK_STANDALONE="true"

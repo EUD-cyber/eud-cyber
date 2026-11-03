@@ -36,7 +36,7 @@ async function main() {
     assert.equal(calls.at(-1), "/api/reports");
     assert.equal(elements.get("reportIncidentCount").textContent, "1");
     assert.equal(elements.get("reportCompromisedCount").textContent, "1");
-    assert.match(text(elements.get("reportTable")), /Standalone phase 03/);
+    assert.match(text(elements.get("reportTable")), /Standalone Attack Technique 03/);
     const button = elements.get("reportTable").children[0].children.at(-1).children[0];
     response = {
         incident: {id, scenario: "full-incident", status: "failed"},
@@ -78,7 +78,7 @@ async function main() {
     };
     await vm.runInContext("openReport('MRN-standalone')", context);
     switchView("Ground Truth View");
-    for (const expected of ["Standalone phase 03", "What happened", "Findings", "Evidence references", "Detection in the CyberLab", "Investigation tasks", "Prevention / Mitigation", "Wazuh", "Educational recommendations", "/logs/truth"])
+    for (const expected of ["Standalone Attack Technique 03", "What happened", "Findings", "Evidence references", "Detection in the CyberLab", "Investigation tasks", "Prevention / Mitigation", "Wazuh", "Educational recommendations", "/logs/truth"])
         assert.ok(text(elements.get("reportDetail")).includes(expected), expected);
 
     for (const [result, status] of [['Custom PowerShell command failed', 'skipped'], ['Custom PowerShell completed with nonfatal stderr/warnings', 'success']]) {
@@ -171,7 +171,7 @@ async function main() {
     // Missing fields remain readable and distinct from a known zero.
     response = {incident: {id: "MRN-historical"}, phases: null, evidence: null, inventory: null};
     await vm.runInContext("openReport('MRN-historical')", context);
-    assert.match(text(root), /No phase records available/);
+    assert.match(text(root), /No technique records available/);
     assert.match(text(root), /No recorded evidence/);
     assert.match(text(root), /No technique mappings recorded/);
     assert.equal(nodes().filter(n => n.className === "report-metric")[0].children[0].textContent, "Unavailable");

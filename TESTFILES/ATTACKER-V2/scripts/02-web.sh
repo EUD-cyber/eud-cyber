@@ -31,6 +31,13 @@ set -u
 # ============================================================
 
 # ATTACK_ID="02"
+# ATTACK_DESCRIPTION="Inspect HTTP and HTTPS services on discovered or explicitly selected lab targets."
+# ATTACK_TEACHING_PURPOSE="Distinguish service discovery from successful application access."
+# ATTACK_DETECTION_FOCUS="HTTP requests|Web server access logs|Service enumeration"
+# ATTACK_PLATFORMS="Web"
+# ATTACK_PREREQUISITES="Reachable web services; Auto Discovery uses the P01 host inventory."
+# ATTACK_TARGET_TYPE="Web services"
+# ATTACK_CLEANUP="Read-only service probes; local discovery evidence is retained."
 # ATTACK_NAME="Web Discovery"
 # ATTACK_ALIAS="web"
 # ATTACK_STANDALONE="true"

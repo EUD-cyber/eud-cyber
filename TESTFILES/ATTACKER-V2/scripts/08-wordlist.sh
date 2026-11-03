@@ -34,6 +34,13 @@ set -u
 # ============================================================
 
 # ATTACK_ID="08"
+# ATTACK_DESCRIPTION="Attempt lab authentication using a supplied username list and wordlist."
+# ATTACK_TEACHING_PURPOSE="Investigate repeated authentication attempts and distinguish failures from successful access."
+# ATTACK_DETECTION_FOCUS="Repeated authentication failures|Successful SSH or RDP logons|Credential attempt timing"
+# ATTACK_PLATFORMS="Linux|Windows"
+# ATTACK_PREREQUISITES="Reachable SSH or RDP service and an execution-time or service-side wordlist source; auto mode uses P01 and P03 state."
+# ATTACK_TARGET_TYPE="Lab authentication services"
+# ATTACK_CLEANUP="Wordlists are execution-only inputs; report evidence is retained. No target account rollback is provided."
 # ATTACK_NAME="Wordlist Authentication"
 # ATTACK_ALIAS="wordlist"
 # ATTACK_STANDALONE="true"

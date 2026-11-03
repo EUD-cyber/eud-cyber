@@ -26,6 +26,7 @@ jobs:
           python -m compileall -q TESTFILES/ATTACKER-V2/web INCIDENTVM/web TESTFILES/ATTACKER/sink.py tests/mrnobody
           node --check TESTFILES/ATTACKER-V2/web/static/app.js
           node --check TESTFILES/ATTACKER-V2/web/static/planning.js
+          node --check tests/mrnobody/ui_browser.cjs
           find TESTFILES/ATTACKER-V2 TESTFILES/ATTACKER MRNOBODY INCIDENTVM -type f -name '*.sh' -print0 | xargs -0 -n1 bash -n
           bash -n TESTFILES/ATTACKER-V2/scripts/mrnobody
           bash -n TESTFILES/ATTACKER/attackctl
@@ -38,6 +39,7 @@ jobs:
       - name: Check routing, live output, incident IDs and historical compatibility with isolated fixtures
         run: |
           python tests/mrnobody/backend.py
+          python tests/mrnobody/ui.py
           python tests/mrnobody/install.py
           python tests/mrnobody/planning.py --bash
           python tests/mrnobody/remote_actions.py
@@ -59,6 +61,22 @@ jobs:
           node tests/mrnobody/logs.cjs
           node tests/mrnobody/reports.cjs
           python tests/mrnobody/report_exports.py
+      - name: Install isolated browser test dependencies
+        run: |
+          npm install --prefix "$RUNNER_TEMP/mrn-ui" --no-save playwright@1.62.1
+          "$RUNNER_TEMP/mrn-ui/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Verify read-only UI and responsive layouts against real registry
+        env:
+          MRN_UI_ARTIFACTS: ${{ runner.temp }}/mrn-ui-screenshots
+        run: |
+          mkdir -p "$MRN_UI_ARTIFACTS"
+          NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/ui_browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mrnobody-ui-screenshots
+          path: ${{ runner.temp }}/mrn-ui-screenshots
+          if-no-files-found: ignore
 
 
   windows-persistence-static:
