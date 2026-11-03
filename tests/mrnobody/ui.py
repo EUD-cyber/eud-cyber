@@ -74,6 +74,11 @@ def verify():
             for endpoint in ['/', '/api/health', '/api/config', '/api/scenarios', '/api/planning/capabilities', '/api/schedules', '/api/reports', '/api/execution-status', '/api/inventory']:
                 response = client.get(endpoint)
                 assert response.status_code == 200, (endpoint, response.status_code)
+            scenario = client.get('/api/scenarios').get_json()['scenarios'][0]
+            module.planning.store.save_schedule({'version': 1, 'execution': {'type':'campaign','id':scenario['id']}, 'at':'2030-01-01T00:00:00Z','interval':0,'enabled':True})
+            scheduled = next(s for s in client.get('/api/scenarios').get_json()['scenarios'] if s['id'] == scenario['id'])
+            assert scheduled['schedule_count'] == scheduled['enabled_schedule_count'] == 1
+            assert scheduled['profile']['mode'] == 'normal' and scheduled['target_mode'] == 'auto'
             html = client.get('/').get_data(as_text=True)
             parser = Structure(); parser.feed(html)
             assert not parser.errors, parser.errors

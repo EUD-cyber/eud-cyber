@@ -16,6 +16,8 @@ Tactics accept both comma and pipe separators used by the registry. Mappings and
 
 Readiness says **Installed**, not unconditional Ready: target prerequisites are evaluated by the existing execution paths. Live execution statuses are separate and remain visible after catalog filtering. Settings exposes existing update controls, API/version information, logs, inventory and Full Incident configuration links. Unsupported integration toggles, backup buttons, detection percentages and invented scenario presets are omitted.
 
+`/api/scenarios` also exposes the existing default execution profile and real total/enabled schedule counts. Custom scenarios remain visible if the built-in scenario directory is absent.
+
 Report lists add recorded technique names/statuses from saved report snapshots. Historical report JSON is not rewritten. Investigation/Ground Truth, canonical timeline, evidence, assets, ATT&CK links, HTML/PDF exports and raw JSON remain supported.
 
 ## Distribution

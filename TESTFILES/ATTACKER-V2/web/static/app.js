@@ -769,6 +769,11 @@ function renderScenarios(scenarios) {
         const profile = scenario.profile;
         meta.textContent = `${scenario.custom ? "Custom" : "Built-in"} · ${scenario.target_mode === "fixed" ? "Fixed Targets" : "Auto Discovery"}${profile?.mode ? " · " + profile.mode : ""}${profile?.duration ? " · target " + profile.duration + " s" : ""}`;
         info.appendChild(meta);
+        if (Number.isInteger(scenario.schedule_count)) {
+            const scheduled = document.createElement("span");
+            scheduled.textContent = `${scenario.schedule_count} scheduled jobs · ${scenario.enabled_schedule_count || 0} enabled`;
+            info.appendChild(scheduled);
+        }
         card.addEventListener(
             "click",
             () => {
