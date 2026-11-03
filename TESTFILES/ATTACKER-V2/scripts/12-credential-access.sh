@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 # ATTACK_ID="12"
+# ATTACK_DESCRIPTION="Inspect metadata or read a fixed-marker synthetic credential test file, then remove the temporary file."
+# ATTACK_TEACHING_PURPOSE="Detect credential-file access without using real credential material."
+# ATTACK_DETECTION_FOCUS="Synthetic credential file access|Remote process creation|Temporary file cleanup"
+# ATTACK_PLATFORMS="Windows|Linux"
+# ATTACK_PREREQUISITES="Authenticated compatible WinRM or SSH access; auto mode uses P03 access."
+# ATTACK_TARGET_TYPE="Synthetic credential test file"
+# ATTACK_CLEANUP="The temporary synthetic test file is cleaned up; inspect report evidence if cleanup is unverified."
 # ATTACK_NAME="Credential Access Simulation"
 # ATTACK_ALIAS="credential-access"
 # ATTACK_STANDALONE="true"

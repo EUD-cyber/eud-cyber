@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 # ATTACK_ID="11"
+# ATTACK_DESCRIPTION="Create or remove a namespaced lab Scheduled Task, Windows service, cron entry or systemd service."
+# ATTACK_TEACHING_PURPOSE="Identify persistence creation and verify its corresponding cleanup evidence."
+# ATTACK_DETECTION_FOCUS="Scheduled Task changes|Service creation|Cron or systemd changes"
+# ATTACK_PLATFORMS="Windows|Linux"
+# ATTACK_PREREQUISITES="Authenticated access with rights for the selected persistence method; auto mode uses P03 access."
+# ATTACK_TARGET_TYPE="Authenticated lab hosts"
+# ATTACK_CLEANUP="Use Cleanup with the same target, username, method and artifact suffix. Ownership markers limit removal to the exercise artifact."
 # ATTACK_NAME="Persistence"
 # ATTACK_ALIAS="persistence"
 # ATTACK_STANDALONE="true"

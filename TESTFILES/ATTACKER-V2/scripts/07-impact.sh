@@ -31,6 +31,13 @@ set -u
 # ============================================================
 
 # ATTACK_ID="07"
+# ATTACK_DESCRIPTION="Create synthetic documents and ransomware indicators inside an exercise directory. No cryptographic encryption is performed."
+# ATTACK_TEACHING_PURPOSE="Recognize impact indicators while distinguishing simulation from actual encryption."
+# ATTACK_DETECTION_FOCUS="Synthetic file renames|Ransom note creation|Impact directory activity"
+# ATTACK_PLATFORMS="Linux|Windows"
+# ATTACK_PREREQUISITES="Authenticated remote access; auto mode uses P03 compromise state."
+# ATTACK_TARGET_TYPE="Synthetic exercise directory"
+# ATTACK_CLEANUP="Exercise artifacts are retained for investigation. No cleanup action is exposed; existing user and system files are not encrypted."
 # ATTACK_NAME="Impact / Ransomware Simulation"
 # ATTACK_ALIAS="impact"
 # ATTACK_STANDALONE="true"

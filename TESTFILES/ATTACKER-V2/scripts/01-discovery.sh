@@ -27,6 +27,13 @@
 # ============================================================
 
 # ATTACK_ID="01"
+# ATTACK_DESCRIPTION="Probe configured private lab networks and record discovered hosts and open services."
+# ATTACK_TEACHING_PURPOSE="Correlate network discovery with the inventory used by later actions."
+# ATTACK_DETECTION_FOCUS="Network probes|Port connection attempts|Discovery timing"
+# ATTACK_PLATFORMS="Network"
+# ATTACK_PREREQUISITES="Reachable private lab subnets and configured discovery tools."
+# ATTACK_TARGET_TYPE="Network ranges"
+# ATTACK_CLEANUP="No target-side restore is provided; discovery state and logs are retained."
 # ATTACK_NAME="Discovery"
 # ATTACK_ALIAS="discovery"
 # ATTACK_STANDALONE="true"

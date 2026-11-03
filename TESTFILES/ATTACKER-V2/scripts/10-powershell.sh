@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 # ATTACK_ID="10"
+# ATTACK_DESCRIPTION="Run optional PowerShell on Windows and Bash on Linux through established remote access."
+# ATTACK_TEACHING_PURPOSE="Connect remote command execution to its transport and resulting process activity."
+# ATTACK_DETECTION_FOCUS="PowerShell execution|Bash execution|WinRM and SSH sessions"
+# ATTACK_PLATFORMS="Windows|Linux"
+# ATTACK_PREREQUISITES="Compatible authenticated WinRM or SSH access and execution-time commands. Blank commands are skipped independently for each platform."
+# ATTACK_TARGET_TYPE="Authenticated lab hosts"
+# ATTACK_CLEANUP="Cleanup depends on the supplied command. No automatic rollback of arbitrary command effects is provided."
 # ATTACK_NAME="Custom Remote Command"
 # ATTACK_ALIAS="powershell"
 # ATTACK_STANDALONE="true"

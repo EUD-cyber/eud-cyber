@@ -105,7 +105,7 @@
             if (draft.description && (!draft.description.trim() || draft.description.length > 2000 || /[\x00-\x1f]/.test(draft.description))) return "Description must be at most 2000 characters without control characters.";
         }
         if (index === 1 && !["auto", "fixed"].includes(draft.target_mode)) return "Choose Auto Discovery or Fixed Targets.";
-        if (index === 2 && (!enabled().length || !validOrder(draft.phases))) return "Enable at least one phase in a valid dependency order.";
+        if (index === 2 && (!enabled().length || !validOrder(draft.phases))) return "Enable at least one Attack Technique in a valid dependency order.";
         if (index === 3) {
             if (commonTarget && !privateAddress(commonTarget)) return "Common Target must be a private lab IPv4 address.";
             for (const p of enabled()) {
@@ -172,7 +172,7 @@
     function review(parent) {
         node("h3", draft.name, parent); node("p", draft.description || "No description", parent);
         node("p", draft.target_mode === "auto" ? "Auto Discovery" : "Custom / Fixed Targets", parent);
-        node("p", `Phase flow: ${enabled().map(p => `P${p.id} ${capFor(p.id)?.name}`).join(" → ")}`, parent);
+        node("p", `Attack Technique flow: ${enabled().map(p => `P${p.id} ${capFor(p.id)?.name}`).join(" → ")}`, parent);
         if (commonTarget) node("p", `Common Target: ${commonTarget}`, parent);
         enabled().forEach(p => {
             node("p", `P${p.id} · ${capFor(p.id)?.name}${required(p.id) ? " · Required" : ""}${autoAdded.has(p.id) ? " · Auto-added prerequisite" : ""}`, parent);
@@ -188,7 +188,7 @@
         const details = node("details", undefined, parent); node("summary", "Advanced / Show JSON", details);
         node("pre", JSON.stringify(definition(), null, 2), details, "planning-review");
     }
-    const steps = ["Scenario basics", "Target mode", "Phase selection / order", "Phase configuration", "Execution profile / timing", "Schedule", "Review / Save / Run"];
+    const steps = ["Scenario basics", "Target mode", "Attack Techniques / order", "Technique configuration", "Execution profile / timing", "Schedule", "Review / Save / Run"];
     const byId = id => document.getElementById(id);
     const copy = value => JSON.parse(JSON.stringify(value));
     function node(tag, text, parent, className) {
@@ -265,7 +265,7 @@
             {value: "normal", label: "Normal"}, {value: "slow", label: "Slow Campaign"}, {value: "custom", label: "Custom Timing"}
         ].filter(option => modes.includes(option.value)));
         if (value.mode !== "normal") durationForm(parent, "Target duration", value.duration, v => {value.duration = v;});
-        if (value.mode === "slow") node("p", "Discovery spreads host probes across its time slot. Web discovery spaces host/port checks. Other phases use absolute start offsets. Work can run longer than the target duration.", parent, "muted");
+        if (value.mode === "slow") node("p", "Discovery spreads host probes across its time slot. Web discovery spaces host/port checks. Other techniques use absolute start offsets. Work can run longer than the target duration.", parent, "muted");
     }
     function parameterForm(parent, phase, mode, common = false, existing = false, onChange = () => {}) {
         const cap = capabilities.find(c => c.id === phase.id);
@@ -275,7 +275,7 @@
         if (["15", "16", "17"].includes(phase.id)) node("p", {"15": "Fingerprint required: dedicated MrNobody Web Lab endpoint. Auto uses P02 web services; no compromise is invented.", "16": "Only synthetic monitor.conf or exercise.log in the MRN exercise directory; original state is restored. Cleanup recovers an interrupted run.", "17": "Only fixed marker-verified finance/engineering files. Archives feed staged-data.json for P05/P06. Cleanup removes the selected archive."}[phase.id], parent, "muted");
         if (phase.id === "12") node("p", "Synthetic temporary test file only: inspect metadata or verify its fixed lab marker, then clean up. Auto requires prior P03 access.", parent, "muted");
         if (phase.id === "18") node("p", "DNS only, UDP 53. Private resolver and reserved lab domain; use a non-forwarding lab DNS zone. Standard defaults: 5s; low-and-slow: 60s (minimum 30s). Three queries, 0% jitter, 4 minute duration ceiling. Internal DNS timing is independent of campaign offsets. Fixed marker only; no remote commands or answer processing.", parent, "muted");
-        if (phase.id === "14") node("p", "Beacons to this MrNobody instance only. Internal interval/count is independent of the phase start offset. Default: HTTP, 5 seconds, 0% jitter, 5 check-ins. Maximum execution budget: 240 seconds. HTTPS uses the lab self-signed certificate policy.", parent, "muted");
+        if (phase.id === "14") node("p", "Beacons to this MrNobody instance only. Internal interval/count is independent of the technique start offset. Default: HTTP, 5 seconds, 0% jitter, 5 check-ins. Maximum execution budget: 240 seconds. HTTPS uses the lab self-signed certificate policy.", parent, "muted");
         if (phase.id === "13") node("p", "Windows only. Choose encoded PowerShell, local certutil decode, or an empty BITS job that is cancelled. No arbitrary command or URL is accepted. Default: encoded PowerShell.", parent, "muted");
         if (phase.id === "09") node("p", "P09 requires a lab domain controller and AD management rights. New or disabled mrnobody accounts are enabled using the runtime Windows password; an already enabled account keeps its password. Domain Admins membership is verified.", parent, "muted");
         if (mode === "auto") {
@@ -362,7 +362,7 @@
             const id = await saveSchedule(execution, draft.schedule);
             const secret = readBuilderCredentials();
             if (Object.values(secret).some(Boolean)) await api(`/api/schedules/${id}/arm`, "POST", secret);
-            message(`Scenario and schedule saved (${id}). Supply credentials on Schedules if needed.`);
+            message(`Scenario and schedule saved (${id}). Supply credentials in Scheduler if needed.`);
             await refresh(); showPage("schedules");
         } else if (run) {
             let result;
@@ -384,7 +384,12 @@
         if (!draft) return newDraft();
         node("h2", `${step + 1}. ${steps[step]}`, parent);
         const progress = node("ol", undefined, parent, "planning-steps");
-        steps.forEach((label, index) => {const item = node("li", `${index < step ? "✓" : index === step ? "●" : "○"} ${label}`, progress, index < step ? "completed" : index === step ? "current" : "upcoming"); if (index === step) item.setAttribute?.("aria-current", "step");});
+        steps.forEach((label, index) => {
+            const item = node("li", undefined, progress, index < step ? "completed" : index === step ? "current" : "upcoming");
+            const control = button(item, `${index + 1}. ${label}`, () => {step = index; renderBuilder();});
+            control.disabled = index > step;
+            if (index === step) control.setAttribute?.("aria-current", "step");
+        });
         const errorBox = node("p", "", parent, "planning-error"); errorBox.id = "builderError"; errorBox.setAttribute?.("role", "alert");
         readWordlist = () => null;
         if (step === 0) {
@@ -394,14 +399,31 @@
             field(parent, "Targets", draft.target_mode, v => {
                 draft.target_mode = v; if (v === "fixed") {draft.phases = draft.phases.filter(p => !autoAdded.has(p.id)); autoAdded.clear();} else {commonTarget = ""; inherited.clear(); ensureAuto();} renderBuilder();
             }, [{value: "auto", label: "Auto Discovery"}, {value: "fixed", label: "Custom / Fixed Targets"}]);
-            node("p", "Auto Discovery uses fresh campaign inventories and checks phase dependencies. Fixed Targets requires private lab addresses and phase-specific settings.", parent);
+            node("p", "Auto Discovery uses fresh campaign inventories and checks technique dependencies. Fixed Targets requires private lab addresses and technique-specific settings.", parent);
         } else if (step === 2) {
             const options = capabilities.filter(c => !draft.phases.some(p => p.id === c.id));
-            const select = field(parent, "Add phase", "", () => {}, [{value: "", label: "Select a phase"}, ...options.map(c => ({value: c.id, label: `P${c.id} · ${c.name}`}))]);
+            const select = field(parent, "Add Attack Technique", "", () => {}, [{value: "", label: "Select an Attack Technique"}, ...options.map(c => ({value: c.id, label: `P${c.id} · ${c.name}`}))]);
             button(parent, "Add", () => {if (select.value) {draft.phases.push(phase(select.value)); autoAdded.delete(select.value); ensureAuto(); if (draft.target_mode === "fixed") setCommon(commonTarget);} renderBuilder();});
+            const workspace = node("div", undefined, parent, "builder-selection");
+            const available = node("section", undefined, workspace, "builder-available");
+            node("h3", "Available Attack Techniques", available);
+            const search = field(available, "Search catalog", "", () => {}); search.type = "search";
+            const choiceList = node("div", undefined, available, "builder-choices");
+            const renderChoices = () => {
+                choiceList.replaceChildren();
+                const choices = options.filter(c => (`P${c.id} ${c.name}`).toLowerCase().includes(search.value.trim().toLowerCase()));
+                if (!choices.length) node("p", "No matching techniques available.", choiceList, "muted");
+                choices.forEach(c => {
+                    const b = button(choiceList, `+ P${c.id} · ${c.name}`, () => {draft.phases.push(phase(c.id)); autoAdded.delete(c.id); ensureAuto(); if (draft.target_mode === "fixed") setCommon(commonTarget); renderBuilder();});
+                    b.className = "mapped-technique";
+                });
+            };
+            search.addEventListener("input", renderChoices); renderChoices();
+            const flow = node("section", undefined, workspace, "builder-selected");
+            node("h3", `Selected Attack Techniques · ${enabled().length}`, flow);
             draft.phases.forEach((phase, index) => {
-                const row = node("div", undefined, parent, "planning-row");
-                const input = node("input", undefined, row); input.type = "checkbox"; input.checked = phase.enabled !== false; input.disabled = required(phase.id);
+                const row = node("div", undefined, flow, "planning-row");
+                const input = node("input", undefined, row); input.type = "checkbox"; input.checked = phase.enabled !== false; input.disabled = required(phase.id); input.setAttribute?.("aria-label", `Enable P${phase.id}`);
                 input.addEventListener("change", () => {if (!required(phase.id)) {phase.enabled = input.checked; ensureAuto();} renderBuilder();});
                 node("span", `P${phase.id} · ${capabilities.find(c => c.id === phase.id)?.name}`, row);
                 if (required(phase.id)) node("span", "Required", row, "planning-badge");
@@ -410,6 +432,7 @@
                 for (const [label, delta] of [["↑", -1], ["↓", 1]]) {
                     const control = button(row, label, () => {move(index, delta, true); renderBuilder();});
                     control.disabled = !move(index, delta);
+                    control.setAttribute?.("aria-label", `${delta < 0 ? "Move up" : "Move down"} P${phase.id}`);
                 }
                 button(row, "Remove", () => {if (!required(phase.id)) {draft.phases.splice(index, 1); autoAdded.delete(phase.id); inherited.delete(phase.id);} renderBuilder();}).disabled = required(phase.id);
             });
@@ -454,10 +477,13 @@
     }
     function library() {
         const parent = byId("customLibrary"); parent.replaceChildren();
-        button(parent, "Create custom scenario", () => newDraft());
+        node("h2", "Custom scenarios", parent);
+        if (!custom.length) node("p", "No custom scenarios saved. Use Scenario Builder to create one.", parent, "empty-state");
         custom.forEach(item => {
             const row = node("div", undefined, parent, "planning-row"); node("strong", item.name, row);
+            node("p", item.description || "Custom incident scenario", row);
             node("p", `${item.target_mode === "auto" ? "Auto Discovery" : "Fixed Targets"} · ${item.phases.filter(p => p.enabled !== false).map(p => "P" + p.id).join(" → ")} · ${timingSummary(item)} · ${schedules.filter(s => s.execution.type === "custom" && s.execution.id === item.id).length} schedule(s)`, row);
+            button(row, "Run", () => runCustom(item.id));
             button(row, "Edit", () => newDraft(item));
             button(row, "Duplicate", () => {const value = copy(item); delete value.id; value.name += " (copy)"; newDraft(value);});
             button(row, "Schedule", () => {showPage("schedules"); scheduleEditor({type: "custom", id: item.id});});
@@ -469,7 +495,7 @@
         const parent = byId("scheduleEditor"); parent.replaceChildren();
         node("h2", existing ? "Edit schedule" : "Schedule an execution", parent);
         const spec = copy(initial || {type: "campaign", id: scenarios.find(s => !s.custom)?.id || "full-incident", profile: {mode: "normal", duration: 0}});
-        const entries = [...scenarios.map(s => ({value: `${s.custom ? "custom" : "campaign"}:${s.id}`, label: `${s.custom ? "Custom" : "Campaign"} · ${s.name}`})), ...capabilities.filter(c => c.standalone).map(c => ({value: `phase:${c.id}`, label: `Phase P${c.id} · ${c.name}`}))];
+        const entries = [...scenarios.map(s => ({value: `${s.custom ? "custom" : "campaign"}:${s.id}`, label: `${s.custom ? "Custom" : "Campaign"} · ${s.name}`})), ...capabilities.filter(c => c.standalone).map(c => ({value: `phase:${c.id}`, label: `Attack Technique P${c.id} · ${c.name}`}))];
         field(parent, "Execution", `${spec.type}:${spec.id}`, value => {const [type, id] = value.split(":"); scheduleEditor({type, id, profile: {mode: "normal", duration: 0}}, existing);}, entries);
         if (spec.type !== "custom") {
             spec.profile ||= {mode: "normal", duration: 0};
@@ -516,8 +542,9 @@
             const e = item.execution;
             const scenario = scenarios.find(s => s.id === e.id);
             const executionProfile = e.profile || scenario?.profile || {mode: "normal"};
-            node("h3", `${e.type} · ${scenario?.name || capabilities.find(c => c.id === e.id)?.name || e.id}`, row);
+            node("h3", `${{phase:"Standalone Attack Technique",campaign:"Built-in scenario",custom:"Custom scenario"}[e.type] || e.type} · ${scenario?.name || capabilities.find(c => c.id === e.id)?.name || e.id}`, row);
             node("p", `${item.enabled ? "Enabled" : "Disabled"} · Next: ${item.enabled ? new Date(item.next_run).toLocaleString() : "—"} · ${executionProfile.mode} ${executionProfile.duration ? durationText(executionProfile.duration) : ""} · ${item.interval ? "Every " + intervalText(item.interval) : "Run Once"}`, row);
+            node("p", `Planned start: ${new Date(item.at).toLocaleString()} · Source: ${e.id}`, row, "muted");
             node("p", `Last dispatch: ${item.last_status} · Temporary credentials: ${item.credentials_ready ? "available" : "not supplied"}`, row, "muted");
             button(row, "Run Now", async () => {message((await api(`/api/schedules/${item.id}/run`, "POST", {})).status); await refresh();});
             button(row, "Edit / supply credentials", () => scheduleEditor(e, item));
@@ -530,6 +557,7 @@
         capabilities = caps.phases; scenarios = all.scenarios; custom = saved.scenarios; schedules = planned.schedules;
         library(); scheduleTable();
         if (typeof loadScenarios === "function") await loadScenarios();
+        window.MrnUI?.refreshDashboard(true);
     }
     document.addEventListener("DOMContentLoaded", () => {
         byId("newCustomScenario").addEventListener("click", () => newDraft());

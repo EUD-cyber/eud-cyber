@@ -45,6 +45,13 @@ set -u
 # ============================================================
 
 # ATTACK_ID="04"
+# ATTACK_DESCRIPTION="Collect internal host and network information over established remote access."
+# ATTACK_TEACHING_PURPOSE="Trace post-access discovery to its authenticated source and target."
+# ATTACK_DETECTION_FOCUS="Remote command execution|Host information queries|Network configuration queries"
+# ATTACK_PLATFORMS="Linux|Windows"
+# ATTACK_PREREQUISITES="Authenticated source and target access; auto mode consumes current discovery and compromise state."
+# ATTACK_TARGET_TYPE="Authenticated lab hosts"
+# ATTACK_CLEANUP="Discovery output is retained in local evidence; no target restore action is provided."
 # ATTACK_NAME="Internal Discovery"
 # ATTACK_ALIAS="lateral"
 # ATTACK_STANDALONE="true"

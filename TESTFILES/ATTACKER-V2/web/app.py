@@ -7,7 +7,7 @@ import uuid
 from planning_api import install, launch, BusyError
 from execution import snapshot
 from scheduler import current_schedule
-from scenario_model import needs_password
+from scenario_model import needs_password, technique_metadata
 import json
 import os
 import signal
@@ -447,6 +447,9 @@ def api_config():
 def api_phases():
 
     phases = []
+    capabilities = planning.capabilities()
+    full_incident = find_scenario('full-incident')
+    full_incident_ids = (full_incident or {}).get('metadata', {}).get('SCENARIO_PHASES', '').split(',')
 
     if not SCRIPT_DIR.exists():
         return jsonify(
@@ -528,6 +531,7 @@ def api_phases():
                 "standalone": standalone,
                 "parameters": parameters,
                 "campaign_state": campaign_state,
+                "education": technique_metadata(metadata, capabilities.get(phase_id, {}), full_incident_ids),
                 "mitre": {
                     "tactic": metadata.get(
                         "MITRE_TACTIC",

@@ -413,129 +413,187 @@ function setSystemStatus(status) {
 // PHASE DISCOVERY
 // ==========================================================
 
-function renderPhases(phases) {
-
-    if (!phaseGrid) {
-        return;
+/* Registry-driven product views. These projections never change execution state. */
+const MrnUI = (() => {
+    let techniques = [], selected = null, dashboardPending = false, dashboardLoaded = 0, executionStatuses = {};
+    const byId = id => document.getElementById(id);
+    function node(parent, tag, text, cls) {
+        const el = document.createElement(tag);
+        if (text !== undefined && text !== null) el.textContent = String(text);
+        if (cls) el.className = cls;
+        if (parent) parent.appendChild(el);
+        return el;
     }
-
-    phaseGrid.innerHTML = "";
-
-    if (!Array.isArray(phases) || phases.length === 0) {
-
-        phaseGrid.innerHTML = `
-            <div class="phase-card">
-                <div class="phase-info">
-                    <strong>No phases available</strong>
-                    <span>No attack metadata was discovered.</span>
-                </div>
-            </div>
-        `;
-
-        return;
+    const education = item => item.education || {};
+    const tactics = item => education(item).tactics || String(item.mitre?.tactic || '').split(/[,|]/).map(x => x.trim()).filter(Boolean);
+    const all = get => [...new Set(techniques.flatMap(get))].sort();
+    const filters = {techniqueTactic: tactics, techniquePlatform: x => education(x).platforms || [], techniqueMode: x => education(x).supported_modes || [], techniqueReadiness: x => [education(x).readiness || 'Unknown']};
+    const tacticIds = {'Reconnaissance':'TA0043','Resource Development':'TA0042','Initial Access':'TA0001','Execution':'TA0002','Persistence':'TA0003','Privilege Escalation':'TA0004','Stealth':'TA0005','Defense Evasion':'TA0005','Defense Impairment':'TA0112','Credential Access':'TA0006','Discovery':'TA0007','Lateral Movement':'TA0008','Collection':'TA0009','Command and Control':'TA0011','Exfiltration':'TA0010','Impact':'TA0040'};
+    function badge(parent, text, type = 'platform') {
+        const tone = type === 'tactic' ? /Impact|Impairment|Access/.test(text) ? 'red' : /Discovery|Collection/.test(text) ? 'yellow' : 'purple' : 'neutral';
+        return node(parent, 'span', text, `tech-badge badge-${tone}`);
     }
-
-
-    phases.forEach(phase => {
-
-        const card =
-            document.createElement("div");
-
-        card.className =
-            "phase-card";
-
-        card.dataset.phase =
-            phase.id;
-
-
-        const number =
-            document.createElement("div");
-
-        number.className =
-            "phase-number";
-
-        number.textContent =
-            phase.id;
-
-
-        const info =
-            document.createElement("div");
-
-        info.className =
-            "phase-info";
-
-
-        const name =
-            document.createElement("strong");
-
-        name.textContent =
-            phase.name;
-
-
-        const details =
-            document.createElement("span");
-
-        const tactic =
-            phase.mitre?.tactic || "No MITRE tactic";
-
-        const techniques =
-            Array.isArray(
-                phase.mitre?.techniques
-            )
-                ? phase.mitre.techniques.join(", ")
-                : "";
-
-        details.textContent =
-            techniques
-                ? `${tactic} · ${techniques}`
-                : tactic;
-
-
-        const status =
-            document.createElement("div");
-
-        status.className =
-            "phase-status";
-
-        status.textContent =
-            "PENDING";
-
-
-        info.appendChild(name);
-        info.appendChild(details);
-
-        card.appendChild(number);
-        card.appendChild(info);
-        card.appendChild(status);
-
-        card.addEventListener(
-            "click",
-            () => {
-
-                document
-                    .querySelectorAll(
-                        ".phase-card"
-                    )
-                    .forEach(item => {
-                        item.classList.remove(
-                            "phase-selected"
-                        );
-                    });
-
-                card.classList.add(
-                    "phase-selected"
-                );
-
-                renderPhaseDetail(
-                    phase
-                );
+    function action(parent, text, callback, cls = 'button') {
+        const b = node(parent, 'button', text, cls); b.type = 'button'; b.addEventListener('click', callback); return b;
+    }
+    function external(parent, text, href) {
+        const a = node(parent, 'a', text); a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer'; return a;
+    }
+    function select(item, focus = false) {
+        const values = Object.fromEntries(Object.keys(filters).map(key => [key, byId(key)?.value || '']));
+        if (!matches(item, byId('techniqueSearch')?.value || '', values)) {
+            for (const key of Object.keys(filters)) if (byId(key)) byId(key).value = '';
+            if (byId('techniqueSearch')) byId('techniqueSearch').value = '';
+        }
+        selected = item.id;
+        renderPhaseDetail(item);
+        renderList();
+        if (focus) byId('phaseDetail')?.focus();
+    }
+    function matches(item, query, values) {
+        const e = education(item);
+        const haystack = [item.id, `P${item.id}`, item.name, e.description, ...tactics(item), ...(item.mitre?.techniques || [])].join(' ').toLowerCase();
+        return (!query || haystack.includes(query.trim().toLowerCase())) && Object.entries(filters).every(([key, get]) => !values[key] || get(item).includes(values[key]));
+    }
+    function renderList() {
+        const root = byId('phaseGrid'); if (!root) return;
+        const scroll = root.scrollTop;
+        root.replaceChildren();
+        const values = Object.fromEntries(Object.keys(filters).map(key => [key, byId(key)?.value || '']));
+        const items = techniques.filter(item => matches(item, byId('techniqueSearch')?.value || '', values));
+        const count = byId('techniqueResultCount'); if (count) count.textContent = `${items.length} of ${techniques.length} Attack Techniques`;
+        if (!items.length) node(root, 'p', 'No Attack Techniques match these filters. Clear a filter or try another search.', 'empty-state');
+        items.forEach(item => {
+            const e = education(item);
+            const card = action(root, '', () => select(item), 'phase-card technique-card' + (selected === item.id ? ' phase-selected' : ''));
+            card.dataset.phase = item.id; card.setAttribute('aria-pressed', String(selected === item.id));
+            node(card, 'span', `P${item.id}`, 'phase-number');
+            const info = node(card, 'span', undefined, 'phase-info');
+            node(info, 'strong', item.name);
+            const badges = node(info, 'span', undefined, 'tech-badges');
+            tactics(item).forEach(t => badge(badges, t, 'tactic'));
+            (e.platforms || []).forEach(p => badge(badges, p));
+            node(info, 'span', e.description || 'Description not yet documented.', 'tech-description');
+            node(info, 'span', e.readiness || 'Unknown', 'readiness-label');
+            const state = executionStatuses[item.id];
+            const label = {running:'Running',complete:'Complete',failed:'Failed',skipped:'Skipped',disabled:'Skipped',partial:'Partial',interrupted:'Interrupted'}[state] || 'Not run';
+            node(card, 'span', label, 'phase-status');
+            if (['running','complete','failed','skipped','partial','interrupted'].includes(state)) card.classList.add(`phase-${state}`);
+        });
+        root.scrollTop = scroll;
+    }
+    function applyTactic(tactic) {
+        for (const key of Object.keys(filters)) if (byId(key)) byId(key).value = '';
+        if (byId('techniqueSearch')) byId('techniqueSearch').value = '';
+        if (byId('techniqueTactic')) byId('techniqueTactic').value = tactic;
+        showPage('phases'); renderList(); byId('techniqueTactic')?.focus();
+    }
+    function coverage() {
+        const counts = byId('catalogTactics'); if (counts) counts.replaceChildren();
+        const root = byId('mitreCoverage'); if (root) root.replaceChildren();
+        const total = byId('mitreSummary'); if (total) {
+            total.replaceChildren();
+            for (const [label,value] of [['MrNobody Attack Techniques', techniques.length], ['Mapped tactics', all(tactics).length], ['Unique ATT&CK techniques / sub-techniques', all(x => x.mitre?.techniques || []).length]]) {
+                const metric = node(total,'div',undefined,'report-metric'); node(metric,'strong',value); node(metric,'span',label);
             }
-        );
+        }
+        all(tactics).forEach(tactic => {
+            const mapped = techniques.filter(item => tactics(item).includes(tactic));
+            if (counts) action(counts, `${tactic} · ${mapped.length}`, () => applyTactic(tactic), 'tactic-count');
+            if (!root) return;
+            const section = node(root, 'section', undefined, 'mitre-tactic');
+            const head = node(section, 'div', undefined, 'panel-header'); node(head,'h2',tactic); badge(head,`${mapped.length} mapped`);
+            if (tacticIds[tactic]) external(section, `${tacticIds[tactic]} · Official tactic ↗`, `https://attack.mitre.org/tactics/${tacticIds[tactic]}/`);
+            node(section,'p',`${new Set(mapped.flatMap(x => x.mitre?.techniques || [])).size} associated ATT&CK techniques / sub-techniques`, 'muted');
+            mapped.forEach(item => action(section, `P${item.id} · ${item.name}`, () => {showPage('phases'); select(item,true);}, 'mapped-technique'));
+            action(section,'Explore tactic →',()=>applyTactic(tactic),'button button-small');
+        });
+        if (root && !techniques.length) node(root, 'p', 'No installed technique mappings are available.');
+    }
+    function setCatalogue(items) {
+        techniques = Array.isArray(items) ? items : [];
+        for (const [id, get] of Object.entries(filters)) {
+            const select = byId(id); if (!select) continue;
+            const previous = select.value;
+            while (select.options.length > 1) select.remove(1);
+            all(get).forEach(value => {const option = node(select, 'option', value); option.value = value;});
+            select.value = previous;
+            if (!select.dataset.bound) {select.addEventListener('change', renderList); select.dataset.bound = 'true';}
+        }
+        const search = byId('techniqueSearch');
+        if (search && !search.dataset.bound) {search.addEventListener('input',renderList); search.dataset.bound = 'true';}
+        renderList(); coverage();
+        if (!selected && techniques.length) select(techniques[0]);
+        const reportFilter = byId('reportPhaseFilter');
+        if (reportFilter) {
+            const previous = reportFilter.value;
+            // Keep historical IDs even when their runtime script is no longer installed.
+            const entries = new Map(REPORT_PHASES);
+            techniques.forEach(item => entries.set(item.id,item.name));
+            reportFilter.replaceChildren(); node(reportFilter,'option','All Attack Techniques').value = '';
+            [...entries].sort(([a],[b])=>a.localeCompare(b)).forEach(([id,name])=>{node(reportFilter,'option',`P${id} · ${name}`).value=id;});
+            reportFilter.value = previous;
+        }
+    }
+    function detail(parent, item) {
+        const e = education(item);
+        node(parent,'p',e.description || 'Description not yet documented.','technique-lead');
+        const badges = node(parent,'div',undefined,'tech-badges');
+        badge(badges,e.readiness || 'Unknown'); tactics(item).forEach(t=>badge(badges,t,'tactic')); (e.platforms || []).forEach(p=>badge(badges,p));
+        node(parent,'p','Installed describes registry availability. Target readiness is checked at execution time.','muted');
+        const grid = node(parent,'div',undefined,'technique-sections');
+        const section = (title,text) => {const s=node(grid,'section',undefined,'technique-section'); node(s,'h3',title); if(text)node(s,'p',text); return s;};
+        section('What does it do?', e.description || 'Not yet documented.');
+        const detect = section('What should students detect?');
+        if (e.detection_focus?.length) {const ul=node(detect,'ul');e.detection_focus.forEach(t=>node(ul,'li',t));} else node(detect,'p','Detection focus not yet documented.');
+        section('Teaching purpose', e.teaching_purpose || 'Not yet documented.');
+        const mitre = section('MITRE ATT&CK');
+        tactics(item).forEach(t => {const p=node(mitre,'p');badge(p,t,'tactic');if(tacticIds[t])external(p,' Official tactic ↗',`https://attack.mitre.org/tactics/${tacticIds[t]}/`);});
+        (e.technique_details || []).forEach(t => {if(/^T\d{4}(?:\.\d{3})?$/.test(t.id))external(node(mitre,'p'),`${t.id} · ${t.name || 'ATT&CK technique'} ↗`,`https://attack.mitre.org/techniques/${t.id.replace('.', '/')}/`);});
+        if (!e.technique_details?.length) node(mitre,'p','No detailed ATT&CK mappings documented.');
+        const execution=section('Execution');
+        const dl=node(execution,'dl',undefined,'overview-fields');
+        const pair=(label,value)=>{node(dl,'dt',label);node(dl,'dd',value || 'Not documented');};
+        pair('Supported modes',(e.supported_modes || []).join(' · '));
+        pair('Platform',(e.platforms || []).join(' · '));pair('Target type',e.target_type);
+        pair('Prerequisites',e.prerequisites);
+        pair('Auto dependencies',(e.dependencies || []).map(id=>'P'+id).join(' → ') || 'None declared');
+        pair('Runtime state',(item.campaign_state || []).join(' · ') || 'None declared');
+        pair('Required fixed-target fields',(e.required_fields || []).map(key=>e.configuration?.[key]?.label || phaseFieldLabel(key)).join(' · ') || 'None declared');
+        pair('Cleanup / restore',e.cleanup);
+        node(execution,'p','Optional techniques can be skipped by Full Incident when their inputs or prerequisites are absent.','muted');
+        const related=techniques.filter(t=>t.id!==item.id && ((e.dependencies || []).includes(t.id) || tactics(t).some(x=>tactics(item).includes(x))));
+        if(related.length){const group=section('Related Attack Techniques');related.forEach(t=>action(group,`P${t.id} · ${t.name}`,()=>select(t,true),'mapped-technique'));}
+        node(parent,'h3','Standalone configuration');
+        node(parent,'p','Runtime credentials are used only for this execution. Review prerequisites and cleanup behavior before running.','muted');
+    }
+    const setText = (id,text) => {const el=byId(id);if(el)el.textContent=text;};
+    async function get(url) {const response=await fetch(url);if(!response.ok)throw new Error('Unavailable');return response.json();}
+    async function refreshDashboard(force=false) {
+        if(dashboardPending || (!force && Date.now()-dashboardLoaded<30000))return;
+        dashboardPending=true;
+        try {
+            await Promise.allSettled([
+                get('/api/health').then(health=>{
+                    setText('dashboardHealth',health.status==='ok'?'Online':health.status || 'Unknown');
+                    const root=byId('settingsRuntime');if(root){root.replaceChildren();const dl=node(root,'dl',undefined,'overview-fields');for(const [label,value] of [['Service',health.service],['Version',health.version],['API health',health.status],['Transport',window.location?.protocol === 'https:' ? 'HTTPS (current browser connection)' : 'HTTP (current browser connection)']]){node(dl,'dt',label);node(dl,'dd',value || 'Unavailable');}}
+                }).catch(()=>{setText('dashboardHealth','Unavailable');setText('settingsRuntime','Application health unavailable. Retry by opening Settings again.');}),
+                get('/api/scenarios').then(data=>setText('dashboardScenarioCount',data.scenarios.length)).catch(()=>setText('dashboardScenarioCount','Unavailable')),
+                get('/api/schedules').then(data=>{setText('dashboardScheduleCount',data.schedules.length);setText('dashboardScheduleEnabled',`${data.schedules.filter(x=>x.enabled).length} enabled`);}).catch(()=>{setText('dashboardScheduleCount','Unavailable');setText('dashboardScheduleEnabled','Schedule status unavailable');}),
+                get('/api/reports').then(data=>{
+                    const root=byId('recentIncidents');if(!root)return;root.replaceChildren();
+                    const reports=(data.reports || []).slice(0,5);
+                    if(!reports.length)node(root,'p','No incidents recorded yet. Start a scenario to collect evidence.','empty-state');
+                    reports.forEach(r=>{const row=node(root,'div',undefined,'recent-incident');action(row,r.id,()=>{showPage('reports');openReport(r.id);},'mapped-technique');badge(row,r.status || 'Unknown');node(row,'span',r.started ? new Date(r.started).toLocaleString() : 'Time unavailable','muted');});
+                }).catch(()=>setText('recentIncidents','Incident history unavailable. Open Reports to retry.'))
+            ]);
+        } finally {dashboardLoaded=Date.now();dashboardPending=false;}
+    }
+    return {setCatalogue, renderList, detail, matches, refreshDashboard, tactics, node, badge, setExecutionStatuses: value => {executionStatuses = value || {};}};
+})();
+window.MrnUI = MrnUI;
 
-        phaseGrid.appendChild(card);
-            });
-}
-
+function renderPhases(phases) { MrnUI.setCatalogue(phases); }
 
 async function loadPhases() {
 
@@ -574,14 +632,14 @@ if (dashboardPhaseCount) {
     catch (error) {
 
         console.error(
-            "Phase discovery error:",
+            "Attack Technique discovery error:",
             error
         );
 
         phaseGrid.innerHTML = `
             <div class="phase-card">
                 <div class="phase-info">
-                    <strong>Unable to load phases</strong>
+                    <strong>Unable to load attack techniques</strong>
                     <span>Check /api/phases</span>
                 </div>
             </div>
@@ -594,6 +652,7 @@ if (dashboardPhaseCount) {
 // ==========================================================
 
 function renderScenarios(scenarios) {
+    scenarios = Array.isArray(scenarios) ? scenarios.filter(scenario => !scenario.custom) : [];
 
     const scenarioGrid =
         document.getElementById(
@@ -632,7 +691,7 @@ function renderScenarios(scenarios) {
     }
 
 
-    scenarios.forEach(scenario => {
+    scenarios.filter(scenario => !scenario.custom).forEach(scenario => {
 
         const card =
             document.createElement(
@@ -667,8 +726,7 @@ function renderScenarios(scenarios) {
             );
 
         description.textContent =
-            scenario.description ||
-            scenario.script;
+            scenario.description || (scenario.custom ? "Custom scenario" : "Built-in scenario");
 
 
         info.appendChild(
@@ -689,7 +747,7 @@ function renderScenarios(scenarios) {
             "phase-status";
 
         status.textContent =
-            `${scenario.phases?.length || 0} PHASES`;
+            `${scenario.phases?.length || 0} ATTACK TECHNIQUES`;
 
 
         card.appendChild(
@@ -701,6 +759,16 @@ function renderScenarios(scenarios) {
         );
 
 
+        card.tabIndex = 0;
+        card.setAttribute("role", "button");
+        card.addEventListener("keydown", event => {if (["Enter", " "].includes(event.key)) {event.preventDefault(); card.click();}});
+        const extra = document.createElement("span"); extra.className = "scenario-flow";
+        extra.textContent = (scenario.phases || []).map(id => "P" + id).join(" → ") || "No Attack Techniques defined";
+        info.appendChild(extra);
+        const meta = document.createElement("span");
+        const profile = scenario.profile;
+        meta.textContent = `${scenario.custom ? "Custom" : "Built-in"} · ${scenario.target_mode === "fixed" ? "Fixed Targets" : "Auto Discovery"}${profile?.mode ? " · " + profile.mode : ""}${profile?.duration ? " · target " + profile.duration + " s" : ""}`;
+        info.appendChild(meta);
         card.addEventListener(
             "click",
             () => {
@@ -795,13 +863,13 @@ function renderScenarioDetail(
         </p>
 
         <p class="muted">
-            Phase order:
+            Attack Technique order:
             <strong>
                 ${phases.length
                     ? phases.map(
                         phase => `P${phase}`
                     ).join(" → ")
-                    : "No phases defined"}
+                    : "No attack techniques defined"}
             </strong>
         </p>
     `;
@@ -997,6 +1065,7 @@ function renderPhaseDetail(phase) {
     header.appendChild(mitre);
 
     phaseDetail.appendChild(header);
+    MrnUI.detail(phaseDetail, phase);
 
 
     const form =
@@ -1096,6 +1165,7 @@ function renderPhaseDetail(phase) {
             `phase-${phase.id}-${parameter}`;
 
 
+        label.htmlFor = input.id;
         group.appendChild(label);
         group.appendChild(input);
 
@@ -1155,6 +1225,8 @@ function renderPhaseDetail(phase) {
         "DRY RUN";
 
 
+    runButton.disabled = !phase.standalone;
+    dryRunButton.disabled = !phase.standalone;
     controls.appendChild(runButton);
     controls.appendChild(dryRunButton);
 
@@ -1247,7 +1319,7 @@ async function runStandalonePhase(
             ) {
 
                 showMessage(
-                    "File upload for standalone phases " +
+                    "File upload for standalone Attack Techniques " +
                     "will be added in the next step.",
                     "info"
                 );
@@ -1313,7 +1385,7 @@ async function runStandalonePhase(
 
         showMessage(
             result.message ||
-            `Phase ${phase.id} started.`,
+            `Attack Technique ${phase.id} started.`,
             "success"
         );
 
@@ -1324,7 +1396,7 @@ async function runStandalonePhase(
         await refreshLog();
 
         console.log(
-            "Phase execution:",
+            "Attack Technique execution:",
             result
         );
 
@@ -1333,7 +1405,7 @@ async function runStandalonePhase(
     catch (error) {
 
         console.error(
-            "Phase execution error:",
+            "Attack Technique execution error:",
             error
         );
 
@@ -1362,10 +1434,11 @@ document.addEventListener("DOMContentLoaded", () => {
 // ==========================================================
 
 function updatePhases(phases) {
+    window.MrnUI?.setExecutionStatuses(phases);
 
     const cards =
         document.querySelectorAll(
-            ".phase-card"
+            "#phaseGrid .phase-card"
         );
 
     cards.forEach(card => {
@@ -1390,10 +1463,15 @@ function updatePhases(phases) {
             "phase-running",
             "phase-complete",
             "phase-failed",
-            "phase-skipped"
+            "phase-skipped", "phase-partial", "phase-interrupted"
         );
 
         switch (status) {
+            case "partial":
+            case "interrupted":
+                statusElement.textContent = status.toUpperCase();
+                card.classList.add(`phase-${status}`);
+                break;
 
             case "skipped":
             case "disabled":
@@ -1440,7 +1518,7 @@ function updatePhases(phases) {
             default:
 
                 statusElement.textContent =
-                    "PENDING";
+                    "NOT RUN";
         }
     });
 }
@@ -1558,7 +1636,7 @@ if (dashboardCampaignStatus) {
 
 
         // --------------------------------------------------
-        // PHASES
+        // ATTACK TECHNIQUES
         // --------------------------------------------------
 
         if (data.state?.phases) {
@@ -1954,7 +2032,7 @@ async function startCampaign() {
             ? `Start ${scenario.name}?\n\n`
             : "Start the Full Incident scenario?\n\n") +
         "The campaign will dynamically discover hosts " +
-        "and execute the configured simulation phases.\n\n" +
+        "and execute the configured simulation attack techniques.\n\n" +
         "Linux targets will use SSH credentials.\n" +
         "Windows targets will use RDP credentials.\n" +
         campaignP10Summary(powershellEnabled ? powershell : "", powershellEnabled ? bash : "") + "\n" +
@@ -2673,7 +2751,7 @@ function addStatusCell(
 
 // One shared request updates visible panels; navigation refreshes newly opened pages.
 // Hidden panels keep their content and scroll position. The backend
-// streams campaign, standalone phase and update output into the same log.
+// streams campaign, standalone Attack Technique and update output into the same log.
 let logRefreshInFlight = false;
 
 async function refreshLog() {
@@ -2708,6 +2786,7 @@ async function refreshLog() {
 
 function startPolling() {
 
+    MrnUI.refreshDashboard();
     if (!statusTimer) {
 
         statusTimer =
@@ -2722,7 +2801,7 @@ function startPolling() {
 
         inventoryTimer =
             setInterval(
-                refreshInventory,
+                () => { refreshInventory(); MrnUI.refreshDashboard(); },
                 INVENTORY_INTERVAL
             );
     }
@@ -2805,6 +2884,8 @@ async function runUpdate() {
 // ==========================================================
 
 function showPage(pageName) {
+    if (["dashboard", "system"].includes(pageName)) MrnUI.refreshDashboard(true);
+    const primaryPage = {builder: "scenarios", campaigns: "scenarios", inventory: "system"}[pageName] || pageName;
 
     if (pageName === "reports") refreshReports();
 
@@ -2851,10 +2932,9 @@ function showPage(pageName) {
 
     navItems.forEach(item => {
 
-        item.classList.toggle(
-            "nav-active",
-            item.dataset.page === pageName
-        );
+        item.classList.toggle("nav-active", item.dataset.page === primaryPage);
+        if (item.dataset.page === primaryPage) item.setAttribute("aria-current", "page");
+        else item.removeAttribute("aria-current");
     });
 }
 
@@ -2885,7 +2965,7 @@ function reportTable(parent, headers, rows) {
 }
 
 function reportType(report) {
-    return report.report_type === "standalone_phase" ? `Standalone phase ${report.phase_id || ""}` : "Campaign";
+    return report.report_type === "standalone_phase" ? `Standalone Attack Technique ${report.phase_id || ""}` : "Campaign";
 }
 
 const REPORT_PHASES = [
@@ -3043,7 +3123,10 @@ async function filterReports() {
     table.replaceChildren();
     reports.forEach(report => {
         const row = reportNode("tr", null, table);
-        [report.id, reportType(report), report.status, report.started, report.summary?.hosts, report.summary?.compromised]
+        const identity = reportNode("td", report.id, row);
+        if (report.scenario_name || report.scenario) reportNode("small", report.scenario_name || report.scenario, identity).className = "report-list-meta";
+        if (report.techniques?.length) reportNode("small", report.techniques.map(t => `P${t.id} · ${t.name}`).join(" → "), identity).className = "report-list-meta";
+        [reportType(report), report.status, report.started, report.summary?.hosts, report.summary?.compromised]
             .forEach(value => reportNode("td", value ?? "Unavailable", row));
         const button = reportNode("button", "Open report", reportNode("td", null, row));
         button.type = "button";
@@ -3051,7 +3134,7 @@ async function filterReports() {
     });
     if (!reports.length) {
         reportNode("td", reportHistory.length ? "No reports match these filters." :
-            "No incident reports available. Run a Full Incident campaign or an individual phase to create one.",
+            "No incident reports available. Run a Full Incident campaign or an individual Attack Technique to create one.",
         reportNode("tr", null, table)).colSpan = 7;
     }
     const notice = document.getElementById("reportFilterNotice");
@@ -3104,7 +3187,7 @@ function renderReportPhase(parent, phase, groundTruth = true) {
     }
     reportNode("p", `${phase.started || "No recorded start"} → ${phase.ended || "No recorded end"}`, section);
     reportNode("h4", "What happened — recorded facts", section);
-    reportNode("p", (groundTruth ? analysis.what_happened : "Review collected logs to establish source, target, method and outcome. Phase status describes the run, not the success of each action.") || "Historical report: no educational analysis recorded. Review the available evidence.", section);
+    reportNode("p", (groundTruth ? analysis.what_happened : "Review collected logs to establish source, target, method and outcome. Attack Technique status describes the run, not the success of each action.") || "Historical report: no educational analysis recorded. Review the available evidence.", section);
     for (const [key, label] of [["findings", "Findings"], ["detection", "Detection in the CyberLab"],
         ["investigation_tasks", "Investigation tasks"], ["prevention", "Prevention / Mitigation"]]) {
         reportNode("h4", label, section);
@@ -3119,7 +3202,7 @@ function renderReportPhase(parent, phase, groundTruth = true) {
     refs.forEach(e => reportNode("p", `${e.path} · line ${e.line}`, section));
     if (!refs.length) reportNode("p", "No evidence references recorded.", section);
     }
-    reportNode("h4", "MITRE ATT&CK — phase metadata", section);
+    reportNode("h4", "MITRE ATT&CK — technique metadata", section);
     reportMitre(section, reportTechniques({phases: [phase]}));
     if (!groundTruth) return;
     const raw = reportNode("details", null, section);
@@ -3173,7 +3256,7 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
     }
     reportMetric(metrics, "MITRE techniques mapped", techniques.length);
     reportNode("h3", "Attack timeline", detail);
-    reportNode("p", "Select a recorded phase to read its analysis. Status describes the phase run; it does not confirm every action succeeded.", detail);
+    reportNode("p", "Select a recorded Attack Technique to read its analysis. Status describes the technique run; it does not confirm every action succeeded.", detail);
     const timeline = reportNode("div", null, detail);
     timeline.className = "report-timeline";
     const phases = reportArray(report.phases);
@@ -3198,13 +3281,13 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
         reportNode("strong", `${phase.id} · ${phase.name}`, button);
         reportBadge(button, phase.status);
         reportNode("small", `${phase.started || "No recorded start"} → ${phase.ended || "No recorded end"}`, button);
-        if (phase.absent) reportNode("small", "No phase record in this report", button);
+        if (phase.absent) reportNode("small", "No technique record in this report", button);
         button.disabled = !!phase.absent;
         button.addEventListener("click", () => selectPhase(phase, button));
         buttons.push(button);
     });
     reportNode("h3", "MITRE ATT&CK summary", detail);
-    reportNode("p", "Phase metadata mappings describe relevant techniques; they do not prove every technique executed or succeeded. Verify the evidence below.", detail);
+    reportNode("p", "Attack Technique metadata mappings describe relevant techniques; they do not prove every technique executed or succeeded. Verify the evidence below.", detail);
     reportMitre(detail, techniques);
     reportNode("h3", "Affected assets", detail);
     if (groundTruth) {
@@ -3217,12 +3300,12 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
         const inventory = report.inventory || report.evidence?.inventory;
         reportTable(detail, ["Host", "Hostname"], reportArray(inventory?.hosts).map(a => [a.ip || a.host, a.hostname || "Unavailable"]));
     }
-    reportNode("h3", "Phase analysis", detail);
+    reportNode("h3", "Attack Technique analysis", detail);
     detail.appendChild(phaseDetail);
     const previous = ordered.findIndex(p => !p.absent && p.id === selectedPhase);
     const first = previous >= 0 ? previous : ordered.findIndex(p => !p.absent);
     if (first >= 0) selectPhase(ordered[first], buttons[first]);
-    else reportNode("p", "No phase records available.", phaseDetail);
+    else reportNode("p", "No technique records available.", phaseDetail);
     if (groundTruth) {
     const raw = reportNode("details", null, detail);
     raw.className = "report-raw";
@@ -3445,6 +3528,7 @@ async function initialize() {
         await loadConfiguration();
         await loadPhases();
         await loadScenarios();
+        MrnUI.refreshDashboard();
 
         await refreshStatus();
         await refreshInventory();
@@ -3511,22 +3595,22 @@ document.addEventListener(
         if (!data.active) node(root, 'p', 'No active execution', 'muted');
         const fields = node(root, 'dl', undefined, 'overview-fields');
         const pair = (label, value) => {node(fields, 'dt', label); node(fields, 'dd', value);};
-        pair({campaign: 'Built-in campaign', custom: 'Custom scenario', phase: 'Standalone phase'}[execution.type] || 'Execution', `${execution.name || execution.id} · ${execution.id}`);
+        pair({campaign: 'Built-in campaign', custom: 'Custom scenario', phase: 'Standalone Attack Technique'}[execution.type] || 'Execution', `${execution.name || execution.id} · ${execution.id}`);
         pair('Execution profile', {normal: 'Normal', slow: 'Slow', custom: 'Custom'}[execution.profile?.mode] || 'Normal');
         pair('Started', data.started ? new Date(data.started).toLocaleString() : 'Unavailable');
         pair(data.active ? 'Elapsed' : 'Recorded elapsed', duration(data.elapsed_seconds));
         if (data.planned_seconds) pair('Target / planned duration', `${duration(data.planned_seconds)} · best-effort`);
         pair('Triggered by', execution.trigger === 'scheduler' ? `Scheduler · ${execution.schedule_id || 'reference unavailable'}` : 'Manual');
-        if (data.current_phase) pair('Current phase', `P${data.current_phase.id} · ${data.current_phase.name}`);
-        else if (data.active) pair('Current phase', 'Preparing / waiting for phase state');
-        if (data.next_phase) pair('Next planned phase', `P${data.next_phase.id} · ${data.next_phase.name}`);
+        if (data.current_phase) pair('Current attack technique', `P${data.current_phase.id} · ${data.current_phase.name}`);
+        else if (data.active) pair('Current attack technique', 'Preparing / waiting for attack technique state');
+        if (data.next_phase) pair('Next planned attack technique', `P${data.next_phase.id} · ${data.next_phase.name}`);
         const progress = data.progress;
         if (progress?.total) {
-            node(root, 'p', `${progress.percent}% · ${progress.complete}/${progress.total} executable phases complete`);
+            node(root, 'p', `${progress.percent}% · ${progress.complete}/${progress.total} executable attack techniques complete`);
             const bar = node(root, 'progress'); bar.max = 100; bar.value = progress.percent;
-            bar.setAttribute('aria-label', 'Progress by completed phases');
+            bar.setAttribute('aria-label', 'Progress by completed attack techniques');
         }
-        node(root, 'p', 'Progress reflects phase states. Timing and planned windows are best-effort; actual runtime may extend.', 'muted');
+        node(root, 'p', 'Progress reflects attack technique states. Timing and planned windows are best-effort; actual runtime may extend.', 'muted');
         const timeline = node(root, 'ol', undefined, 'overview-timeline');
         (data.timeline || []).forEach(phase => {
             const row = node(timeline, 'li');

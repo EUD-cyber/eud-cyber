@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 # ATTACK_ID="17"
+# ATTACK_DESCRIPTION="Archive marker-verified synthetic finance or engineering files for downstream staging."
+# ATTACK_TEACHING_PURPOSE="Follow collection into archive creation and later exfiltration."
+# ATTACK_DETECTION_FOCUS="Synthetic file reads|Archive creation|Staged-data correlation"
+# ATTACK_PLATFORMS="Windows|Linux"
+# ATTACK_PREREQUISITES="Authenticated compatible remote access and fixed marker-verified exercise datasets."
+# ATTACK_TARGET_TYPE="Synthetic exercise datasets"
+# ATTACK_CLEANUP="Archives are retained for P05/P06. Cleanup removes the selected marker-verified archive."
 # ATTACK_NAME="Collection / Archive"
 # ATTACK_ALIAS="collection"
 # ATTACK_STANDALONE="true"

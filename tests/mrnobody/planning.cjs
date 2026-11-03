@@ -105,12 +105,12 @@ const text = root => walk(root).map(n => n.textContent || '').join('\n');
 const set = (label,value,root=body()) => change(field(root,label),value);
 const next = () => click(body(),'Next');
 const back = () => click(body(),'Back');
-const phaseRows = () => body().children.filter(n=>n.className==='planning-row' && n.children.some(c=>c.tag==='span' && /^P\d\d ·/.test(c.textContent)));
+const phaseRows = () => walk(body()).filter(n=>n.className==='planning-row' && n.children.some(c=>c.tag==='span' && /^P\d\d ·/.test(c.textContent)));
 const row = id => phaseRows().find(n=>text(n).includes('P'+id+' ·'));
 const ids = () => phaseRows().map(n=>n.children.find(c=>c.tag==='span').textContent.slice(1,3));
 const error = () => walk(body()).find(n=>n.className==='planning-error').textContent;
 const title = () => body().children[0].textContent;
-const add = async id => {set('Add phase',id);await click(body(),'Add');};
+const add = async id => {set('Add Attack Technique',id);await click(body(),'Add');};
 async function select(mode='auto') {context.window.MrnPlanning.newDraft();await next();if(mode==='fixed')set('Targets','fixed');await next();}
 async function review() {while(textButton(body(),'Next')) {await next();assert.equal(error(),'');}}
 async function main() {

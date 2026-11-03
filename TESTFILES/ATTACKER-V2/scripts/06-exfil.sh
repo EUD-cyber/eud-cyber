@@ -24,6 +24,13 @@ set -u
 # ============================================================
 
 # ATTACK_ID="06"
+# ATTACK_DESCRIPTION="Transfer synthetic staged training data to the configured incident receiver."
+# ATTACK_TEACHING_PURPOSE="Correlate source files with outbound transfers and receiver evidence."
+# ATTACK_DETECTION_FOCUS="Outbound connections|Synthetic file transfer|Receiver events"
+# ATTACK_PLATFORMS="Linux|Windows"
+# ATTACK_PREREQUISITES="Authenticated remote access and a synthetic staging file; auto mode uses P03 and P05 state."
+# ATTACK_TARGET_TYPE="Staged synthetic files"
+# ATTACK_CLEANUP="Transfer evidence and receiver artifacts are retained; no automatic source-file restore is provided."
 # ATTACK_NAME="Exfiltration"
 # ATTACK_ALIAS="exfil"
 # ATTACK_STANDALONE="true"

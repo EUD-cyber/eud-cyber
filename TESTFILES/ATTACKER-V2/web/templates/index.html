@@ -23,6 +23,7 @@
 
 
 <body>
+<a class="skip-link" href="#mainContent">Skip to content</a>
 
 <!-- ========================================================
      HEADER
@@ -33,7 +34,7 @@
     <div class="header-left">
 
         <div class="logo-box">
-            NM
+            MN
         </div>
 
         <div>
@@ -43,7 +44,7 @@
             </h1>
 
             <div class="subtitle">
-                MrNobody Incident Platform
+                Cyber range · Operator workspace
             </div>
 
         </div>
@@ -96,72 +97,15 @@
         </div>
 
 
-        <nav class="sidebar-nav">
-            <button
-                class="nav-item nav-active"
-                type="button"
-                data-page="dashboard"
-            >
-                <span class="nav-icon">⌂</span>
-                <span>Dashboard</span>
-            </button>
-
-            <button
-                class="nav-item"
-                type="button"
-                data-page="campaigns"
-            >
-                <span class="nav-icon">▱</span>
-                <span>Campaigns</span>
-            </button>
-
-            <button
-                class="nav-item"
-                type="button"
-                data-page="scenarios"
-            >
-                <span class="nav-icon">⬡</span>
-                <span>Scenarios</span>
-            </button>
-
-            <button
-                class="nav-item"
-                type="button"
-                data-page="phases"
-            >
-                <span class="nav-icon">◆</span>
-                <span>Phases</span>
-            </button>
-
-            <button class="nav-item" type="button" data-page="schedules"><span class="nav-icon">◷</span><span>Schedules</span></button>
-
-            <button
-                class="nav-item"
-                type="button"
-                data-page="inventory"
-            >
-                <span class="nav-icon">▤</span>
-                <span>Inventory / State</span>
-            </button>
-
-            <button
-                class="nav-item"
-                type="button"
-                data-page="reports"
-            >
-                <span class="nav-icon">▥</span>
-                <span>Reports</span>
-            </button>
-
-            <button
-                class="nav-item"
-                type="button"
-                data-page="system"
-            >
-                <span class="nav-icon">⚙</span>
-                <span>System</span>
-            </button>
-        </nav>
+        <nav class="sidebar-nav" aria-label="Main navigation">
+<button class="nav-item nav-active" type="button" data-page="dashboard"><span class="nav-icon" aria-hidden="true">⌂</span><span>Dashboard</span></button>
+<button class="nav-item" type="button" data-page="phases"><span class="nav-icon" aria-hidden="true">◆</span><span>Attack Techniques</span></button>
+<button class="nav-item" type="button" data-page="scenarios"><span class="nav-icon" aria-hidden="true">⬡</span><span>Scenarios</span></button>
+<button class="nav-item" type="button" data-page="schedules"><span class="nav-icon" aria-hidden="true">◷</span><span>Scheduler</span></button>
+<button class="nav-item" type="button" data-page="reports"><span class="nav-icon" aria-hidden="true">▥</span><span>Reports</span></button>
+<button class="nav-item" type="button" data-page="mitre"><span class="nav-icon" aria-hidden="true">⊞</span><span>MITRE ATT&CK</span></button>
+<button class="nav-item" type="button" data-page="system"><span class="nav-icon" aria-hidden="true">⚙</span><span>Settings</span></button>
+</nav>
 
 
         <div class="sidebar-footer">
@@ -187,7 +131,7 @@
          PAGE CONTENT
     ===================================================== -->
 
-    <main class="main-container">
+    <main id="mainContent" class="main-container" tabindex="-1">
 
         <section
             id="page-dashboard"
@@ -201,25 +145,11 @@
     <section class="panel intro-panel">
 
         <h2>
-            Dynamic Incident Simulation
+            Your cyber range, in focus
         </h2>
 
-        <p>
-            Full incident simulation:
-            Recon → Web Discovery → Initial Access →
-            Wordlist Authentication → Internal Discovery →
-            Data Staging → Exfiltration → Impact
-        </p>
-
-        <p class="muted">
-            Targets are discovered dynamically from the
-            CyberLab network. Linux hosts are only considered
-            compromised when the configured SSH credentials
-            successfully authenticate. Windows hosts can be
-            identified and authenticated using the configured
-            Windows / RDP credentials.
-        </p>
-
+        <p>Build realistic lab incidents. Explore attack techniques, orchestrate scenarios and investigate the evidence.</p>
+        <p class="muted">MrNobody · Incident simulation and hands-on investigation</p>
     </section>
 
 
@@ -269,80 +199,15 @@
 
 
     <div class="dashboard-kpi-grid">
-
-        <div class="dashboard-kpi-card">
-
-            <div class="dashboard-kpi-label">
-                Web Service
-            </div>
-
-            <div class="dashboard-kpi-value dashboard-good">
-                ACTIVE
-            </div>
-
-        </div>
-
-
-        <div class="dashboard-kpi-card">
-
-            <div class="dashboard-kpi-label">
-                Nginx
-            </div>
-
-            <div class="dashboard-kpi-value dashboard-good">
-                ACTIVE
-            </div>
-
-        </div>
-
-
-        <div class="dashboard-kpi-card">
-
-            <div class="dashboard-kpi-label">
-                HTTPS Health
-            </div>
-
-            <div class="dashboard-kpi-value dashboard-good">
-                HEALTHY
-            </div>
-
-        </div>
-
-
-        <div class="dashboard-kpi-card">
-
-            <div class="dashboard-kpi-label">
-                Installed Phases
-            </div>
-
-            <div
-                id="dashboardPhaseCount"
-                class="dashboard-kpi-value"
-            >
-                0
-            </div>
-
-        </div>
-
-
-        <div class="dashboard-kpi-card">
-
-            <div class="dashboard-kpi-label">
-                Campaign Status
-            </div>
-
-            <div
-                id="dashboardCampaignStatus"
-                class="dashboard-kpi-value"
-            >
-                IDLE
-            </div>
-
-        </div>
-
+        <div class="dashboard-kpi-card"><div class="dashboard-kpi-label">Attack Techniques</div><div id="dashboardPhaseCount" class="dashboard-kpi-value">—</div><span class="muted">Installed catalog</span></div>
+        <div class="dashboard-kpi-card"><div class="dashboard-kpi-label">Scenarios</div><div id="dashboardScenarioCount" class="dashboard-kpi-value">—</div><span class="muted">Built-in and custom</span></div>
+        <div class="dashboard-kpi-card"><div class="dashboard-kpi-label">Scheduled jobs</div><div id="dashboardScheduleCount" class="dashboard-kpi-value">—</div><span id="dashboardScheduleEnabled" class="muted">Loading schedules</span></div>
+        <div class="dashboard-kpi-card"><div class="dashboard-kpi-label">Application API</div><div id="dashboardHealth" class="dashboard-kpi-value">—</div><span class="muted">Verified by /api/health</span></div>
+        <div class="dashboard-kpi-card"><div class="dashboard-kpi-label">Execution status</div><div id="dashboardCampaignStatus" class="dashboard-kpi-value">—</div><span class="muted">Live execution state</span></div>
     </div>
-
 </section>
+<section class="panel"><div class="panel-header"><h2>Recent incidents</h2><span class="panel-tag">Recorded activity</span></div><div id="recentIncidents" aria-live="polite">Loading incident history…</div></section>
+
 
 
 <!-- ====================================================
@@ -369,9 +234,9 @@
         <button
             class="button button-start dashboard-action"
             type="button"
-            data-page-link="campaigns"
+            data-page-link="scenarios"
         >
-            RUN CAMPAIGN
+            Start Scenario
         </button>
 
 
@@ -380,7 +245,7 @@
             type="button"
             data-page-link="phases"
         >
-            RUN PHASE
+            Explore Attack Techniques
         </button>
 
 
@@ -835,7 +700,7 @@
             <h2>Campaign output</h2>
             <button class="button button-small" type="button" data-refresh-log>REFRESH</button>
         </div>
-        <p class="muted">Shared execution log: campaigns, scenarios, phases and updates.</p>
+        <p class="muted">Shared execution log: campaigns, scenarios, attack techniques and updates.</p>
         <p class="muted" data-log-status role="status">Connecting to live output...</p>
         <pre id="campaignsLog" class="campaign-log" data-live-log aria-label="Campaign output">Waiting for output...</pre>
     </section>
@@ -859,7 +724,7 @@
         <div class="panel-header">
 
             <h2>
-                Attack Phases
+                Attack Techniques
             </h2>
 
             <span class="panel-tag">
@@ -869,11 +734,11 @@
         </div>
 
         <p>
-            Execute individual attack phases against selected targets.
+            Execute individual attack techniques against selected targets.
         </p>
 
         <p class="muted">
-            Phase definitions, parameters and MITRE mappings are loaded
+            Attack Technique definitions, parameters and MITRE mappings are loaded
             dynamically from the attack scripts.
         </p>
 
@@ -885,16 +750,26 @@
         <div class="panel-header">
 
             <h2>
-                Available Phases
+                Technique catalog
             </h2>
 
             <span class="panel-tag">
-                P01 through P14
+                Registry metadata
             </span>
 
         </div>
 
 
+        <div class="catalog-filters" aria-label="Attack Technique filters">
+            <label>Search<input id="techniqueSearch" type="search" placeholder="Name, ID, MITRE or description"></label>
+            <label>MITRE tactic<select id="techniqueTactic"><option value="">All tactics</option></select></label>
+            <label>Platform<select id="techniquePlatform"><option value="">All platforms</option></select></label>
+            <label>Supported mode<select id="techniqueMode"><option value="">All modes</option></select></label>
+            <label>Readiness<select id="techniqueReadiness"><option value="">All statuses</option></select></label>
+        </div>
+        <p id="techniqueResultCount" class="muted" role="status"></p>
+        <details class="tactic-overview" open><summary>MITRE tactic overview</summary><div id="catalogTactics" class="tactic-counts"></div></details>
+        <div class="catalog-workspace">
         <div
             id="phaseGrid"
             class="phase-grid"
@@ -904,7 +779,7 @@
                 <div class="phase-info">
 
                     <strong>
-                        Loading phases...
+                        Loading attack techniques...
                     </strong>
 
                     <span>
@@ -918,21 +793,22 @@
 
 
         <div
-            id="phaseDetail"
-            class="phase-detail hidden"
+            id="phaseDetail" tabindex="-1" aria-label="Attack Technique detail"
+            class="phase-detail"
         ></div>
+        </div>
 
     </section>
 
 
     <section class="panel">
         <div class="panel-header">
-            <h2>Phase output</h2>
+            <h2>Attack Technique output</h2>
             <button class="button button-small" type="button" data-refresh-log>REFRESH</button>
         </div>
-        <p class="muted">Shared execution log: campaigns, scenarios, phases and updates.</p>
+        <p class="muted">Shared execution log: campaigns, scenarios, attack techniques and updates.</p>
         <p class="muted" data-log-status role="status">Connecting to live output...</p>
-        <pre id="phasesLog" class="campaign-log" data-live-log aria-label="Phase output">Waiting for output...</pre>
+        <pre id="phasesLog" class="campaign-log" data-live-log aria-label="Attack Technique output">Waiting for output...</pre>
     </section>
 
 </section>
@@ -989,7 +865,7 @@
         </div>
 
 
-<div class="panel" id="customLibrary"></div><button id="newCustomScenario" class="button" type="button">Custom Scenario Builder</button>
+<div id="customLibrary"></div><button id="newCustomScenario" class="button" type="button">Custom Scenario Builder</button>
         <div
             id="scenarioGrid"
             class="phase-grid"
@@ -1037,7 +913,7 @@
         >
 
             <p class="muted">
-                Select a scenario to inspect its phases,
+                Select a scenario to inspect its attack techniques,
                 configuration and execution options.
             </p>
 
@@ -1051,7 +927,7 @@
             <h2>Scenario / campaign output</h2>
             <button class="button button-small" type="button" data-refresh-log>REFRESH</button>
         </div>
-        <p class="muted">Shared execution log: campaigns, scenarios, phases and updates.</p>
+        <p class="muted">Shared execution log: campaigns, scenarios, attack techniques and updates.</p>
         <p class="muted" data-log-status role="status">Connecting to live output...</p>
         <pre id="scenariosLog" class="campaign-log" data-live-log aria-label="Scenario / campaign output">Waiting for output...</pre>
     </section>
@@ -1088,7 +964,7 @@
 
                 <p class="muted">
                     Hosts are populated dynamically from discovery,
-                    access, exfiltration and impact phases.
+                    access, exfiltration and impact attack techniques.
                 </p>
 
             </section>
@@ -1313,7 +1189,7 @@
         </p>
 
         <p class="muted">
-            Reports combine campaign state, phase execution,
+            Reports combine campaign state, attack technique execution,
             discovered hosts, compromise evidence, exfiltration and impact.
         </p>
 
@@ -1405,13 +1281,13 @@
 
 
         <div class="report-filters" aria-label="Report history filters">
-            <label>Report type<select id="reportTypeFilter"><option value="">All types</option><option value="campaign">Campaign</option><option value="standalone_phase">Standalone phase</option></select></label>
+            <label>Report type<select id="reportTypeFilter"><option value="">All types</option><option value="campaign">Campaign</option><option value="standalone_phase">Standalone attack technique</option></select></label>
             <label>Status<select id="reportStatusFilter"><option value="">All statuses</option><option value="complete">Complete</option><option value="failed">Failed</option><option value="interrupted">Interrupted</option></select></label>
-            <label>Recorded phase<select id="reportPhaseFilter"><option value="">All phases</option><option value="01">Phase 01</option><option value="02">Phase 02</option><option value="03">Phase 03</option><option value="08">Phase 08</option><option value="04">Phase 04</option><option value="05">Phase 05</option><option value="06">Phase 06</option><option value="07">Phase 07</option><option value="09">Phase 09</option><option value="10">Phase 10</option><option value="11">Phase 11</option><option value="12">Phase 12</option><option value="13">Phase 13</option><option value="14">Phase 14</option></select></label>
+            <label>Recorded Attack Technique<select id="reportPhaseFilter"><option value="">All Attack Techniques</option></select></label>
             <label>Incident ID or host<input id="reportSearch" type="search" placeholder="Search ID, IP or hostname"></label>
         </div>
         <p id="reportFilterNotice" class="muted" aria-live="polite">History totals above cover all reports. Filters apply to the list below.</p>
-        <p class="muted">Phase filters match recorded phases, including skipped and not run. Host search uses recorded asset evidence. Totals above cover all history.</p>
+        <p class="muted">Attack Technique filters match recorded attack techniques, including skipped and not run. Host search uses recorded asset evidence. Totals above cover all history.</p>
         <div class="table-container">
 
             <table class="inventory-table">
@@ -1496,7 +1372,7 @@
 
             <p class="muted">
                 Select an incident report to inspect evidence,
-                phase state and collected artifacts.
+                attack technique state and collected artifacts.
             </p>
 
         </div>
@@ -1521,7 +1397,7 @@
         <div class="panel-header">
 
             <h2>
-                System
+                Settings
             </h2>
 
             <span class="panel-tag">
@@ -1531,11 +1407,11 @@
         </div>
 
         <p>
-            Manage MrNobody services, updates and platform health.
+            Manage supported updates and inspect lab runtime information.
         </p>
 
         <p class="muted">
-            System information and service status will be expanded here.
+            View application health, supported update controls and recorded runtime inventory.
         </p>
 
     </section>
@@ -1591,48 +1467,9 @@
         </div>
 
 
-        <div class="stats-grid">
-
-            <div class="stat-card">
-
-                <div class="stat-number">
-                    ACTIVE
-                </div>
-
-                <div class="stat-label">
-                    Web Service
-                </div>
-
-            </div>
-
-
-            <div class="stat-card">
-
-                <div class="stat-number">
-                    ACTIVE
-                </div>
-
-                <div class="stat-label">
-                    Nginx
-                </div>
-
-            </div>
-
-
-            <div class="stat-card">
-
-                <div class="stat-number">
-                    HTTPS
-                </div>
-
-                <div class="stat-label">
-                    Transport
-                </div>
-
-            </div>
-
-        </div>
-
+        <div id="settingsRuntime" aria-live="polite">Loading application health…</div>
+        <p class="muted">Application health is measured by the API. Nginx, TLS and target reachability are not independently monitored here.</p>
+        <div class="dashboard-actions"><button type="button" class="button" data-page-link="inventory">Lab inventory / runtime state</button><button type="button" class="button" data-page-link="campaigns">Full Incident configuration</button></div>
     </section>
 
 
@@ -1641,7 +1478,7 @@
             <h2>Update / system output</h2>
             <button class="button button-small" type="button" data-refresh-log>REFRESH</button>
         </div>
-        <p class="muted">Shared execution log: campaigns, scenarios, phases and updates.</p>
+        <p class="muted">Shared execution log: campaigns, scenarios, attack techniques and updates.</p>
         <p class="muted" data-log-status role="status">Connecting to live output...</p>
         <pre id="systemLog" class="campaign-log" data-live-log aria-label="Update / system output">Waiting for output...</pre>
     </section>
@@ -1649,8 +1486,9 @@
 </section>
 
             
-<section id="page-builder" class="app-page"><section class="panel"><h1>Custom Scenario Builder</h1><div id="builderBody"></div></section></section>
-<section id="page-schedules" class="app-page"><section class="panel"><h1>Schedules</h1><p class="muted">Schedules survive restarts. Missed recurring runs coalesce into one execution. Busy runs are skipped. Temporary credentials must be supplied again after a service restart.</p><div id="scheduleList"></div><div id="scheduleEditor"></div></section></section>
+<section id="page-mitre" class="app-page"><section class="panel intro-panel"><p class="eyebrow">Registry mappings</p><h1>MITRE ATT&amp;CK</h1><p>Implementation / mapping coverage</p><p class="muted">Explore tactics and techniques mapped by the installed MrNobody registry. Counts describe implemented mappings, not measured detection effectiveness. A single MrNobody Attack Technique may map to several ATT&amp;CK techniques.</p><a href="https://attack.mitre.org/tactics/enterprise/" target="_blank" rel="noopener noreferrer">Official Enterprise tactics ↗</a></section><section class="panel"><div id="mitreSummary" class="report-metrics"></div><div id="mitreCoverage" class="mitre-coverage" aria-live="polite">Loading registry mappings…</div></section></section>
+<section id="page-builder" class="app-page"><section class="panel"><p class="eyebrow">Scenario workspace</p><h1>Scenario Builder</h1><div id="builderBody"></div></section></section>
+<section id="page-schedules" class="app-page"><section class="panel"><h1>Scheduler</h1><p class="eyebrow">Execution planning</p><p class="muted">Schedules survive restarts. Missed recurring runs coalesce into one execution. Busy runs are skipped. Temporary credentials must be supplied again after a service restart.</p><div id="scheduleList"></div><div id="scheduleEditor"></div></section></section>
 <div id="planningMessage" role="status" aria-live="polite"></div>
     </main>
 
@@ -1664,7 +1502,7 @@
 <footer>
 
     MrNobody Incident Platform
-    · MrNobody Incident Platform
+    · Cyber range workspace
 
 </footer>
 
