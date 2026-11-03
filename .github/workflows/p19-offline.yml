@@ -1,0 +1,19 @@
+name: P19 offline fixture
+on:
+  pull_request:
+    paths:
+      - 'docs/examples/p19_validation.py'
+      - 'tests/mrnobody/p19_offline.py'
+      - '.github/workflows/p19-offline.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests/mrnobody -p p19_offline.py
