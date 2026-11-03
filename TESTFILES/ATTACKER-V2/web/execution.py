@@ -39,6 +39,8 @@ def project(value):
     profile = value.get('profile') if isinstance(value.get('profile'), dict) else {}
     return {'type': value.get('type') if value.get('type') in {'campaign', 'custom', 'phase'} else 'campaign',
             'id': str(value.get('id', ''))[:160], 'name': str(value.get('name', ''))[:160],
+            'version': value.get('version') if value.get('version') == 1 else None,
+            'preset': {k: value['preset'][k] for k in ('id', 'version', 'name') if k in value['preset']} if isinstance(value.get('preset'), dict) else None,
             'profile': {'mode': profile.get('mode') if profile.get('mode') in {'normal', 'slow', 'custom'} else 'normal',
                         'duration': number(profile.get('duration'))},
             'phases': [{'id': p['id'], 'timing': {k: n for k in ('start_offset', 'duration')

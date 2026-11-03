@@ -7,7 +7,7 @@ import uuid
 from planning_api import install, launch, BusyError
 from execution import snapshot
 from scheduler import current_schedule
-from scenario_model import needs_password, technique_metadata, profile as scenario_profile
+from scenario_model import needs_password, technique_metadata, profile as scenario_profile, preset_cards
 import json
 import os
 import signal
@@ -186,9 +186,9 @@ def find_scenario(
     Find an installed scenario by SCENARIO_ID.
     """
 
-    custom = planning.custom(scenario_id)
+    custom = planning.custom(scenario_id) or planning.preset(scenario_id)
     if custom is not None:
-        return {"path": SCENARIO_DIR / "full-incident.sh", "metadata": {"SCENARIO_ID": custom["id"], "SCENARIO_NAME": custom["name"]}}
+        return {"path": SCENARIO_DIR / "full-incident.sh", "metadata": {"SCENARIO_ID": custom.get("id", scenario_id), "SCENARIO_NAME": custom["name"]}}
 
     if not SCENARIO_DIR.exists():
         return None
@@ -1124,6 +1124,7 @@ def api_scenarios():
 
     scenarios = [dict(x, custom=True, phases=[p["id"] for p in x["phases"] if p.get("enabled", True)],
                       **schedule_counts(x['id'], 'custom')) for x in planning.store.scenarios()]
+    scenarios.extend(dict(x, **schedule_counts(x['id'], 'campaign')) for x in preset_cards(planning.capabilities()))
 
     if not SCENARIO_DIR.exists():
 

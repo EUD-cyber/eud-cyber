@@ -61,7 +61,11 @@ def report_document(report, view="investigation"):
     report = safe_report(report)
     incident = obj(report.get("incident"))
     phases = [p for p in array(report.get("phases")) if isinstance(p, dict)]
-    phases.sort(key=lambda p: (PHASE_ORDER.index(p.get("id")) if p.get("id") in PHASE_ORDER else len(PHASE_ORDER)))
+    ordered = [p.get('id') for p in obj(report.get('execution')).get('phases', []) if isinstance(p, dict)]
+    if ordered:
+        phases.sort(key=lambda p: ordered.index(p.get('id')) if p.get('id') in ordered else len(ordered))
+    else:
+        phases.sort(key=lambda p: (PHASE_ORDER.index(p.get("id")) if p.get("id") in PHASE_ORDER else len(PHASE_ORDER)))
     full = view == "ground-truth"
     blocks = []
     def add(kind, content, url=None):
@@ -72,7 +76,7 @@ def report_document(report, view="investigation"):
         # One paragraph per JSON line allows long appendices to split across pages.
         for line in json.dumps(value, ensure_ascii=False, indent=2).splitlines():
             add("code", line)
-    report_type = ("Standalone phase " + text(report.get("phase_id"))) if report.get("report_type") == "standalone_phase" else "Full Incident"
+    report_type = ("Standalone phase " + text(report.get("phase_id"))) if report.get("report_type") == "standalone_phase" else (incident.get("scenario_name") or "Full Incident")
     add("h1", "MrNobody Incident Report")
     add("p", incident.get("id"))
     add("p", f"{report_type} | {VIEWS[view]}")
@@ -86,6 +90,14 @@ def report_document(report, view="investigation"):
                          ("Status", incident.get("status")),
                          ("Start", incident.get("started")), ("End", incident.get("ended"))]:
         add("p", f"{label}: {text(value)}")
+    origin = obj(execution.get("preset"))
+    if origin:
+        add("p", f"Preset: {text(origin.get('name'))} ({text(origin.get('id'))}) · version {text(origin.get('version'))}")
+    if execution.get("version"):
+        add("p", f"Scenario version: {text(execution['version'])}")
+    flow = array(execution.get("phases"))
+    if flow:
+        add("p", "Ordered Attack Technique flow: " + " → ".join("P" + text(p.get("id")) for p in flow if isinstance(p, dict)))
     add("p", "Recorded phase status describes the run, not proof that every action succeeded. Missing evidence is not proof of an unaffected asset.")
     heading("Summary metrics")
     summary = obj(report.get("summary"))

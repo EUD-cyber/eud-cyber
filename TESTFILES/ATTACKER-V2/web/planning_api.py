@@ -10,7 +10,7 @@ from pathlib import Path
 
 from flask import jsonify, request
 from reports import read_metadata
-from scenario_model import catalogue, keys, plan, profile, validate
+from scenario_model import catalogue, keys, plan, profile, validate, preset_definition
 from scheduler import Scheduler, Store, timestamp
 
 
@@ -74,6 +74,12 @@ class Planning:
     def custom(self, sid):
         return next((s for s in self.store.scenarios() if s['id'] == sid), None)
 
+    def preset(self, sid):
+        try:
+            return preset_definition(sid, self.capabilities())
+        except (ValueError, KeyError):
+            return None  # Missing or incompatible runtime capabilities.
+
     def log(self, sid, status):
         self.m.LOG_DIR.mkdir(parents=True, exist_ok=True)
         with self.m.CAMPAIGN_LOG.open('a', encoding='utf-8') as handle:
@@ -117,6 +123,9 @@ class Planning:
                 raise ValueError('Built-in scenario not found')
             if set(spec) & {'parameters', 'timing', 'target_mode'}:
                 raise ValueError('Built-in campaigns do not accept phase overrides')
+            preset = self.preset(spec['id'])
+            if preset is not None:
+                validate(preset, self.capabilities())
             if p['mode'] != 'normal' and spec['id'] != 'full-incident':
                 raise ValueError('This campaign has no structured timing adapter')
             if p['mode'] == 'custom':
@@ -124,7 +133,7 @@ class Planning:
         return spec
 
     def definition(self, sid, data):
-        definition = self.custom(sid)
+        definition = self.custom(sid) or self.preset(sid)
         if definition is None and 'profile' in data:
             scenario = self.m.find_scenario(sid)
             if sid != 'full-incident':
@@ -206,6 +215,14 @@ def install(module):
     @app.route('/api/planning/capabilities')
     def planning_capabilities():
         return jsonify({'version': 1, 'phases': list(service.capabilities().values())})
+
+    @app.route('/api/scenario-presets/<sid>')
+    @guarded
+    def scenario_preset(sid):
+        definition = service.preset(sid)
+        if definition is None:
+            raise ValueError('Preset not found')
+        return jsonify(definition)
 
     @app.route('/api/custom-scenarios', methods=['GET', 'POST'])
     @guarded

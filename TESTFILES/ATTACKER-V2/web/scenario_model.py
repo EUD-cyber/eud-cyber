@@ -180,11 +180,19 @@ def profile(value):
     return {'mode': mode, 'duration': duration}
 
 
-def validate(value, capabilities):
-    keys(value, ['version', 'id', 'name', 'description', 'target_mode', 'phases', 'profile'], 'scenario')
+def validate(value, capabilities, *, template=False):
+    keys(value, ['version', 'id', 'name', 'description', 'target_mode', 'phases', 'profile', 'preset', 'teaching_objective'], 'scenario')
     if value.get('version') != VERSION:
         raise ValueError('Unsupported scenario version')
     result = copy.deepcopy(value)
+    if 'preset' in value:
+        origin = value['preset']
+        keys(origin, ['id', 'version', 'name'], 'preset origin')
+        if str(origin.get('id', '')).removeprefix('preset-') not in PRESETS or origin.get('version') != VERSION:
+            raise ValueError('Unknown preset origin or version')
+        result['preset']['name'] = PRESETS[origin['id'].removeprefix('preset-')][0]
+    if 'teaching_objective' in value:
+        result['teaching_objective'] = text(value['teaching_objective'], 2000)
     result['name'] = text(value.get('name'))
     description = value.get('description', '')
     result['description'] = text(description, 2000) if description else ''
@@ -285,7 +293,7 @@ def validate(value, capabilities):
             raise ValueError('Maximum delay must be >= minimum delay')
         if phase.get('enabled', True):
             enabled.append(pid)
-            if mode == 'fixed':
+            if mode == 'fixed' and not template:
                 required = required_fields(pid)
                 if not required <= set(params):
                     raise ValueError(f'Phase {pid} needs: {", ".join(sorted(required))}')
@@ -303,6 +311,10 @@ def validate(value, capabilities):
     for first, later in [('14', '18'), ('18', '16'), ('18', '04'), ('18', '17'), ('18', '05'), ('18', '06'), ('18', '07'), ('02', '15'), ('15', '03'), ('10', '16'), ('11', '16'), ('12', '16'), ('13', '16'), ('14', '16'), ('16', '17'), ('17', '05'), ('17', '06'), ('17', '07'), ('16', '05'), ('16', '06'), ('16', '07')]:
         if first in positions and later in positions and positions[first] > positions[later]:
             raise ValueError(f'Phase {first} must precede {later}')
+    if not template:
+        missing = preset_requirements(result)
+        if missing:
+            raise ValueError('Needs configuration: ' + '; '.join(missing))
     return result
 
 
@@ -338,3 +350,110 @@ def needs_password(definition, windows=False):
         if protocol.startswith(('rdp', 'winrm')) == windows:
             return True
     return False
+
+# These are scenario-model definitions, not an independent runner. Ordering is
+# deliberate; catalogue validation below rejects registry/dependency drift.
+PRESETS = {
+    'recon-only': ('Recon Only', 'Discover private lab hosts and identify web services.',
+                   'Distinguish host discovery from service identification without authenticated activity.',
+                   '01 02'),
+    'credential-attack': ('Credential Attack', 'Validate supplied lab credentials, then inspect synthetic credential telemetry.',
+                          'Correlate successful authentication with a bounded synthetic credential action. No password guessing is enabled.',
+                          '01 03 12'),
+    'windows-domain-compromise': ('Windows Domain Compromise', 'Exercise explicit Windows/DC targets and reversible host persistence.',
+                                 'Correlate AD account/group changes, host persistence, synthetic credential access and native-tool telemetry. AD changes require separate lab rollback.',
+                                 '01 03 09 11 12 13'),
+    'c2-detection': ('C2 Detection Exercise', 'Observe bounded HTTP and DNS marker check-ins after authenticated access.',
+                      'Compare HTTP beacon and reserved-zone DNS detections using a private non-forwarding lab resolver.',
+                      '01 03 14 18'),
+    'web-attack': ('Web Attack', 'Discover web services and exercise the fingerprinted MrNobody Web Lab.',
+                   'Correlate dedicated synthetic SQL injection requests with application and web telemetry; this does not grant host access.',
+                   '01 02 15'),
+    'collection-exfiltration': ('Collection + Exfiltration', 'Archive synthetic exercise data, stage it and transfer the staged output.',
+                                'Follow marker-verified collection artifacts through shared staging state into transfer evidence.',
+                                '01 03 17 05 06'),
+    'ransomware-style': ('Ransomware-style Incident', 'Exercise a synthetic access-to-impact incident with bounded marker beacons.',
+                         'Investigate persistence, synthetic collection, staging, transfer and impact artifacts without encrypting existing files.',
+                         '01 03 11 12 14 16 17 05 06 07'),
+    'slow-intrusion': ('Slow Intrusion', 'Spread a representative synthetic incident across a four-hour target window.',
+                       'Correlate sparse discovery and post-authentication events using the engine Slow Campaign offsets. Target duration is best effort.',
+                       '01 02 03 11 12 14 16 04 17 05 06 07'),
+    'full-attack-incident': ('Full ATT&CK-style Incident', 'A broad coherent lab incident from discovery through synthetic impact.',
+                            'Investigate web, authenticated host, persistence, synthetic credential, C2, evasion, collection, transfer and impact evidence. Web activity is a separate branch, not a host exploit.',
+                            '01 02 15 03 11 12 14 18 16 04 17 05 06 07'),
+}
+
+
+def preset_requirements(value):
+    """Non-secret configuration only. Runtime credentials retain their own flow.
+
+    Origin survives cloning so configuration requirements cannot disappear just
+    by saving a template as a custom scenario. Removed techniques need no input.
+    """
+    if not value.get('preset'):
+        return []
+    missing = []
+    for p in value.get('phases', []):
+        if not p.get('enabled', True):
+            continue
+        params = p.get('parameters', {})
+        pid = p['id']
+        if value['target_mode'] == 'fixed':
+            missing.extend(f'P{pid}: {key}' for key in sorted(required_fields(pid)) if not params.get(key))
+        if pid == '09' and value['target_mode'] != 'fixed':
+            missing.append('P09: use Fixed Targets and select a lab DC with AD management rights')
+        if pid == '18' and not params.get('dns_endpoint'):
+            missing.append('P18: private non-forwarding lab DNS endpoint')
+        if pid == '15' and not params.get('target'):
+            missing.append('P15: fingerprinted MrNobody Web Lab target (edit base path/profile for your app)')
+    return missing
+
+
+def preset_definition(sid, capabilities):
+    key = sid.removeprefix('preset-')
+    if sid != 'preset-' + key or key not in PRESETS:
+        return None
+    name, description, objective, flow = PRESETS[key]
+    windows = key == 'windows-domain-compromise'
+    defaults = {
+        '11': {'method': 'scheduled-task' if windows else 'auto', 'action': 'create', 'artifact': 'telemetry'},
+        '12': {'method': 'metadata'},
+        '13': {'behavior': 'encoded-powershell'},
+        '14': {'transport': 'http', 'beacon_interval': 5, 'beacon_jitter': .1, 'beacon_count': 5, 'uri_profile': 'heartbeat'},
+        '15': {'web_profile': 'sqli', 'web_path': '/mrn-lab'},
+        '16': {'behavior': 'config-toggle', 'action': 'run'},
+        '17': {'dataset': 'finance', 'archive_name': 'collection', 'action': 'run'},
+        '18': {'dns_behavior': 'standard', 'dns_domain': 'mrnobody.test', 'dns_pattern': 'mrn-{seq}', 'dns_interval': 5, 'dns_jitter': .1, 'dns_count': 5, 'dns_duration': 60},
+    }
+    phases = []
+    for pid in flow.split():
+        params = copy.deepcopy(defaults.get(pid, {}))
+        if windows and pid != '01':
+            params['protocol'] = 'rdp' if pid == '03' else 'winrm-http'
+            if 'platform' in capabilities[pid]['fields']:
+                params['platform'] = 'windows'
+        phases.append({'id': pid, 'enabled': True, 'parameters': params, 'timing': {}})
+    value = {'version': VERSION, 'name': name, 'description': description, 'target_mode': 'fixed' if windows else 'auto',
+             'profile': {'mode': 'slow', 'duration': 14400} if key == 'slow-intrusion' else {'mode': 'normal', 'duration': 0},
+             'phases': phases, 'teaching_objective': objective, 'preset': {'id': sid, 'version': VERSION}}
+    return validate(value, capabilities, template=True)
+
+
+def preset_cards(capabilities):
+    cards = []
+    for key, (_, _, objective, _) in PRESETS.items():
+        sid = 'preset-' + key
+        try:
+            value = preset_definition(sid, capabilities)
+        except (ValueError, KeyError):
+            # Partial/older installations must not advertise executable presets.
+            continue
+        required = preset_requirements(value)
+        cards.append({'id': sid, 'name': value['name'], 'description': value['description'],
+                      'teaching_objective': objective, 'version': VERSION, 'preset': True, 'read_only': True,
+                      'phases': [p['id'] for p in value['phases']], 'target_mode': value['target_mode'],
+                      'profile': value['profile'], 'required_inputs': required, 'runnable': not required,
+                      'readiness': 'Needs configuration' if required else 'Ready · runtime credentials where required',
+                      'duration_seconds': value['profile']['duration'] or None,
+                      'estimated_seconds': 60 if key == 'c2-detection' else None})
+    return cards

@@ -99,6 +99,10 @@
         return (a === 10 || a === 172 && b >= 16 && b <= 31 || a === 192 && b === 168) &&
             (network ? parts.length <= 2 && (parts.length === 1 || /^\d+$/.test(parts[1]) && Number(parts[1]) >= 24 && Number(parts[1]) <= 32) : parts.length === 1);
     }
+    function presetWarnings() {
+        if (!draft?.preset) return [];
+        return enabled().flatMap(p => p.id === "09" && draft.target_mode !== "fixed" ? ["P09: use Fixed Targets and select a lab DC with AD management rights."] : p.id === "18" && !p.parameters.dns_endpoint ? ["P18: enter a private non-forwarding lab DNS endpoint."] : p.id === "15" && !p.parameters.target ? ["P15: enter the fingerprinted MrNobody Web Lab target and review its base path/profile."] : []);
+    }
     function stepError(index) {
         if (index === 0) {
             if (!draft.name?.trim() || draft.name.length > 160 || /[\x00-\x1f]/.test(draft.name)) return "Enter a name of 1–160 characters without control characters.";
@@ -107,6 +111,7 @@
         if (index === 1 && !["auto", "fixed"].includes(draft.target_mode)) return "Choose Auto Discovery or Fixed Targets.";
         if (index === 2 && (!enabled().length || !validOrder(draft.phases))) return "Enable at least one Attack Technique in a valid dependency order.";
         if (index === 3) {
+            if (presetWarnings().length) return presetWarnings()[0];
             if (commonTarget && !privateAddress(commonTarget)) return "Common Target must be a private lab IPv4 address.";
             for (const p of enabled()) {
                 const cap = capFor(p.id), params = p.parameters;
@@ -170,7 +175,10 @@
         return `${{normal: "Normal", slow: "Slow Campaign", custom: "Custom Timing"}[value.profile.mode]}${span ? " · target / planned span " + durationText(span) : ""}`;
     }
     function review(parent) {
+        presetWarnings().forEach(w => node("p", "Needs configuration: " + w, parent, "planning-error"));
+        if (draft.preset) node("p", `Preset origin: ${draft.preset.id} · version ${draft.preset.version}. Editing saves a custom scenario.`, parent, "muted");
         node("h3", draft.name, parent); node("p", draft.description || "No description", parent);
+        if (draft.teaching_objective) node("p", draft.teaching_objective, parent, "muted");
         node("p", draft.target_mode === "auto" ? "Auto Discovery" : "Custom / Fixed Targets", parent);
         node("p", `Attack Technique flow: ${enabled().map(p => `P${p.id} ${capFor(p.id)?.name}`).join(" → ")}`, parent);
         if (commonTarget) node("p", `Common Target: ${commonTarget}`, parent);
@@ -256,6 +264,7 @@
     }
     function newDraft(definition) {
         draft = definition ? copy(definition) : {version: 1, name: "Custom Incident", description: "", target_mode: "auto", phases: [], profile: {mode: "normal", duration: 0}};
+        if (draft.teaching_objective) draft.teaching_objective = String(draft.teaching_objective);
         draft.schedule = {mode: "now", at: "", interval: 86400};
         autoAdded = new Set(); inherited = new Set(); commonTarget = ""; ensureAuto();
         step = 0; renderBuilder(); showPage("builder");
@@ -494,8 +503,8 @@
         editingSchedule = existing || null;
         const parent = byId("scheduleEditor"); parent.replaceChildren();
         node("h2", existing ? "Edit schedule" : "Schedule an execution", parent);
-        const spec = copy(initial || {type: "campaign", id: scenarios.find(s => !s.custom)?.id || "full-incident", profile: {mode: "normal", duration: 0}});
-        const entries = [...scenarios.map(s => ({value: `${s.custom ? "custom" : "campaign"}:${s.id}`, label: `${s.custom ? "Custom" : "Campaign"} · ${s.name}`})), ...capabilities.filter(c => c.standalone).map(c => ({value: `phase:${c.id}`, label: `Attack Technique P${c.id} · ${c.name}`}))];
+        const spec = copy(initial || {type: "campaign", id: scenarios.find(s => !s.custom && !s.preset)?.id || "full-incident", profile: {mode: "normal", duration: 0}});
+        const entries = [...scenarios.filter(s => !s.preset).map(s => ({value: `${s.custom ? "custom" : "campaign"}:${s.id}`, label: `${s.custom ? "Custom" : "Campaign"} · ${s.name}`})), ...capabilities.filter(c => c.standalone).map(c => ({value: `phase:${c.id}`, label: `Attack Technique P${c.id} · ${c.name}`}))];
         field(parent, "Execution", `${spec.type}:${spec.id}`, value => {const [type, id] = value.split(":"); scheduleEditor({type, id, profile: {mode: "normal", duration: 0}}, existing);}, entries);
         if (spec.type !== "custom") {
             spec.profile ||= {mode: "normal", duration: 0};
@@ -571,5 +580,12 @@
         if (!saved) throw new Error("Custom scenario not found");
         newDraft(saved); step = 0; while (step < 6 && !stepError(step)) step++; renderBuilder();
     }
-    window.MrnPlanning = {newDraft, refresh, localDate, runCustom};
+    async function openPreset(id, run = false) {
+        if (!capabilities.length) await refresh();
+        const value = await api(`/api/scenario-presets/${encodeURIComponent(id)}`);
+        delete value.id;
+        newDraft(value);
+        if (run) {while (step < 6 && !stepError(step)) step++; renderBuilder();}
+    }
+    window.MrnPlanning = {newDraft, refresh, localDate, runCustom, openPreset};
 })();
