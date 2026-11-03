@@ -155,6 +155,8 @@ def add_analysis(report):
             "Apply least privilege, segmentation and monitoring appropriate to the recorded activity."))
         for technique in phase.get("mitre", {}).get("techniques", []):
             technique["url"] = mitre_url(technique.get("id"))
+            if phase.get("status") in {"skipped", "not_run"}:
+                continue
             tid = technique["id"]
             item = summary.setdefault(tid, {**technique, "mapping": "phase_metadata", "phases": [], "observed_phases": []})
             item["phases"].append(phase["id"])

@@ -1,3 +1,4 @@
+const presetFixture = JSON.parse(require('node:child_process').execFileSync(process.env.MRN_TEST_PYTHON || 'python', ['-c', "import runpy,json; m=runpy.run_path('tests/mrnobody/scenario_presets.py'); print(json.dumps({'cards':m['preset_cards'](m['CAPS']), 'templates':{('preset-'+k):m['preset_definition']('preset-'+k,m['CAPS']) for k in m['PRESETS']}, 'configured':{('preset-'+k):m['configured']('preset-'+k) for k in m['PRESETS']}}))"], {cwd:require('node:path').resolve(__dirname,'../..'),encoding:'utf8'}));
 const fs = require("node:fs");
 const vm = require("node:vm");
 const assert = require("node:assert/strict");
@@ -6,6 +7,8 @@ function element(id = "") {
     const item = {
         id, value: "", checked: false, children: [], listeners: {},
         classList: {add() {}, remove() {}, toggle() {}},
+        replaceChildren() {this.children = [];},
+        setAttribute() {},
         addEventListener(type, callback) { this.listeners[type] = callback; },
         appendChild(child) {
             this.children.push(child);
@@ -112,6 +115,20 @@ async function main() {
     await vm.runInContext('startCampaign()', context);
     assert.equal(context.submissions.at(-1).form.get('wordlist_path'), null);
     assert.equal(await context.submissions.at(-1).form.get('wordlist_file').text(), 'unused-upload');
+    elements.set('scenarioGrid', element('scenarioGrid'));
+    context.presetCards = presetFixture.cards;
+    context.window.MrnPlanning = {openPreset: async () => {}};
+    vm.runInContext('renderScenarios(presetCards)', context);
+    assert.equal(elements.get('scenarioGrid').children.length, 9);
+    for (const card of presetFixture.cards) {
+        context.presetCard = card;
+        vm.runInContext('renderScenarioDetail(presetCard)', context);
+        const detail = elements.get('scenarioDetail');
+        assert.ok(detail.children.some(e => e.textContent === card.teaching_objective));
+        assert.equal(detail.children.find(e => e.textContent === 'Run').disabled, !card.runnable);
+        assert.ok(detail.children.find(e => e.textContent === 'Duplicate'));
+        assert.ok(detail.children.find(e => e.textContent === 'Edit'));
+    }
     console.log("JavaScript syntax and isolated frontend checks passed; no network requests sent.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

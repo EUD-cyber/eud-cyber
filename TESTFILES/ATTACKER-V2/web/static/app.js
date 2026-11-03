@@ -773,6 +773,21 @@ function renderScenarios(scenarios) {
         const profile = scenario.profile;
         meta.textContent = `${scenario.custom ? "Custom" : "Built-in"} · ${scenario.target_mode === "fixed" ? "Fixed Targets" : "Auto Discovery"}${profile?.mode ? " · " + profile.mode : ""}${profile?.duration ? " · target " + profile.duration + " s" : ""}`;
         info.appendChild(meta);
+        if (scenario.preset) {
+            if (scenario.estimated_seconds) {const estimate = document.createElement("span"); estimate.textContent = `Estimated activity: about ${scenario.estimated_seconds} s plus discovery/access (best effort)`; info.appendChild(estimate);}
+            const readiness = document.createElement("span");
+            readiness.className = scenario.runnable ? "planning-badge" : "planning-error";
+            readiness.textContent = scenario.readiness;
+            info.appendChild(readiness);
+            const actions = document.createElement("div"); actions.className = "planning-row";
+            for (const label of ["Run", "Duplicate", "Edit"]) {
+                const control = document.createElement("button"); control.type = "button"; control.className = "button button-small";
+                control.textContent = label; control.disabled = label === "Run" && !scenario.runnable;
+                control.addEventListener("click", event => {event.stopPropagation(); window.MrnPlanning.openPreset(scenario.id, label === "Run").catch(error => showMessage(error.message, "error"));});
+                actions.appendChild(control);
+            }
+            info.appendChild(actions);
+        }
         if (Number.isInteger(scenario.schedule_count)) {
             const scheduled = document.createElement("span");
             scheduled.textContent = `${scenario.schedule_count} scheduled jobs · ${scenario.enabled_schedule_count || 0} enabled`;
@@ -827,6 +842,21 @@ function renderScenarios(scenarios) {
 function renderScenarioDetail(
     scenario
 ) {
+    if (scenario.preset) {
+        const parent = document.getElementById("scenarioDetail");
+        if (!parent) return;
+        parent.replaceChildren();
+        for (const [tag, text] of [["h2", scenario.name], ["p", scenario.description], ["p", scenario.teaching_objective], ["p", `Attack Technique order: ${(scenario.phases || []).map(id => "P" + id).join(" → ")}`], ["p", scenario.readiness], ...(scenario.required_inputs || []).map(text => ["p", text])]) {
+            const item = document.createElement(tag); item.textContent = text; parent.appendChild(item);
+        }
+        for (const label of ["Run", "Duplicate", "Edit"]) {
+            const control = document.createElement("button"); control.type = "button"; control.className = "button"; control.textContent = label;
+            control.disabled = label === "Run" && !scenario.runnable;
+            control.addEventListener("click", () => window.MrnPlanning.openPreset(scenario.id, label === "Run").catch(error => showMessage(error.message, "error")));
+            parent.appendChild(control);
+        }
+        return;
+    }
     const originalScenario = scenario;
     scenario = {...scenario, ...Object.fromEntries(["name","id","description","script"].map(key => [key, String(scenario[key] || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"})[c])]))};
 

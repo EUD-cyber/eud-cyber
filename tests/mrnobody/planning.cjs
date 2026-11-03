@@ -1,3 +1,4 @@
+const presetFixture = JSON.parse(require('node:child_process').execFileSync(process.env.MRN_TEST_PYTHON || 'python', ['-c', "import runpy,json; m=runpy.run_path('tests/mrnobody/scenario_presets.py'); print(json.dumps({'capabilities':m['CAPS'], 'cards':m['preset_cards'](m['CAPS']), 'templates':{('preset-'+k):m['preset_definition']('preset-'+k,m['CAPS']) for k in m['PRESETS']}, 'configured':{('preset-'+k):m['configured']('preset-'+k) for k in m['PRESETS']}}))"], {cwd:require('node:path').resolve(__dirname,'../..'),encoding:'utf8'}));
 const fs = require('node:fs');
 const vm = require('node:vm');
 const assert = require('node:assert/strict');
@@ -70,6 +71,7 @@ const p18fields = {
     dns_count:{label:'DNS count',type:'number',default:3}, dns_duration:{label:'DNS duration ceiling',type:'seconds',default:240}
 };
 caps.push({id:'18',name:'Advanced C2 / DNS Activity',dependencies:['03'],fields:p18fields,required_fields:['target','protocol'],timing:['start_offset'],credentials:true,standalone:true});
+for (const cap of caps) cap.fields = {...presetFixture.capabilities[cap.id].fields, ...cap.fields};
 const definitions = [], plans = [], requests = [];
 const context = vm.createContext({document:{getElementById:id=>elements.get(id) || [...elements.values()].flatMap(walk).find(n=>n.id===id), createElement:element, querySelectorAll:()=>[],addEventListener(){}},
     window:{}, Date, Intl, console, FormData, showPage:page=>{context.page=page;}, confirm:()=>true,
@@ -77,6 +79,7 @@ const context = vm.createContext({document:{getElementById:id=>elements.get(id) 
         const data = options.body instanceof FormData ? options.body : options.body ? JSON.parse(options.body) : null;
         requests.push({url, method:options.method,data});
         let value = {};
+        if (url.startsWith('/api/scenario-presets/')) value=presetFixture.templates[url.split('/').at(-1)];
         if (url === '/api/planning/capabilities') value={phases:caps};
         if (url === '/api/custom-scenarios') {
             if (options.method==='POST') {value={...data,id:'custom-'+definitions.length};definitions.push(value);}
@@ -115,6 +118,18 @@ async function select(mode='auto') {context.window.MrnPlanning.newDraft();await 
 async function review() {while(textButton(body(),'Next')) {await next();assert.equal(error(),'');}}
 async function main() {
     await context.window.MrnPlanning.refresh();
+    for (const card of presetFixture.cards) {
+        await context.window.MrnPlanning.openPreset(card.id);
+        assert.match(title(), /^1\./);
+        await next(); await next();
+        assert.deepEqual(ids(), card.phases, `${card.id} must open without reordering`);
+        await next(); await next();
+        if (!card.runnable) assert.ok(error(), `${card.id} must require configuration`);
+        context.window.MrnPlanning.newDraft(presetFixture.configured[card.id]);
+        await review();
+        assert.match(text(body()), /Preset origin:/);
+        assert.match(text(body()), /version 1/);
+    }
     context.window.MrnPlanning.newDraft();
     set('Name','');await next();assert.match(error(),/name/);assert.match(title(),/^1\./);
     set('Name','<img src=x onerror=alert(1)>');set('Description',' ');await next();assert.match(error(),/Description/);
