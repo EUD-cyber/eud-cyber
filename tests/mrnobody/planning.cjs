@@ -37,7 +37,7 @@ for (const cap of caps.filter(c=>['10','11','12','14'].includes(c.id))) {
     cap.fields.timeout = {label:'Action timeout',type:'timeout'};
     cap.required_fields = ['target','protocol'];
     if (cap.id === '11') {
-        cap.fields.method = {label:'Persistence method',options:['auto','scheduled-task','service','cron','systemd']};
+        cap.fields.method = {label:'Persistence method',options:['auto','task-service','cron-systemd','scheduled-task','service','cron','systemd']};
         cap.fields.action = {label:'Persistence action',options:['create','cleanup']};
         cap.fields.artifact = {label:'Artifact suffix',type:'text'};
     }

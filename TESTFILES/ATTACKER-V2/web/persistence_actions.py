@@ -221,6 +221,9 @@ def activity_configuration(env, method, action='create'):
 
 def paired_metadata(env, platform, method, action, name):
     c = activity_configuration(env, method, action)
+    if action == 'cleanup':
+        c.update(persistence_dns='not_assessed_during_cleanup', dns_domain='see_original_create_evidence',
+                 dns_resolver='see_original_create_evidence', query_interval='not_assessed', activity_duration='not_assessed')
     directory = ('%ProgramData%/MrNobody/P11/' if platform == 'windows' else '~/.config/mrnobody/') + name
     return dict(c, platform=platform, method=method, action=action, artifact=name,
                 artifact_path=directory, service_name=name if platform == 'windows' else name + '.service',
