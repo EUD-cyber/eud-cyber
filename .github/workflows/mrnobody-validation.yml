@@ -64,6 +64,8 @@ jobs:
         run: |
           bash TESTFILES/ATTACKER-V2/tools/build-manifest.sh
           git diff --exit-code -- TESTFILES/ATTACKER-V2/update-manifest.txt
+      - name: Verify P06 standalone validation, dispatch and receiver evidence offline
+        run: python tests/mrnobody/p06_standalone.py -v
       - name: Verify paired P11 lifecycle, bounded DNS, API and report exports without network
         timeout-minutes: 3
         run: python -u tests/mrnobody/persistence_dns.py -v
@@ -94,7 +96,6 @@ jobs:
           node tests/mrnobody/scenarios.cjs
           node tests/mrnobody/logs.cjs
           node tests/mrnobody/reports.cjs
-          python tests/mrnobody/p06_standalone.py -v
           python tests/mrnobody/staging_artifacts.py
           python tests/mrnobody/p04_evidence.py
           python tests/mrnobody/report_exports.py

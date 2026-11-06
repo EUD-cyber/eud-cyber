@@ -116,7 +116,7 @@ class P06(unittest.TestCase):
                 f'NORDIC_LOG_DIR="{root}/logs"\nNORDIC_STATE_DIR="{root}/state"\n'
                 f'NORDIC_UPLOAD_DIR="{root}/uploads"\nNORDIC_COMPROMISED_STATE="{root}/state/compromised-hosts.json"\n'
                 f'NORDIC_GROUND_TRUTH_LOG="{root}/logs/incident-ground-truth.log"\n'
-                'NORDIC_DEFAULT_SSH_PASSWORD=""\nNORDIC_DEFAULT_RDP_PASSWORD=""\n')
+                'NORDIC_DEFAULT_SSH_PASSWORD=""\nNORDIC_DEFAULT_RDP_PASSWORD=""\nNORDIC_SSH_TIMEOUT=2\n')
             staging(root/'state/staged-data.json')
             # A remote-command double sends only the synthetic fixture to the real loopback receiver.
             fake = root/'bin/sshpass'
