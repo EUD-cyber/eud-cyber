@@ -206,7 +206,8 @@ class APIIntegration(unittest.TestCase):
             web.campaign_process = None
             saved = fixture.client.post('/api/schedules', json=dict(version=1, execution=spec, interval=0, enabled=True, at='2099-01-01T00:00:00Z'))
             self.assertEqual(saved.status_code, 201, saved.json)
-            self.assertEqual(saved.json['execution']['persistence'], params)
+            stored = fixture.client.get('/api/schedules').json['schedules']
+            self.assertEqual(next(row for row in stored if row['id'] == saved.json['id'])['execution']['persistence'], params)
             self.assertEqual(fixture.client.post('/api/schedules/'+saved.json['id']+'/arm',
                 json=dict(ssh_password='LAB_ONLY', rdp_password='LAB_ONLY')).status_code, 200)
         for platform, method, protocol in [('linux','cron-systemd','ssh'), ('windows','task-service','winrm-http')]:
@@ -237,14 +238,14 @@ class TransportAndReports(unittest.TestCase):
         for platform in ('linux', 'windows'):
             target = dict(TARGET, platform=platform, protocol='ssh' if platform == 'linux' else 'winrm-http')
             for action in ('create', 'cleanup'):
-                env = dict(ENV, MRNOBODY_PASSWORD='synthetic-only', MRNOBODY_ACTION=action)
+                env = dict(ENV, MRNOBODY_RUN_MODE='standalone', MRNOBODY_PASSWORD='synthetic-only', MRNOBODY_ACTION=action)
                 out = b'MRN_P11_CLEANUP=complete' if action == 'cleanup' else b'MRN_P11=1,1,1900000000,1,1,1800000000000,3'
                 factory = Mock()
                 factory.return_value.run_ps.return_value = SimpleNamespace(status_code=0,std_out=out,std_err=b'')
                 framed = out + b'\nMRN_REMOTE_EXIT=0__MRN_END__\n'
                 result = remote.perform('11', target, env, session_factory=factory,
                                         ssh=Mock(return_value=(0,(framed,len(framed)),(b'',0))))
-                self.assertEqual(result['result'], 'success')
+                self.assertEqual(result['result'], 'success', (platform, action, result))
                 self.assertEqual(result['cleanup_required'], 'false' if action == 'cleanup' else 'true')
             if platform == 'linux':
                 self.assertEqual(remote.perform('11', target, ENV, ssh=Mock(return_value=(255,(b'',0),(b'',0))))['result'], 'failed')
