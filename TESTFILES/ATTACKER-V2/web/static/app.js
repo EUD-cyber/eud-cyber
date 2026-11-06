@@ -1009,6 +1009,33 @@ async function loadScenarios() {
 }
 
 
+let p06Feedback = {message: "", type: "info", pending: false};
+function showP06Feedback(message, type = "info") {
+    p06Feedback.message = message; p06Feedback.type = type;
+    const box = document.getElementById("phase-06-feedback");
+    if (box) {
+        box.textContent = message; box.className = `message-box message-${type}`;
+        box.hidden = !message;
+    }
+}
+async function followP06Job(id) {
+    try {
+        const job = await apiGet("/api/execution-status");
+        if (job.incident_id !== id) throw new Error("P06 job status no longer matches this submission. Inspect Reports and live output.");
+        if (job.active) {
+            showP06Feedback(`P06 running · ${id}. See live output for progress.`);
+            setTimeout(() => followP06Job(id), 1000);
+            return;
+        }
+        p06Feedback.pending = false;
+        showP06Feedback(`P06 ${job.status} · ${id}. Inspect Reports and live output for transfer evidence.`,
+            job.status === "complete" ? "success" : "error");
+    } catch (error) {
+        p06Feedback.pending = false;
+        showP06Feedback(`P06 status unavailable: ${error.message}. Check live output before submitting again.`, "error");
+    }
+}
+
 function phaseFieldLabel(parameter) {
 
     const labels = {
@@ -1029,6 +1056,7 @@ function phaseFieldLabel(parameter) {
         persistence_duration: "P11 activity lifetime (60–14400 seconds; manual artifact cleanup)",
         dns_behavior: "DNS behavior", dns_endpoint: "Private lab DNS endpoint (UDP 53)", dns_domain: "Reserved lab domain (.test/.internal/.localhost)", dns_pattern: "Query label pattern (mrn-{seq})", dns_interval: "DNS interval (seconds)", dns_jitter: "DNS jitter (fraction 0-0.5)", dns_count: "DNS query count (1-40)", dns_duration: "DNS duration ceiling (3-240 seconds)",
         file: "File",
+        staging_incident: "Staging incident ID (from P05 report)",
         platform: "Execution platform",
         method: "Method",
         behavior: "Native tool behavior",
@@ -1127,7 +1155,8 @@ function renderPhaseDetail(phase) {
             : [];
 
 
-    parameters.forEach(parameter => {
+    const formParameters = phase.id === "06" ? [...parameters, "staging_incident"] : parameters;
+    formParameters.forEach(parameter => {
 
         const group =
             document.createElement("div");
@@ -1154,6 +1183,12 @@ function renderPhaseDetail(phase) {
             input.type =
                 "checkbox";
 
+        } else if (phase.id === "06" && parameter === "protocol") {
+            input = document.createElement("select");
+            ["", "ssh", "winrm-http", "winrm-https"].forEach(value => {
+                const option = document.createElement("option"); option.value = value;
+                option.textContent = value || "Choose transport"; input.appendChild(option);
+            });
         } else if (["10", "11"].includes(phase.id) && ["platform", "method", "action", "protocol"].includes(parameter)) {
             input = document.createElement("select");
             const choices = {platform: ["auto", "windows", "linux"], method: ["auto", "task-service", "cron-systemd", "scheduled-task", "service", "cron", "systemd"], action: ["create", "cleanup"], protocol: ["", "ssh", "winrm-http", "winrm-https"]}[parameter];
@@ -1184,7 +1219,7 @@ function renderPhaseDetail(phase) {
             input.type =
                 parameter === "password"
                     ? "password"
-                    : parameter === "file"
+                    : parameter === "file" && phase.id !== "06"
                         ? "file"
                         : parameter === "port"
                             ? "number"
@@ -1221,6 +1256,10 @@ function renderPhaseDetail(phase) {
             `phase-${phase.id}-${parameter}`;
 
 
+        if (phase.id === "06" && parameter === "file") {
+            label.textContent = "Remote synthetic file path (from P05 report)";
+            input.placeholder = "/tmp/.nordic-MRN-…/nordic-data-MRN-….txt";
+        }
         label.htmlFor = input.id;
         group.appendChild(label);
         group.appendChild(input);
@@ -1230,6 +1269,15 @@ function renderPhaseDetail(phase) {
 
 
     phaseDetail.appendChild(form);
+    if (phase.id === "06") {
+        const help = document.createElement("p");
+        help.textContent = "Run P05 first. Copy its staging incident ID and exact remote synthetic file path. P06 reuses that artifact from staged-data.json, verifies the received size and SHA256, and records a new incident. It does not upload a local file or generate staging data.";
+        phaseDetail.appendChild(help);
+        const feedback = document.createElement("div");
+        feedback.id = "phase-06-feedback"; feedback.setAttribute("role", "status");
+        feedback.setAttribute("aria-live", "polite"); phaseDetail.appendChild(feedback);
+        showP06Feedback(p06Feedback.message, p06Feedback.type);
+    }
     if (["10", "11", "12", "14", "16", "17", "18"].includes(phase.id)) {
         const platform = document.getElementById(`phase-${phase.id}-platform`);
         const adapt = () => {
@@ -1325,8 +1373,15 @@ async function runStandalonePhase(
     }
 
 
+    if (phase.id === "06" && p06Feedback.pending) {
+        showP06Feedback("P06 already submitted. Wait for its job status or inspect live output."); return;
+    }
     const data = {
         dry_run: dryRun,
+    };
+    const feedback = (message, type = "info") => {
+        if (phase.id === "06") showP06Feedback(message, type);
+        else showMessage(message, type);
     };
 
 
@@ -1338,7 +1393,7 @@ async function runStandalonePhase(
             : [];
 
 
-    for (const parameter of parameters) {
+    for (const parameter of phase.id === "06" ? [...parameters, "staging_incident"] : parameters) {
 
         const input =
             document.getElementById(
@@ -1367,14 +1422,14 @@ async function runStandalonePhase(
         // File parameters
         // --------------------------------------------------
 
-        if (parameter === "file") {
+        if (parameter === "file" && phase.id !== "06") {
 
             if (
                 input.files &&
                 input.files.length > 0
             ) {
 
-                showMessage(
+                feedback(
                     "File upload for standalone Attack Techniques " +
                     "will be added in the next step.",
                     "info"
@@ -1394,12 +1449,13 @@ async function runStandalonePhase(
         const value =
             String(
                 input.value || ""
-            ).trim();
+            );
+        const normalized = parameter === "password" ? value : value.trim();
 
-        if (value) {
+        if (normalized) {
 
             data[parameter] =
-                value;
+                normalized;
         }
     }
 
@@ -1410,7 +1466,19 @@ async function runStandalonePhase(
             : "run";
 
 
-    if (!dryRun) {
+    if (phase.id === "06") {
+        const required = ["target", "protocol", "username", "password", "file", "staging_incident"];
+        const missing = required.filter(key => !data[key] || !data[key].trim());
+        if (missing.length) {
+            feedback("P06 requires: " + missing.map(phaseFieldLabel).join(", "), "error");
+            document.getElementById(`phase-06-${missing[0]}`)?.focus(); return;
+        }
+        if (data.port && (!/^\d+$/.test(data.port) || +data.port < 1 || +data.port > 65535)) {
+            feedback("P06 port must be 1–65535.", "error"); return;
+        }
+    }
+
+    if (!dryRun && phase.id !== "06") {
 
         const confirmed =
             window.confirm(
@@ -1423,13 +1491,14 @@ async function runStandalonePhase(
     }
 
 
-    showMessage(
+    feedback(
         `${dryRun ? "Dry running" : "Starting"} ` +
         `P${phase.id} · ${phase.name}...`,
         "info"
     );
 
 
+    if (phase.id === "06") p06Feedback.pending = true;
     try {
 
         const result =
@@ -1439,7 +1508,7 @@ async function runStandalonePhase(
             );
 
 
-        showMessage(
+        feedback(
             result.message ||
             `Attack Technique ${phase.id} started.`,
             "success"
@@ -1448,6 +1517,10 @@ async function runStandalonePhase(
 
         for (const key of ["password", "powershell"]) {
             const input = document.getElementById(`phase-${phase.id}-${key}`); if (input) input.value = "";
+        }
+        if (phase.id === "06") {
+            feedback(`P06 submitted · ${result.incident_id}. Waiting for job status…`);
+            followP06Job(result.incident_id);
         }
         await refreshLog();
 
@@ -1459,6 +1532,7 @@ async function runStandalonePhase(
     }
 
     catch (error) {
+        if (phase.id === "06") p06Feedback.pending = false;
 
         console.error(
             "Attack Technique execution error:",
@@ -1466,7 +1540,7 @@ async function runStandalonePhase(
         );
 
 
-        showMessage(
+        feedback(
             error.message,
             "error"
         );

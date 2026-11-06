@@ -784,7 +784,7 @@ case "$COMMAND" in
                     shift 2
                     ;;
 
-                --persistence-dns|--persistence-domain|--persistence-resolver|--persistence-interval|--persistence-duration|--dns-behavior|--dns-endpoint|--dns-domain|--dns-pattern|--dns-interval|--dns-jitter|--dns-count|--dns-duration|--web-profile|--web-path|--dataset|--archive-name|--transport|--beacon-interval|--beacon-jitter|--beacon-count|--uri-profile)
+                --staging-incident|--persistence-dns|--persistence-domain|--persistence-resolver|--persistence-interval|--persistence-duration|--dns-behavior|--dns-endpoint|--dns-domain|--dns-pattern|--dns-interval|--dns-jitter|--dns-count|--dns-duration|--web-profile|--web-path|--dataset|--archive-name|--transport|--beacon-interval|--beacon-jitter|--beacon-count|--uri-profile)
                     [[ $# -ge 2 ]] || die "$1 requires a value"
                     key="${1#--}"
                     key="${key//-/_}"

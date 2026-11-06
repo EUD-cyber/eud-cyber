@@ -120,6 +120,67 @@ async function checkFullIncident(page, artifacts) {
     }
 }
 
+async function checkP06(page, phase) {
+    await page.locator('[data-page="phases"]').click();
+    await page.evaluate(item => renderPhaseDetail(item), phase);
+    const feedback = page.locator('#phase-06-feedback');
+    assert.equal(await page.locator('#phase-06-file').getAttribute('type'), 'text');
+    assert.equal(await page.locator('#phase-06-protocol').evaluate(el => el.tagName), 'SELECT');
+    await page.evaluate(() => {
+        window.p06Submissions = [];
+        window.p06OriginalFetch = window.fetch;
+        window.p06Status = {incident_id:'MRN-p06-fixture',active:true,status:'running',execution:null};
+        window.p06Reject = false;
+        window.fetch = async (url, options) => {
+            if (String(url) === '/api/phase/06/run') {
+                window.p06Submissions.push(JSON.parse(options.body));
+                return new Response(JSON.stringify(window.p06Reject ?
+                    {message:'Staging incident ID mismatch'} :
+                    {incident_id:'MRN-p06-fixture',message:'submitted'}), {
+                    status:window.p06Reject ? 400 : 200,headers:{'Content-Type':'application/json'}});
+            }
+            if (String(url) === '/api/execution-status') return new Response(JSON.stringify(window.p06Status),
+                {status:200,headers:{'Content-Type':'application/json'}});
+            return window.p06OriginalFetch(url, options);
+        };
+    });
+    try {
+        await page.getByRole('button', {name:'RUN P06',exact:true}).click();
+        assert.ok((await feedback.textContent()).includes('P06 requires:'));
+        assert.equal(await feedback.isVisible(), true);
+        assert.equal(await page.evaluate(() => p06Submissions.length), 0);
+        const values = {target:'192.168.1.20',username:'student',password:' fixture secret ',
+            file:'/tmp/.nordic-MRN-p05/nordic-data-MRN-p05.txt',staging_incident:'MRN-p05'};
+        for (const [key,value] of Object.entries(values)) await page.locator('#phase-06-'+key).fill(value);
+        await page.locator('#phase-06-protocol').selectOption('ssh');
+        await page.locator('#phase-06-port').fill('70000');
+        await page.getByRole('button', {name:'RUN P06',exact:true}).click();
+        assert.ok((await feedback.textContent()).includes('1–65535'));
+        assert.equal(await page.evaluate(() => p06Submissions.length), 0);
+        await page.locator('#phase-06-port').fill('22');
+        await page.getByRole('button', {name:'RUN P06',exact:true}).click();
+        await page.waitForFunction(() => document.getElementById('phase-06-feedback').textContent.includes('P06 running'));
+        const sent = await page.evaluate(() => p06Submissions[0]);
+        assert.equal(sent.file, values.file); assert.equal(sent.password, values.password);
+        assert.equal(sent.staging_incident, values.staging_incident); assert.equal(sent.protocol, 'ssh');
+        await page.getByRole('button', {name:'RUN P06',exact:true}).click();
+        assert.equal(await page.evaluate(() => p06Submissions.length), 1);
+        await page.evaluate(() => {p06Status.active=false;p06Status.status='failed';});
+        await page.waitForFunction(() => document.getElementById('phase-06-feedback').textContent.includes('P06 failed'));
+        await page.locator('#phase-06-password').fill('fixture');
+        await page.evaluate(() => {p06Status.status='complete';});
+        await page.getByRole('button', {name:'RUN P06',exact:true}).click();
+        await page.waitForFunction(() => document.getElementById('phase-06-feedback').textContent.includes('P06 complete'));
+        await page.locator('#phase-06-password').fill('fixture');
+        await page.evaluate(() => {p06Reject=true;});
+        await page.getByRole('button', {name:'RUN P06',exact:true}).click();
+        await page.waitForFunction(() => document.getElementById('phase-06-feedback').textContent.includes('Staging incident ID mismatch'));
+        assert.equal(await feedback.isVisible(), true);
+    } finally {
+        await page.evaluate(() => {window.fetch=window.p06OriginalFetch;p06Feedback.pending=false;});
+    }
+}
+
 async function main() {
     const server=spawn(process.env.MRN_TEST_PYTHON || 'python',['-u','tests/mrnobody/ui_server.py'],{stdio:['ignore','pipe','pipe'],env:process.env});
     let browser;
@@ -136,6 +197,7 @@ async function main() {
         await page.goto(url);
         await page.waitForFunction(()=>document.getElementById('dashboardPhaseCount').textContent !== '—');
         const catalogue=await (await page.request.get(url+'/api/phases')).json();
+        await checkP06(page, catalogue.phases.find(p => p.id === '06'));
         const nav=page.locator('.sidebar-nav .nav-item');
         assert.deepEqual(await nav.allTextContents().then(a=>a.map(x=>x.trim().replace(/^[^A-Za-z]+/,''))),['Dashboard','Attack Techniques','Scenarios','Scheduler','Reports','MITRE ATT&CK','Settings']);
         assert.equal(await page.locator('#dashboardPhaseCount').textContent(),String(catalogue.count));
