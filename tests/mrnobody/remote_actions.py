@@ -317,6 +317,9 @@ esac
             (base/'venv/bin/python').symlink_to(sys.executable)
             for p in (base/'scripts').glob('*'):p.chmod(0o755)
             env['MRN_POWERSHELL_SECRET']='printf lab'
+            # This existing real-Bash harness retains legacy cron compatibility;
+            # paired lifecycle is exercised separately with fake service providers.
+            env['MRNOBODY_METHOD']='cron'
             for pid in ('10','11'):
                 result=subprocess.run(['bash',str(base/'scripts/run-phase.sh'),pid,'--target',TARGET['target'],'--protocol','ssh'],env=env,capture_output=True,text=True,timeout=30)
                 self.assertEqual(result.returncode,0,result.stdout+result.stderr)
@@ -327,7 +330,7 @@ esac
             for mode in ('normal','slow','custom'):
                 value=definition('10','auto',platform='linux')
                 value['profile']={'mode':mode,'duration':60 if mode=='slow' else 0}
-                value['phases']=[dict(id='01'),dict(id='03')]+value['phases']+[dict(id='11',parameters={'platform':'linux'}),dict(id='04')]
+                value['phases']=[dict(id='01'),dict(id='03')]+value['phases']+[dict(id='11',parameters={'platform':'linux', 'method':'cron'}),dict(id='04')]
                 value=plan(validate(value,CAPS))
                 # Offsets were checked by unit tests; do not wait a minute here.
                 for p in value['phases']:p['timing']={}

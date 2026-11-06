@@ -169,6 +169,58 @@ class LinuxPair(unittest.TestCase):
                     run.assert_not_called()
 
 
+class APIIntegration(unittest.TestCase):
+    def test_full_incident_standalone_custom_scheduler_and_registry(self):
+        # The shared API fixture replaces launch; no actual process or target.
+        sys.path.insert(0, str(Path(__file__).parent))
+        from planning import API
+        import app as web
+        fixture = API(methodName='runTest')
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        params = dict(platform='linux', method='cron-systemd', persistence_dns='enabled',
+                      persistence_resolver='192.168.1.53', persistence_domain='evilcorp.test',
+                      persistence_interval=60, persistence_duration=3600, artifact='api-dns')
+        for mode in ('normal', 'slow'):
+            spec = dict(type='campaign', id='full-incident', profile=dict(mode=mode), persistence=params)
+            clean = web.planning.execution(spec)
+            execution = web.planning.definition('full-incident', clean)
+            phase = next(p for p in execution['phases'] if p['id']=='11')
+            self.assertEqual(phase['parameters'], params)
+            ids = [p['id'] for p in execution['phases']]
+            self.assertLess(ids.index('03'), ids.index('11'))
+            self.assertLess(ids.index('11'), ids.index('12'))
+            result = fixture.client.post('/api/executions/run', json=dict(execution=spec, credentials=dict(ssh_password='LAB_ONLY', rdp_password='LAB_ONLY')))
+            self.assertEqual(result.status_code, 200, result.json)
+            web.campaign_process = None
+            saved = fixture.client.post('/api/schedules', json=dict(version=1, execution=spec, interval=0, enabled=True, at='2099-01-01T00:00:00Z'))
+            self.assertEqual(saved.status_code, 201, saved.json)
+            self.assertEqual(saved.json['execution']['persistence'], params)
+            self.assertEqual(fixture.client.post('/api/schedules/'+saved.json['id']+'/arm',
+                json=dict(ssh_password='LAB_ONLY', rdp_password='LAB_ONLY')).status_code, 200)
+        for platform, method, protocol in [('linux','cron-systemd','ssh'), ('windows','task-service','winrm-http')]:
+            fixed = dict(params, platform=platform, method=method, protocol=protocol, target=TARGET['target'])
+            phase = dict(type='phase',id='11',parameters=fixed)
+            self.assertEqual(web.planning.execution(phase), dict(phase, profile={'mode':'normal','duration':0}))
+            invalid = dict(fixed,persistence_domain='public.example')
+            with self.assertRaises(ValueError):
+                web.planning.execution(dict(phase,parameters=invalid))
+        cap = web.planning.capabilities()['11']['fields']
+        for key in params:
+            self.assertIn(key, cap)
+        self.assertIn('task-service', cap['method']['options'])
+        self.assertIn('cron-systemd', cap['method']['options'])
+        custom = dict(version=1,name='Pair integration',target_mode='auto',profile={'mode':'custom'},
+                      phases=[{'id':'01'},{'id':'03'},{'id':'11','parameters':params,'timing':{'start_offset':10}}])
+        self.assertEqual([p['id'] for p in plan(validate(custom,CAPS))['phases']], ['01','03','11'])
+        for source in ('web/static/app.js', 'web/static/planning.js', 'web/templates/index.html'):
+            text = (PLATFORM/source).read_text()
+            for key in ('persistence_dns','persistence_resolver','persistence_duration'):
+                self.assertIn(key, text)
+        data = web.planning.store.path.read_bytes()
+        self.assertNotIn(b'LAB_ONLY', data)
+
+
 class TransportAndReports(unittest.TestCase):
     def test_transports_parse_only_evidence_and_cleanup(self):
         for platform in ('linux', 'windows'):

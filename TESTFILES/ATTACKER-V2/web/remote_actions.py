@@ -124,6 +124,8 @@ def perform(pid, target, env, session_factory=None, ssh=None):
         if code or marker not in stdout[0] or not stdout[0].rstrip().endswith(b'__MRN_END__'):
             return dict(result='failed', warning='transport_error_details_omitted', cleanup_required='true')
         raw, trailer = stdout[0].rsplit(marker, 1)
+        if len(raw) > 8192:
+            return dict(result='failed', warning='oversized_persistence_evidence', cleanup_required='true')
         try:
             action_code = int(trailer.split(b'__MRN_END__')[0])
         except ValueError:

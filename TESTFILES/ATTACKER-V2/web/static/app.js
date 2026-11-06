@@ -3679,6 +3679,7 @@ document.addEventListener(
             const allowed = ['complete', 'partial', 'running', 'pending', 'skipped', 'failed', 'interrupted'];
             const state = allowed.includes(phase.status) ? phase.status : 'pending';
             node(row, 'span', state, `overview-phase overview-${state}`);
+            if (phase.activity_notice) node(row, 'small', phase.activity_notice, 'muted');
             if (phase.action_result === 'command_error') node(row, 'small', 'Custom remote command failed', 'muted');
             if (phase.action_result === 'success_with_warning') node(row, 'small', 'Completed with nonfatal stderr/warnings', 'muted');
             if (execution.profile?.mode !== 'normal' && (phase.start_offset !== undefined || phase.duration !== undefined)) {
