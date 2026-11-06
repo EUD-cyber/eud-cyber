@@ -3115,6 +3115,7 @@ function reportAssets(report) {
     events.forEach(e => {
         const name = e.event || "";
         const ref = `${name} · ${e.evidence?.path || "ground truth"}${e.evidence?.line ? ":" + e.evidence.line : ""}`;
+        if (name.startsWith('INTERNAL_DISCOVERY') && e.target) mark({ip:e.target}, 'scanned target', ref);
         if (name.startsWith('INTERNAL_DISCOVERY') && e.source) mark({ip: e.source}, 'remote execution source', ref);
         if (/^(WEB_|ACCESS_|WORDLIST_|STAGING_|IMPACT_|INTERNAL_DISCOVERY)/.test(name) && e.target)
             mark({ip: e.target}, "targeted", ref);
@@ -3362,10 +3363,14 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
     if (groundTruth) {
     reportNode("p", "Recorded states only. — means no supporting evidence, not proof the host was unaffected. Successful transfers mark their source, not the receiver. Snapshot membership records compromise, staging and impact unless explicitly false.", detail);
     const states = ["discovered", "targeted", "compromised", "staged", "exfiltrated", "impacted"];
+    if (assets.some(a => a.states.has('remote execution source'))) states.push('remote execution source', 'scanned target');
+    if (assets.length > 100) reportNode('p', 'Showing 100 of ' + assets.length + ' involved assets; full evidence remains in raw JSON.', detail);
     reportTable(detail, ["Host", "Hostname", ...states.map(s => s[0].toUpperCase() + s.slice(1)), "Evidence source"],
-        assets.map(a => [a.ip, a.hostname || "Unavailable", ...states.map(s => a.states.has(s) ? "Recorded" : "—"), [...a.references].join("; ")]));
+        assets.slice(0, 100).map(a => [a.ip, a.hostname || "Unavailable", ...states.map(s => a.states.has(s) ? "Recorded" : "—"), [...a.references].slice(0,10).join("; ") + (a.references.size > 10 ? "; references capped; see raw JSON" : "")]));
     } else {
         reportNode("p", "Review the discovered inventory and correlate logs to determine which assets were affected. Confirm compromise, staging, transfer and impact in Ground Truth View after investigating.", detail);
+        const involved = assets.filter(a => a.states.has('remote execution source') || a.states.has('scanned target'));
+        if (involved.length) reportTable(detail, ['Involved host', 'P04 role'], involved.slice(0,100).map(a => [a.ip, [...a.states].filter(s => ['remote execution source','scanned target'].includes(s)).join(', ')]));
         const inventory = report.inventory || report.evidence?.inventory;
         reportTable(detail, ["Host", "Hostname"], reportArray(inventory?.hosts).map(a => [a.ip || a.host, a.hostname || "Unavailable"]));
     }
@@ -3386,7 +3391,7 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
     for (const key of ["inventory", "compromised_hosts", "evidence", "events", "sources", "campaign"]) {
         const section = reportNode("details", null, raw);
         reportNode("summary", key, section);
-        reportNode("pre", JSON.stringify(report[key] ?? "Unavailable", null, 2).slice(0, 65536), section);
+        reportNode("pre", JSON.stringify(report[key] ?? "Unavailable", null, 2).slice(0, reportArray(report.phases).some(p => p.discovery) ? 65536 : undefined), section);
     }
     }
     if (report.evidence_availability && Object.keys(report.evidence_availability).length) {

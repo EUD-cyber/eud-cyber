@@ -75,9 +75,10 @@ def report_document(report, view="investigation"):
     def dump(value):
         # One paragraph per JSON line allows long appendices to split across pages.
         lines = json.dumps(value, ensure_ascii=False, indent=2).splitlines()
-        for line in lines[:200]:
+        limit = 200 if any(p.get('discovery') for p in phases) else len(lines)
+        for line in lines[:limit]:
             add("code", line)
-        if len(lines) > 200:
+        if len(lines) > limit:
             add('p', f'Appendix preview: 200 of {len(lines)} lines. Full evidence remains in immutable incident JSON.')
     report_type = ("Standalone phase " + text(report.get("phase_id"))) if report.get("report_type") == "standalone_phase" else (incident.get("scenario_name") or "Full Incident")
     add("h1", "MrNobody Incident Report")

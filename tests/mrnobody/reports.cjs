@@ -267,8 +267,13 @@ async function main() {
             events:[{event:'INTERNAL_DISCOVERY_TCP',source:'192.168.1.20',target:'192.168.1.1'}]}],
         evidence_availability:{impact:'not applicable / not produced by standalone P04'}};
     context.p04assets = vm.runInContext('reportAssets(p04report)',context);
-    assert.deepEqual([...context.p04assets[0].states],['remote execution source']);
-    assert.deepEqual([...context.p04assets[1].states],['targeted']);
+    assert.deepEqual([...context.p04assets.find(a=>a.ip==='192.168.1.20').states],['remote execution source']);
+    assert.deepEqual([...context.p04assets.find(a=>a.ip==='192.168.1.1').states],['scanned target','targeted']);
+    for(const mode of ['investigation','ground-truth']) {
+        root.replaceChildren();
+        vm.runInContext("renderReport(document.getElementById('reportDetail'),p04report,'MRN-p04','"+mode+"')",context);
+        for(const token of ['192.168.1.20','192.168.1.1','Remote execution source','Scanned target'])assert.ok(text(root).toLowerCase().includes(token.toLowerCase()));
+    }
     for(const groundTruth of [false,true]) {
         root.replaceChildren();
         vm.runInContext("renderReportPhase(document.getElementById('reportDetail'),p04report.phases[0],"+groundTruth+")",context);
