@@ -340,6 +340,14 @@ def read_events(path, incident_id, started, warnings):
                 # Values in existing logs may contain unquoted spaces or Windows paths.
                 fields = {m[1]: m[2].strip().strip('"') for m in re.finditer(
                     r"\b(\w+)=(.*?)(?=\s+\w+=|$)", message)}
+                if match[3] == '11':
+                    for key in list(fields):
+                        encoded = re.search(r'\b' + re.escape(key) + r'=("(?:\\.|[^"\\])*")(?=\s|$)', message)
+                        if encoded:
+                            try:
+                                fields[key] = json.loads(encoded[1])
+                            except (ValueError, TypeError):
+                                fields[key] = '[invalid P11 evidence omitted]'
                 name = message.split(" ", 1)[0]
                 phase = match[3] or fields.get("phase")
                 if phase in {'10', '13'}:
