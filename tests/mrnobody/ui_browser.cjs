@@ -80,7 +80,7 @@ async function main() {
         await page.locator('#builderBody').getByLabel('P11 internal non-forwarding lab DNS resolver', {exact:true}).fill('192.168.1.53');
         await page.locator('#builderBody').getByLabel('P11 reserved test domain (.test)', {exact:true}).fill('fixture.test');
         for(let i=0;i<2;i++) await page.locator('#builderBody').getByRole('button',{name:'Next',exact:true}).click();
-        assert.ok((await page.locator('#builderBody').textContent()).includes('fixture.test'));
+        assert.ok((await page.locator('#builderBody').textContent()).includes('fixture.test'), await page.locator('#builderBody').textContent());
         await page.locator('[data-page="schedules"]').click();
         assert.ok((await page.locator('#scheduleList').textContent()).includes('No schedules saved'));
         await page.locator('#scheduleList').getByRole('button',{name:'New schedule / Run Now'}).click();
