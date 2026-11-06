@@ -4,6 +4,120 @@ const fs = require('node:fs');
 const path = require('node:path');
 const {spawn} = require('node:child_process');
 const {chromium} = require('playwright');
+
+async function checkFullIncident(page, artifacts) {
+    await page.evaluate(() => configureScenario(null));
+    const p10 = page.getByRole('region', {name: 'P10 – Custom Remote Command', exact: true});
+    const p11 = page.getByRole('region', {name: 'P11 Persistence – Full Incident', exact: true});
+    assert.equal(await p10.count(), 1);
+    assert.equal(await p11.count(), 1);
+    assert.equal(await p10.locator('#campaignPowershell, #campaignBash').count(), 2);
+    assert.equal(await p10.locator('[data-campaign-p11]').count(), 0);
+    assert.equal(await p11.locator('[data-campaign-p11]').count(), 6);
+    assert.equal(await p11.locator('textarea').count(), 0);
+    assert.equal(await page.locator('#page-campaigns').getByText('P09 changes mrnobody membership', {exact:false}).count(), 0);
+    assert.equal(await page.evaluate(() => {
+        const toggle = document.querySelector('label[for="powershellEnabled"]');
+        const commands = document.getElementById('campaignPowershellFields');
+        const persistence = document.getElementById('campaignPersistenceFields');
+        return toggle.nextElementSibling === commands &&
+            !!(commands.compareDocumentPosition(persistence) & Node.DOCUMENT_POSITION_FOLLOWING);
+    }), true);
+    const powershell = p10.getByLabel('PowerShell command (Windows, optional)', {exact:true});
+    const bash = p10.getByLabel('Bash command (Linux, optional)', {exact:true});
+    for (const field of [powershell, bash]) {
+        assert.equal(await field.getAttribute('maxlength'), '16384');
+        assert.equal(await field.getAttribute('rows'), '5');
+    }
+    await page.getByLabel('Enable P10 Custom Remote Command', {exact:true}).focus();
+    await page.keyboard.press('Tab');
+    assert.equal(await powershell.evaluate(el => el === document.activeElement), true);
+    await page.keyboard.press('Tab');
+    assert.equal(await bash.evaluate(el => el === document.activeElement), true);
+    await powershell.fill('Write-Output layout-fixture');
+    await bash.fill('printf layout-fixture');
+    await p11.getByLabel('P11 reserved domain', {exact:true}).fill('layout.test');
+    await p11.getByLabel('P11 internal lab DNS resolver', {exact:true}).fill('192.168.1.53');
+    await p11.getByLabel('P11 periodic DNS', {exact:true}).selectOption('enabled');
+    const persistence = await p11.locator('[data-campaign-p11]').evaluateAll(inputs =>
+        Object.fromEntries(inputs.map(input => [input.dataset.campaignP11, input.value])));
+    await page.evaluate(() => {showPage('scenarios'); configureScenario(null);});
+    assert.equal(await powershell.inputValue(), 'Write-Output layout-fixture');
+    assert.equal(await bash.inputValue(), 'printf layout-fixture');
+    for (const width of [1440,1024,768,390]) {
+        await page.setViewportSize({width,height:1050});
+        const commandBox = await p10.boundingBox(), persistenceBox = await p11.boundingBox();
+        assert.ok(commandBox.y + commandBox.height < persistenceBox.y, 'P10 card must end before P11');
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false,
+            'Full Incident overflows at ' + width);
+        for (const section of [p10,p11]) {
+            assert.notEqual(await section.evaluate(el => getComputedStyle(el).borderTopStyle), 'none');
+        }
+        if (artifacts && [1440,390].includes(width))
+            await page.screenshot({path:path.join(artifacts,'full-incident-' + width + '.png'),fullPage:true});
+    }
+    await page.setViewportSize({width:1440,height:1050});
+    await page.getByLabel('Enable P10 Custom Remote Command', {exact:true}).uncheck();
+    assert.equal(await p10.isVisible(), false);
+    assert.equal(await p11.isVisible(), true);
+    assert.equal(await powershell.inputValue(), '');
+    assert.equal(await bash.inputValue(), '');
+    await page.getByLabel('Enable P10 Custom Remote Command', {exact:true}).check();
+
+    // Capture real FormData in the browser; never send a campaign start to Flask.
+    await page.evaluate(() => {
+        window.fullIncidentSubmissions = [];
+        window.fullIncidentFetch = window.fetch;
+        window.fetch = async (url, options) => {
+            if (/\/api\/(?:scenario\/[^/]+\/)?start$/.test(String(url))) {
+                window.fullIncidentSubmissions.push({url:String(url), fields:Object.fromEntries(options.body.entries())});
+                return new Response(JSON.stringify({message:'Fixture accepted'}), {status:200,headers:{'Content-Type':'application/json'}});
+            }
+            return window.fullIncidentFetch(url, options);
+        };
+    });
+    const accept = dialog => dialog.accept();
+    page.on('dialog', accept);
+    try {
+        for (const [id,value] of Object.entries({incidentIp:'192.168.1.254',webPorts:'80,443',
+            sshUser:'ubuntu',sshPort:'22',rdpUser:'Administrator',rdpPort:'3389',exfilPort:'9090'}))
+            await page.locator('#' + id).fill(value);
+        await page.locator('#wordlistEnabled').uncheck();
+        // Existing required-credential validation still prevents submission.
+        await page.locator('#sshPassword').fill('');
+        await page.locator('#startButton').click();
+        assert.equal(await page.evaluate(() => fullIncidentSubmissions.length), 0);
+        const cases = [['Write-Output fixture',''],['','printf fixture'],
+            ['Write-Output fixture','printf fixture'],['   ','printf fixture'],
+            ['Write-Output fixture',' \n '],[' \n ','\t '],['','']];
+        for (const [index,[ps,sh]] of cases.entries()) {
+            await powershell.fill(ps);
+            await bash.fill(sh);
+            assert.ok((await page.locator('#campaignP10Review').textContent()).includes(
+                !ps.trim() && !sh.trim() ? 'skipped (NOT_CONFIGURED)' :
+                'PowerShell ' + (ps.trim() ? 'configured' : 'not configured')));
+            await page.locator('#sshPassword').fill('fixture-only');
+            await page.locator('#rdpPassword').fill('fixture-only');
+            // Exercise both default and explicitly selected Full Incident routes.
+            await page.evaluate(explicit => {selectedScenario = explicit ?
+                {id:'full-incident',name:'Full Incident',phases:['03','09','10','11']} : null;}, index % 2 === 1);
+            const count = await page.evaluate(() => fullIncidentSubmissions.length);
+            await page.locator('#startButton').click();
+            await page.waitForFunction(count => fullIncidentSubmissions.length === count + 1 &&
+                document.getElementById('campaignPowershell').value === '', count);
+            const sent = await page.evaluate(() => fullIncidentSubmissions.at(-1));
+            assert.equal(sent.fields.powershell_enabled, '1');
+            assert.equal(sent.fields.powershell_windows, ps);
+            assert.equal(sent.fields.bash, sh);
+            assert.deepEqual(JSON.parse(sent.fields.persistence), persistence);
+            assert.equal(await bash.inputValue(), '');
+        }
+    } finally {
+        page.off('dialog', accept);
+        await page.evaluate(() => {window.fetch = window.fullIncidentFetch; configureScenario(null);});
+    }
+}
+
 async function main() {
     const server=spawn(process.env.MRN_TEST_PYTHON || 'python',['-u','tests/mrnobody/ui_server.py'],{stdio:['ignore','pipe','pipe'],env:process.env});
     let browser;
@@ -66,6 +180,8 @@ async function main() {
         assert.equal(await page.locator('#phase-11-persistence_dns option[value="enabled"]').count(), 1);
         await page.locator('[data-page="scenarios"]').click();
         assert.ok(await page.locator('#scenarioGrid .phase-card').count());
+        await checkFullIncident(page, process.env.MRN_UI_ARTIFACTS);
+        await page.locator('[data-page="scenarios"]').click();
         await page.locator('#scenarioGrid .phase-card').first().press('Enter');
         assert.ok(await page.locator('#scenarioDetail button').count());
         await page.locator('#newCustomScenario').click();
