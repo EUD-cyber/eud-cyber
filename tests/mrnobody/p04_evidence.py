@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from pypdf import PdfReader
 
 ROOT = Path(__file__).resolve().parents[2]
 PLATFORM = ROOT / 'TESTFILES/ATTACKER-V2'
@@ -92,7 +93,7 @@ NORDIC_CONNECT_TIMEOUT=1
 
     @unittest.skipUnless(os.name != 'nt' and shutil.which('bash'), 'requires Bash')
     def test_real_script_and_reports_offline(self):
-        for platform, result, output in [('linux', 0, OUTPUT), ('windows', 0, OUTPUT),
+        for platform, result, output in [('linux', 0, OUTPUT), ('windows', 0, OUTPUT), ('linux', 1, OUTPUT),
                                          ('linux', 1, ''), ('windows', 1, ''), ('linux', 0, '[DISCOVERY] target=' + TARGET + '\n')]:
             with self.subTest(platform=platform, result=result, missing=not output), tempfile.TemporaryDirectory() as tmp:
                 base = Path(tmp)
@@ -163,7 +164,14 @@ NORDIC_CONNECT_TIMEOUT=1
         html = export_html(report, 'ground-truth')
         self.assertNotIn('<img ', html)
         self.assertIn('&lt;img', html)
-        self.assertTrue(export_pdf(report, 'ground-truth').startswith(b'%PDF'))
+        pdf = export_pdf(report, 'ground-truth')
+        self.assertTrue(pdf.startswith(b'%PDF'))
+        content = '\n'.join(p.extract_text() for p in PdfReader(io.BytesIO(pdf)).pages)
+        for token in [SOURCE, TARGET, 'remote execution source', 'scanned target', 'ping=']:
+            self.assertIn(token, content)
+        if output == OUTPUT:
+            for port in PORTS:
+                self.assertIn(f'{port}={pair["tcp"][str(port)]}', content)
 
     def test_multiple_sources_targets_historical(self):
         events = []
