@@ -23,7 +23,7 @@ $ErrorActionPreference = 'Stop'
 $script:task = $null
 $script:service = $null
 function Get-ScheduledTask { param($TaskName,$TaskPath,$ErrorAction) if($TaskPath -ne '\'){throw 'wrong_task_path'}; $script:task }
-function New-ScheduledTaskAction { param($Execute,$Argument) @{Execute=$Execute;Argument=$Argument} }
+function New-ScheduledTaskAction { param($Execute,$Argument) @{Execute=$Execute;Arguments=$Argument} }
 function New-ScheduledTaskTrigger { param([switch]$Daily,[switch]$Once,$At,$RepetitionInterval,$RepetitionDuration) @{At=$At;RepetitionInterval=$RepetitionInterval} }
 function Stop-ScheduledTask { param($TaskName,$TaskPath,$ErrorAction) }
 function Register-ScheduledTask { param($TaskName,$TaskPath,$Description,$Action,$Trigger,$User,$RunLevel,[switch]$Force) if($TaskPath -ne '\'){throw 'wrong_task_path'}; $script:task = [pscustomobject]@{Description=$Description;Actions=$Action;Triggers=$Trigger} }
@@ -83,6 +83,14 @@ function Invoke-CimMethod { param($InputObject,$MethodName) if($MethodName -ne '
                                     text=True, capture_output=True, timeout=60)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertTrue(output.is_file())
+            # Execute only the expired maintenance branch: it must return before
+            # ServiceController, SCM registration or any DNS socket is touched.
+            (Path(tmp) / 'config.txt').write_text('enabled|evilcorp.test|192.168.1.53|60|3600\n0\n')
+            expired = subprocess.run([str(output), '--maintain'], capture_output=True, timeout=10)
+            self.assertEqual(expired.returncode, 0)
+            self.assertFalse((Path(tmp) / 'status.txt').exists())
+            invalid = subprocess.run([str(output), '--unknown'], capture_output=True, timeout=10)
+            self.assertNotEqual(invalid.returncode, 0)
 
 
 if __name__ == '__main__':

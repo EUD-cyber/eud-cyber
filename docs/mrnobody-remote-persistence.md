@@ -40,7 +40,7 @@ is independent of Normal/Slow/Custom campaign timing and campaign completion.
 
 | Method | Mechanisms and scope | Prerequisites |
 | --- | --- | --- |
-| task-service | Real Windows Service Control Manager service plus a visible SYSTEM Scheduled Task every minute. The task checks the deadline and starts the service. Native .NET ServiceBase executable under %ProgramData%\MrNobody\P11\<name>, with maintain.ps1, config.txt, owner.txt and status.txt. Manual service startup; task maintains it. | WinRM, administrative task/service rights, Windows PowerShell and .NET Framework 4.6+ compiler with System.ServiceProcess.dll. Source is packaged in persistence_actions.py; no downloaded wrapper/package. Executable/config directory ACL is Administrators/SYSTEM only. Service runs as LocalSystem with explicit administrative lab access. |
+| task-service | Real Windows Service Control Manager service plus a visible SYSTEM Scheduled Task every minute. The task checks the deadline and starts the service. Native .NET ServiceBase executable under %ProgramData%\MrNobody\P11\<name>, with config.txt, owner.txt and status.txt. The same native executable supports a fixed --maintain mode, avoiding any task dependency on PowerShell script execution policy. Manual service startup; task maintains it. | WinRM, administrative task/service rights, Windows PowerShell and .NET Framework 4.6+ compiler with System.ServiceProcess.dll. Source is packaged in persistence_actions.py; no downloaded wrapper/package. Executable/config directory ACL is Administrators/SYSTEM only. Service runs as LocalSystem with explicit administrative lab access. |
 | cron-systemd | One marked user-crontab entry every minute checks/starts ~/.config/systemd/user/<name>.service. Long-running Type=simple Python worker; files under ~/.config/mrnobody/<name>. | SSH, Python 3, crontab, /usr/bin/systemctl and an existing reachable user systemd manager. No sudo or linger changes. Cron sets XDG_RUNTIME_DIR to the existing /run/user/<uid>. Persistence is limited to that manager's lifecycle. |
 
 Configuration is available through standalone GUI/API/CLI, Scenario Builder and
@@ -109,9 +109,9 @@ Windows uses winrm-http or winrm-https and task-service with lab admin access.
 
 ## Integration and evidence
 
-Full Incident order: P01 → P02 → P03 → P08 (optional) → P09 (DC prerequisite)
-→ P10 (existing opt-in, Auto) → **P11 (required integration, Auto)** → P04 → P05
-→ P06 → P07. Custom fixed-target runs need no discovery prerequisites. Custom
+Full Incident keeps the current order: P01 → P02 → P15 → P03 → optional P08 →
+P09 → optional P10 → **P11** → P12 → P13 → P14 → P18 → P16 → P04 → P17 →
+P05 → P06 → P07. Unsupported prerequisites retain their existing skip behavior. Custom fixed-target runs need no discovery prerequisites. Custom
 Auto runs add/lock dependencies before Review. Normal, Slow and Custom Timing,
 CLI/GUI standalone, scheduler, imports/exports and live status use the existing
 phase registry and structured execution model (schema version remains 1).

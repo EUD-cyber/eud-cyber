@@ -340,7 +340,23 @@ public class MrNobodyLabService : ServiceBase {
         } catch(Exception) { EventLog.WriteEntry(ServiceName, "MrNobody P11 safe worker stopped; check owned configuration.", EventLogEntryType.Warning); }
         ThreadPool.QueueUserWorkItem(delegate { Stop(); });
     }
-    public static void Main() { ServiceBase.Run(new MrNobodyLabService()); }
+    public static int Main(string[] args) {
+        if(args.Length == 1 && args[0] == "--maintain") {
+            try {
+                string[] config = File.ReadAllLines(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.txt"));
+                if(config.Length != 2 || config[0] != "__SETTINGS__") return 1;
+                if(DateTimeOffset.UtcNow.ToUnixTimeSeconds() >= long.Parse(config[1])) return 0;
+                using(ServiceController service = new ServiceController("__NAME__")) {
+                    if(service.Status == ServiceControllerStatus.Stopped) service.Start();
+                    service.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(10));
+                }
+                return 0;
+            } catch(Exception) { return 1; }
+        }
+        if(args.Length != 0) return 1;
+        ServiceBase.Run(new MrNobodyLabService());
+        return 0;
+    }
 }
 '''
 
@@ -424,20 +440,15 @@ __SOURCE__
 if (-not $old) {
     New-Service -Name $name -BinaryPathName ('"' + $exe + '"') -DisplayName ($name + ' visible DNS simulation') -Description $marker -StartupType Manual | Out-Null
 }
-$maintain = @'
-$ErrorActionPreference = 'Stop'
-$lines = @(Get-Content -LiteralPath '__CONFIG__')
-if ($lines.Count -eq 2 -and [long]$lines[1] -gt [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()) { Start-Service -Name '__NAME__' }
-'@
-$maintain = $maintain.Replace('__CONFIG__', $config.Replace("'", "''"))
-[IO.File]::WriteAllText((Join-Path $dir 'maintain.ps1'), $maintain)
-$a = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" -Argument ('-NoProfile -NonInteractive -File "' + (Join-Path $dir 'maintain.ps1') + '"')
+# Same native executable supports a fixed deadline-checked maintenance mode.
+# This avoids dependence on PowerShell script execution policy for the task.
+$a = New-ScheduledTaskAction -Execute $exe -Argument '--maintain'
 $t = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Seconds ([Math]::Max(60, $deadline - [DateTimeOffset]::UtcNow.ToUnixTimeSeconds())))
 Register-ScheduledTask -TaskName $name -TaskPath '\' -Description $marker -Action $a -Trigger $t -User 'SYSTEM' -RunLevel Highest -Force | Out-Null
 Start-Service -Name $name
 for ($i=0; $i -lt 20 -and -not (Test-Path (Join-Path $dir 'status.txt')); $i++) { Start-Sleep -Milliseconds 250 }
 $verified = Get-ScheduledTask -TaskName $name -TaskPath '\' -ErrorAction Stop
-if ((Get-Service -Name $name).Status -ne 'Running' -or -not $verified.Triggers -or -not $verified.Actions) { throw 'create_verification_failed' }
+if ((Get-Service -Name $name).Status -ne 'Running' -or -not $verified.Triggers -or $verified.Actions.Execute -ne $exe -or $verified.Actions.Arguments -ne '--maintain') { throw 'create_verification_failed' }
 $status = [IO.File]::ReadAllText((Join-Path $dir 'status.txt'))
 Write-Output ('MRN_P11=1,1,' + $deadline + ',' + $status)
 """.replace('__SOURCE__', code).replace('__SETTINGS__', settings)
@@ -445,7 +456,10 @@ Write-Output ('MRN_P11=1,1,' + $deadline + ',' + $status)
 Write-Output ('MRN_P11_PATH=artifact_path,' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($dir)))
 Write-Output ('MRN_P11_PATH=service_path,' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($exe)))
 """
-    return (prelude + body + paths).replace('__NAME__', name)
+    source = (prelude + body + paths).replace('__NAME__', name)
+    return ("$mutex = New-Object Threading.Mutex($false, 'Global\\" + name + "')\n"
+            "if (-not $mutex.WaitOne(30000)) { $mutex.Dispose(); throw 'persistence_action_busy' }\n"
+            "try {\n" + source + "\n} finally { $mutex.ReleaseMutex(); $mutex.Dispose() }\n")
 
 
 LINUX_WORKER = r"""import base64, os, pathlib, socket, subprocess, sys, time
