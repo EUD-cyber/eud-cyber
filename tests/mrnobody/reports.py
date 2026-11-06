@@ -50,7 +50,7 @@ class Reports(unittest.TestCase):
         before = {p: p.read_bytes() for p in self.base.rglob("*") if p.is_file()}
         report = build_report(self.base, self.id)
         self.assertEqual(report["incident"]["status"], "complete")
-        self.assertEqual(report["summary"], {"hosts": 1, "compromised": 1, "exfiltration": 1, "impact": 0})
+        self.assertEqual(report["summary"], {"hosts": 1, "compromised": 1, "exfiltration": 1, "impact": 0, "involved_hosts": 3})
         self.assertEqual([p["id"] for p in report["phases"]], ["01", "02", "03", "08", "04", "05", "06", "07"])
         phase = report["phases"][2]
         self.assertEqual(phase["status"], "success")

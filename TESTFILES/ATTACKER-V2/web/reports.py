@@ -192,6 +192,101 @@ def p04_summary(events):
         'truncated': any(e.get('event') == 'INTERNAL_DISCOVERY_TRUNCATED' for e in events)}
 
 
+def artifact_evidence(host, name, action, timestamp=None, verification='unverified',
+                      purpose=None, inspection=None, cleanup=None, references=None, kind='file', **metadata):
+    """Common observation contract. Adapters must not infer creation from completion."""
+    item = dict(schema_version=1, host=host, name=name, kind=kind, action=action,
+                timestamp=timestamp, verification=verification, purpose=purpose,
+                inspection=inspection or [], cleanup=cleanup or 'Not recorded',
+                references=references or [], **metadata)
+    item['display'] = [[k.replace('_', ' ').title(), str(v) if v is not None else 'Unrecorded'] for k, v in item.items() if k not in {'inspection', 'references', 'schema_version'}]
+    item['display'] += [['Evidence', str(r)] for r in item['references']]
+    return item
+
+
+def p05_artifacts(report, phase):
+    import ntpath
+    import posixpath
+    import shlex
+    events = phase.get('events', [])
+    artifacts, users = {}, {}
+    for e in events:
+        f = e.get('fields', {})
+        if e.get('event') == 'STAGING_START':
+            users[f.get('host')] = f.get('user')
+    def observe(f, timestamp, ref):
+        host, path = f.get('host') or f.get('ip'), f.get('file')
+        if not address(host) or not isinstance(path, str) or not path or any(ord(c) < 32 for c in path):
+            return
+        item = artifacts.setdefault((host, path), dict(host=host, file=path, references=[]))
+        if timestamp:
+            item['timestamp'] = timestamp
+            # A later success may have no hash; do not attach an older hash to new bytes.
+            item['sha256'], item['size'] = f.get('sha256'), f.get('size')
+        if ref and ref not in item['references']:
+            item['references'].append(ref)
+        for k in ('platform', 'access', 'user', 'sha256', 'size', 'producer_phase'):
+            if f.get(k) is not None and f[k] != '':
+                if timestamp or k not in item:
+                    item[k] = f[k]
+    for e in events:
+        if e.get('event') == 'STAGING_SUCCESS':
+            observe(e.get('fields', {}), e.get('timestamp'), e.get('evidence'))
+    state = (report.get('evidence') or {}).get('staging') or {}
+    if state.get('incident_id') == report.get('incident', {}).get('id'):
+        for i, h in enumerate(state.get('hosts', [])):
+            if h.get('staged') is not False:
+                observe(dict(h, user=h.get('ssh_user') or h.get('ssh_username') or h.get('rdp_user') or h.get('rdp_username')), None,
+                        dict(path=report.get('sources', {}).get('staging', 'staged-data.json'), pointer=f'/hosts/{i}'))
+    result = []
+    for item in artifacts.values():
+        host, path = item['host'], item['file']
+        platform = item.get('platform', 'unknown')
+        paths = ntpath if platform == 'windows' else posixpath
+        method = item.get('access') or ('WinRM' if platform == 'windows' else 'SSH' if platform == 'linux' else 'unrecorded')
+        sha = str(item.get('sha256', ''))
+        sha = sha.lower() if re.fullmatch(r'[a-fA-F0-9]{64}', sha) else None
+        size = str(item.get('size', ''))
+        size = int(size) if re.fullmatch(r'\d{1,18}', size) else None
+        if platform == 'windows':
+            q = "'" + path.replace("'", "''") + "'"
+            commands = [f'Get-Item -LiteralPath {q}', f'Get-Content -LiteralPath {q}', f'Get-FileHash -Algorithm SHA256 -LiteralPath {q}']
+        elif platform == 'linux' and path.startswith('/'):
+            q = shlex.quote(path)
+            commands = [f'ls -lah -- {q}', f'cat -- {q}', f'sha256sum -- {q}']
+        else:
+            commands = []
+        retained = str(item.get('producer_phase')) == '17'
+        purpose = ('Retained P17 synthetic collection archive; consult P17 for selected datasets. P05 did not create it.' if retained else
+            'P05 generator template: five synthetic customer/order rows (CUSTOMER_ID, NAME, EMAIL, ORDER_VALUE; example.invalid addresses), fictitious NordicERP, NordicMES production and NordicShop webshop information. Markers: SIMULATED INCIDENT DATA and Synthetic CyberLab Training Data. CONFIDENTIAL is a simulated label; no real confidential customer/employee data is collected. Template description, not independent content inspection.')
+        a = artifact_evidence(host, path, 'retained for staging' if retained else 'created for staging',
+            timestamp=item.get('timestamp'), verification=('Remote staging success recorded' + ('; size recorded' if size is not None else '; size unavailable') + ('; SHA256 recorded' if sha else '; SHA256 unavailable')),
+            purpose=purpose, inspection=commands, cleanup='Retained for P06; P05 exposes no cleanup. After the exercise remove only independently confirmed incident artifacts.',
+            references=item['references'], platform=platform, method=method.upper(), user=item.get('user') or users.get(host),
+            directory=paths.dirname(path), filename=paths.basename(path), size_bytes=size, sha256=sha,
+            classification='synthetic-training-data', result='staged', phase='05')
+        a['display'] = [[label, str(value) if value is not None else 'Unrecorded'] for label, value in (
+            ('Host', host), ('Platform', platform), ('Remote method', a['method']), ('User', a['user']),
+            ('Action', a['action']), ('Directory', a['directory']), ('Full path', path), ('Filename', a['filename']),
+            ('Size (bytes)', size), ('SHA256', sha), ('Classification', a['classification']), ('Result', a['result']),
+            ('Timestamp', a['timestamp']), ('Verification', a['verification']), ('Content / purpose', purpose),
+            ('P06 relationship', 'Staging prepares data for P06 Exfiltration; this evidence establishes no transfer or receiver.'),
+            ('Investigation', f'On {host}, correlate {a["method"]} execution/account and file creation at the recorded time. Inspect Wazuh FIM/audit, Linux SSH/journal/auditd or Windows WinRM/PowerShell/Sysmon 1/11 where configured. Search synthetic data markers; these are investigation sources, not observed SIEM detections.'),
+            ('Inspection caveat', f'Run these read-only commands locally on {host} using an authorized account. Compare the current file with recorded size/hash; it may have changed. Never paste file text into a shell. Reading may update access/audit metadata.'),
+            ('Cleanup', a['cleanup']))]
+        a['display'] += [['Evidence', f"{r.get('path', 'ground truth')}:{r.get('line', r.get('pointer', '?'))}"] for r in a['references']]
+        result.append(a)
+    terminal = next((e.get('fields', {}) for e in reversed(events) if e.get('event') == 'PHASE_COMPLETE'), {})
+    def count(key, event):
+        value = str(terminal.get(key, ''))
+        return int(value) if value.isdigit() else sum(e.get('event') == event for e in events) if events else None
+    hosts = {a['host'] for a in result} | {e.get('fields', {}).get('host') for e in events if e.get('event') == 'STAGING_SUCCESS' and address(e.get('fields', {}).get('host'))}
+    metrics = dict(hosts_staged=len(hosts), artifacts_created=sum(a['action'] == 'created for staging' for a in result),
+        artifacts_recorded=len(result), total_bytes_staged=sum(a['size_bytes'] or 0 for a in result),
+        unknown_sizes=sum(a['size_bytes'] is None for a in result), failed=count('failed', 'STAGING_FAILED'), skipped=count('skipped', 'STAGING_SKIPPED'))
+    return result, metrics
+
+
 def add_analysis(report):
     """Add a versioned student view without changing the underlying phase evidence."""
     summary = {}
@@ -223,6 +318,21 @@ def add_analysis(report):
             "guidance_notice": "Educational recommendations, not evidence that a sensor detected or a control prevented this activity. Apply only to recorded actions/protocols; logging and audit configuration vary.",
             "mitre_notice": "Mapped from phase metadata, not proof that every technique executed or succeeded.",
         }
+        if phase['id'] == '17':
+            phase['artifacts'] = [artifact_evidence(
+                e.get('target') or e.get('fields', {}).get('target'), e['fields']['archive_path'], 'archive created', kind='archive',
+                timestamp=e.get('timestamp'), verification='Remote archive size/hash and selected files recorded',
+                purpose='Synthetic collection archive; selected files: ' + e['fields'].get('files_selected', 'unrecorded'),
+                cleanup=e['fields'].get('cleanup'), references=[e['evidence']] if e.get('evidence') else [],
+                size_bytes=e['fields'].get('size'), sha256=e['fields'].get('sha256'))
+                for e in events if e.get('event') == 'COLLECTION_ACTION_SUCCESS' and e.get('fields', {}).get('archive_path')]
+        if phase['id'] == '05':
+            phase['artifacts'], phase['artifact_metrics'] = p05_artifacts(report, phase)
+            phase['artifact_overview'] = 'Data Staging Findings (T1074): ' + '; '.join(f'{k.replace("_", " ")}: {v if v is not None else "unknown"}' for k, v in phase['artifact_metrics'].items()) + '. Phase completion is separate from host results; staging establishes no new compromise or exfiltration.'
+            phase['staging_hosts'] = sorted({a['host'] for a in phase['artifacts']} | {e.get('fields', {}).get('host') for e in events if e.get('event') == 'STAGING_SUCCESS' and address(e.get('fields', {}).get('host'))})
+            phase['artifact_outcomes'] = [f"{e.get('timestamp')} · {e.get('message')}" for e in events if e.get('event') in {'STAGING_FAILED', 'STAGING_SKIPPED'}]
+            phase['artifact_outcomes'] += [f"Host {host}: staging success recorded, but no artifact path/size/hash was captured; inspect the incident Ground Truth and producer evidence." for host in phase['staging_hosts'] if not any(a['host'] == host for a in phase['artifacts'])]
+            phase['analysis']['what_happened'] = phase['artifact_overview']
         if phase['id'] == '04':
             discovery = p04_summary(events)
             phase['discovery'] = discovery
@@ -310,7 +420,17 @@ def add_analysis(report):
             phase['action_outcome'] = ('Persistence: ' if phase['id'] == '11' else 'Windows Native Tools / LOLBins: ') + str(phase.get('status', 'not_run')) + '; verify artifact and cleanup metadata'
             phase['analysis']['what_happened'] = phase['action_outcome']
             phase['analysis']['findings'] = details or ['No persistence artifact evidence recorded']
-    report["analysis_version"] = 2
+    if any(p.get('id') == '05' and (p.get('events') or p.get('artifacts')) for p in report.get('phases', [])):
+        involved = {a['host'] for p in report['phases'] for a in p.get('artifacts', [])}
+        involved |= {e.get(k) for p in report['phases'] for e in p.get('events', []) for k in ('source', 'target') if address(e.get(k))}
+        involved |= {h.get('ip') for h in (report.get('inventory') or {}).get('hosts', []) if h.get('ip')}
+        report.setdefault('summary', {})['involved_hosts'] = len(involved)
+    if report.get('report_type') == 'standalone_phase' and report.get('phase_id') == '05':
+        unrelated = set(STATE_FILES) - {'staging'}
+        report['warnings'] = [w for w in report.get('warnings', []) if not any(w.startswith('Unavailable ' + k + ':') for k in unrelated)]
+        for k in unrelated:
+            report.setdefault('evidence_availability', {})[k] = 'not applicable / not produced by standalone P05'
+    report["analysis_version"] = 3
     report["mitre_summary"] = list(summary.values())
     report.setdefault("report_type", "campaign")
     return report
@@ -461,11 +581,11 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
     for key, (filename, variable) in STATE_FILES.items():
         path = Path(environ.get(variable, state_dir / filename) if variable else state_dir / filename)
         sources[key] = str(path)
-        if standalone is not None and standalone['phase_id'] == '04':
-            # P04 produces its own incident evidence, never consumes foreign snapshots
-            # as evidence. Campaign input provenance remains in the execution log.
+        if standalone is not None and (standalone['phase_id'] == '04' or standalone['phase_id'] == '05' and key != 'staging'):
+            # These standalone phases produce their own evidence; unrelated snapshots
+            # are not report inputs. Campaign provenance remains in execution logs.
             snapshots[key] = None
-            availability[key] = 'not applicable / not produced by standalone P04'
+            availability[key] = 'not applicable / not produced by standalone P' + standalone['phase_id']
             continue
         try:
             data = read_json(path)

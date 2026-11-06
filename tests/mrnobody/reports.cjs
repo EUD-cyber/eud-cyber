@@ -167,7 +167,8 @@ async function main() {
     assert.deepEqual(assetStates.find(a => a.ip === "discovered-only").states, ["discovered"]);
     assert.deepEqual(assetStates.find(a => a.ip === "attempt-only").states, ["targeted"]);
     assert.deepEqual(assetStates.find(a => a.ip === "failed-transfer").states, ["targeted"]);
-    for (const ip of ["receiver", "no-stage", "no-impact"]) assert.ok(!assetStates.some(a => a.ip === ip));
+    for (const ip of ["no-stage", "no-impact"]) assert.ok(!assetStates.some(a => a.ip === ip));
+    assert.deepEqual(assetStates.find(a => a.ip === "receiver").states, ["downstream receiver"]);
     assert.match(text(root), /exfiltration.transfers \(successful\)/);
 
     // Missing fields remain readable and distinct from a known zero.
@@ -281,6 +282,29 @@ async function main() {
         if(groundTruth)for(const token of ['192.168.1.20','192.168.1.1','22=open','80=open','443=open','445=closed','3389=closed','5985=closed','5986=closed'])assert.ok(text(root).includes(token));
         assert.ok(!descendants(root).some(n=>n.tag==='img'));
     }
+    context.p05report = {incident:{id:'MRN-p05'}, summary:{compromised:0,involved_hosts:1}, phases:[{
+        id:'05', name:'Data Staging', status:'success', artifact_overview:'Data Staging Findings: hosts staged: 1; failed: 1',
+        staging_hosts:['192.168.1.20'], artifact_outcomes:['STAGING_FAILED host=192.168.1.40'],
+        artifacts:[{host:'192.168.1.20', filename:'nordic-data-MRN-p05.txt', sha256:'a'.repeat(64),
+            display:[['Full path','/tmp/.nordic-MRN-p05/nordic-data-MRN-p05.txt'],['SHA256','a'.repeat(64)],['Size (bytes)','1177'],['Content / purpose','Synthetic customer/order data <script>']],
+            inspection:['cat -- /tmp/.nordic-MRN-p05/nordic-data-MRN-p05.txt']}]}]};
+    for (const mode of ['investigation','ground-truth']) {
+        root.replaceChildren();
+        vm.runInContext("renderReport(document.getElementById('reportDetail'),p05report,'MRN-p05','"+mode+"')",context);
+        for(const value of ['Data Staging Findings','1177','a'.repeat(64),'cat -- /tmp/.nordic-MRN-p05/nordic-data-MRN-p05.txt','authenticated staging source','STAGING_FAILED']) assert.ok(text(root).toLowerCase().includes(value.toLowerCase()),value);
+        assert.ok(!descendants(root).some(n=>n.tag==='script'));
+        assert.ok(descendants(root).some(n=>n.className==='report-artifact'));
+    }
+    let copied;
+    context.navigator = {clipboard:{writeText:async value => {copied=value;}}};
+    root.replaceChildren();
+    vm.runInContext("renderReportPhase(document.getElementById('reportDetail'),p05report.phases[0],false)",context);
+    await descendants(root).find(n=>n.textContent==='Copy SHA256').listeners.click();
+    assert.equal(copied,'a'.repeat(64));
+    assert.ok(text(root).includes('Copied SHA256'));
+    context.p05assets = vm.runInContext('reportAssets(p05report)', context);
+    assert.ok(!context.p05assets[0].states.has('compromised'));
+    assert.ok(!context.p05assets[0].states.has('exfiltrated'));
     console.log("Reports UI passed: overview, canonical timeline/status/navigation, P09/P10, MITRE dedupe/trusted links, evidence-based assets, filters/host search, collapsed raw evidence, historical/empty/error states, response races and text-safe rendering.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

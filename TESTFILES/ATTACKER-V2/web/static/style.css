@@ -2151,3 +2151,7 @@ footer { font-size: 11px; color: var(--text-muted); padding: 18px; }
     background: #0d1523;
 }
 .campaign-action-section > .config-section-title { margin-top: 0; }
+
+.report-artifact { min-width:0; border:1px solid #405166; border-radius:8px; padding:16px; margin:12px 0; overflow-wrap:anywhere; }
+.report-artifact p, .report-artifact h4 { overflow-wrap:anywhere; white-space:pre-wrap; }
+.report-artifact pre { white-space:pre-wrap; overflow-wrap:anywhere; word-break:break-word; }

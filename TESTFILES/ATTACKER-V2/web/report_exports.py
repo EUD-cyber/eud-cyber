@@ -109,7 +109,7 @@ def report_document(report, view="investigation"):
                        ("exfiltration", "Exfiltration transfers recorded"), ("impact", "Impacted hosts")]:
         add("p", f"{label}: {text(summary.get(key))}")
     if summary.get("involved_hosts") is not None:
-        add("p", f"Involved hosts (P04 and inventory): {summary['involved_hosts']}")
+        add("p", f"Involved hosts (incident evidence): {summary['involved_hosts']}")
     heading("Attack timeline")
     for phase in phases:
         add("p", f"{text(phase.get('id'))} - {text(phase.get('name'))} | {text(phase.get('status'))} | {text(phase.get('started'))} to {text(phase.get('ended'))}")
@@ -138,10 +138,16 @@ def report_document(report, view="investigation"):
     if not array(inventory.get("hosts")):
         add("p", "No recorded inventory available.")
     for phase in phases:
+        for host in array(phase.get('staging_hosts')):
+            add('p', f'Host: {host} | Role: authenticated staging source; no transfer or new compromise established.')
+        for a in (array(phase.get('artifacts')) if phase.get('id') == '05' else []):
+            add('p', f"Host: {a.get('host')} | Role: authenticated staging source | Method: {a.get('method')} | Staging alone establishes no compromise or transfer.")
         for source in array(obj(phase.get('discovery')).get('sources'))[:100]:
             add('p', f"Host: {text(source.get('source'))} | Role: remote execution source | Platform: {text(source.get('platform'))} | Transport: {text(source.get('transport'))}")
         for pair in array(obj(phase.get('discovery')).get('targets'))[:100]:
             add('p', f"Host: {text(pair.get('target'))} | Role: scanned target | Source: {text(pair.get('source'))}")
+    for transfer in array(obj(evidence.get('exfiltration')).get('transfers')):
+        add('p', f"Host: {text(transfer.get('destination'))} | Role: downstream receiver; not a staged or compromised host by this evidence.")
     if full:
         add("h3", "Actual compromised hosts")
         dump(report.get("compromised_hosts") or evidence.get("compromised") or "Unavailable")
@@ -150,6 +156,17 @@ def report_document(report, view="investigation"):
     for phase in phases:
         add("h3", f"{text(phase.get('id'))} - {text(phase.get('name'))}")
         add("p", f"Phase status: {text(phase.get('status'))}")
+        if phase.get('artifact_overview'):
+            add('h3', 'Data Staging Findings')
+            add('p', phase['artifact_overview'])
+        for detail in array(phase.get('artifact_outcomes')):
+            add('p', detail)
+        for artifact in array(phase.get('artifacts')):
+            add('h3', artifact.get('filename') or artifact.get('name'))
+            for label, value in array(artifact.get('display')):
+                add('p', f'{label}: {value}')
+            for command in array(artifact.get('inspection')):
+                add('code', command)
         if phase.get('discovery_overview'):
             add('p', phase['discovery_overview'])
             if full:

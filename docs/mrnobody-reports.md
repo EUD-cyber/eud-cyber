@@ -272,3 +272,64 @@ For the verified 192.168.1.20 → 192.168.1.1 test, Ground Truth shows Linux/SSH
 Investigation retains prompts and aggregate overview; exact probe answers and references appear in Ground Truth GUI/HTML/PDF. Details show at most 100 sources and pairs; raw event previews are bounded and full recorded JSON remains available. T1082/T1016/T1018 are phase metadata: this TCP/ICMP evidence supports remote system discovery, not successful lateral compromise or proof that system-information/configuration queries ran.
 
 Offline regressions: python tests/mrnobody/p04_evidence.py (Linux runs mocked SSH/WinRM execution, Auto/P03/P01 and standalone wrapper, failures and absent responses, immutable JSON and HTML/PDF); node tests/mrnobody/reports.cjs covers safe text rendering and host roles. No live targets are contacted.
+
+
+## Artifact evidence standard and P05 workflow
+
+File-producing phases should project observations through `artifact_evidence` in
+`web/reports.py`. The versioned record includes kind (file, archive, service,
+scheduled task, cron entry, systemd unit, DNS simulation artifact, etc.), host,
+name/path, action, timestamp, verification, content/purpose when known,
+read-only inspection guidance, cleanup instructions/status and source references.
+Missing values remain unrecorded. A phase completing is never sufficient evidence
+of an artifact or its successful cleanup. Adapters must explicitly select actual
+action evidence. `display` holds text-only label/value pairs shared by the GUI and
+HTML/PDF exporters; `inspection` contains separately displayed example commands.
+Never put host text into HTML or execute inspection commands in the report server.
+
+P05 now parses historical STAGING_START / STAGING_SUCCESS fields (including Windows
+paths) into structured artifacts and supplements missing fields only from a
+strictly matching staged-data.json incident snapshot. The identity is host plus
+full path. Repeated observations merge references; the latest event supplies the
+recorded result, timestamp, size and hash. State generation time is not claimed as
+file creation time. Immutable historical JSON files are enriched on read, not
+rewritten. Old unquoted free-form fields can be ambiguous (for example a filename
+containing ` key=`); only recoverable fields are projected. Invalid hashes/sizes
+remain unavailable. Full raw events and Ground Truth line references remain intact.
+
+Both report views and both export formats show Data Staging Findings with each
+host, SSH/WinRM method, safely recorded user, created directory, exact file path,
+filename, byte size, full SHA256, timestamp and synthetic-data classification.
+Long values wrap; the GUI offers SHA256 copy when browser clipboard access exists.
+Metrics distinguish successfully staged hosts, unique artifacts created/recorded,
+known total bytes, unknown sizes, failed/skipped outcomes and overall phase status.
+Retained P17 archives count as staged, never newly created P05 files. P17 adopts
+the shared component only for already-recorded successful archive creation;
+other phases keep their current reports until explicit adapters are implemented.
+The generic model supports those artifact types without inventing observations.
+
+On the recorded host, use the provided exact-path `ls -lah`, `cat`, `sha256sum`
+(Linux) or `Get-Item`, `Get-Content`, `Get-FileHash -LiteralPath` (Windows) examples
+with an authorized account. Commands quote paths for the respective shell and are
+read-only, although reads may update access/audit metadata. Compare current size
+and hash with the capture; the file may have changed. Correlate SSH/WinRM execution,
+account, creation time and synthetic markers with Wazuh FIM/audit, auditd/journal,
+PowerShell and Sysmon where configured. These are investigation suggestions, not
+claims of detected SIEM events or independently verified file contents.
+
+The P05 generator writes five synthetic customer/order rows using example.invalid
+addresses plus fictitious NordicERP/NordicMES/NordicShop system information. The
+CONFIDENTIAL label is part of the simulation; this is no real confidential dataset.
+Retained P17 archives use their own collection evidence instead of this template
+description. T1074 Data Staged describes preparation for P06, not exfiltration.
+Affected Assets identifies the authenticated staging source separately from a
+receiver observed in P06 evidence; neither role establishes a new compromise.
+Standalone P05 can correctly show zero P03-compromised hosts while showing involved
+and staged hosts. Unrelated phase snapshots are not applicable/not produced;
+foreign staging snapshots remain excluded with a visible mismatch warning and real
+P05 failures remain visible. P05 retains artifacts for P06 and offers no automatic
+cleanup; remove only independently confirmed incident artifacts after the exercise.
+
+Offline regressions: `python tests/mrnobody/staging_artifacts.py`,
+`node tests/mrnobody/reports.cjs`, existing report/export tests and validation CI.
+No VM access or deployment is required for this reporting change.
