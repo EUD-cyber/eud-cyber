@@ -168,6 +168,8 @@ class CampaignIntegration(unittest.TestCase):
                 (base / directory).mkdir()
             shutil.copy(PLATFORM / "scripts/run-phase.sh", base / "scripts/run-phase.sh")
             shutil.copy(PLATFORM / "web/reports.py", base / "web/reports.py")
+
+            shutil.copy(PLATFORM / "web/p04_evidence.py", base / "web/p04_evidence.py")
             (base / "config/defaults.conf").write_text(
                 'NORDIC_STATE_DIR="$NORDIC_BASE_DIR/state"\nNORDIC_GROUND_TRUTH_LOG="$NORDIC_BASE_DIR/logs/incident-ground-truth.log"\n', encoding="utf8")
             campaign = base / "state/campaign.json"
@@ -227,6 +229,8 @@ exit "${FIXTURE_EXIT:-0}"
                 (base / "config/defaults.conf").write_text(defaults, encoding="utf8", newline="\n")
                 if not broken_reporter:
                     shutil.copy(PLATFORM / "web/reports.py", base / "web/reports.py")
+
+                    shutil.copy(PLATFORM / "web/p04_evidence.py", base / "web/p04_evidence.py")
                 for source in (PLATFORM / "scripts").glob("[0-9][0-9]-*.sh"):
                     script = base / "scripts" / source.name
                     action = 'kill -TERM "$PPID"\nexit 0' if failure == "interrupt" and source.name.startswith("03") else (

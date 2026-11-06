@@ -94,6 +94,7 @@ jobs:
           node tests/mrnobody/scenarios.cjs
           node tests/mrnobody/logs.cjs
           node tests/mrnobody/reports.cjs
+          python tests/mrnobody/p04_evidence.py
           python tests/mrnobody/report_exports.py
       - name: Install isolated browser test dependencies
         run: |

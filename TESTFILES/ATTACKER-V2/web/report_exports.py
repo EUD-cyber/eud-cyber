@@ -74,8 +74,12 @@ def report_document(report, view="investigation"):
         add("h2", title)
     def dump(value):
         # One paragraph per JSON line allows long appendices to split across pages.
-        for line in json.dumps(value, ensure_ascii=False, indent=2).splitlines():
+        lines = json.dumps(value, ensure_ascii=False, indent=2).splitlines()
+        limit = 200 if any(p.get('discovery') for p in phases) else len(lines)
+        for line in lines[:limit]:
             add("code", line)
+        if len(lines) > limit:
+            add('p', f'Appendix preview: 200 of {len(lines)} lines. Full evidence remains in immutable incident JSON.')
     report_type = ("Standalone phase " + text(report.get("phase_id"))) if report.get("report_type") == "standalone_phase" else (incident.get("scenario_name") or "Full Incident")
     add("h1", "MrNobody Incident Report")
     add("p", incident.get("id"))
@@ -104,6 +108,8 @@ def report_document(report, view="investigation"):
     for key, label in [("hosts", "Hosts discovered"), ("compromised", "Compromised hosts"),
                        ("exfiltration", "Exfiltration transfers recorded"), ("impact", "Impacted hosts")]:
         add("p", f"{label}: {text(summary.get(key))}")
+    if summary.get("involved_hosts") is not None:
+        add("p", f"Involved hosts (P04 and inventory): {summary['involved_hosts']}")
     heading("Attack timeline")
     for phase in phases:
         add("p", f"{text(phase.get('id'))} - {text(phase.get('name'))} | {text(phase.get('status'))} | {text(phase.get('started'))} to {text(phase.get('ended'))}")
@@ -131,6 +137,11 @@ def report_document(report, view="investigation"):
             add("p", f"Host: {text(host.get('ip') or host.get('host'))} | Hostname: {text(host.get('hostname'))}")
     if not array(inventory.get("hosts")):
         add("p", "No recorded inventory available.")
+    for phase in phases:
+        for source in array(obj(phase.get('discovery')).get('sources'))[:100]:
+            add('p', f"Host: {text(source.get('source'))} | Role: remote execution source | Platform: {text(source.get('platform'))} | Transport: {text(source.get('transport'))}")
+        for pair in array(obj(phase.get('discovery')).get('targets'))[:100]:
+            add('p', f"Host: {text(pair.get('target'))} | Role: scanned target | Source: {text(pair.get('source'))}")
     if full:
         add("h3", "Actual compromised hosts")
         dump(report.get("compromised_hosts") or evidence.get("compromised") or "Unavailable")
@@ -139,6 +150,13 @@ def report_document(report, view="investigation"):
     for phase in phases:
         add("h3", f"{text(phase.get('id'))} - {text(phase.get('name'))}")
         add("p", f"Phase status: {text(phase.get('status'))}")
+        if phase.get('discovery_overview'):
+            add('p', phase['discovery_overview'])
+            if full:
+                for detail in array(phase.get('discovery_findings')):
+                    add('p', detail)
+            else:
+                add('p', 'Identify the remote execution source and scanned target separately. Correlate ping and TCP results with independent logs; exact answers are in Ground Truth View.')
         if phase.get('action_outcome'):
             add('p', phase['action_outcome'])
             for detail in array(phase.get('action_evidence')):
@@ -181,6 +199,10 @@ def report_document(report, view="investigation"):
     else:
         heading("Ground-truth appendix")
         add("p", "Choose Ground Truth View and export again to include recorded answers, exact action outcomes and technical evidence.")
+    if obj(report.get('evidence_availability')):
+        heading('Evidence availability')
+        for key, value in report['evidence_availability'].items():
+            add('p', f'{key}: {value}')
     if array(report.get("warnings")):
         heading("Evidence availability")
         for warning in report["warnings"]:

@@ -260,6 +260,27 @@ async function main() {
     const newIds=descendants(root).filter(n=>n.className?.includes('report-timeline-step')).map(n=>n.children[0].textContent.split(' · ')[0]);
     for(const [a,b] of [['14','18'],['18','16'],['02','15'],['15','03'],['13','16'],['16','17'],['17','05'],['05','06']])assert.ok(newIds.indexOf(a)<newIds.indexOf(b));
     assert.equal(vm.runInContext("reportStatus('partial')", context),'partial');
+    context.p04report = {incident:{id:'MRN-p04'}, summary:{hosts:0,compromised:0,involved_hosts:2},
+        phases:[{id:'04', name:'Internal Discovery',status:'success',
+            discovery_overview:'1 sources / 1 targets / 3 open TCP results',
+            discovery_findings:['source=192.168.1.20 target=192.168.1.1 transport=ssh ping=reachable 22=open 80=open 443=open 445=closed 3389=closed 5985=closed 5986=closed <img onerror=attack()>'],
+            events:[{event:'INTERNAL_DISCOVERY_TCP',source:'192.168.1.20',target:'192.168.1.1'}]}],
+        evidence_availability:{impact:'not applicable / not produced by standalone P04'}};
+    context.p04assets = vm.runInContext('reportAssets(p04report)',context);
+    assert.deepEqual([...context.p04assets.find(a=>a.ip==='192.168.1.20').states],['remote execution source']);
+    assert.deepEqual([...context.p04assets.find(a=>a.ip==='192.168.1.1').states],['scanned target','targeted']);
+    for(const mode of ['investigation','ground-truth']) {
+        root.replaceChildren();
+        vm.runInContext("renderReport(document.getElementById('reportDetail'),p04report,'MRN-p04','"+mode+"')",context);
+        for(const token of ['192.168.1.20','192.168.1.1','Remote execution source','Scanned target'])assert.ok(text(root).toLowerCase().includes(token.toLowerCase()));
+    }
+    for(const groundTruth of [false,true]) {
+        root.replaceChildren();
+        vm.runInContext("renderReportPhase(document.getElementById('reportDetail'),p04report.phases[0],"+groundTruth+")",context);
+        assert.equal(text(root).includes('ping=reachable'),groundTruth);
+        if(groundTruth)for(const token of ['192.168.1.20','192.168.1.1','22=open','80=open','443=open','445=closed','3389=closed','5985=closed','5986=closed'])assert.ok(text(root).includes(token));
+        assert.ok(!descendants(root).some(n=>n.tag==='img'));
+    }
     console.log("Reports UI passed: overview, canonical timeline/status/navigation, P09/P10, MITRE dedupe/trusted links, evidence-based assets, filters/host search, collapsed raw evidence, historical/empty/error states, response races and text-safe rendering.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

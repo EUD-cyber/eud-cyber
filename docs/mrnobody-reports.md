@@ -260,3 +260,15 @@ for CLIXML cleanup, sensitive-output withholding and redaction limitations.
 historical raw compatibility/immutability, links, text safety, redaction, PDF
 pagination/content, long evidence, invalid requests and missing dependency.
 
+
+## P04 internal discovery evidence
+
+P04 keeps the existing Linux SSH and Windows WinRM probes and configured port set. It now captures exact DISCOVERY, PING and TCP stdout records through web/p04_evidence.py. Only allowlisted IP targets and ports, exact line grammar and results following a DISCOVERY marker are accepted; duplicate results use the first observation. Arbitrary remote text cannot inject Ground Truth events. These remain source-reported observations, not independent sensor detections. Capture is bounded at 8 MiB / 65,536 accepted records per source; a truncation event identifies incomplete evidence.
+
+Incident JSON phase 04 contains discovery.sources, discovery.targets (source-target pairs), discovery.probes with timestamps and Ground Truth path/line references, counts and a truncation flag. Planned ports without responses are unknown. No-reply does not establish host absence; closed preserves the existing probe's result and can include timeout/filtering. Execution completion is separate from probe status. Remote execution failure returns failure while retaining partial observed evidence. Historical generic INTERNAL_DISCOVERY events remain readable and never acquire inferred ping or port results.
+
+For the verified 192.168.1.20 → 192.168.1.1 test, Ground Truth shows Linux/SSH, ping reachable, 22/80/443 open and 445/3389/5985/5986 closed. Both hosts are involved: remote execution source and scanned target. Neither role establishes new compromise. Hosts discovered remains inventory count; compromised remains incident-scoped compromise state; involved hosts is the P04 source/target plus inventory union. Standalone P04 consumes no unrelated state snapshots as report evidence; availability reads not applicable / not produced, without importing foreign incident IDs.
+
+Investigation retains prompts and aggregate overview; exact probe answers and references appear in Ground Truth GUI/HTML/PDF. Details show at most 100 sources and pairs; raw event previews are bounded and full recorded JSON remains available. T1082/T1016/T1018 are phase metadata: this TCP/ICMP evidence supports remote system discovery, not successful lateral compromise or proof that system-information/configuration queries ran.
+
+Offline regressions: python tests/mrnobody/p04_evidence.py (Linux runs mocked SSH/WinRM execution, Auto/P03/P01 and standalone wrapper, failures and absent responses, immutable JSON and HTML/PDF); node tests/mrnobody/reports.cjs covers safe text rendering and host roles. No live targets are contacted.

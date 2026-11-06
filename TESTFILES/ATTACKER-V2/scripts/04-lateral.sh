@@ -158,6 +158,10 @@ log() {
 }
 
 
+record_probes() {
+    python3 "$BASE_DIR/web/p04_evidence.py" "$INCIDENT_ID" "$SOURCE" "$PLATFORM" "$REMOTE_TRANSPORT" "$PROBE_PORTS" "${REMOTE_TARGETS[@]}" >> "$NORDIC_GROUND_TRUTH_LOG"
+}
+
 ground_truth() {
 
     local MESSAGE="$1"
@@ -547,8 +551,10 @@ fi
     echo
 
 
+    REMOTE_TRANSPORT="ssh"
+    [[ "$PLATFORM" == "windows" ]] && REMOTE_TRANSPORT="winrm"
     ground_truth \
-        "INTERNAL_DISCOVERY_START source=$SOURCE platform=$PLATFORM"
+        "INTERNAL_DISCOVERY_START source=$SOURCE platform=$PLATFORM protocol=$REMOTE_TRANSPORT"
 
 
     # --------------------------------------------------------
@@ -578,6 +584,10 @@ fi
     fi
 
 
+    for TARGET in "${REMOTE_TARGETS[@]}"; do
+        ground_truth "INTERNAL_DISCOVERY_PLAN source=$SOURCE platform=$PLATFORM protocol=$REMOTE_TRANSPORT target=$TARGET ports=${PROBE_PORTS// /,}"
+    done
+
     log "[*] Starting internal discovery from $SOURCE"
     log "[*] Platform: $PLATFORM"
     log "[*] Targets from $SOURCE: ${#REMOTE_TARGETS[@]}"
@@ -599,7 +609,7 @@ fi
             log "[WARNING] SSH password unavailable for $SOURCE"
 
             ground_truth \
-                "INTERNAL_DISCOVERY_FAILED source=$SOURCE platform=linux reason=missing_credentials"
+                "INTERNAL_DISCOVERY_FAILED source=$SOURCE protocol=$REMOTE_TRANSPORT platform=linux reason=missing_credentials"
 
             continue
         fi
@@ -671,6 +681,7 @@ REMOTE_EOF
         )"
 
         RESULT=$?
+        record_probes <<< "$REMOTE_OUTPUT" || RESULT=1
 
 
         while IFS= read -r LINE; do
@@ -689,7 +700,7 @@ REMOTE_EOF
             log "[WARNING] Internal discovery failed from Linux host $SOURCE"
 
             ground_truth \
-                "INTERNAL_DISCOVERY_FAILED source=$SOURCE platform=linux"
+                "INTERNAL_DISCOVERY_FAILED source=$SOURCE protocol=$REMOTE_TRANSPORT platform=linux"
 
             continue
         fi
@@ -714,7 +725,7 @@ REMOTE_EOF
             log "[WARNING] Windows password unavailable for $SOURCE"
 
             ground_truth \
-                "INTERNAL_DISCOVERY_FAILED source=$SOURCE platform=windows reason=missing_credentials"
+                "INTERNAL_DISCOVERY_FAILED source=$SOURCE protocol=$REMOTE_TRANSPORT platform=windows reason=missing_credentials"
 
             continue
         fi
@@ -750,7 +761,7 @@ REMOTE_EOF
                 log "[SKIPPED] Windows host $SOURCE has no reachable WinRM service on port $WINRM_PORT."
 
                 ground_truth \
-                    "INTERNAL_DISCOVERY_SKIPPED source=$SOURCE platform=windows reason=winrm_unavailable"
+                    "INTERNAL_DISCOVERY_SKIPPED source=$SOURCE protocol=$REMOTE_TRANSPORT platform=windows reason=winrm_unavailable"
 
                 continue
             fi
@@ -780,7 +791,7 @@ REMOTE_EOF
                     log "[SKIPPED] Windows host $SOURCE has no reachable WinRM service."
 
                     ground_truth \
-                        "INTERNAL_DISCOVERY_SKIPPED source=$SOURCE platform=windows reason=winrm_unavailable"
+                        "INTERNAL_DISCOVERY_SKIPPED source=$SOURCE protocol=$REMOTE_TRANSPORT platform=windows reason=winrm_unavailable"
 
                     continue
                 fi
@@ -795,7 +806,7 @@ REMOTE_EOF
             log "[SKIPPED] Python pywinrm is not installed."
 
             ground_truth \
-                "INTERNAL_DISCOVERY_SKIPPED source=$SOURCE platform=windows reason=pywinrm_unavailable"
+                "INTERNAL_DISCOVERY_SKIPPED source=$SOURCE protocol=$REMOTE_TRANSPORT platform=windows reason=pywinrm_unavailable"
 
             continue
         fi
@@ -1009,6 +1020,8 @@ PY
 
         done <<< "$WINDOWS_OUTPUT"
 
+        record_probes <<< "$WINDOWS_OUTPUT" || RESULT=1
+
 
         if [[ $RESULT -ne 0 ]]; then
 
@@ -1017,7 +1030,7 @@ PY
             log "[WARNING] Internal discovery failed from Windows host $SOURCE"
 
             ground_truth \
-                "INTERNAL_DISCOVERY_FAILED source=$SOURCE platform=windows"
+                "INTERNAL_DISCOVERY_FAILED source=$SOURCE protocol=$REMOTE_TRANSPORT platform=windows"
 
             continue
         fi
@@ -1037,7 +1050,7 @@ PY
         log "[SKIPPED] FreeBSD host $SOURCE is authenticated, but Linux discovery payload is not applicable."
 
         ground_truth \
-            "INTERNAL_DISCOVERY_SKIPPED source=$SOURCE platform=freebsd reason=unsupported_payload"
+            "INTERNAL_DISCOVERY_SKIPPED source=$SOURCE protocol=$REMOTE_TRANSPORT platform=freebsd reason=unsupported_payload"
 
         continue
 
@@ -1063,12 +1076,14 @@ PY
     # SUCCESSFUL SOURCE
     # ========================================================
 
+    ground_truth "INTERNAL_DISCOVERY_EXECUTION_COMPLETE source=$SOURCE platform=$PLATFORM protocol=$REMOTE_TRANSPORT"
+
     for TARGET in "${REMOTE_TARGETS[@]}"; do
 
         TOTAL_RELATIONSHIPS=$(( TOTAL_RELATIONSHIPS + 1 ))
 
         ground_truth \
-            "INTERNAL_DISCOVERY source=$SOURCE platform=$PLATFORM target=$TARGET"
+            "INTERNAL_DISCOVERY source=$SOURCE platform=$PLATFORM protocol=$REMOTE_TRANSPORT target=$TARGET"
 
     done
 
@@ -1144,7 +1159,11 @@ echo "  $LOG_FILE"
 echo
 
 
+FINAL_EVENT="PHASE_COMPLETE"
+[[ "$FAILED_SOURCES" -gt 0 || ( "$SUCCESSFUL_SOURCES" -eq 0 && "$SKIPPED_SOURCES" -gt 0 ) ]] && FINAL_EVENT="PHASE_FAILED"
 ground_truth \
-    "PHASE_COMPLETE sources=${#COMPROMISED[@]} linux_sources=$LINUX_SOURCES windows_sources=$WINDOWS_SOURCES freebsd_sources=$FREEBSD_SOURCES successful_sources=$SUCCESSFUL_SOURCES failed_sources=$FAILED_SOURCES skipped_sources=$SKIPPED_SOURCES relationships=$TOTAL_RELATIONSHIPS"
+    "$FINAL_EVENT sources=${#COMPROMISED[@]} linux_sources=$LINUX_SOURCES windows_sources=$WINDOWS_SOURCES freebsd_sources=$FREEBSD_SOURCES successful_sources=$SUCCESSFUL_SOURCES failed_sources=$FAILED_SOURCES skipped_sources=$SKIPPED_SOURCES relationships=$TOTAL_RELATIONSHIPS"
 
+# Preserve completion evidence but propagate remote execution failures.
+[[ "$FAILED_SOURCES" -gt 0 || ( "$SUCCESSFUL_SOURCES" -eq 0 && "$SKIPPED_SOURCES" -gt 0 ) ]] && exit 1
 exit 0
