@@ -108,7 +108,15 @@ class LinuxPair(unittest.TestCase):
                 source = p.script(dict(ENV, MRNOBODY_ACTION=action), 'linux')
                 setup = source.split("python3 - <<'MRN_P11_SETUP'\n", 1)[1].rsplit('\nMRN_P11_SETUP', 1)[0]
                 with patch('pathlib.Path.home', return_value=home), patch('subprocess.run', side_effect=provider), contextlib.redirect_stdout(io.StringIO()) as output:
-                    exec(compile(setup, '<P11 setup>', 'exec'), {})
+                    namespace = {}
+                    try:
+                        exec(compile(setup, '<P11 setup>', 'exec'), namespace)
+                    finally:
+                        # A real remote Python process releases flock on exit.
+                        # exec leaves cyclic function/global references in this
+                        # in-process fixture; close explicitly to emulate exit.
+                        if 'lock' in namespace:
+                            namespace['lock'].close()
                 return output.getvalue()
             out = execute()
             self.assertEqual(p.evidence(out, ENV, 'linux')['result'], 'success')
