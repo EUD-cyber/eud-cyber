@@ -124,7 +124,7 @@ PHASE_GUIDANCE = {
         "Use MFA where supported, SSH keys, disable root/password SSH login where feasible, harden RDP with NLA and a managed gateway, restrict management ports and apply least privilege and rate limiting."),
     "04": (
         "Correlate east-west Suricata flows and firewall logs with Wazuh authentication events on source and destination. Check Linux auth/journal, Windows Security 4624/4625 and WinRM Operational logs for the actual recorded protocol.",
-        "Build a source-to-target timeline. Establish whether the record shows internal discovery, authentication or remote execution; do not infer lateral compromise from an open port.",
+        "Build a source-to-target timeline using probe timestamps and Ground Truth lines. T1018 covers remote system discovery; T1082 and T1016 are phase metadata and require separate system-information or network-configuration evidence. SSH/WinRM execution occurs on the source; ICMP/TCP probes scan the target. An open port does not establish authentication or lateral compromise. No-reply/closed may include filtering or timeout.",
         "Segment server and user networks, allowlist SSH/RDP/WinRM management paths, avoid shared administrator credentials and enforce least privilege and MFA at management entry points."),
     "05": (
         "Inspect Wazuh FIM alerts for the recorded staging paths and correlate file size/hash/time with Linux audit/journal or Windows file auditing and EDR-style process/file evidence where enabled. FIM detects changes only in monitored paths.",
