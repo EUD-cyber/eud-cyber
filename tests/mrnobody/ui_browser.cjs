@@ -104,7 +104,9 @@ async function checkFullIncident(page, artifacts) {
             const count = await page.evaluate(() => fullIncidentSubmissions.length);
             await page.locator('#startButton').click();
             await page.waitForFunction(count => fullIncidentSubmissions.length === count + 1 &&
-                document.getElementById('campaignPowershell').value === '', count);
+                document.getElementById('campaignPowershell').value === '' &&
+                document.getElementById('campaignBash').value === '' &&
+                !document.getElementById('startButton').disabled, count);
             const sent = await page.evaluate(() => fullIncidentSubmissions.at(-1));
             assert.equal(sent.fields.powershell_enabled, '1');
             assert.equal(sent.fields.powershell_windows, ps);
