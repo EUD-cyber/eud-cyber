@@ -76,7 +76,7 @@ async function main() {
         assert.ok((await page.locator('.builder-selected').textContent()).includes('P03'));
         await page.locator('.builder-choices').getByRole('button',{name:/P11/}).click();
         await page.locator('#builderBody').getByRole('button',{name:'Next',exact:true}).click();
-        await page.locator('#builderBody').getByLabel('P11 periodic DNS activity', {exact:true}).selectOption('enabled');
+        await page.locator('#builderBody').getByLabel(/^P11 periodic DNS activity/).selectOption('enabled');
         await page.locator('#builderBody').getByLabel('P11 internal non-forwarding lab DNS resolver', {exact:true}).fill('192.168.1.53');
         await page.locator('#builderBody').getByLabel('P11 reserved test domain (.test)', {exact:true}).fill('evilcorp.test');
         for(let i=0;i<2;i++) await page.locator('#builderBody').getByRole('button',{name:'Next',exact:true}).click();
