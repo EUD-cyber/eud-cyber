@@ -186,7 +186,7 @@ def snapshot(base, capabilities, process=None, now=None):
                     logs.append('P10 · Completed with nonfatal stderr/warnings')
             match = re.search(r'\b(PHASE_START|PHASE_COMPLETE|PHASE_PARTIAL|PHASE_FAILED|PHASE_SKIPPED|CAMPAIGN_START|CAMPAIGN_COMPLETE)\b', line)
             if match:
-                phase = re.search(r'\bphase=(\d{2,4})\b', line)
+                phase = re.search(r'\bphase="?(\d{2,4})"?(?=\s|$)', line)
                 logs.append(match[1].replace('_', ' ').title() + (' · P' + phase[1] if phase else ''))
     except OSError:
         pass

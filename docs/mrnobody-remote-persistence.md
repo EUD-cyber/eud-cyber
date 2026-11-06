@@ -34,7 +34,7 @@ Auto now chooses **task-service** on Windows or **cron-systemd** on Linux.
 All artifacts use mrnobody-p11-<artifact> (default suffix: telemetry). Use separate
 suffixes for separate exercises. Repeating the same parameters reuses the pair
 and **does not extend its UTC deadline**. Configuration changes or recreation
-after expiry require Cleanup first. Clean legacy artifacts with their original
+after expiry require Cleanup first. Recurring create schedules need an explicit Cleanup between exercises; they do not silently renew expired activity. Clean legacy artifacts with their original
 method before selecting a pair. P11 finishes after verification; remote activity
 is independent of Normal/Slow/Custom campaign timing and campaign completion.
 
