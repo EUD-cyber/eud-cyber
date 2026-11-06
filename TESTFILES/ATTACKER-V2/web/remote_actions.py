@@ -115,6 +115,26 @@ def perform(pid, target, env, session_factory=None, ssh=None):
     if pid == '10' and platform == 'windows':
         return windows_command('10', target, env, session_factory)
     source = runtime_command(env.get('MRN_POWERSHELL_SECRET', '')) if pid == '10' else persistence.script(env, platform)
+    if pid == '11' and persistence.configuration(env, platform)[0] in persistence.PAIRED:
+        if platform == 'windows':
+            return windows_command('10', target, dict(env, MRN_POWERSHELL_SECRET=source), session_factory,
+                                   evidence_parser=lambda output: persistence.evidence(output, env, platform))
+        code, stdout, stderr = ssh(target, source, env, limit)
+        marker = b'\nMRN_REMOTE_EXIT='
+        if code or marker not in stdout[0] or not stdout[0].rstrip().endswith(b'__MRN_END__'):
+            return dict(result='failed', warning='transport_error_details_omitted', cleanup_required='true')
+        raw, trailer = stdout[0].rsplit(marker, 1)
+        if len(raw) > 8192:
+            return dict(result='failed', warning='oversized_persistence_evidence', cleanup_required='true')
+        try:
+            action_code = int(trailer.split(b'__MRN_END__')[0])
+        except ValueError:
+            return dict(result='failed', warning='invalid_worker_response', cleanup_required='true')
+        if action_code:
+            return dict(result='skipped' if action_code == 78 else 'failed', exit_code=action_code,
+                        warning='target_method_unsupported' if action_code == 78 else 'persistence_action_failed_check_target_logs',
+                        cleanup_required='true')
+        return persistence.evidence(raw.decode('ascii', errors='replace'), env, platform)
     if platform == 'windows':
         # Reuse pywinrm session setup and controlled script/error handling. Fixed
         # P11 payloads contain no operator command or persisted credentials.

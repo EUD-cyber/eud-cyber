@@ -171,6 +171,8 @@ def snapshot(base, capabilities, process=None, now=None):
         for line in tail.splitlines():
             if f'INCIDENT={iid} ' not in line:
                 continue
+            if 'PHASE=11 ' in line and 'PERSISTENCE_ACTION_SUCCESS ' in line:
+                logs.append('P11 · Artifact verification recorded; activity deadline is independent of campaign completion. Use P11 Cleanup.')
             if 'PHASE=10 ' in line:
                 if 'REMOTE_ACTION_PARTIAL ' in line:
                     action_result = 'success_with_warning'
@@ -184,11 +186,13 @@ def snapshot(base, capabilities, process=None, now=None):
                     logs.append('P10 · Completed with nonfatal stderr/warnings')
             match = re.search(r'\b(PHASE_START|PHASE_COMPLETE|PHASE_PARTIAL|PHASE_FAILED|PHASE_SKIPPED|CAMPAIGN_START|CAMPAIGN_COMPLETE)\b', line)
             if match:
-                phase = re.search(r'\bphase=(\d{2,4})\b', line)
+                phase = re.search(r'\bphase="?(\d{2,4})"?(?=\s|$)', line)
                 logs.append(match[1].replace('_', ' ').title() + (' · P' + phase[1] if phase else ''))
     except OSError:
         pass
     for phase in timeline:
+        if phase['id'] == '11':
+            phase['activity_notice'] = 'Remote activity may continue until its configured deadline; completion or cancellation does not remove artifacts. Use P11 Cleanup and inspect recorded evidence.'
         if phase['id'] == '10':
             phase['action_result'] = reported.get('10', {}).get('action_result') or action_result
     return redact_environment({'version': 1, 'active': bool(active), 'status': status, 'incident_id': iid,
@@ -206,7 +210,7 @@ def phase_environment(pid, environ=None, sleep=time.sleep, clock=time.time):
     timing = phase.get('timing', {})
     offset = timing.get('start_offset', 0)
     sleep(max(0, float(env['MRN_STARTED']) + offset - clock()))
-    for key in ('SOURCE', 'TARGET', 'SUBNET', 'PORT', 'PROTOCOL', 'USERNAME', 'FILE', 'AUTO', 'TIMEOUT', 'PLATFORM', 'METHOD', 'ACTION', 'ARTIFACT', 'BEHAVIOR', 'TRANSPORT', 'BEACON_INTERVAL', 'BEACON_JITTER', 'BEACON_COUNT', 'URI_PROFILE', 'WEB_PROFILE', 'WEB_PATH', 'DATASET', 'ARCHIVE_NAME', 'DNS_BEHAVIOR', 'DNS_ENDPOINT', 'DNS_DOMAIN', 'DNS_PATTERN', 'DNS_INTERVAL', 'DNS_JITTER', 'DNS_COUNT', 'DNS_DURATION'):
+    for key in ('SOURCE', 'TARGET', 'SUBNET', 'PORT', 'PROTOCOL', 'USERNAME', 'FILE', 'AUTO', 'TIMEOUT', 'PLATFORM', 'METHOD', 'ACTION', 'ARTIFACT', 'BEHAVIOR', 'TRANSPORT', 'BEACON_INTERVAL', 'BEACON_JITTER', 'BEACON_COUNT', 'URI_PROFILE', 'WEB_PROFILE', 'WEB_PATH', 'DATASET', 'ARCHIVE_NAME', 'DNS_BEHAVIOR', 'DNS_ENDPOINT', 'DNS_DOMAIN', 'DNS_PATTERN', 'DNS_INTERVAL', 'DNS_JITTER', 'DNS_COUNT', 'DNS_DURATION', 'PERSISTENCE_DNS', 'PERSISTENCE_DOMAIN', 'PERSISTENCE_RESOLVER', 'PERSISTENCE_INTERVAL', 'PERSISTENCE_DURATION'):
         env.pop('MRNOBODY_' + key, None)
     env['MRNOBODY_RUN_MODE'] = 'campaign' if config['target_mode'] == 'auto' else 'standalone'
     for key, value in phase.get('parameters', {}).items():

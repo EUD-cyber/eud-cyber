@@ -761,6 +761,7 @@ def api_run_phase(phase_id):
         "method": "--method",
         "action": "--action",
         "artifact": "--artifact",
+        **{key: "--" + key.replace("_", "-") for key in ("persistence_dns", "persistence_domain", "persistence_resolver", "persistence_interval", "persistence_duration")},
         "behavior": "--behavior",
         "web_profile": "--web-profile", "web_path": "--web-path",
         "dataset": "--dataset", "archive_name": "--archive-name",

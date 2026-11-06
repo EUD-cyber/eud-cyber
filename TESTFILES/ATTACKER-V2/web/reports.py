@@ -102,8 +102,8 @@ PHASE_GUIDANCE = {
         "Was mrnobody created enabled, enabled from a disabled state, or already enabled? Was membership added or already present? Confirm the subject, domain/DC, group SID and partial failures. Existing membership need not generate a new 4728. Historical created_disabled evidence describes the earlier behavior. P03 access alone does not grant rights to change AD.",
         "Restrict Domain Admin membership and WinRM, separate administrative accounts, alert on privileged group changes and review delegated AD rights. After the exercise remove only lab membership/account changes verified in ground truth; never delete a pre-existing account blindly."),
     "11": (
-        "Correlate Windows Security 4698/4702/4699 (task create/update/delete), TaskScheduler Operational 106/140/141/200/201, System 7045/7036 and Security 4697 (service install where audited). For Linux inspect cron/syslog/journal, user systemd journal, ~/.config/systemd/user, crontab changes and FIM/Wazuh sources. Sensors/auditing must be configured.",
-        "Which namespaced artifact was created or removed, by which account and method? Compare artifact/path, action, outcome and cleanup_required with target evidence. Re-run P11 cleanup with the same target, username, method and artifact suffix; verify removal independently. Failures/timeouts may leave partial artifacts.",
+        "Correlate Security 4698/4702/4699, TaskScheduler Operational 106/140/141/200/201, System 7045/7036 and Security 4697 where audited. Use Sysmon process/DNS events where configured; raw UDP queries may need network telemetry rather than Sysmon DNS API events. On Linux inspect cron/syslog, journalctl --user -u the recorded service, ~/.config/systemd/user and ~/.config/mrnobody; correlate Wazuh FIM/service/process events. Compare DNS/firewall logs and Suricata eve.json only when the resolver path is visible. OVS mirrors and Docker-internal DNS require deliberate capture visibility. These are investigation sources, not detected events.",
+        "Which host, account and transport created the paired artifacts? Verify service active and scheduled trigger configured against target evidence, and compare UTC deadline, fixed domain/resolver, query interval and counters with resolver/packet logs. A matching NOERROR or NXDOMAIN reply confirms DNS exchange, not successful A-record resolution or sensor detection. Benign DNS-beacon-like questions do not establish DNS C2 (T1071.004 is not mapped for P11). Activity outlives phase/campaign completion until the fixed deadline; stop/cancel does not clean up the remote artifacts. Re-run P11 Cleanup on the same target, user, method and suffix; verify task/cron, service, unit/executable and config removal. Failures/timeouts can leave partial artifacts.",
         "Restrict task/service creation and cron/systemd write permissions, monitor configuration changes, use least privilege and remove only verified MrNobody artifacts after the exercise."),
     "10": (
         "For Windows correlate WinRM Operational and PowerShell Operational 4103/4104 with Security 4688 and 4624 where enabled. For Linux correlate SSH auth/journal, shell/auditd exec records and process telemetry. In Wazuh compare win.system.eventID, host, subject and timestamp. Script block logs on the target may contain sensitive command content.",
@@ -233,6 +233,7 @@ def add_analysis(report):
         if phase['id'] in {'11', '13'}:
             details = [e['timestamp'] + ' · ' + e['message'] for e in events
                        if e['event'].startswith('PERSISTENCE_ACTION_' if phase['id'] == '11' else 'NATIVE_ACTION_')]
+            phase['actions'] = [dict(timestamp=e['timestamp'], outcome=e['outcome'], **e['fields']) for e in events if e['event'].startswith('PERSISTENCE_ACTION_' if phase['id'] == '11' else 'NATIVE_ACTION_')]
             phase['action_evidence'] = details
             phase['action_outcome'] = ('Persistence: ' if phase['id'] == '11' else 'Windows Native Tools / LOLBins: ') + str(phase.get('status', 'not_run')) + '; verify artifact and cleanup metadata'
             phase['analysis']['what_happened'] = phase['action_outcome']
@@ -339,6 +340,14 @@ def read_events(path, incident_id, started, warnings):
                 # Values in existing logs may contain unquoted spaces or Windows paths.
                 fields = {m[1]: m[2].strip().strip('"') for m in re.finditer(
                     r"\b(\w+)=(.*?)(?=\s+\w+=|$)", message)}
+                if match[3] == '11':
+                    for key in list(fields):
+                        encoded = re.search(r'\b' + re.escape(key) + r'=("(?:\\.|[^"\\])*")(?=\s|$)', message)
+                        if encoded:
+                            try:
+                                fields[key] = json.loads(encoded[1])
+                            except (ValueError, TypeError):
+                                fields[key] = '[invalid P11 evidence omitted]'
                 name = message.split(" ", 1)[0]
                 phase = match[3] or fields.get("phase")
                 if phase in {'10', '13'}:
@@ -405,7 +414,7 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
             technique_ids = list(dict.fromkeys(t for e in phase_events for t in e['fields'].get('mitre', '').split(',') if mitre_url(t))) or technique_ids
             technique_names = {'T1071.004': 'DNS', 'T1132.001': 'Standard Encoding', 'T1190': 'Exploit Public-Facing Application', 'T1005': 'Data from Local System', 'T1685': 'Disable or Modify Tools', 'T1070': 'Indicator Removal', 'T1560.001': 'Archive via Utility', 'T1560.002': 'Archive via Library'}
             names = [technique_names.get(t, '') for t in technique_ids]
-        recorded = {e['fields'].get('mitre') for e in phase_events} & set(technique_ids)
+        recorded = {t for e in phase_events for t in e['fields'].get('mitre', '').split(',')} & set(technique_ids)
         if phase_id == '13' or phase_id in {'10', '11'} and recorded:
             named = dict(zip(technique_ids, names))
             technique_ids = [tid for tid in technique_ids if tid in recorded]
@@ -414,6 +423,11 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
             if phase_id in {'15', '16', '17', '18'}:
                 tids = [t for t in event['fields'].get('mitre', '').split(',') if mitre_url(t)]
                 event['mitre_technique_ids'] = tids
+                event['mitre_mapping'] = 'action_metadata' if tids else 'phase_metadata'
+                continue
+            if phase_id == '11':
+                tids = [t for t in event['fields'].get('mitre', '').split(',') if t in technique_ids]
+                event['mitre_technique_ids'] = tids or technique_ids
                 event['mitre_mapping'] = 'action_metadata' if tids else 'phase_metadata'
                 continue
             action_tid = event['fields'].get('mitre')

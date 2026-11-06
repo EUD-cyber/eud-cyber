@@ -141,12 +141,14 @@ class Actions(unittest.TestCase):
                 factory.return_value.run_ps.return_value=SimpleNamespace(status_code=0,std_out=b'verified',std_err=b'')
                 target=dict(TARGET,platform=platform,protocol='winrm-http')
                 for action in ('create','create','cleanup','cleanup'):
+                    if method in persistence.PAIRED:
+                        factory.return_value.run_ps.return_value.std_out = b'MRN_P11_CLEANUP=complete' if action == 'cleanup' else b'MRN_P11=1,1,1900000000,0,0,0,-1'
                     result=remote.perform('11',target,dict(env,MRNOBODY_ACTION=action),session_factory=factory)
                     self.assertEqual(result['result'],'success')
                 self.assertIn('artifact_ownership_conflict',create)
                 self.assertIn('cleanup_verification_failed',cleanup)
             else:
-                self.assertEqual(remote.perform('11',TARGET,env,ssh=Mock(return_value=framed()))['result'],'success')
+                self.assertEqual(remote.perform('11',TARGET,env,ssh=Mock(return_value=framed(output=b'MRN_P11=1,1,1900000000,0,0,0,-1') if method in persistence.PAIRED else framed()))['result'],'success')
         self.assertNotIn('sudo ',persistence.script(dict(self.env,MRNOBODY_METHOD='systemd'),'linux'))
         unsupported = remote.perform('11',TARGET,self.env,ssh=Mock(return_value=framed(78)))
         self.assertEqual(unsupported['result'],'skipped')
@@ -213,7 +215,7 @@ class Actions(unittest.TestCase):
         self.assertIn('safe lab output',''.join(page.extract_text() for page in PdfReader(io.BytesIO(pdf)).pages))
         standalone.update(phase_id='11',phases={'11':'complete'})
         report=build_report(self.base,self.env['NORDIC_INCIDENT_ID'],environ=self.env,standalone=standalone)
-        self.assertEqual([t['id'] for t in report['phases'][0]['mitre']['techniques']],['T1053.003'])
+        self.assertEqual([t['id'] for t in report['phases'][0]['mitre']['techniques']],['T1053.003','T1543.002'])
         self.assertIn('cleanup_artifact=telemetry',json.dumps(report['phases'][0]['action_evidence']))
         save_report(self.base,report)
         live=snapshot(self.base,CAPS)
@@ -315,6 +317,9 @@ esac
             (base/'venv/bin/python').symlink_to(sys.executable)
             for p in (base/'scripts').glob('*'):p.chmod(0o755)
             env['MRN_POWERSHELL_SECRET']='printf lab'
+            # This existing real-Bash harness retains legacy cron compatibility;
+            # paired lifecycle is exercised separately with fake service providers.
+            env['MRNOBODY_METHOD']='cron'
             for pid in ('10','11'):
                 result=subprocess.run(['bash',str(base/'scripts/run-phase.sh'),pid,'--target',TARGET['target'],'--protocol','ssh'],env=env,capture_output=True,text=True,timeout=30)
                 self.assertEqual(result.returncode,0,result.stdout+result.stderr)
@@ -325,7 +330,7 @@ esac
             for mode in ('normal','slow','custom'):
                 value=definition('10','auto',platform='linux')
                 value['profile']={'mode':mode,'duration':60 if mode=='slow' else 0}
-                value['phases']=[dict(id='01'),dict(id='03')]+value['phases']+[dict(id='11',parameters={'platform':'linux'}),dict(id='04')]
+                value['phases']=[dict(id='01'),dict(id='03')]+value['phases']+[dict(id='11',parameters={'platform':'linux', 'method':'cron'}),dict(id='04')]
                 value=plan(validate(value,CAPS))
                 # Offsets were checked by unit tests; do not wait a minute here.
                 for p in value['phases']:p['timing']={}
@@ -344,6 +349,11 @@ esac
             dns_phase=base/'scripts/18-dns.sh'
             metadata='\n'.join(line for line in dns_phase.read_text().splitlines() if line.startswith('#'))
             dns_phase.write_text(metadata+'\nexit 0\n')
+            # Unstructured Full Incident deliberately clears method overrides.
+            # Pin legacy cron in this isolated script copy; paired providers are
+            # covered by persistence_dns.py without invoking a real user manager.
+            p11_phase = base/'scripts/11-persistence.sh'
+            p11_phase.write_text(p11_phase.read_text().replace('exec ', 'export MRNOBODY_METHOD=cron\nexec ', 1))
             env.pop('MRN_EXECUTION');env.update(MRNOBODY_BEACON_COUNT='1',NORDIC_INCIDENT_ID='MRN-full-remote',MRN_POWERSHELL_ENABLED='1',NORDIC_SSH_PASSWORD='SSH_RUNTIME')
             result=subprocess.run(['bash',str(base/'scenarios/full-incident.sh')],env=env,capture_output=True,text=True,timeout=30)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)

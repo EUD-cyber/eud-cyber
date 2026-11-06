@@ -1022,6 +1022,11 @@ function phaseFieldLabel(parameter) {
         password: "Password",
         powershell: "P10 remote command (PowerShell / Bash) (runtime only, never saved)",
         timeout: "Action timeout (seconds, 5–300)",
+        persistence_dns: "P11 periodic DNS activity",
+        persistence_domain: "P11 reserved test domain (.test)",
+        persistence_resolver: "P11 internal non-forwarding lab DNS resolver",
+        persistence_interval: "P11 DNS interval (10–3600 seconds)",
+        persistence_duration: "P11 activity lifetime (60–14400 seconds; manual artifact cleanup)",
         dns_behavior: "DNS behavior", dns_endpoint: "Private lab DNS endpoint (UDP 53)", dns_domain: "Reserved lab domain (.test/.internal/.localhost)", dns_pattern: "Query label pattern (mrn-{seq})", dns_interval: "DNS interval (seconds)", dns_jitter: "DNS jitter (fraction 0-0.5)", dns_count: "DNS query count (1-40)", dns_duration: "DNS duration ceiling (3-240 seconds)",
         file: "File",
         platform: "Execution platform",
@@ -1151,7 +1156,7 @@ function renderPhaseDetail(phase) {
 
         } else if (["10", "11"].includes(phase.id) && ["platform", "method", "action", "protocol"].includes(parameter)) {
             input = document.createElement("select");
-            const choices = {platform: ["auto", "windows", "linux"], method: ["auto", "scheduled-task", "service", "cron", "systemd"], action: ["create", "cleanup"], protocol: ["", "ssh", "winrm-http", "winrm-https"]}[parameter];
+            const choices = {platform: ["auto", "windows", "linux"], method: ["auto", "task-service", "cron-systemd", "scheduled-task", "service", "cron", "systemd"], action: ["create", "cleanup"], protocol: ["", "ssh", "winrm-http", "winrm-https"]}[parameter];
             choices.forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value || "Choose transport"; input.appendChild(option);});
         } else if (phase.id === "13" && ["behavior", "protocol"].includes(parameter)) {
             input = document.createElement("select");
@@ -1165,6 +1170,9 @@ function renderPhaseDetail(phase) {
             input = document.createElement("select");
             const choices = {web_profile: ["sqli", "traversal"], protocol: phase.id === "15" ? ["http", "https"] : ["", "ssh", "winrm-http", "winrm-https"], platform: ["auto", "windows", "linux"], behavior: ["config-toggle", "log-rename"], dataset: ["finance", "engineering"], action: ["run", "cleanup"]}[parameter];
             choices.forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value || "Choose transport"; input.appendChild(option);});
+        } else if (phase.id === "11" && parameter === "persistence_dns") {
+            input = document.createElement("select");
+            ["disabled", "enabled"].forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value; input.appendChild(option);});
         } else if (parameter === "powershell") {
             input = document.createElement("textarea");
             input.rows = 5; input.maxLength = 16384; input.autocomplete = "off";
@@ -1195,6 +1203,15 @@ function renderPhaseDetail(phase) {
             input.max = {beacon_interval: 60, beacon_jitter: .5, beacon_count: 20}[parameter];
             input.step = parameter === "beacon_count" ? 1 : "any";
         }
+        if (phase.id === "11") {
+            if (parameter === "persistence_domain") input.value = "evilcorp.test";
+            if (["persistence_interval", "persistence_duration"].includes(parameter)) {
+                input.type = "number"; input.step = "1";
+                input.value = parameter === "persistence_interval" ? 60 : 3600;
+                input.min = parameter === "persistence_interval" ? 10 : 60;
+                input.max = parameter === "persistence_interval" ? 3600 : 14400;
+            }
+        }
         if (parameter === "web_path") input.value = "/mrn-lab";
         if (parameter === "archive_name") input.value = "collection";
         input.dataset.parameter =
@@ -1221,7 +1238,7 @@ function renderPhaseDetail(phase) {
                 const input = document.getElementById(`phase-${phase.id}-${key}`);
                 if (!input || phase.id === "12" && key === "method") continue;
                 for (const option of input.options) {
-                    option.hidden = !!option.value && option.value !== "auto" && mode !== "auto" && (["ssh", "cron", "systemd"].includes(option.value)) !== (mode === "linux");
+                    option.hidden = !!option.value && option.value !== "auto" && mode !== "auto" && (["ssh", "cron", "systemd", "cron-systemd"].includes(option.value)) !== (mode === "linux");
                     option.disabled = option.hidden;
                 }
                 if (input.selectedOptions[0]?.disabled) input.value = key === "method" ? "auto" : "";
@@ -2144,6 +2161,11 @@ async function startCampaign() {
         // --------------------------------------------------
         // Windows / RDP
         // --------------------------------------------------
+        if (!scenario || scenario.id === "full-incident") {
+            const persistence = {};
+            document.querySelectorAll("[data-campaign-p11]").forEach(input => {if (input.value) persistence[input.dataset.campaignP11] = input.value;});
+            formData.append("persistence", JSON.stringify(persistence));
+        }
         formData.append("powershell_enabled", powershellEnabled ? "1" : "0");
         if (powershellEnabled || scenario?.id !== "full-incident" && scenario?.phases?.includes("10")) {
             formData.append("powershell_windows", powershell);
@@ -3657,6 +3679,7 @@ document.addEventListener(
             const allowed = ['complete', 'partial', 'running', 'pending', 'skipped', 'failed', 'interrupted'];
             const state = allowed.includes(phase.status) ? phase.status : 'pending';
             node(row, 'span', state, `overview-phase overview-${state}`);
+            if (phase.activity_notice) node(row, 'small', phase.activity_notice, 'muted');
             if (phase.action_result === 'command_error') node(row, 'small', 'Custom remote command failed', 'muted');
             if (phase.action_result === 'success_with_warning') node(row, 'small', 'Completed with nonfatal stderr/warnings', 'muted');
             if (execution.profile?.mode !== 'normal' && (phase.start_offset !== undefined || phase.duration !== undefined)) {

@@ -41,7 +41,12 @@ FIELDS = {
     'username': {'type': 'text', 'label': 'Username'},
     'timeout': {'type': 'timeout', 'label': 'Action timeout (seconds, 5–300)'},
     'platform': {'type': 'choice', 'label': 'Execution platform', 'options': ['auto', 'windows', 'linux']},
-    'method': {'type': 'choice', 'label': 'Persistence method', 'options': ['auto', 'scheduled-task', 'service', 'cron', 'systemd']},
+    'method': {'type': 'choice', 'label': 'Persistence method', 'options': ['auto', 'task-service', 'cron-systemd', 'scheduled-task', 'service', 'cron', 'systemd']},
+    'persistence_dns': {'type': 'choice', 'label': 'P11 periodic DNS activity', 'options': ['disabled', 'enabled'], 'default': 'disabled'},
+    'persistence_domain': {'type': 'text', 'label': 'P11 reserved test domain (.test)', 'default': 'evilcorp.test'},
+    'persistence_resolver': {'type': 'ipv4', 'label': 'P11 internal non-forwarding lab DNS resolver'},
+    'persistence_interval': {'type': 'seconds', 'label': 'P11 DNS interval (10–3600 seconds)', 'default': 60},
+    'persistence_duration': {'type': 'seconds', 'label': 'P11 activity lifetime (60–14400 seconds; manual artifact cleanup)', 'default': 3600},
     'action': {'type': 'choice', 'label': 'Persistence action', 'options': ['create', 'cleanup']},
     'artifact': {'type': 'text', 'label': 'Artifact suffix (default: telemetry)'},
     'file': {'type': 'path', 'label': 'Synthetic staged file (@staged = current target staging output)'},
@@ -329,7 +334,9 @@ def validate(value, capabilities, *, template=False):
             allowed -= {'target', 'source', 'subnet', 'protocol', 'port', 'username', 'file'}
         keys(params, allowed, 'phase parameter')
         for key, val in list(params.items()):
-            if key == 'dns_endpoint':
+            if key.startswith('persistence_'):
+                pass  # Validated together below using the remote-action contract.
+            elif key == 'dns_endpoint':
                 params[key] = private(val)
             elif key.startswith('dns_'):
                 pass  # Full cross-field validation below, shared with CLI.
@@ -377,6 +384,10 @@ def validate(value, capabilities, *, template=False):
                 from persistence_actions import METHODS
                 if effective != 'auto' and METHODS[method][0] != effective:
                     raise ValueError('Persistence method/platform mismatch')
+        if pid == '11':
+            from persistence_actions import configuration
+            configuration({'MRNOBODY_' + k.upper(): str(v) for k, v in params.items()},
+                          effective if effective != 'auto' else METHODS[method][0] if method != 'auto' else 'linux')
         if pid == '18':
             from dns_actions import configuration
             configuration(pid, {'MRNOBODY_' + k.upper(): str(v) for k, v in params.items()})
@@ -523,7 +534,7 @@ def preset_definition(sid, capabilities):
     name, description, objective, flow = PRESETS[key]
     windows = key == 'windows-domain-compromise'
     defaults = {
-        '11': {'method': 'scheduled-task' if windows else 'auto', 'action': 'create', 'artifact': 'telemetry'},
+        '11': {'method': 'task-service' if windows else 'auto', 'action': 'create', 'artifact': 'telemetry'},
         '12': {'method': 'metadata'},
         '13': {'behavior': 'encoded-powershell'},
         '14': {'transport': 'http', 'beacon_interval': 5, 'beacon_jitter': .1, 'beacon_count': 5, 'uri_profile': 'heartbeat'},

@@ -23,45 +23,95 @@ command when running/arming; schedule credentials/commands expire on restart or
 edit. Select an explicit platform for platform-specific commands; an Auto command
 must suit whichever compatible host is chosen. No command-language guessing occurs.
 
-## P11 controlled persistence
+## P11 paired persistence and bounded DNS activity
 
-P11 accepts `platform`, `method`, `action=create|cleanup`, `artifact` (default
-`telemetry`, 1–32 lowercase letters/digits/hyphens), and the same access fields.
-The deterministic name is `mrnobody-p11-<artifact>`. Auto chooses Scheduled Task
-on Windows or user cron on Linux. It uses a fixed harmless payload and never
-accepts arbitrary persistence commands, elevates privileges, changes audit policy,
-or hides artifacts. Artifacts remain until explicit cleanup. Choose a different
-suffix for concurrent exercises; repeat the same suffix to reuse/update an artifact.
+Previously P11 selected one harmless artifact: a daily Windows task running echo,
+an idle native Windows service, a five-minute user cron logger, or a user-systemd
+oneshot running true. Explicit legacy methods retain their original behavior and
+cleanup identities. They cannot generate DNS activity.
 
-| Method | Artifact / behavior | Requirements / cleanup |
+Auto now chooses **task-service** on Windows or **cron-systemd** on Linux.
+All artifacts use mrnobody-p11-<artifact> (default suffix: telemetry). Use separate
+suffixes for separate exercises. Repeating the same parameters reuses the pair
+and **does not extend its UTC deadline**. Configuration changes or recreation
+after expiry require Cleanup first. Recurring create schedules need an explicit Cleanup between exercises; they do not silently renew expired activity. Clean legacy artifacts with their original
+method before selecting a pair. P11 finishes after verification; remote activity
+is independent of Normal/Slow/Custom campaign timing and campaign completion.
+
+| Method | Mechanisms and scope | Prerequisites |
 | --- | --- | --- |
-| scheduled-task | Task Scheduler task named `mrnobody-p11-<artifact>`; daily fixed echo process | ScheduledTasks module and task registration rights. Ownership description checked before overwrite/removal. Cleanup unregisters and verifies absence. |
-| service | Automatic Windows Service; fixed .NET ServiceBase executable under `%ProgramData%/MrNobody/P11/<name>/<name>.exe` | Administrative service rights, Windows PowerShell/.NET compiler and ServiceProcess assembly. Description, binary path and owner marker checked. Cleanup stops/deletes the service, verifies absence and removes only its owned directory. No service credentials are persisted. |
-| cron | User crontab entry every five minutes, `logger -t mrnobody-p11`; exact namespaced comment | crontab, logger and flock. Lock protects read/modify/write, preserves unrelated entries, replaces its own entry without duplication. Cleanup removes the exact marker. |
-| systemd | `~/.config/systemd/user/<name>.service`; visible oneshot `/usr/bin/true`, enabled on user-manager start | Existing user systemd manager and `/usr/bin/true`. No sudo, linger or system-wide changes. Cleanup disables/stops, removes owned unit and reloads manager. Persistence lasts within the existing user-manager lifecycle. |
+| task-service | Real Windows Service Control Manager service plus a visible SYSTEM Scheduled Task every minute. The task checks the deadline and starts the service. Native .NET ServiceBase executable under %ProgramData%\MrNobody\P11\<name>, with config.txt, owner.txt and status.txt. The same native executable supports a fixed --maintain mode, avoiding any task dependency on PowerShell script execution policy. Manual service startup; task maintains it. | WinRM, administrative task/service rights, Windows PowerShell and .NET Framework 4.6+ compiler with System.ServiceProcess.dll. Source is packaged in persistence_actions.py; no downloaded wrapper/package. Executable/config directory ACL is Administrators/SYSTEM only. Service runs as LocalSystem with explicit administrative lab access. |
+| cron-systemd | One marked user-crontab entry every minute checks/starts ~/.config/systemd/user/<name>.service. Long-running Type=simple Python worker; files under ~/.config/mrnobody/<name>. | SSH, Python 3, crontab, /usr/bin/systemctl and an existing reachable user systemd manager. No sudo or linger changes. Cron sets XDG_RUNTIME_DIR to the existing /run/user/<uid>. Persistence is limited to that manager's lifecycle. |
 
-Unsupported Linux cron/systemd environments return a clearly recorded prerequisite
-skip (78), handled nonfatally by the campaign and standalone wrapper. A missing
-compatible host in an Auto campaign skips P11. Direct target failure and all-target
-transport/authentication failures remain hard failures. Artifact creation/cleanup
-failure stays hard; partial artifacts may remain. Cleanup is repeatable. Reports
-include target, platform, method, action, artifact/path, timestamps, outcome, exit
-code and cleanup parameters. Re-run cleanup against the same target **and user**
-using the recorded method and suffix, even after a partial failure or timeout.
+Configuration is available through standalone GUI/API/CLI, Scenario Builder and
+scheduler. Full Incident exposes P11 fields and a persistence object in its
+campaign/schedule API specification. Dependencies and order are unchanged: Auto
+consumes P03 access; fixed targets execute directly. Auto retains first-success
+candidate behavior with compatible transport fallback.
 
-Example (passwords supplied via runtime environment/secret input):
+- platform: auto/windows/linux; method: auto/task-service/cron-systemd.
+  Legacy methods: scheduled-task/service/cron/systemd.
+- action: create/cleanup; artifact: 1–32 lowercase letters/digits/hyphens.
+- persistence_dns: disabled/enabled (default disabled). DNS requires a pair and
+  an explicit persistence_resolver: unicast RFC1918 IPv4 on your internal lab
+  networks. No gateway inference, public resolver or target default resolver.
+- persistence_domain: evilcorp.test by default; reserved lowercase **.test** names
+  only. No operator command, URL, arbitrary payload or answer execution.
+- persistence_interval: 60 seconds by default, integer 10–3600.
+  persistence_duration: 3600 seconds by default, integer 60–14400; interval must
+  fit. This is a finite activity ceiling, **not automatic artifact cleanup**.
+  Workers also enforce a monotonic runtime ceiling and a query-count bound.
 
-```bash
-scripts/run-phase.sh 10 --target 192.168.1.20 --protocol ssh --platform linux --user ubuntu
-scripts/run-phase.sh 11 --target 192.168.1.20 --protocol ssh --method cron --artifact lesson
-scripts/run-phase.sh 11 --target 192.168.1.20 --protocol ssh --method cron --artifact lesson --action cleanup
-```
+The service sends a fixed DNS A question directly to the chosen resolver over
+UDP 53, bypassing client DNS caches. Recursion-desired is clear (RD=0).
+Configure a dedicated **non-forwarding authoritative .test zone**, returning a
+fixed lab A address or NXDOMAIN. Restrict target egress to that resolver.
+No host data, credentials, external C2, remote instructions or exfiltration is
+included. Replies are checked for transaction/question/header and NOERROR or
+NXDOMAIN; answer records are discarded. A matching reply confirms an exchange,
+not A-record resolution or sensor detection. Socket waits are bounded at two
+seconds; an in-flight attempt can finish just after expiry. The interval is a
+pause between attempts.
+
+Choose a resolver whose target-to-resolver path crosses the monitored OVS ports;
+confirm the OVS mirror includes this path. Docker embedded DNS (127.0.0.11) and
+container bridge traffic are not automatically visible to OVS/Suricata. Use an
+explicit resolver on a monitored lab subnet. Correlate resolver logs or packet
+capture/Suricata eve.json before claiming visibility. P11 deploys no resolver,
+routes, mirrors or containers.
+
+Creation verifies service active and task actions/triggers, or Linux unit
+enablement plus exactly one cron entry. Fixed counters record attempts, matching
+replies, last query timestamp, accepted RCODE and deadline. DNS failure is a
+warning on an installed pair, not fabricated success. Evidence is a creation-time
+snapshot; no remote polling occurs after phase completion. Missing verification
+is a hard error. Unsupported Linux prerequisites return 78; transport/action
+failures remain hard errors. Timeout or failure can leave partial artifacts.
+
+Cleanup removes the restart trigger first, stops/deletes the service, removes
+owned files/unit, verifies absence and is repeatable. Unrelated cron entries
+remain intact; ownership conflicts fail closed. Reuse the exact target, username,
+method and suffix even after timeout. Deadline expiry stops service/DNS activity;
+inert task/cron, service registration and configuration remain until manual P11
+Cleanup. Campaign cancellation does not clean remote artifacts. Cleanup needs
+no original DNS options. Runtime credentials are never persisted in artifacts.
+
+Example (supply credentials via execution-time secret input):
+
+    scripts/run-phase.sh 11 --target 192.168.1.20 --protocol ssh --user ubuntu \
+      --method cron-systemd --artifact lesson --persistence-dns enabled \
+      --persistence-domain evilcorp.test --persistence-resolver 192.168.1.53 \
+      --persistence-interval 60 --persistence-duration 3600
+    scripts/run-phase.sh 11 --target 192.168.1.20 --protocol ssh --user ubuntu \
+      --method cron-systemd --artifact lesson --action cleanup
+
+Windows uses winrm-http or winrm-https and task-service with lab admin access.
 
 ## Integration and evidence
 
-Full Incident order: P01 → P02 → P03 → P08 (optional) → P09 (DC prerequisite)
-→ P10 (existing opt-in, Auto) → **P11 (required integration, Auto)** → P04 → P05
-→ P06 → P07. Custom fixed-target runs need no discovery prerequisites. Custom
+Full Incident keeps the current order: P01 → P02 → P15 → P03 → optional P08 →
+P09 → optional P10 → **P11** → P12 → P13 → P14 → P18 → P16 → P04 → P17 →
+P05 → P06 → P07. Unsupported prerequisites retain their existing skip behavior. Custom fixed-target runs need no discovery prerequisites. Custom
 Auto runs add/lock dependencies before Review. Normal, Slow and Custom Timing,
 CLI/GUI standalone, scheduler, imports/exports and live status use the existing
 phase registry and structured execution model (schema version remains 1).
@@ -74,7 +124,7 @@ withheld. Unlabelled unknown secrets cannot always be recognized: target-side
 PowerShell/audit logs may also capture commands. Use synthetic lab data.
 
 The supported technique metadata is narrowed to the recorded action method when
-action evidence exists. Mappings were verified against MITRE ATT&CK on 2026-11-01:
+action evidence exists. P11 mappings were verified against current MITRE ATT&CK on 2026-11-06:
 
 - [T1059.001 PowerShell](https://attack.mitre.org/techniques/T1059/001/)
 - [T1059.004 Unix Shell](https://attack.mitre.org/techniques/T1059/004/)
@@ -83,7 +133,13 @@ action evidence exists. Mappings were verified against MITRE ATT&CK on 2026-11-0
 - [T1053.003 Cron](https://attack.mitre.org/techniques/T1053/003/)
 - [T1543.002 Systemd Service](https://attack.mitre.org/techniques/T1543/002/)
 
-Detection guidance covers Security 4698/4702/4699/4697, TaskScheduler Operational,
+P11 does not map T1071.004 (Application Layer Protocol: DNS): fixed benign questions
+are DNS-beacon-like activity without an application-layer C2 protocol. Pair evidence
+maps both platform-specific persistence techniques; legacy evidence keeps its single
+mapping. No network detection is inferred from service installation.
+
+Detection guidance covers Sysmon process/DNS where configured, DNS/firewall logs,
+Suricata when visible, and Security 4698/4702/4699/4697, TaskScheduler Operational,
 System 7045/7036, cron/syslog, user-systemd journal, process/audit and FIM/Wazuh
 sources. This is investigation guidance, not a claim that sensors observed them.
 
