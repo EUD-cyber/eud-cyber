@@ -132,14 +132,22 @@ class P06(unittest.TestCase):
                        NORDIC_INCIDENT_IP='127.0.0.1', PATH=str(root/'bin')+os.pathsep+os.environ['PATH'])
             command = ['bash', str(root/'scripts/run-phase.sh'), '06', '--target', PAYLOAD['target'],
                        '--protocol', 'ssh', '--user', 'student', '--file', REMOTE, '--staging-incident', ORIGIN]
-            for mode in ('success', 'failure', 'mismatch', 'missing'):
+            for mode in ('success', 'failure', 'mismatch', 'winrm_missing', 'missing'):
                 with self.subTest(mode=mode):
                     with socket.socket() as sock:
                         sock.bind(('127.0.0.1', 0))
                         port = sock.getsockname()[1]
+                    current_command = list(command)
+                    if mode == 'winrm_missing':
+                        data = json.loads((root/'state/staged-data.json').read_text())
+                        data['hosts'][0].update(platform='windows',
+                            file=rf'C:\NordicIncident\{ORIGIN}\staging\nordic-data-{ORIGIN}.txt')
+                        (root/'state/staged-data.json').write_text(json.dumps(data))
+                        current_command[current_command.index('--protocol')+1] = 'winrm-http'
+                        current_command[current_command.index('--file')+1] = data['hosts'][0]['file']
                     if mode == 'missing':
                         (root/'state/staged-data.json').unlink()
-                    result = subprocess.run(command, env=dict(env, FIXTURE_MODE=mode, NORDIC_EXFIL_PORT=str(port)),
+                    result = subprocess.run(current_command, env=dict(env, FIXTURE_MODE=mode, NORDIC_EXFIL_PORT=str(port)),
                                             text=True, capture_output=True, timeout=25)
                     self.assertEqual(result.returncode == 0, mode == 'success', result.stdout+result.stderr)
                     reports = sorted((root/'reports').glob('MRN-*.json'), key=lambda p:p.stat().st_mtime_ns)

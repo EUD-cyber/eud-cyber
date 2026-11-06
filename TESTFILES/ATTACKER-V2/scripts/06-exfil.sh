@@ -1013,7 +1013,17 @@ REMOTE
         WINRM_SCHEME=""
 
 
-        if [[ "$ACCESS_PORT" == "$WINRM_HTTPS_PORT" ]] &&
+        if [[ "$RUN_MODE" == "standalone" ]]; then
+            if ! tcp_open "$HOST" "$ACCESS_PORT"; then
+                FAILED_COUNT=$(( FAILED_COUNT + 1 ))
+                log "[ERROR] Selected WinRM transport unavailable on $HOST:$ACCESS_PORT"
+                ground_truth "EXFIL_FAILED source=$HOST platform=windows reason=selected_transport_unavailable"
+                continue
+            fi
+            WINRM_PORT="$ACCESS_PORT"
+            WINRM_SCHEME="http"
+            [[ "$MANUAL_PROTOCOL" == "winrm-https" ]] && WINRM_SCHEME="https"
+        elif [[ "$ACCESS_PORT" == "$WINRM_HTTPS_PORT" ]] &&
            tcp_open "$HOST" "$ACCESS_PORT"; then
 
             WINRM_PORT="$ACCESS_PORT"
