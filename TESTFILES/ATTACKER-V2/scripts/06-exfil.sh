@@ -45,7 +45,7 @@ set -u
 # PATHS / CONFIG
 # ============================================================
 
-BASE_DIR="/opt/nordic-attack"
+BASE_DIR="${NORDIC_BASE_DIR:-/opt/nordic-attack}"
 CONFIG_FILE="$BASE_DIR/config/defaults.conf"
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
@@ -125,6 +125,13 @@ ground_truth() {
 }
 
 
+verify_received() {
+    # Campaign legacy records without a digest retain their existing behavior.
+    [[ "$RUN_MODE" == "campaign" && -z "$4" ]] && return 0
+    python3 "$BASE_DIR/web/exfil_validation.py" --received \
+        "$NORDIC_UPLOAD_DIR/${INCIDENT_ID}-$2-$1.bin" "$3|$4"
+}
+
 tcp_open() {
     local HOST="$1"
     local PORT="$2"
@@ -140,7 +147,7 @@ tcp_open() {
 # REQUIRED COMMANDS
 # ============================================================
 
-for CMD in python3 sshpass ssh timeout; do
+for CMD in python3 timeout ss; do
 
     if ! command -v "$CMD" >/dev/null 2>&1; then
 
@@ -156,7 +163,7 @@ done
 # WINDOWS WINRM SUPPORT
 # ============================================================
 
-PYTHON_BIN="/opt/nordic-attack/venv/bin/python"
+PYTHON_BIN="$BASE_DIR/venv/bin/python"
 
 PYWINRM_AVAILABLE=0
 
@@ -440,8 +447,20 @@ elif [[ "$RUN_MODE" == "standalone" ]]; then
             ;;
     esac
 
+    # Revalidate at execution time: state may have changed after API submission.
+    # A custom scenario uses its current incident; GUI/CLI reuse names an origin explicitly.
+    export MRNOBODY_PROTOCOL="${MANUAL_PROTOCOL:-ssh}"
+    export MRNOBODY_PORT="$ACCESS_PORT"
+    export MRNOBODY_USERNAME="$ACCESS_USER"
+    export NORDIC_INCIDENT_ID="$INCIDENT_ID"
+    STAGED_EVIDENCE="$(python3 "$BASE_DIR/web/exfil_validation.py" "$STAGING_STATE")" || {
+        ground_truth "PHASE_FAILED reason=invalid_staging_selection"
+        exit 1
+    }
+    IFS='|' read -r STAGED_SIZE STAGED_HASH <<< "$STAGED_EVIDENCE"
+    ground_truth "EXFIL_STAGING_SELECTED staging_incident=${MRNOBODY_STAGING_INCIDENT:-$INCIDENT_ID} source=$MANUAL_TARGET file=$MANUAL_FILE"
     STAGED_HOSTS=(
-        "${MANUAL_TARGET}|${PLATFORM}|${ACCESS}|${ACCESS_PORT}|${ACCESS_USER}|${MANUAL_PASSWORD}|${MANUAL_FILE}|0|"
+        "${MANUAL_TARGET}|${PLATFORM}|${ACCESS}|${ACCESS_PORT}|${ACCESS_USER}|${MANUAL_PASSWORD}|${MANUAL_FILE}|${STAGED_SIZE}|${STAGED_HASH}"
     )
 
 fi
@@ -781,10 +800,10 @@ for RECORD in "${STAGED_HOSTS[@]}"; do
     if [[ -z "$ACCESS_PASSWORD" ]]; then
 
         if [[ "$PLATFORM" == "linux" ]]; then
-            ACCESS_PASSWORD="$SSH_PASSWORD"
+            [[ "$RUN_MODE" == "campaign" ]] && ACCESS_PASSWORD="$SSH_PASSWORD"
 
         elif [[ "$PLATFORM" == "windows" ]]; then
-            ACCESS_PASSWORD="$RDP_PASSWORD"
+            [[ "$RUN_MODE" == "campaign" ]] && ACCESS_PASSWORD="$RDP_PASSWORD"
         fi
 
     fi
@@ -797,6 +816,9 @@ for RECORD in "${STAGED_HOSTS[@]}"; do
     echo
 
 
+    if [[ "$RUN_MODE" == "standalone" ]]; then
+        rm -f -- "$NORDIC_UPLOAD_DIR/${INCIDENT_ID}-${PLATFORM}-${HOST}.bin"
+    fi
     log "[*] Starting simulated exfiltration from $HOST ($PLATFORM)"
 
 
@@ -810,11 +832,11 @@ for RECORD in "${STAGED_HOSTS[@]}"; do
 
 if [[ "$PLATFORM" == "linux" ]]; then
 
-    if [[ -z "$ACCESS_PASSWORD" ]]; then
+    if [[ -z "$ACCESS_PASSWORD" ]] || ! command -v sshpass >/dev/null || ! command -v ssh >/dev/null; then
 
         FAILED_COUNT=$(( FAILED_COUNT + 1 ))
 
-        log "[WARNING] SSH password unavailable for $HOST"
+        log "[WARNING] SSH credentials or dependencies unavailable for $HOST"
 
         ground_truth \
             "EXFIL_FAILED source=$HOST platform=linux reason=missing_credentials"
@@ -900,7 +922,8 @@ REMOTE
 
 
         if [[ $COMMAND_RESULT -eq 0 ]] &&
-           grep -q '^NORDIC_RECEIVED ' <<< "$REMOTE_RESULT"; then
+           grep -q '^NORDIC_RECEIVED ' <<< "$REMOTE_RESULT" &&
+           verify_received "$HOST" "linux" "$EXPECTED_SIZE" "$EXPECTED_HASH"; then
 
 
             RECEIVED_SIZE="$(
@@ -990,7 +1013,17 @@ REMOTE
         WINRM_SCHEME=""
 
 
-        if [[ "$ACCESS_PORT" == "$WINRM_HTTPS_PORT" ]] &&
+        if [[ "$RUN_MODE" == "standalone" ]]; then
+            if ! tcp_open "$HOST" "$ACCESS_PORT"; then
+                FAILED_COUNT=$(( FAILED_COUNT + 1 ))
+                log "[ERROR] Selected WinRM transport unavailable on $HOST:$ACCESS_PORT"
+                ground_truth "EXFIL_FAILED source=$HOST platform=windows reason=selected_transport_unavailable"
+                continue
+            fi
+            WINRM_PORT="$ACCESS_PORT"
+            WINRM_SCHEME="http"
+            [[ "$MANUAL_PROTOCOL" == "winrm-https" ]] && WINRM_SCHEME="https"
+        elif [[ "$ACCESS_PORT" == "$WINRM_HTTPS_PORT" ]] &&
            tcp_open "$HOST" "$ACCESS_PORT"; then
 
             WINRM_PORT="$ACCESS_PORT"
@@ -1004,18 +1037,23 @@ REMOTE
             WINRM_SCHEME="http"
 
 
-        elif tcp_open "$HOST" "$WINRM_HTTP_PORT"; then
+        elif [[ "$RUN_MODE" == "campaign" ]] && tcp_open "$HOST" "$WINRM_HTTP_PORT"; then
 
             WINRM_PORT="$WINRM_HTTP_PORT"
             WINRM_SCHEME="http"
 
 
-        elif tcp_open "$HOST" "$WINRM_HTTPS_PORT"; then
+        elif [[ "$RUN_MODE" == "campaign" ]] && tcp_open "$HOST" "$WINRM_HTTPS_PORT"; then
 
             WINRM_PORT="$WINRM_HTTPS_PORT"
             WINRM_SCHEME="https"
 
 
+        elif [[ "$RUN_MODE" == "standalone" ]]; then
+            FAILED_COUNT=$(( FAILED_COUNT + 1 ))
+            log "[ERROR] Selected WinRM transport unavailable on $HOST:$ACCESS_PORT"
+            ground_truth "EXFIL_FAILED source=$HOST platform=windows reason=selected_transport_unavailable"
+            continue
         else
 
             SKIPPED_COUNT=$(( SKIPPED_COUNT + 1 ))
@@ -1234,7 +1272,8 @@ PY
 
 
         if [[ $COMMAND_RESULT -eq 0 ]] &&
-           grep -q '^NORDIC_RECEIVED ' <<< "$WINDOWS_RESULT"; then
+           grep -q '^NORDIC_RECEIVED ' <<< "$WINDOWS_RESULT" &&
+           verify_received "$HOST" "windows" "$EXPECTED_SIZE" "$EXPECTED_HASH"; then
 
 
             RECEIVED_SIZE="$(
@@ -1475,6 +1514,11 @@ echo "  $LOG_FILE"
 
 echo
 
+
+if [[ "$RUN_MODE" == "standalone" ]] && (( SUCCESS_COUNT != 1 || FAILED_COUNT > 0 || SKIPPED_COUNT > 0 )); then
+    ground_truth "PHASE_FAILED transfers=$SUCCESS_COUNT failed=$FAILED_COUNT skipped=$SKIPPED_COUNT"
+    exit 1
+fi
 
 ground_truth \
     "PHASE_COMPLETE transfers=$SUCCESS_COUNT linux_transfers=$LINUX_SUCCESS windows_transfers=$WINDOWS_SUCCESS failed=$FAILED_COUNT skipped=$SKIPPED_COUNT"

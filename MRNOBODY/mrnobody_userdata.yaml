@@ -205,6 +205,10 @@ write_files:
           "$INSTALL_DIR/web/exercise_actions.py"
 
       download_file \
+          "web/exfil_validation.py" \
+          "$INSTALL_DIR/web/exfil_validation.py"
+
+      download_file \
           "web/collection_state.py" \
           "$INSTALL_DIR/web/collection_state.py"
 

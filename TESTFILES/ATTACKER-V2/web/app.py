@@ -666,7 +666,17 @@ def api_run_phase(phase_id):
     # Dry run
     # --------------------------------------------------------
 
+    if not isinstance(data, dict):
+        return jsonify({'status': 'error', 'message': 'Phase request must be a JSON object.'}), 400
     phase_env = os.environ.copy()
+    if phase_id == '06':
+        try:
+            from exfil_validation import validate
+            validate(data, Path(os.environ.get('NORDIC_STAGING_STATE', STATE_DIR / 'staged-data.json')))
+        except ValueError as exc:
+            app.logger.warning('P06 submission rejected: %s', exc)
+            return jsonify({'status': 'error', 'message': str(exc)}), 400
+        phase_env['MRNOBODY_STAGING_INCIDENT'] = data['staging_incident']
     phase_env["NORDIC_INCIDENT_ID"] = "MRN-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:12]
     phase_env['MRNOBODY_PASSWORD'] = str(data.get('password', ''))
     if phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'}:
@@ -682,7 +692,7 @@ def api_run_phase(phase_id):
     if "profile" in data:
         try:
             from scenario_model import keys
-            keys(data, set(allowed_phase_fields(phase_id)) | {"profile", "timing", "target_mode", "password", "dry_run", "auto", "powershell", "powershell_windows", "bash"}, "phase execution")
+            keys(data, set(allowed_phase_fields(phase_id)) | {"profile", "timing", "target_mode", "password", "dry_run", "auto", "staging_incident", "powershell", "powershell_windows", "bash"}, "phase execution")
             spec = {"type": "phase", "id": phase_id, "profile": data["profile"],
                     "parameters": {k: v for k, v in data.items() if k in allowed_phase_fields(phase_id)},
                     "timing": data.get("timing", {}), "target_mode": data.get("target_mode", "fixed")}
@@ -915,8 +925,9 @@ def api_run_phase(phase_id):
             ),
             "dry_run": dry_run,
             "pid": process.pid,
+            "incident_id": phase_env["NORDIC_INCIDENT_ID"],
             "message": (
-                f"Phase {phase_id} started."
+                f"Phase {phase_id} submitted. Follow its status and live output."
             ),
         }
     )
