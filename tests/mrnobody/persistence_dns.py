@@ -101,6 +101,8 @@ class LinuxPair(unittest.TestCase):
                     (directory/'status.txt').write_text('1,1,1800000000000,3')
                 if argv[2] == 'disable':
                     state['active'] = False
+                if argv[2] == 'is-active':
+                    return SimpleNamespace(returncode=0 if state['active'] else 3, stdout='active\n' if state['active'] else 'inactive\n', stderr='')
                 return SimpleNamespace(returncode=0, stdout='active\n', stderr='')
             def execute(action='create'):
                 source = p.script(dict(ENV, MRNOBODY_ACTION=action), 'linux')
@@ -110,6 +112,7 @@ class LinuxPair(unittest.TestCase):
                 return output.getvalue()
             out = execute()
             self.assertEqual(p.evidence(out, ENV, 'linux')['result'], 'success')
+            self.assertEqual(p.evidence(out, ENV, 'linux')['artifact_path'], str(directory))
             deadline = (directory/'config.txt').read_text()
             execute()
             self.assertEqual((directory/'config.txt').read_text(), deadline)

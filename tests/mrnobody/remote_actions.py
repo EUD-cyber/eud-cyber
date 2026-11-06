@@ -349,6 +349,11 @@ esac
             dns_phase=base/'scripts/18-dns.sh'
             metadata='\n'.join(line for line in dns_phase.read_text().splitlines() if line.startswith('#'))
             dns_phase.write_text(metadata+'\nexit 0\n')
+            # Unstructured Full Incident deliberately clears method overrides.
+            # Pin legacy cron in this isolated script copy; paired providers are
+            # covered by persistence_dns.py without invoking a real user manager.
+            p11_phase = base/'scripts/11-persistence.sh'
+            p11_phase.write_text(p11_phase.read_text().replace('exec ', 'export MRNOBODY_METHOD=cron\nexec ', 1))
             env.pop('MRN_EXECUTION');env.update(MRNOBODY_BEACON_COUNT='1',NORDIC_INCIDENT_ID='MRN-full-remote',MRN_POWERSHELL_ENABLED='1',NORDIC_SSH_PASSWORD='SSH_RUNTIME')
             result=subprocess.run(['bash',str(base/'scenarios/full-incident.sh')],env=env,capture_output=True,text=True,timeout=30)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)

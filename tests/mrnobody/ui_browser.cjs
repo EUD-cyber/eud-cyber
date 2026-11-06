@@ -55,6 +55,15 @@ async function main() {
         assert.equal(await page.locator('#page-phases').isVisible(),true);
         assert.equal(await page.locator('#phaseGrid .phase-selected').count(),1);
         assert.equal(await page.locator('.nav-active').count(),1);
+        // P11 uses real registry fields; changing platform filters paired methods.
+        await page.evaluate(item => renderPhaseDetail(item), catalogue.phases.find(p => p.id === '11'));
+        assert.equal(await page.locator('#phase-11-persistence_domain').inputValue(), 'evilcorp.test');
+        await page.locator('#phase-11-platform').selectOption('linux');
+        assert.equal(await page.locator('#phase-11-method option[value="cron-systemd"]').isDisabled(), false);
+        assert.equal(await page.locator('#phase-11-method option[value="task-service"]').isDisabled(), true);
+        await page.locator('#phase-11-platform').selectOption('windows');
+        assert.equal(await page.locator('#phase-11-method option[value="task-service"]').isDisabled(), false);
+        assert.equal(await page.locator('#phase-11-persistence_dns option[value="enabled"]').count(), 1);
         await page.locator('[data-page="scenarios"]').click();
         assert.ok(await page.locator('#scenarioGrid .phase-card').count());
         await page.locator('#scenarioGrid .phase-card').first().press('Enter');
@@ -65,6 +74,13 @@ async function main() {
         assert.ok((await page.locator('.builder-selected').textContent()).includes('Auto-added prerequisite'));
         await page.locator('.builder-choices').getByRole('button',{name:/P10/}).click();
         assert.ok((await page.locator('.builder-selected').textContent()).includes('P03'));
+        await page.locator('.builder-choices').getByRole('button',{name:/P11/}).click();
+        await page.locator('#builderBody').getByRole('button',{name:'Next',exact:true}).click();
+        await page.locator('#builderBody').getByLabel('P11 periodic DNS activity', {exact:true}).selectOption('enabled');
+        await page.locator('#builderBody').getByLabel('P11 internal non-forwarding lab DNS resolver', {exact:true}).fill('192.168.1.53');
+        await page.locator('#builderBody').getByLabel('P11 reserved test domain (.test)', {exact:true}).fill('evilcorp.test');
+        for(let i=0;i<2;i++) await page.locator('#builderBody').getByRole('button',{name:'Next',exact:true}).click();
+        assert.ok((await page.locator('#builderBody').textContent()).includes('evilcorp.test'));
         await page.locator('[data-page="schedules"]').click();
         assert.ok((await page.locator('#scheduleList').textContent()).includes('No schedules saved'));
         await page.locator('#scheduleList').getByRole('button',{name:'New schedule / Run Now'}).click();

@@ -397,7 +397,7 @@ foreach ($sid in @('S-1-5-18','S-1-5-32-544')) {
     $acl.AddAccessRule($rule)
 }
 $acl.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')))
-Set-Acl -LiteralPath $dir -AclObject $acl
+[IO.Directory]::SetAccessControl($dir, $acl)
 # Existing files must inherit only this protected parent DACL.
 foreach ($child in Get-ChildItem -LiteralPath $dir -Force) {
     & "$env:SystemRoot\System32\icacls.exe" $child.FullName /reset | Out-Null
@@ -536,6 +536,15 @@ if '__ACTION__' == 'cleanup':
         systemctl('disable', '--now', name + '.service')
         unit.unlink()
         systemctl('daemon-reload')
+    elif directory.exists():
+        # Recover a unit removed after a partial install while still loaded.
+        loaded = systemctl('show', name + '.service', '--property=LoadState', '--value').strip()
+        if loaded != 'not-found':
+            systemctl('stop', name + '.service')
+            systemctl('daemon-reload')
+    active = subprocess.run(['/usr/bin/systemctl', '--user', 'is-active', name + '.service'], capture_output=True, text=True)
+    if active.returncode == 0 or active.returncode not in (3, 4):
+        raise SystemExit('cleanup_service_verification_failed')
     if unit.exists() or any(line.endswith(tag) for line in run(['crontab', '-l']).splitlines()):
         raise SystemExit('cleanup_verification_failed')
     if directory.exists():
