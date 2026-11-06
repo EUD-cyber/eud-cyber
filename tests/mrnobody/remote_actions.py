@@ -141,12 +141,14 @@ class Actions(unittest.TestCase):
                 factory.return_value.run_ps.return_value=SimpleNamespace(status_code=0,std_out=b'verified',std_err=b'')
                 target=dict(TARGET,platform=platform,protocol='winrm-http')
                 for action in ('create','create','cleanup','cleanup'):
+                    if method in persistence.PAIRED:
+                        factory.return_value.run_ps.return_value.std_out = b'MRN_P11_CLEANUP=complete' if action == 'cleanup' else b'MRN_P11=1,1,1900000000,0,0,0,-1'
                     result=remote.perform('11',target,dict(env,MRNOBODY_ACTION=action),session_factory=factory)
                     self.assertEqual(result['result'],'success')
                 self.assertIn('artifact_ownership_conflict',create)
                 self.assertIn('cleanup_verification_failed',cleanup)
             else:
-                self.assertEqual(remote.perform('11',TARGET,env,ssh=Mock(return_value=framed()))['result'],'success')
+                self.assertEqual(remote.perform('11',TARGET,env,ssh=Mock(return_value=framed(output=b'MRN_P11=1,1,1900000000,0,0,0,-1') if method in persistence.PAIRED else framed()))['result'],'success')
         self.assertNotIn('sudo ',persistence.script(dict(self.env,MRNOBODY_METHOD='systemd'),'linux'))
         unsupported = remote.perform('11',TARGET,self.env,ssh=Mock(return_value=framed(78)))
         self.assertEqual(unsupported['result'],'skipped')
@@ -213,7 +215,7 @@ class Actions(unittest.TestCase):
         self.assertIn('safe lab output',''.join(page.extract_text() for page in PdfReader(io.BytesIO(pdf)).pages))
         standalone.update(phase_id='11',phases={'11':'complete'})
         report=build_report(self.base,self.env['NORDIC_INCIDENT_ID'],environ=self.env,standalone=standalone)
-        self.assertEqual([t['id'] for t in report['phases'][0]['mitre']['techniques']],['T1053.003'])
+        self.assertEqual([t['id'] for t in report['phases'][0]['mitre']['techniques']],['T1053.003','T1543.002'])
         self.assertIn('cleanup_artifact=telemetry',json.dumps(report['phases'][0]['action_evidence']))
         save_report(self.base,report)
         live=snapshot(self.base,CAPS)

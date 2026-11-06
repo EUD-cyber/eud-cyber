@@ -1,3 +1,4 @@
+import copy
 """Planning API integrated with the existing Flask phase/scenario endpoints."""
 import json
 import os
@@ -89,13 +90,17 @@ class Planning:
             handle.write(f'[SCHEDULER] {time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())} {sid} {status}\n')
 
     def execution(self, spec):
-        keys(spec, ['type', 'id', 'profile', 'parameters', 'timing', 'target_mode', 'powershell_enabled'], 'execution')
+        keys(spec, ['type', 'id', 'profile', 'parameters', 'timing', 'target_mode', 'powershell_enabled', 'persistence'], 'execution')
         if spec.get('type') not in {'phase', 'campaign', 'custom'}:
             raise ValueError('Unknown execution type')
         if not isinstance(spec.get('id'), str):
             raise ValueError('Execution ID is required')
         if 'powershell_enabled' in spec and (spec['type'] != 'campaign' or spec['id'] != 'full-incident' or type(spec['powershell_enabled']) is not bool):
             raise ValueError('P10 toggle is supported only for Full Incident')
+        if 'persistence' in spec:
+            if spec['type'] != 'campaign' or spec['id'] != 'full-incident':
+                raise ValueError('P11 campaign configuration is supported only for Full Incident')
+            self.definition('full-incident', dict(profile=spec.get('profile', {'mode': 'normal'}), persistence=spec['persistence']))
         p = profile(spec.get('profile', {}))
         spec = dict(spec)
         if 'profile' in spec or spec['type'] == 'phase':
@@ -137,17 +142,25 @@ class Planning:
 
     def definition(self, sid, data):
         definition = self.custom(sid) or self.preset(sid)
-        if definition is None and 'profile' in data:
+        if definition is None and ('profile' in data or 'persistence' in data):
             scenario = self.m.find_scenario(sid)
             if sid != 'full-incident':
                 raise ValueError('This campaign has no structured timing adapter')
             ids = scenario['metadata'].get('SCENARIO_PHASES', '').split(',')
             definition = {'version': 1, 'name': scenario['metadata'].get('SCENARIO_NAME', sid),
-                          'description': '', 'target_mode': 'auto', 'profile': data['profile'],
+                          'description': '', 'target_mode': 'auto', 'profile': data.get('profile', {'mode': 'normal'}),
                           'phases': [{'id': p, 'enabled': (str(data.get('wordlist_enabled', '0')).lower() in {'1', 'true'} if p == '08' else str(data.get('powershell_enabled', '0')).lower() in {'1', 'true'} if p == '10' else True), 'parameters': {}, 'timing': {}} for p in ids if p]}
         if definition is None:
             return None
-        definition = dict(definition)
+        definition = copy.deepcopy(definition)
+        if 'persistence' in data:
+            if sid != 'full-incident':
+                raise ValueError('P11 campaign configuration is supported only for Full Incident')
+            params = data['persistence']
+            if isinstance(params, str):
+                params = json.loads(params)
+            keys(params, ['platform', 'method', 'action', 'artifact', 'target', 'persistence_dns', 'persistence_domain', 'persistence_resolver', 'persistence_interval', 'persistence_duration'], 'Full Incident P11')
+            next(p for p in definition['phases'] if p['id'] == '11')['parameters'] = params
         if 'profile' in data:
             definition['profile'] = profile(data['profile'])
         definition = validate(definition, self.capabilities())
@@ -181,6 +194,8 @@ class Planning:
                 data['profile'] = execution['profile']
             if execution['type'] == 'campaign' and execution['id'] == 'full-incident':
                 data['powershell_enabled'] = execution.get('powershell_enabled', False)
+                if 'persistence' in execution:
+                    data['persistence'] = execution['persistence']
             definition = self.custom(execution['id'])
             if definition and any(p['id'] == '08' and p.get('enabled', True) for p in definition['phases']):
                 data['wordlist_enabled'] = '1'

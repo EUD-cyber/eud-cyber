@@ -120,8 +120,15 @@
                 const platform = params.platform || "auto";
                 const effective = params.protocol === "ssh" ? "linux" : params.protocol ? "windows" : platform;
                 if (["10", "11", "12", "14", "16", "17", "18"].includes(p.id) && platform !== "auto" && platform !== effective) return `P${p.id}: platform and protocol must match.`;
-                const methodPlatform = {"scheduled-task":"windows", service:"windows", cron:"linux", systemd:"linux"}[params.method];
+                const methodPlatform = {"scheduled-task":"windows", service:"windows", "task-service":"windows", cron:"linux", systemd:"linux", "cron-systemd":"linux"}[params.method];
                 if (p.id === "11" && methodPlatform && effective !== "auto" && effective !== methodPlatform) return "P11: method and platform must match.";
+                if (p.id === "11") {
+                    const interval = Number(params.persistence_interval ?? 60), duration = Number(params.persistence_duration ?? 3600);
+                    if (!Number.isInteger(interval) || interval < 10 || interval > 3600 || !Number.isInteger(duration) || duration < 60 || duration > 14400 || interval > duration) return "P11: interval 10–3600 seconds must fit activity lifetime 60–14400 seconds.";
+                    if (params.persistence_domain && (params.persistence_domain.length > 120 || !/^(?:[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?\.)+test$/.test(params.persistence_domain))) return "P11: use a lowercase reserved .test domain.";
+                    if (params.persistence_resolver && (!privateAddress(params.persistence_resolver) || /\.(0|255)$/.test(params.persistence_resolver))) return "P11: use an internal unicast lab resolver.";
+                    if (params.persistence_dns === "enabled" && params.action !== "cleanup" && (!params.persistence_resolver || !["auto", "task-service", "cron-systemd"].includes(params.method || "auto"))) return "P11: DNS requires a paired method and an explicit private non-forwarding resolver.";
+                }
                 if (p.id === "18") {
                     const behavior = params.dns_behavior || "standard";
                     const interval = Number(params.dns_interval ?? (behavior === "low-and-slow" ? 60 : 5)), jitter = Number(params.dns_jitter ?? 0), count = Number(params.dns_count ?? 3), duration = Number(params.dns_duration ?? 240);
@@ -160,7 +167,7 @@
         return "";
     }
     function dataHint(id) {
-        return {"01": "Discovers hosts on configured lab networks.", "02": "Uses hosts discovered by P01.", "03": "Uses hosts discovered by P01.", "04": "Uses compromised hosts from P03 as source and target.", "05": "Uses compromised hosts from P03.", "06": "Uses compromised hosts from P03 and staged data from P05.", "07": "Uses compromised hosts from P03.", "09": "Requires Windows access from P03. Select a lab DC with AD management rights; P03 authentication alone does not grant them.", "10": "Uses P03 Windows/WinRM or Linux/SSH access. Auto chooses a compatible host; optional target override filters established access.", "11": "Uses P03 access. Auto chooses Scheduled Task on Windows or cron on Linux. Cleanup uses the same target, username, method and artifact suffix.", "08": "Uses discovery from P01 and access results from P03; wordlist is supplied only at execution."}[id] || "";
+        return {"01": "Discovers hosts on configured lab networks.", "02": "Uses hosts discovered by P01.", "03": "Uses hosts discovered by P01.", "04": "Uses compromised hosts from P03 as source and target.", "05": "Uses compromised hosts from P03.", "06": "Uses compromised hosts from P03 and staged data from P05.", "07": "Uses compromised hosts from P03.", "09": "Requires Windows access from P03. Select a lab DC with AD management rights; P03 authentication alone does not grant them.", "10": "Uses P03 Windows/WinRM or Linux/SSH access. Auto chooses a compatible host; optional target override filters established access.", "11": "Uses P03 access. Auto chooses paired task + service on Windows or cron + user systemd on Linux. DNS is optional; activity stops at a fixed deadline, while artifacts require manual cleanup. Cleanup uses the same target, username, method and artifact suffix.", "08": "Uses discovery from P01 and access results from P03; wordlist is supplied only at execution."}[id] || "";
     }
     function scheduleSummary(value) {
         return value.mode === "now" ? "Run now / save only" : `${value.mode === "recurring" ? "Repeat every " + intervalText(value.interval) : "Run once"} · ${new Date(value.at).toLocaleString()} · ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;
@@ -293,6 +300,7 @@
         if (!existing) parent = node("div", undefined, parent, "phase-parameters");
         if (cap.runtime_powershell) node("p", "P10 remote command (PowerShell / Bash) is requested on Review or when arming the schedule; it is never stored in the definition.", parent, "muted");
         if (["15", "16", "17"].includes(phase.id)) node("p", {"15": "Fingerprint required: dedicated MrNobody Web Lab endpoint. Auto uses P02 web services; no compromise is invented.", "16": "Only synthetic monitor.conf or exercise.log in the MRN exercise directory; original state is restored. Cleanup recovers an interrupted run.", "17": "Only fixed marker-verified finance/engineering files. Archives feed staged-data.json for P05/P06. Cleanup removes the selected archive."}[phase.id], parent, "muted");
+        if (phase.id === "11") node("p", "Auto: task + native Windows service, or cron + user systemd service. DNS disabled by default. Enable only with an internal non-forwarding resolver for your .test zone. Activity ends at its fixed UTC deadline, independent of campaign timing or completion. Cleanup removes both mechanisms and owned files; reruns preserve the deadline. Existing user-systemd manager required; no linger or elevation.", parent, "muted");
         if (phase.id === "12") node("p", "Synthetic temporary test file only: inspect metadata or verify its fixed lab marker, then clean up. Auto requires prior P03 access.", parent, "muted");
         if (phase.id === "18") node("p", "DNS only, UDP 53. Private resolver and reserved lab domain; use a non-forwarding lab DNS zone. Standard defaults: 5s; low-and-slow: 60s (minimum 30s). Three queries, 0% jitter, 4 minute duration ceiling. Internal DNS timing is independent of campaign offsets. Fixed marker only; no remote commands or answer processing.", parent, "muted");
         if (phase.id === "14") node("p", "Beacons to this MrNobody instance only. Internal interval/count is independent of the technique start offset. Default: HTTP, 5 seconds, 0% jitter, 5 check-ins. Maximum execution budget: 240 seconds. HTTPS uses the lab self-signed certificate policy.", parent, "muted");
@@ -307,7 +315,7 @@
             let options = spec.options;
             if (["10", "11", "12", "13", "14", "16", "17", "18"].includes(phase.id)) {
                 if (key === "protocol") options = options.filter(v => platform === "auto" || (v === "ssh") === (platform === "linux"));
-                if (key === "method" && phase.id === "11") options = options.filter(v => v === "auto" || platform === "auto" || (["cron", "systemd"].includes(v)) === (platform === "linux"));
+                if (key === "method" && phase.id === "11") options = options.filter(v => v === "auto" || platform === "auto" || (["cron", "systemd", "cron-systemd"].includes(v)) === (platform === "linux"));
                 if (key === "source" || key === "subnet" || key === "file") return;
             }
             if (spec.type === "seconds") {
@@ -558,6 +566,9 @@
             parameterForm(parent, phase, spec.target_mode, false, false, () => refreshCredentials()); timingForm(parent, phase, spec.profile);
         }
         if (spec.type === "campaign" && spec.id === "full-incident") {
+            node("p", "P11 persistence: DNS lifetime is independent of campaign completion; manual artifact cleanup is required.", parent, "muted");
+            spec.persistence ||= {};
+            parameterForm(parent, {id: "11", parameters: spec.persistence}, "auto", false, false, () => {});
             field(parent, "P10 Custom Remote Command", spec.powershell_enabled ? "1" : "0", value => {spec.powershell_enabled = value === "1"; scheduleEditor(spec, existing);}, [{value:"0",label:"Disabled"},{value:"1",label:"Enabled"}]);
         }
         const when = {mode: existing?.interval ? "recurring" : "once", at: existing ? localDate(existing.next_run || existing.at) : "", interval: existing?.interval || 86400};

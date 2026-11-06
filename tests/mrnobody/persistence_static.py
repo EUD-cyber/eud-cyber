@@ -24,18 +24,19 @@ $script:task = $null
 $script:service = $null
 function Get-ScheduledTask { param($TaskName,$TaskPath,$ErrorAction) if($TaskPath -ne '\'){throw 'wrong_task_path'}; $script:task }
 function New-ScheduledTaskAction { param($Execute,$Argument) @{Execute=$Execute;Argument=$Argument} }
-function New-ScheduledTaskTrigger { param([switch]$Daily,$At) @{At=$At} }
-function Register-ScheduledTask { param($TaskName,$TaskPath,$Description,$Action,$Trigger,[switch]$Force) if($TaskPath -ne '\'){throw 'wrong_task_path'}; $script:task = [pscustomobject]@{Description=$Description} }
+function New-ScheduledTaskTrigger { param([switch]$Daily,[switch]$Once,$At,$RepetitionInterval,$RepetitionDuration) @{At=$At;RepetitionInterval=$RepetitionInterval} }
+function Stop-ScheduledTask { param($TaskName,$TaskPath,$ErrorAction) }
+function Register-ScheduledTask { param($TaskName,$TaskPath,$Description,$Action,$Trigger,$User,$RunLevel,[switch]$Force) if($TaskPath -ne '\'){throw 'wrong_task_path'}; $script:task = [pscustomobject]@{Description=$Description;Actions=$Action;Triggers=$Trigger} }
 function Unregister-ScheduledTask { param($TaskName,$TaskPath,$Confirm) if($TaskPath -ne '\'){throw 'wrong_task_path'}; $script:task=$null }
 function Get-CimInstance { param($ClassName,$Filter) $script:service }
 function Add-Type { param($TypeDefinition,$ReferencedAssemblies,$OutputAssembly,$OutputType) [IO.File]::WriteAllBytes($OutputAssembly,[byte[]]@(1,2,3)) }
 function New-Service { param($Name,$BinaryPathName,$DisplayName,$Description,$StartupType) $script:service=[pscustomobject]@{Description=$Description;PathName=$BinaryPathName;State='Stopped';Status='Stopped'} }
-function Start-Service { param($Name) $script:service.State='Running';$script:service.Status='Running' }
+function Start-Service { param($Name) $script:service.State='Running';$script:service.Status='Running'; $dir=Join-Path $env:ProgramData ('MrNobody\P11\'+$Name); if(Test-Path (Join-Path $dir 'config.txt')){[IO.File]::WriteAllText((Join-Path $dir 'status.txt'),'0,0,0,-1')} }
 function Stop-Service { param($Name,$ErrorAction) $script:service.State='Stopped';$script:service.Status='Stopped' }
 function Get-Service { param($Name) $script:service }
 function Invoke-CimMethod { param($InputObject,$MethodName) if($MethodName -ne 'Delete'){throw 'wrong_method'}; $script:service=$null; [pscustomobject]@{ReturnValue=0} }
 '''
-        for method in ('scheduled-task', 'service'):
+        for method in ('scheduled-task', 'service', 'task-service'):
             create = script({'MRNOBODY_METHOD': method}, 'windows')
             cleanup = script({'MRNOBODY_METHOD': method, 'MRNOBODY_ACTION': 'cleanup'}, 'windows')
             member = 'task' if method == 'scheduled-task' else 'service'
@@ -72,7 +73,7 @@ function Invoke-CimMethod { param($InputObject,$MethodName) if($MethodName -ne '
 
     @unittest.skipUnless(os.name == 'nt', 'Compile against Windows PowerShell .NET Framework')
     def test_service_binary_compiles_without_installing_or_executing(self):
-        source = script({'MRNOBODY_METHOD': 'service'}, 'windows')
+        source = script({'MRNOBODY_METHOD': 'task-service', 'MRNOBODY_PERSISTENCE_DNS': 'enabled', 'MRNOBODY_PERSISTENCE_RESOLVER': '192.168.1.53'}, 'windows')
         code = re.search(r"\$source = @'\n(.*?)\n'@", source, re.S)[1]
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
             output = Path(tmp) / 'mrnobody-p11-telemetry.exe'

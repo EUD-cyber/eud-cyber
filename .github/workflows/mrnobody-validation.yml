@@ -74,6 +74,7 @@ jobs:
           python tests/mrnobody/scenario_portability.py
           python tests/mrnobody/planning.py --bash
           python tests/mrnobody/remote_actions.py
+          python tests/mrnobody/persistence_dns.py
           python tests/mrnobody/dns_activity.py
           python tests/mrnobody/lab_phases.py
           python tests/mrnobody/application_collection.py

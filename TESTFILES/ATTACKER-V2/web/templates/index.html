@@ -578,13 +578,29 @@
             <div class="config-section-title">P09 / P10 remote actions · P11 Persistence, P12 Credential Access, P13 Native Tools and P14 Beaconing are included</div>
             <p>P09 changes mrnobody membership in Domain Admins on the lab DC. P09 runs only when Windows/RDP access is available; otherwise it is skipped. AD management rights are required for domain changes.</p>
             <label class="checkbox-label" for="powershellEnabled"><input id="powershellEnabled" type="checkbox" checked> Enable P10 Custom Remote Command</label>
+            <div class="form-group form-group-wide" id="campaignPersistenceFields">
+                <label>P11 Persistence · Full Incident</label>
+                <p class="field-help">Paired service maintenance. DNS is optional and uses your private non-forwarding resolver for a .test zone. Activity continues after P11 completes, stops at its deadline, and requires manual artifact Cleanup. Linux requires an existing user systemd manager.</p>
+                <label for="campaignP11Platform">P11 platform</label>
+                <select id="campaignP11Platform" data-campaign-p11="platform"><option>auto</option><option>windows</option><option>linux</option></select>
+                <label for="campaignP11DNS">P11 periodic DNS</label>
+                <select id="campaignP11DNS" data-campaign-p11="persistence_dns"><option>disabled</option><option>enabled</option></select>
+                <label for="campaignP11Domain">P11 reserved domain</label>
+                <input id="campaignP11Domain" data-campaign-p11="persistence_domain" value="evilcorp.test">
+                <label for="campaignP11Resolver">P11 internal lab DNS resolver</label>
+                <input id="campaignP11Resolver" data-campaign-p11="persistence_resolver" placeholder="Internal resolver IPv4 (required for DNS)">
+                <label for="campaignP11Interval">P11 DNS interval (seconds)</label>
+                <input id="campaignP11Interval" data-campaign-p11="persistence_interval" type="number" min="10" max="3600" value="60">
+                <label for="campaignP11Duration">P11 activity lifetime (seconds; manual artifact cleanup)</label>
+                <input id="campaignP11Duration" data-campaign-p11="persistence_duration" type="number" min="60" max="14400" value="3600">
+            </div>
             <div class="form-group" id="campaignPowershellFields">
                 <label for="campaignPowershell">PowerShell command (Windows, optional)</label>
                 <textarea id="campaignPowershell" rows="5" maxlength="16384" autocomplete="off"></textarea>
                 <label for="campaignBash">Bash command (Linux, optional)</label>
                 <textarea id="campaignBash" rows="5" maxlength="16384" autocomplete="off"></textarea>
                 <p id="campaignP10Review" aria-live="polite"></p>
-                <div class="field-help">Each command is optional. Both filled: execute both platforms independently. Both blank: P10 is skipped as NOT_CONFIGURED and the campaign continues. Auto selects compatible P03 access: WinRM/PowerShell or SSH/Bash. Blank fields skip only their own platform action. Reports include bounded, redacted output previews. P11 defaults to Scheduled Task or user cron; use standalone P11 cleanup afterward.</div>
+                <div class="field-help">Each command is optional. Both filled: execute both platforms independently. Both blank: P10 is skipped as NOT_CONFIGURED and the campaign continues. Auto selects compatible P03 access: WinRM/PowerShell or SSH/Bash. Blank fields skip only their own platform action. Reports include bounded, redacted output previews. P11 defaults to task + native Windows service or cron + user systemd. Activity stops at its deadline; use standalone P11 Cleanup to remove artifacts.</div>
             </div>
         </div>
         <!-- ==================================================

@@ -615,9 +615,14 @@ Options:
   --password <password>
   --file <path>
   --platform <auto|windows|linux> (P10/P11)
-  --method <auto|scheduled-task|service|cron|systemd> (P11)
+  --method <auto|task-service|cron-systemd|scheduled-task|service|cron|systemd> (P11)
   --action <create|cleanup> (P11)
   --artifact <suffix> (P11, default telemetry)
+  --persistence-dns <disabled|enabled> (P11; paired methods only)
+  --persistence-domain <reserved .test domain> (default evilcorp.test)
+  --persistence-resolver <private lab IPv4> (required for DNS; no default)
+  --persistence-interval <10-3600 seconds> (default 60)
+  --persistence-duration <60-14400 seconds> (default 3600; artifacts require Cleanup)
   --web-profile <sqli|traversal> --web-path </mrn-lab> (P15)
   --behavior <config-toggle|log-rename> --action <run|cleanup> (P16)
   --dataset <finance|engineering> --archive-name <suffix> --action <run|cleanup> (P17)
@@ -779,7 +784,7 @@ case "$COMMAND" in
                     shift 2
                     ;;
 
-                --dns-behavior|--dns-endpoint|--dns-domain|--dns-pattern|--dns-interval|--dns-jitter|--dns-count|--dns-duration|--web-profile|--web-path|--dataset|--archive-name|--transport|--beacon-interval|--beacon-jitter|--beacon-count|--uri-profile)
+                --persistence-dns|--persistence-domain|--persistence-resolver|--persistence-interval|--persistence-duration|--dns-behavior|--dns-endpoint|--dns-domain|--dns-pattern|--dns-interval|--dns-jitter|--dns-count|--dns-duration|--web-profile|--web-path|--dataset|--archive-name|--transport|--beacon-interval|--beacon-jitter|--beacon-count|--uri-profile)
                     [[ $# -ge 2 ]] || die "$1 requires a value"
                     key="${1#--}"
                     key="${key//-/_}"
