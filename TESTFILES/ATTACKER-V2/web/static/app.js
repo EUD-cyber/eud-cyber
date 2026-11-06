@@ -3093,6 +3093,11 @@ function reportAssets(report) {
         asset.references.add(reference);
         assets.set(host.ip, asset);
     };
+    reportArray(report.phases).forEach(p => reportArray(p.staging_hosts).forEach(ip => mark({ip}, 'authenticated staging source', 'P05 STAGING_SUCCESS')));
+    reportArray(report.phases).filter(p => p.id === '05').forEach(p => reportArray(p.artifacts).forEach(a => {
+        mark({ip: a.host}, 'authenticated staging source', 'artifact evidence');
+        mark({ip: a.host}, 'staged', 'artifact evidence');
+    }));
     const state = report.evidence || {};
     reportArray((report.inventory || state.inventory)?.hosts).forEach(h => mark(h, "discovered", "inventory.hosts"));
     reportArray(state.web_targets?.targets).forEach(h => mark(h, "targeted", "web_targets.targets"));
@@ -3103,6 +3108,7 @@ function reportAssets(report) {
         if (h.staged !== false) mark(h, "staged", "staging.hosts");
     });
     reportArray(state.exfiltration?.transfers).forEach(t => {
+        mark({ip: t.destination || t.receiver}, "downstream receiver", "exfiltration.transfers (receiver)");
         mark({ip: t.source}, "targeted", "exfiltration.transfers (source)");
         if (t.successful === true) mark({ip: t.source}, "exfiltrated", "exfiltration.transfers (successful)");
     });
@@ -3123,6 +3129,7 @@ function reportAssets(report) {
         if (/^EXFIL_/.test(name)) mark({ip: e.source || e.fields?.source}, "targeted", ref);
         if (name === "ACCESS_SUCCESS") mark({ip: e.target}, "compromised", ref);
         if (name === "STAGING_SUCCESS") mark({ip: e.target}, "staged", ref);
+        if (/^EXFIL_/.test(name) && e.fields?.destination) mark({ip: e.fields.destination}, "downstream receiver", ref);
         if (name === "EXFIL_SUCCESS") mark({ip: e.source || e.fields?.source}, "exfiltrated", ref);
         if (name === "IMPACT_SUCCESS") mark({ip: e.target}, "impacted", ref);
     });
@@ -3234,12 +3241,38 @@ async function refreshReports() {
     }
 }
 
+function renderReportArtifacts(parent, phase) {
+    if (phase.artifact_overview) reportNode('p', phase.artifact_overview, parent);
+    reportArray(phase.artifact_outcomes).forEach(value => reportNode('p', value, parent));
+    if (reportArray(phase.artifacts).length) reportNode('h4', phase.id === '05' ? 'Data Staging Findings' : 'Artifact evidence', parent);
+    reportArray(phase.artifacts).forEach(artifact => {
+        const card = reportNode('article', null, parent);
+        card.className = 'report-artifact';
+        reportNode('h4', artifact.filename || artifact.name, card);
+        reportArray(artifact.display).forEach(([label, value]) => {
+            reportNode('strong', label + ': ', card);
+            reportNode('p', value, card);
+        });
+        reportArray(artifact.inspection).forEach(command => reportNode('pre', command, card));
+        // Selectable, full text also works when clipboard access is unavailable.
+        if (artifact.sha256 && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+            const copy = reportNode('button', 'Copy SHA256', card);
+            copy.type = 'button';
+            copy.addEventListener('click', async () => {
+                try { await navigator.clipboard.writeText(artifact.sha256); copy.textContent = 'Copied SHA256'; }
+                catch { copy.textContent = 'Select the SHA256 above to copy'; }
+            });
+        }
+    });
+}
+
 function renderReportPhase(parent, phase, groundTruth = true) {
     const analysis = phase.analysis || {};
     const section = reportNode("section", null, parent);
     section.className = "report-phase-detail";
     reportNode("h3", `${phase.id} · ${phase.name}`, section);
     reportBadge(section, phase.status);
+    renderReportArtifacts(section, phase);
     if (phase.discovery_overview) {
         reportNode('p', phase.discovery_overview, section);
         if (groundTruth) reportArray(phase.discovery_findings).forEach(detail => reportNode('p', detail, section));
@@ -3323,7 +3356,7 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
         const count = report.summary?.[key] ?? (evidence ? reportArray(key === "exfiltration" ? evidence.transfers : evidence.hosts).length : null);
         reportMetric(metrics, label, count);
     }
-    if (report.summary?.involved_hosts != null) reportMetric(metrics, "Involved hosts (P04 and inventory)", report.summary.involved_hosts);
+    if (report.summary?.involved_hosts != null) reportMetric(metrics, "Involved hosts (incident evidence)", report.summary.involved_hosts);
     reportMetric(metrics, "MITRE techniques mapped", techniques.length);
     reportNode("h3", "Attack timeline", detail);
     reportNode("p", "Select a recorded Attack Technique to read its analysis. Status describes the technique run; it does not confirm every action succeeded.", detail);
@@ -3363,14 +3396,17 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
     if (groundTruth) {
     reportNode("p", "Recorded states only. — means no supporting evidence, not proof the host was unaffected. Successful transfers mark their source, not the receiver. Snapshot membership records compromise, staging and impact unless explicitly false.", detail);
     const states = ["discovered", "targeted", "compromised", "staged", "exfiltrated", "impacted"];
+    if (assets.some(a => a.states.has('authenticated staging source'))) states.push('authenticated staging source');
+    if (assets.some(a => a.states.has('downstream receiver'))) states.push('downstream receiver');
     if (assets.some(a => a.states.has('remote execution source'))) states.push('remote execution source', 'scanned target');
     if (assets.length > 100) reportNode('p', 'Showing 100 of ' + assets.length + ' involved assets; full evidence remains in raw JSON.', detail);
     reportTable(detail, ["Host", "Hostname", ...states.map(s => s[0].toUpperCase() + s.slice(1)), "Evidence source"],
         assets.slice(0, 100).map(a => [a.ip, a.hostname || "Unavailable", ...states.map(s => a.states.has(s) ? "Recorded" : "—"), [...a.references].slice(0,10).join("; ") + (a.references.size > 10 ? "; references capped; see raw JSON" : "")]));
     } else {
         reportNode("p", "Review the discovered inventory and correlate logs to determine which assets were affected. Confirm compromise, staging, transfer and impact in Ground Truth View after investigating.", detail);
-        const involved = assets.filter(a => a.states.has('remote execution source') || a.states.has('scanned target'));
-        if (involved.length) reportTable(detail, ['Involved host', 'P04 role'], involved.slice(0,100).map(a => [a.ip, [...a.states].filter(s => ['remote execution source','scanned target'].includes(s)).join(', ')]));
+        const roles = ['remote execution source', 'scanned target', 'authenticated staging source', 'downstream receiver'];
+        const involved = assets.filter(a => roles.some(s => a.states.has(s)));
+        if (involved.length) reportTable(detail, ['Involved host', 'Evidence role'], involved.slice(0,100).map(a => [a.ip, [...a.states].filter(s => roles.includes(s)).join(', ')]));
         const inventory = report.inventory || report.evidence?.inventory;
         reportTable(detail, ["Host", "Hostname"], reportArray(inventory?.hosts).map(a => [a.ip || a.host, a.hostname || "Unavailable"]));
     }
