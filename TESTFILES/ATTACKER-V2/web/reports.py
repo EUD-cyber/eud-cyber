@@ -390,7 +390,7 @@ def outcome(event):
         return "skipped"
     if any(word in upper for word in ("FAILED", "REJECTED", "INVALID", "ACTION_ERROR")):
         return "failure"
-    if any(word in upper for word in ("SUCCESS", "COMPLETE", "DISCOVERED")) or upper in {"WEB_TARGET", "INTERNAL_DISCOVERY"}:
+    if any(word in upper for word in ("SUCCESS", "COMPLETE", "DISCOVERED")) or upper in {"WEB_TARGET"}:
         return "success"
     return "observed"
 

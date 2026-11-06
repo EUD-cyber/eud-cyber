@@ -19,7 +19,7 @@ spec = importlib.util.spec_from_file_location('p04_evidence', PLATFORM / 'web/p0
 capture = importlib.util.module_from_spec(spec)
 sys.modules['p04_evidence'] = capture
 spec.loader.exec_module(capture)
-from reports import build_report, p04_summary, save_report, load_report, run_phase
+from reports import build_report, p04_summary, save_report, load_report, run_phase, outcome
 from report_exports import export_html, export_pdf
 
 SOURCE, TARGET = '192.168.1.20', '192.168.1.1'
@@ -185,6 +185,7 @@ NORDIC_CONNECT_TIMEOUT=1
         self.assertEqual(summary['counts']['relationships'], 4)
         self.assertEqual(summary['counts']['open_ports'], 12)
         legacy = p04_summary([{'event': 'INTERNAL_DISCOVERY', 'fields': {'source': SOURCE, 'target': TARGET}}])
+        self.assertEqual(outcome("INTERNAL_DISCOVERY"), "observed")
         self.assertEqual(legacy['probes'], [])
         self.assertEqual(legacy['targets'][0]['ping'], 'unknown')
 
