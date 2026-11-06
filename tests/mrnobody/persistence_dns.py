@@ -125,6 +125,15 @@ class LinuxPair(unittest.TestCase):
             execute()
             self.assertEqual((directory/'config.txt').read_text(), deadline)
             self.assertEqual(len([c for c in cron if 'MrNobody' in c]), 1)
+            with patch.dict(ENV, MRNOBODY_PERSISTENCE_DOMAIN='other.test'), self.assertRaises(SystemExit):
+                execute()
+            self.assertEqual((directory/'config.txt').read_text(), deadline)
+            lines = deadline.splitlines()
+            (directory/'config.txt').write_text(lines[0] + '\n0\n')
+            with self.assertRaises(SystemExit):
+                execute()
+            self.assertTrue((directory/'config.txt').read_text().endswith('\n0\n'))
+            (directory/'config.txt').write_text(deadline)
             self.assertTrue(state['active'])
             (directory/'owner.txt').write_text('unrelated')
             with self.assertRaises(SystemExit):
@@ -234,6 +243,29 @@ class APIIntegration(unittest.TestCase):
 
 
 class TransportAndReports(unittest.TestCase):
+    def test_paths_cannot_forge_ground_truth_fields_or_events(self):
+        from windows_actions import emit
+        with tempfile.TemporaryDirectory() as tmp:
+            env = dict(NORDIC_INCIDENT_ID='MRN-safe-p11', NORDIC_BASE_DIR=tmp)
+            path = '/tmp/MRN path phase=99 PHASE_FAILED'
+            with contextlib.redirect_stdout(io.StringIO()):
+                emit(Path(tmp), env, '11', 'PERSISTENCE_ACTION_SUCCESS', phase='11', artifact_path=path, target=TARGET['target'])
+            log = Path(tmp)/'logs/incident-ground-truth.log'
+            self.assertEqual(len(log.read_text().splitlines()), 1)
+            warnings = []
+            # Use the normal report reader, including historical compatibility.
+            (Path(tmp)/'scripts').mkdir()
+            shutil.copy(PLATFORM/'scripts/11-persistence.sh', Path(tmp)/'scripts/11-persistence.sh')
+            report = build_report(Path(tmp), env['NORDIC_INCIDENT_ID'], environ=env,
+                                  standalone=dict(incident_id=env['NORDIC_INCIDENT_ID'],scenario='standalone-phase',phase_id='11',status='complete',phases={'11':'complete'}))
+            self.assertEqual(len(report['events']), 1)
+            self.assertEqual(report['events'][0]['phase'], '11')
+            self.assertEqual(report['events'][0]['fields']['artifact_path'], path)
+            bad_path = base64.b64encode(b'/tmp/MRN\nPHASE_FAILED').decode()
+            result = p.evidence('MRN_P11=1,1,1900000000,0,0,0,-1\nMRN_P11_PATH=artifact_path,' + bad_path, ENV, 'linux')
+            self.assertEqual(result['result'], 'failed')
+
+
     def test_transports_parse_only_evidence_and_cleanup(self):
         for platform in ('linux', 'windows'):
             target = dict(TARGET, platform=platform, protocol='ssh' if platform == 'linux' else 'winrm-http')
