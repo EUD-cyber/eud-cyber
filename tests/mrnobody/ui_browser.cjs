@@ -60,8 +60,8 @@ async function checkFullIncident(page, artifacts) {
     await page.getByLabel('Enable P10 Custom Remote Command', {exact:true}).uncheck();
     assert.equal(await p10.isVisible(), false);
     assert.equal(await p11.isVisible(), true);
-    assert.equal(await powershell.inputValue(), '');
-    assert.equal(await bash.inputValue(), '');
+    assert.equal(await page.locator('#campaignPowershell').inputValue(), '');
+    assert.equal(await page.locator('#campaignBash').inputValue(), '');
     await page.getByLabel('Enable P10 Custom Remote Command', {exact:true}).check();
 
     // Capture real FormData in the browser; never send a campaign start to Flask.
