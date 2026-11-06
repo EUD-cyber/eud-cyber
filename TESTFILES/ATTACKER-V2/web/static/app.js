@@ -3115,6 +3115,7 @@ function reportAssets(report) {
     events.forEach(e => {
         const name = e.event || "";
         const ref = `${name} · ${e.evidence?.path || "ground truth"}${e.evidence?.line ? ":" + e.evidence.line : ""}`;
+        if (name.startsWith('INTERNAL_DISCOVERY') && e.source) mark({ip: e.source}, 'remote execution source', ref);
         if (/^(WEB_|ACCESS_|WORDLIST_|STAGING_|IMPACT_|INTERNAL_DISCOVERY)/.test(name) && e.target)
             mark({ip: e.target}, "targeted", ref);
         if (name === "HOST_DISCOVERED" || name === "Discovered") mark({ip: e.target}, "discovered", ref);
@@ -3238,6 +3239,11 @@ function renderReportPhase(parent, phase, groundTruth = true) {
     section.className = "report-phase-detail";
     reportNode("h3", `${phase.id} · ${phase.name}`, section);
     reportBadge(section, phase.status);
+    if (phase.discovery_overview) {
+        reportNode('p', phase.discovery_overview, section);
+        if (groundTruth) reportArray(phase.discovery_findings).forEach(detail => reportNode('p', detail, section));
+        else reportNode('p', 'Identify source and scanned target separately; correlate ping and TCP results with independent logs. Exact probe answers are in Ground Truth View.', section);
+    }
     if (phase.action_outcome) {
         reportNode('p', phase.action_outcome, section);
         reportArray(phase.action_evidence).forEach(detail => reportNode('p', detail, section));
@@ -3268,8 +3274,9 @@ function renderReportPhase(parent, phase, groundTruth = true) {
     if (!groundTruth) return;
     const raw = reportNode("details", null, section);
     reportNode("summary", "Technical ground-truth events", raw);
+    if (phase.id === "04" && reportArray(phase.events).length > 200) reportNode("p", "Showing 200 events; full evidence is in raw JSON.", raw);
     reportTable(raw, ["Timestamp", "Action", "Source", "Target", "Protocol / method", "Outcome", "Evidence"],
-        reportArray(phase.events).map(e => [e.timestamp, e.event, e.source, e.target,
+        reportArray(phase.events).slice(0, phase.id === "04" ? 200 : undefined).map(e => [e.timestamp, e.event, e.source, e.target,
             [e.protocol, e.method].filter(Boolean).join(" / "), e.outcome, e.message]));
 }
 
@@ -3315,6 +3322,7 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
         const count = report.summary?.[key] ?? (evidence ? reportArray(key === "exfiltration" ? evidence.transfers : evidence.hosts).length : null);
         reportMetric(metrics, label, count);
     }
+    if (report.summary?.involved_hosts != null) reportMetric(metrics, "Involved hosts (P04 and inventory)", report.summary.involved_hosts);
     reportMetric(metrics, "MITRE techniques mapped", techniques.length);
     reportNode("h3", "Attack timeline", detail);
     reportNode("p", "Select a recorded Attack Technique to read its analysis. Status describes the technique run; it does not confirm every action succeeded.", detail);
@@ -3378,8 +3386,12 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
     for (const key of ["inventory", "compromised_hosts", "evidence", "events", "sources", "campaign"]) {
         const section = reportNode("details", null, raw);
         reportNode("summary", key, section);
-        reportNode("pre", JSON.stringify(report[key] ?? "Unavailable", null, 2), section);
+        reportNode("pre", JSON.stringify(report[key] ?? "Unavailable", null, 2).slice(0, 65536), section);
     }
+    }
+    if (report.evidence_availability && Object.keys(report.evidence_availability).length) {
+        reportNode('h3', 'Evidence availability', detail);
+        Object.entries(report.evidence_availability).forEach(([key, value]) => reportNode('p', key + ': ' + value, detail));
     }
     if (reportArray(report.warnings).length) {
         reportNode("h3", "Evidence availability", detail);

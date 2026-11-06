@@ -361,6 +361,9 @@ write_files:
       download_file \
           "web/reports.py" \
           "$INSTALL_DIR/web/reports.py"
+      download_file \
+          "web/p04_evidence.py" \
+          "$INSTALL_DIR/web/p04_evidence.py"
 
       download_file \
           "web/report_exports.py" \
@@ -840,4 +843,3 @@ power_state:
   message: "MrNobody Incident Platform installation completed - powering off"
   timeout: 30
   condition: true
-

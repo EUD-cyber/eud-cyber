@@ -14,6 +14,7 @@ import signal
 import subprocess
 import uuid
 import xml.etree.ElementTree as ET
+from p04_evidence import address
 
 
 P10_PREVIEW_LIMIT = 512
@@ -144,6 +145,53 @@ PHASE_GUIDANCE = {
 }
 
 
+def p04_summary(events):
+    """Project incident-scoped observations, retaining line references and missingness."""
+    sources, pairs, probes = {}, {}, []
+    for event in events:
+        name, fields = event.get('event', ''), event.get('fields', {})
+        source, target = fields.get('source', ''), fields.get('target', '')
+        if not name.startswith('INTERNAL_DISCOVERY') or not address(source):
+            continue
+        item = sources.setdefault(source, {'source': source, 'platform': fields.get('platform'),
+            'transport': fields.get('protocol'), 'execution': 'unknown'})
+        if name == 'INTERNAL_DISCOVERY_EXECUTION_COMPLETE':
+            item['execution'] = 'success'
+        elif name in {'INTERNAL_DISCOVERY_FAILED', 'INTERNAL_DISCOVERY_SKIPPED'}:
+            item['execution'] = 'failure' if name.endswith('FAILED') else 'skipped'
+        if not address(target):
+            continue
+        pair = pairs.setdefault((source, target), {'source': source, 'target': target,
+            'platform': item['platform'], 'transport': item['transport'], 'ping': 'unknown',
+            'tcp': {}, 'evidence': []})
+        status, port = fields.get('status'), fields.get('port', '')
+        kind = name.removeprefix('INTERNAL_DISCOVERY_')
+        if kind == 'PLAN':
+            for planned in fields.get('ports', '').split(',')[:256]:
+                if planned.isdigit() and 1 <= int(planned) <= 65535:
+                    pair['tcp'].setdefault(planned, 'unknown')
+            continue
+        if kind == 'PING' and status in {'reachable', 'no-reply', 'unknown', 'error'}:
+            pair['ping'] = status
+        elif kind == 'TCP' and port.isdigit() and 1 <= int(port) <= 65535 and status in {'open', 'closed', 'unknown', 'error'}:
+            pair['tcp'][port] = status
+        elif kind != 'DISCOVERY':
+            continue
+        probe = {'source': source, 'target': target, 'platform': item['platform'],
+            'transport': item['transport'], 'kind': kind.lower(), 'status': status,
+            'port': int(port) if port.isdigit() else None, 'timestamp': event.get('timestamp'),
+            'evidence': event.get('evidence')}
+        probes.append(probe)
+        pair['evidence'].append({'timestamp': probe['timestamp'], **(probe['evidence'] or {})})
+    return {'sources': list(sources.values()), 'targets': list(pairs.values()), 'probes': probes,
+        'counts': {'sources': len(sources), 'targets': len({p[1] for p in pairs}),
+            'relationships': len(pairs), 'probes': len(probes),
+            'open_ports': sum(s == 'open' for p in pairs.values() for s in p['tcp'].values()),
+            'execution_success': sum(s['execution'] == 'success' for s in sources.values()),
+            'execution_failure': sum(s['execution'] == 'failure' for s in sources.values())},
+        'truncated': any(e.get('event') == 'INTERNAL_DISCOVERY_TRUNCATED' for e in events)}
+
+
 def add_analysis(report):
     """Add a versioned student view without changing the underlying phase evidence."""
     summary = {}
@@ -175,6 +223,30 @@ def add_analysis(report):
             "guidance_notice": "Educational recommendations, not evidence that a sensor detected or a control prevented this activity. Apply only to recorded actions/protocols; logging and audit configuration vary.",
             "mitre_notice": "Mapped from phase metadata, not proof that every technique executed or succeeded.",
         }
+        if phase['id'] == '04':
+            discovery = p04_summary(events)
+            phase['discovery'] = discovery
+            if discovery['sources']:
+                counts = discovery['counts']
+                phase['discovery_overview'] = (f"Internal discovery: {counts['sources']} sources / {counts['targets']} targets / "
+                    f"{counts['open_ports']} open TCP results across source-target pairs. "
+                    "Remote execution success does not establish target reachability or compromise.")
+                details = []
+                for source in discovery['sources'][:100]:
+                    details.append(f"source={source['source']} platform={source['platform']} transport={source['transport']} execution={source['execution']}")
+                for pair in discovery['targets'][:100]:
+                    ports = ', '.join(f"{port}={status}" for port, status in sorted(pair['tcp'].items(), key=lambda x: int(x[0]))) or 'unknown / no responses recorded'
+                    refs = '; '.join(f"{e.get('timestamp')} {e.get('path', 'ground truth')}:{e.get('line', '?')}" for e in pair['evidence'][:10])
+                    details.append(f"source={pair['source']} target={pair['target']} platform={pair['platform']} transport={pair['transport']} ping={pair['ping']} TCP: {ports}. Evidence: {refs or 'no probe lines recorded'}")
+                if len(discovery['targets']) > 100 or len(discovery['sources']) > 100 or discovery['truncated']:
+                    details.append('Detail display capped at 100 sources / 100 pairs; consult structured evidence. Capture limit reached.' if discovery['truncated'] else 'Detail display capped at 100 sources / 100 pairs; aggregate counts include all recorded pairs.')
+                phase['discovery_findings'] = details
+                phase['analysis']['what_happened'] = phase['discovery_overview']
+                phase['analysis']['findings'] = details
+                phase['analysis']['evidence'] = phase['analysis']['evidence'][:200]
+                if report.get('summary') is not None:
+                    involved = {s['source'] for s in discovery['sources']} | {p['target'] for p in discovery['targets']}
+                    report['summary']['involved_hosts'] = len(involved | {h.get('ip') for h in (report.get('inventory') or {}).get('hosts', []) if h.get('ip')})
         if phase['id'] == '09' and phase.get('status') == 'skipped':
             # Operational prerequisite information belongs in both report views.
             phase['prerequisite_outcome'] = next((e['fields'].get('reason') for e in reversed(events)
@@ -385,9 +457,16 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
     if not isinstance(campaign, dict) or campaign.get("incident_id") != incident_id:
         raise ValueError("Campaign state does not belong to this incident")
     warnings, snapshots, sources = [], {}, {}
+    availability = {}
     for key, (filename, variable) in STATE_FILES.items():
         path = Path(environ.get(variable, state_dir / filename) if variable else state_dir / filename)
         sources[key] = str(path)
+        if standalone is not None and standalone['phase_id'] == '04':
+            # P04 produces its own incident evidence, never consumes foreign snapshots
+            # as evidence. Campaign input provenance remains in the execution log.
+            snapshots[key] = None
+            availability[key] = 'not applicable / not produced by standalone P04'
+            continue
         try:
             data = read_json(path)
             if not isinstance(data, dict) or data.get("incident_id") != incident_id:
@@ -462,6 +541,7 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
         "execution": redact(json.loads(environ["MRN_EXECUTION"])) if environ.get("MRN_EXECUTION") else campaign.get("execution"),
         "inventory": snapshots["inventory"], "compromised_hosts": snapshots["compromised"],
         "evidence": snapshots, "events": events, "sources": sources, "warnings": warnings,
+        "evidence_availability": availability,
     }
     if standalone is not None:
         report["phase_id"] = standalone["phase_id"]
