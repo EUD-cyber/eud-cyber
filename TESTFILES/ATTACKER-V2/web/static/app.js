@@ -1009,6 +1009,115 @@ async function loadScenarios() {
 }
 
 
+// MRN_STANDALONE_REPORT
+/* Retain only run identity, never form values or credentials. Report readiness
+ * is checked by exact ID; the shared execution overview is only a status hint. */
+const MrnStandaloneReport = (() => {
+    const key = "mrn.standalone-reports.v1";
+    const runs = new Map();
+    const validPhase = id => typeof id === "string" && /^\d{2,4}$/.test(id);
+    const validId = id => typeof id === "string" && /^MRN-[A-Za-z0-9_-]{1,120}$/.test(id);
+    let selected = null, root = null, timer = null, version = 0;
+    try {
+        const saved = JSON.parse(window.localStorage.getItem(key) || "{}");
+        for (const [phase, id] of Object.entries(saved || {})) {
+            if (validPhase(phase) && validId(id)) runs.set(phase, {id});
+        }
+    } catch { /* Storage can be unavailable; in-memory tracking still works. */ }
+    function persist() {
+        try { window.localStorage.setItem(key, JSON.stringify(Object.fromEntries([...runs].map(([phase, run]) => [phase, run.id])))); }
+        catch { /* Private browsing / storage quota must not break execution. */ }
+    }
+    function render() {
+        if (!root) return;
+        root.replaceChildren();
+        const run = runs.get(selected);
+        if (!run) return;
+        const status = document.createElement("p");
+        status.setAttribute("role", "status");
+        status.textContent = `P${selected} · ${run.id} · ${run.message || "Waiting for report…"}`;
+        root.appendChild(status);
+        const controls = document.createElement("div");
+        controls.className = "campaign-controls";
+        root.appendChild(controls);
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "button button-start";
+        button.textContent = "View Report";
+        button.disabled = !run.ready;
+        button.addEventListener("click", () => {
+            if (!run.ready) return;
+            showPage("reports");
+            openReport(run.id);
+            document.getElementById("reportDetail")?.scrollIntoView?.({block: "start"});
+        });
+        controls.appendChild(button);
+        if (!run.ready) {
+            const retry = document.createElement("button");
+            retry.type = "button";
+            retry.className = "button button-small";
+            retry.textContent = "Check report";
+            retry.addEventListener("click", refresh);
+            controls.appendChild(retry);
+        }
+    }
+    async function check(phase, run, token) {
+        let report, error;
+        try { report = await fetchReport(run.id); }
+        catch (failure) { error = failure; }
+        if (token !== version || runs.get(phase) !== run) return;
+        if (report) {
+            if (report.incident?.id === run.id && report.report_type === "standalone_phase" && report.phase_id === phase) {
+                run.ready = true;
+                run.message = "Report ready · Investigation View and Ground Truth available.";
+            } else {
+                run.ready = false;
+                run.message = "Report identity does not match this run. Check report generation.";
+            }
+        } else {
+            run.ready = false;
+            let job;
+            try { job = await apiGet("/api/execution-status"); } catch { /* Exact report lookup can still succeed next time. */ }
+            if (token !== version || runs.get(phase) !== run) return;
+            if (error?.message !== "HTTP 404") {
+                run.message = "Unable to check report. Retrying; use Check report to retry now.";
+            } else if (job?.incident_id === run.id && job.active) {
+                run.message = "Running · report pending.";
+            } else if (job?.incident_id === run.id) {
+                run.message = `${job.status} · No readable report yet. Report generation may have failed; retrying.`;
+            } else {
+                run.message = "Report not available yet; this run's job status is unavailable. Retrying.";
+            }
+        }
+        render();
+        if (!run.ready && selected === phase) timer = setTimeout(refresh, 3000);
+    }
+    function refresh() {
+        clearTimeout(timer);
+        const run = runs.get(selected), token = ++version;
+        if (run) return check(selected, run, token);
+    }
+    function mount(parent, phase) {
+        clearTimeout(timer);
+        ++version;
+        selected = phase;
+        root = document.createElement("section");
+        root.className = "standalone-report-status";
+        root.setAttribute("aria-label", "Standalone execution report");
+        parent.appendChild(root);
+        render();
+        refresh();
+    }
+    function track(phase, id) {
+        if (!validPhase(phase) || !validId(id)) return;
+        runs.set(phase, {id});
+        persist();
+        if (selected === phase) { render(); refresh(); }
+    }
+    return {mount, track};
+})();
+// MRN_STANDALONE_REPORT_END
+
 let p06Feedback = {message: "", type: "info", pending: false};
 function showP06Feedback(message, type = "info") {
     p06Feedback.message = message; p06Feedback.type = type;
@@ -1335,6 +1444,7 @@ function renderPhaseDetail(phase) {
     controls.appendChild(dryRunButton);
 
     phaseDetail.appendChild(controls);
+    MrnStandaloneReport.mount(phaseDetail, phase.id);
 
 
     runButton.addEventListener(
@@ -1521,6 +1631,7 @@ async function runStandalonePhase(
         for (const key of ["password", "powershell"]) {
             const input = document.getElementById(`phase-${phase.id}-${key}`); if (input) input.value = "";
         }
+        MrnStandaloneReport.track(phase.id, result.incident_id);
         if (phase.id === "06") {
             feedback(`P06 submitted · ${result.incident_id}. Waiting for job status…`);
             followP06Job(result.incident_id);
