@@ -668,6 +668,20 @@ def api_run_phase(phase_id):
 
     if not isinstance(data, dict):
         return jsonify({'status': 'error', 'message': 'Phase request must be a JSON object.'}), 400
+    if phase_id == '09':
+        # Standalone endpoint contract; custom/full scenario settings stay intact.
+        data['protocol'], data['port'] = 'winrm-http', 5985
+        data.setdefault('username', 'Administrator')
+        data.setdefault('timeout', 60)
+        try:
+            from scenario_model import private, text
+            from windows_actions import timeout_value, ad_script
+            private(data.get('target'))
+            text(data.get('username'), 128)
+            ad_script(data.get('password'))
+            timeout_value(data['timeout'])
+        except (ValueError, TypeError):
+            return jsonify(status='error', message='P09 requires a private lab IPv4 target, username, runtime password and timeout of 5–300 seconds.'), 400
     phase_env = os.environ.copy()
     if phase_id == '06':
         try:
@@ -860,6 +874,7 @@ def api_run_phase(phase_id):
     # Start phase
     # --------------------------------------------------------
 
+    log_handle = None
     try:
 
         log_handle = CAMPAIGN_LOG.open(
@@ -900,16 +915,19 @@ def api_run_phase(phase_id):
         log_handle.close()
 
     except BusyError:
-        log_handle.close()
+        if log_handle:
+            log_handle.write(f"Phase {phase_id} submission rejected: an execution is already running.\n")
+            log_handle.close()
         return jsonify({"status": "error", "message": "An execution is already running."}), 409
-    except Exception as exc:
-
+    except Exception:
+        if log_handle:
+            log_handle.write(f"Phase {phase_id} launch failed. Check runner permissions, runtime directories and service configuration.\n")
+            log_handle.close()
         return jsonify(
             {
                 "status": "error",
                 "message": (
-                    f"Unable to start phase {phase_id}: "
-                    f"{exc}"
+                    f"Unable to start phase {phase_id}. Check runner permissions, runtime directories and web service configuration."
                 ),
             }
         ), 500

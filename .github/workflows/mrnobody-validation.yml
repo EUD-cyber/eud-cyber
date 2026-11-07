@@ -68,6 +68,7 @@ jobs:
         run: |
           python tests/mrnobody/p06_default.py -v
           python tests/mrnobody/p06_standalone.py -v
+          python tests/mrnobody/p09_standalone.py -v
       - name: Verify paired P11 lifecycle, bounded DNS, API and report exports without network
         timeout-minutes: 3
         run: python -u tests/mrnobody/persistence_dns.py -v
