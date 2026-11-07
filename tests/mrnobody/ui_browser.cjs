@@ -227,7 +227,7 @@ async function checkP09(page, phase) {
         await page.evaluate(() => {p09Mode='failed';});
         await page.waitForFunction(() => document.getElementById('phase-09-feedback').textContent.includes('P09 failed'));
         await page.evaluate(() => refreshLog());
-        assert.ok((await page.locator('[data-live-log]').first().textContent()).includes('winrm_http_port_unreachable'));
+        assert.ok((await page.locator('#phasesLog').textContent()).includes('winrm_http_port_unreachable'));
         for (const mode of ['complete', 'skipped', 'reject', 'network', 'html']) {
             await page.locator('#phase-09-password').fill('fixture');
             await page.evaluate(value => {p09Mode=value;}, mode);

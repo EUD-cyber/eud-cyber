@@ -671,6 +671,7 @@ def api_run_phase(phase_id):
     if phase_id == '09':
         # Standalone endpoint contract; custom/full scenario settings stay intact.
         data['protocol'], data['port'] = 'winrm-http', 5985
+        data.setdefault('username', 'Administrator')
         data.setdefault('timeout', 60)
         try:
             from scenario_model import private, text
