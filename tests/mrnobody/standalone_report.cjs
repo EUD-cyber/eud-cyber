@@ -103,7 +103,7 @@ const reportFor = (id, phase = '04', status = 'complete') => ({incident: {id, st
         const key = id.replace(/^phase-\d+-/, '');
         return key in fields ? {value: fields[key]} : null;
     };
-    Object.assign(submitted.context, {p06Feedback: {pending: false}, showP06Feedback() {}, showMessage() {},
+    Object.assign(submitted.context, {p09Feedback: {pending: false}, showP09Feedback() {}, followP09Job() {}, p06Feedback: {pending: false}, showP06Feedback() {}, showMessage() {},
         phaseFieldLabel: value => value, followP06Job() {}, refreshLog: async () => {}, console: {log() {}, error() {}}});
     submitted.context.window.confirm = () => true;
     vm.runInContext(handler, submitted.context);
