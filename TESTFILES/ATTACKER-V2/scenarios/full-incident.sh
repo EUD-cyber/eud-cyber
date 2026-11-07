@@ -1142,6 +1142,23 @@ PY
 finalize_report() {
     local RESULT=$?
     trap - EXIT INT TERM
+    if (( RESULT != 0 )); then
+        python3 - "$NORDIC_CAMPAIGN_STATE" "$RESULT" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+
+filename = sys.argv[1]
+with open(filename, encoding="utf-8") as handle:
+    data = json.load(handle)
+if data.get("status") != "partial":
+    data["status"] = "interrupted" if int(sys.argv[2]) in {130, 143} else "failed"
+data.pop("completed", None)
+data["updated"] = datetime.now(timezone.utc).isoformat()
+with open(filename, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+PY
+    fi
     export NORDIC_CAMPAIGN_STATE NORDIC_STATE_DIR NORDIC_NETWORK_STATE
     export NORDIC_DISCOVERED_STATE NORDIC_WEB_STATE NORDIC_COMPROMISED_STATE
     export NORDIC_STAGING_STATE NORDIC_EXFIL_STATE NORDIC_IMPACT_STATE
@@ -1230,7 +1247,39 @@ PY
 }
 
 if [[ -n "${MRN_EXECUTION:-}" ]]; then
-    while read -r PHASE; do
+    # Capture first: process substitution hides the producer's exit status, and
+    # a read loop would share its queued identifiers with child processes.
+    if ! PHASE_LIST="$(python3 "$BASE_DIR/web/execution.py" --list)"; then
+        log "[ERROR] Could not read execution plan."
+        exit 1
+    fi
+    mapfile -t phases <<< "$PHASE_LIST"
+    if [[ -z "$PHASE_LIST" ]]; then
+        log "[ERROR] Execution plan is empty."
+        exit 1
+    fi
+    declare -A seen_phases=()
+    for PHASE in "${phases[@]}"; do
+        if [[ ! "$PHASE" =~ ^[0-9]{2,4}$ || -n "${seen_phases[$PHASE]:-}" ]]; then
+            log "[ERROR] Invalid or duplicate execution phase: $PHASE"
+            exit 1
+        fi
+        seen_phases[$PHASE]=1
+    done
+    # Verify membership and order before dispatching any child.
+    if ! python3 - "${phases[@]}" <<'PY'
+import json
+import os
+import sys
+
+planned = [p["id"] for p in json.loads(os.environ["MRN_EXECUTION"])["phases"]]
+sys.exit(0 if planned == sys.argv[1:] else 1)
+PY
+    then
+        log "[ERROR] Execution list does not match the plan."
+        exit 1
+    fi
+    for PHASE in "${phases[@]}"; do
         if [[ "$PHASE" == "09" ]] && ! windows_access_available; then
             update_phase_state "09" "disabled"
             ground_truth "PHASE_SKIPPED phase=09 reason=no_windows_rdp_access"
@@ -1243,7 +1292,7 @@ if [[ -n "${MRN_EXECUTION:-}" ]]; then
             exit 1
         fi
         update_phase_state "$PHASE" "$RUN_PHASE_STATUS"
-    done < <(python3 "$BASE_DIR/web/execution.py" --list)
+    done
 else
 # ============================================================
 # PHASE 01
@@ -1524,7 +1573,7 @@ fi
 # COMPLETE CAMPAIGN
 # ============================================================
 
-python3 - \
+if ! python3 - \
     "$NORDIC_CAMPAIGN_STATE" <<'PY'
 
 import json
@@ -1541,19 +1590,31 @@ with open(filename, encoding="utf-8") as f:
     data = json.load(f)
 
 
-data["status"] = "complete"
+states = data.get("phases", {})
+planned = [p["id"] for p in data["execution"]["phases"]] if "execution" in data else list(states)
+unfinished = {pid: states.get(pid, "pending") for pid in planned
+              if states.get(pid) not in {"complete", "skipped", "disabled", "partial"}}
+data["status"] = "failed" if any(s == "failed" for s in unfinished.values()) else "partial" if unfinished else "complete"
+if unfinished:
+    data.pop("completed", None)
+    print("[ERROR] Incomplete campaign: " + repr(unfinished), file=sys.stderr)
 
 
-data["completed"] = datetime.now(
-    timezone.utc
-).isoformat()
+if not unfinished:
+    data["completed"] = datetime.now(timezone.utc).isoformat()
 
 
 with open(filename, "w", encoding="utf-8") as f:
 
     json.dump(data, f, indent=2)
 
+sys.exit(1 if unfinished else 0)
 PY
+then
+    ground_truth "CAMPAIGN_INCOMPLETE"
+    log "[ERROR] Campaign did not complete."
+    exit 1
+fi
 
 
 ground_truth \
