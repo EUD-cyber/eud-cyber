@@ -20,7 +20,7 @@ let calls = [];
 let response;
 const context = vm.createContext({
     document: { getElementById: id => elements.get(id), querySelectorAll: () => [], createElement: element, addEventListener() {} },
-    window: {}, console, FormData,
+    window: {requestAnimationFrame() {}}, console, FormData,
     fetch: async url => { calls.push(url); return {ok: true, json: async () => response}; }
 });
 vm.runInContext(fs.readFileSync(__dirname + "/../../TESTFILES/ATTACKER-V2/web/static/app.js", "utf8"), context);
