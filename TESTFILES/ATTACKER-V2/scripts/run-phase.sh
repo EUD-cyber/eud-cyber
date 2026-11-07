@@ -613,7 +613,7 @@ Options:
   --protocol <protocol>
   --user <username>
   --password <password>
-  --file <path>
+  --file <path>  (P06: optional registered synthetic P05 file; omit for generated simulated data)
   --platform <auto|windows|linux> (P10/P11)
   --method <auto|task-service|cron-systemd|scheduled-task|service|cron|systemd> (P11)
   --action <create|cleanup> (P11)

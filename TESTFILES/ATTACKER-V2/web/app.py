@@ -676,7 +676,7 @@ def api_run_phase(phase_id):
         except ValueError as exc:
             app.logger.warning('P06 submission rejected: %s', exc)
             return jsonify({'status': 'error', 'message': str(exc)}), 400
-        phase_env['MRNOBODY_STAGING_INCIDENT'] = data['staging_incident']
+        phase_env['MRNOBODY_STAGING_INCIDENT'] = data.get('staging_incident', '')
     phase_env["NORDIC_INCIDENT_ID"] = "MRN-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:12]
     phase_env['MRNOBODY_PASSWORD'] = str(data.get('password', ''))
     if phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'}:

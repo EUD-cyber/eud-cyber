@@ -146,6 +146,12 @@ def report_document(report, view="investigation"):
             add('p', f"Host: {text(source.get('source'))} | Role: remote execution source | Platform: {text(source.get('platform'))} | Transport: {text(source.get('transport'))}")
         for pair in array(obj(phase.get('discovery')).get('targets'))[:100]:
             add('p', f"Host: {text(pair.get('target'))} | Role: scanned target | Source: {text(pair.get('source'))}")
+    for phase in phases:
+        if phase.get('id') == '06':
+            for artifact in array(phase.get('artifacts')):
+                add('p', 'P06 source host: ' + text(artifact.get('host')) + ' | Role: synthetic transfer source; no compromise established by this evidence.')
+                for label, value in array(artifact.get('display')):
+                    add('p', f'{label}: {value}')
     for transfer in array(obj(evidence.get('exfiltration')).get('transfers')):
         add('p', f"Host: {text(transfer.get('destination'))} | Role: downstream receiver; not a staged or compromised host by this evidence.")
     if full:

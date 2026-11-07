@@ -19,7 +19,7 @@ const caps = Object.entries(dependencyMap).map(([id, dependencies]) => ({
         target:{label:'Target IPv4',type:'ipv4'}, protocol:{label:'Protocol',options:['ssh','rdp']}, port:{label:'Port',type:'port'},
         ...(id === '04' ? {source:{label:'Source IPv4',type:'ipv4'}} : {}),
         ...(id === '06' ? {file:{label:'Synthetic staged file',type:'path'}} : {})},
-    required_fields: id === '01' ? ['subnet'] : ['target', ...(['03','08'].includes(id) ? ['protocol'] : []), ...(id === '04' ? ['source'] : []), ...(id === '06' ? ['file'] : [])],
+    required_fields: id === '01' ? ['subnet'] : ['target', ...(['03','08'].includes(id) ? ['protocol'] : []), ...(id === '04' ? ['source'] : [])],
     timing: ['01','02'].includes(id) ? ['start_offset','duration','delay_min','delay_max','jitter'] : ['start_offset'],
     credentials:['03','04','05','06','07','09','10','11','12','13','14'].includes(id), wordlist:id === '08', standalone:true,
     runtime_powershell:id === '10'
@@ -193,7 +193,7 @@ async function main() {
     set('Protocol','ssh',panels()[1]);set('Port','65536',panels()[1]);await next();assert.match(error(),/port/);
     set('Port','22',panels()[1]);await next();assert.match(error(),/Source/);
     set('Source IPv4','8.8.8.8');await next();assert.match(error(),/private lab/);
-    set('Source IPv4','192.168.1.10');await next();assert.match(error(),/Synthetic staged file/);
+    set('Source IPv4','192.168.1.10');await next();assert.match(title(),/^5\./);await back();assert.match(title(),/^4\./);
     set('Synthetic staged file','/etc/passwd');await next();assert.match(error(),/@staged/);
     set('Synthetic staged file','@staged');await next();assert.match(title(),/^5\./);
     set('Execution profile','slow');assert.equal(field(body(),'Target duration · Hours').value,4);

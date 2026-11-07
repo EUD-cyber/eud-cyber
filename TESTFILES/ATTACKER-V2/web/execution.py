@@ -206,22 +206,31 @@ def snapshot(base, capabilities, process=None, now=None):
 def phase_environment(pid, environ=None, sleep=time.sleep, clock=time.time):
     env = dict(os.environ if environ is None else environ)
     config = json.loads(env['MRN_EXECUTION'])
+    staging_origin = env.get('MRNOBODY_STAGING_INCIDENT')
     phase = next(p for p in config['phases'] if p['id'] == pid)
     timing = phase.get('timing', {})
     offset = timing.get('start_offset', 0)
     sleep(max(0, float(env['MRN_STARTED']) + offset - clock()))
-    for key in ('SOURCE', 'TARGET', 'SUBNET', 'PORT', 'PROTOCOL', 'USERNAME', 'FILE', 'AUTO', 'TIMEOUT', 'PLATFORM', 'METHOD', 'ACTION', 'ARTIFACT', 'BEHAVIOR', 'TRANSPORT', 'BEACON_INTERVAL', 'BEACON_JITTER', 'BEACON_COUNT', 'URI_PROFILE', 'WEB_PROFILE', 'WEB_PATH', 'DATASET', 'ARCHIVE_NAME', 'DNS_BEHAVIOR', 'DNS_ENDPOINT', 'DNS_DOMAIN', 'DNS_PATTERN', 'DNS_INTERVAL', 'DNS_JITTER', 'DNS_COUNT', 'DNS_DURATION', 'PERSISTENCE_DNS', 'PERSISTENCE_DOMAIN', 'PERSISTENCE_RESOLVER', 'PERSISTENCE_INTERVAL', 'PERSISTENCE_DURATION'):
+    for key in ('STAGING_INCIDENT', 'REQUIRE_STAGING', 'SOURCE', 'TARGET', 'SUBNET', 'PORT', 'PROTOCOL', 'USERNAME', 'FILE', 'AUTO', 'TIMEOUT', 'PLATFORM', 'METHOD', 'ACTION', 'ARTIFACT', 'BEHAVIOR', 'TRANSPORT', 'BEACON_INTERVAL', 'BEACON_JITTER', 'BEACON_COUNT', 'URI_PROFILE', 'WEB_PROFILE', 'WEB_PATH', 'DATASET', 'ARCHIVE_NAME', 'DNS_BEHAVIOR', 'DNS_ENDPOINT', 'DNS_DOMAIN', 'DNS_PATTERN', 'DNS_INTERVAL', 'DNS_JITTER', 'DNS_COUNT', 'DNS_DURATION', 'PERSISTENCE_DNS', 'PERSISTENCE_DOMAIN', 'PERSISTENCE_RESOLVER', 'PERSISTENCE_INTERVAL', 'PERSISTENCE_DURATION'):
         env.pop('MRNOBODY_' + key, None)
     env['MRNOBODY_RUN_MODE'] = 'campaign' if config['target_mode'] == 'auto' else 'standalone'
     for key, value in phase.get('parameters', {}).items():
         env['MRNOBODY_' + key.upper()] = str(value)
-    if env.get('MRNOBODY_FILE') == '@staged':
+    needs_p05 = pid == '06' and any(p['id'] == '05' for p in config['phases'])
+    if pid == '06' and not needs_p05 and phase.get('parameters', {}).get('file') and staging_origin:
+        env['MRNOBODY_STAGING_INCIDENT'] = staging_origin
+    if needs_p05:
+        env['MRNOBODY_REQUIRE_STAGING'] = '1'
+    if env.get('MRNOBODY_FILE') == '@staged' or needs_p05 and config['target_mode'] == 'fixed':
         staging = Path(env.get('NORDIC_STAGING_STATE', Path(env.get('NORDIC_BASE_DIR', '/opt/nordic-attack')) / 'state/staged-data.json'))
         data = json.loads(staging.read_text())
+        if data.get('incident_id') != env.get('NORDIC_INCIDENT_ID'):
+            raise ValueError('P06 staging incident ID mismatch')
         host = next((h for h in data.get('hosts', []) if h.get('ip') == env.get('MRNOBODY_TARGET') and h.get('staged') and h.get('data_type') == 'synthetic-training-data'), None)
         if host is None:
             raise ValueError('No synthetic staging output exists for this target')
         env['MRNOBODY_FILE'] = host['file']
+        env['MRNOBODY_STAGING_INCIDENT'] = env['NORDIC_INCIDENT_ID']
     if pid == '01':
         env['MRNOBODY_AUTO'] = '1' if config['target_mode'] == 'auto' else '0'
     protocol = env.get('MRNOBODY_PROTOCOL') or ('winrm-http' if env.get('MRNOBODY_PLATFORM') == 'windows' or pid in {'09', '10', '13'} else 'ssh')

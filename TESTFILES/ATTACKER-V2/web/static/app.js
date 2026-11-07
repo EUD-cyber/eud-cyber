@@ -1056,7 +1056,7 @@ function phaseFieldLabel(parameter) {
         persistence_duration: "P11 activity lifetime (60–14400 seconds; manual artifact cleanup)",
         dns_behavior: "DNS behavior", dns_endpoint: "Private lab DNS endpoint (UDP 53)", dns_domain: "Reserved lab domain (.test/.internal/.localhost)", dns_pattern: "Query label pattern (mrn-{seq})", dns_interval: "DNS interval (seconds)", dns_jitter: "DNS jitter (fraction 0-0.5)", dns_count: "DNS query count (1-40)", dns_duration: "DNS duration ceiling (3-240 seconds)",
         file: "File",
-        staging_incident: "Staging incident ID (from P05 report)",
+        staging_incident: "Staging incident ID (optional; only for P05 reuse)",
         platform: "Execution platform",
         method: "Method",
         behavior: "Native tool behavior",
@@ -1257,8 +1257,8 @@ function renderPhaseDetail(phase) {
 
 
         if (phase.id === "06" && parameter === "file") {
-            label.textContent = "Remote synthetic file path (from P05 report)";
-            input.placeholder = "/tmp/.nordic-MRN-…/nordic-data-MRN-….txt";
+            label.textContent = "Registered P05 synthetic file path (optional)";
+            input.placeholder = "Leave empty to generate corporate-secret-data.txt";
         }
         label.htmlFor = input.id;
         group.appendChild(label);
@@ -1271,7 +1271,7 @@ function renderPhaseDetail(phase) {
     phaseDetail.appendChild(form);
     if (phase.id === "06") {
         const help = document.createElement("p");
-        help.textContent = "Run P05 first. Copy its staging incident ID and exact remote synthetic file path. P06 reuses that artifact from staged-data.json, verifies the received size and SHA256, and records a new incident. It does not upload a local file or generate staging data.";
+        help.textContent = "Leave file and staging incident empty to create one corporate-secret-data.txt containing explicitly simulated company data on the target. P06 verifies received size and SHA256. To reuse P05 data, enter both its incident ID and exact registered synthetic file path. Existing user files and directories are never collected.";
         phaseDetail.appendChild(help);
         const feedback = document.createElement("div");
         feedback.id = "phase-06-feedback"; feedback.setAttribute("role", "status");
@@ -1467,11 +1467,14 @@ async function runStandalonePhase(
 
 
     if (phase.id === "06") {
-        const required = ["target", "protocol", "username", "password", "file", "staging_incident"];
+        const required = ["target", "protocol", "username", "password"];
         const missing = required.filter(key => !data[key] || !data[key].trim());
         if (missing.length) {
             feedback("P06 requires: " + missing.map(phaseFieldLabel).join(", "), "error");
             document.getElementById(`phase-06-${missing[0]}`)?.focus(); return;
+        }
+        if (Boolean(data.file) !== Boolean(data.staging_incident)) {
+            feedback("P06 staged reuse requires both remote file and staging incident ID; leave both empty for simulated data.", "error"); return;
         }
         if (data.port && (!/^\d+$/.test(data.port) || +data.port < 1 || +data.port > 65535)) {
             feedback("P06 port must be 1–65535.", "error"); return;
@@ -3484,6 +3487,12 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
         const inventory = report.inventory || report.evidence?.inventory;
         reportTable(detail, ["Host", "Hostname"], reportArray(inventory?.hosts).map(a => [a.ip || a.host, a.hostname || "Unavailable"]));
     }
+    reportArray(report.phases).filter(p => p.id === '06').forEach(p => {
+        reportArray(p.artifacts).forEach(a => {
+            reportNode('h4', 'P06 synthetic source: ' + (a.host || 'unrecorded'), detail);
+            reportTable(detail, ['Field', 'Recorded evidence'], reportArray(a.display));
+        });
+    });
     reportNode("h3", "Attack Technique analysis", detail);
     detail.appendChild(phaseDetail);
     const previous = ordered.findIndex(p => !p.absent && p.id === selectedPhase);

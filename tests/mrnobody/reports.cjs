@@ -295,6 +295,19 @@ async function main() {
         assert.ok(!descendants(root).some(n=>n.tag==='script'));
         assert.ok(descendants(root).some(n=>n.className==='report-artifact'));
     }
+    context.p06report = {incident:{id:'MRN-p06'}, phases:[{id:'06',name:'Exfiltration',status:'failure',
+        artifacts:[{host:'192.168.1.20',name:'/tmp/mrnobody-p06-MRN-p06/corporate-secret-data.txt',
+            display:[['Remote path','/tmp/mrnobody-p06-MRN-p06/corporate-secret-data.txt'],['Source kind','synthetic-default'],
+                ['Local destination','/opt/nordic-attack/uploads/MRN-p06-linux-192.168.1.20.bin'],['Expected size','321'],
+                ['Expected SHA256','b'.repeat(64)],['Result','transfer_failed'],['Verified','False']]}]}]};
+    for (const mode of ['investigation','ground-truth']) {
+        root.replaceChildren();
+        vm.runInContext("renderReport(document.getElementById('reportDetail'),p06report,'MRN-p06','"+mode+"')",context);
+        for(const value of ['Affected assets','corporate-secret-data.txt','synthetic-default','321','b'.repeat(64),'transfer_failed','Verified'])
+            assert.ok(text(root).includes(value),value);
+        const headings=descendants(root).filter(n=>n.tag==='h3').map(n=>n.textContent);
+        assert.ok(headings.indexOf('Affected assets')<headings.indexOf('Attack Technique analysis'));
+    }
     let copied;
     context.navigator = {clipboard:{writeText:async value => {copied=value;}}};
     root.replaceChildren();

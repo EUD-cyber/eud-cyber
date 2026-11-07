@@ -326,6 +326,27 @@ def add_analysis(report):
                 cleanup=e['fields'].get('cleanup'), references=[e['evidence']] if e.get('evidence') else [],
                 size_bytes=e['fields'].get('size'), sha256=e['fields'].get('sha256'))
                 for e in events if e.get('event') == 'COLLECTION_ACTION_SUCCESS' and e.get('fields', {}).get('archive_path')]
+        if phase['id'] == '06':
+            state = (report.get('evidence') or {}).get('exfiltration') or {}
+            records = {}
+            if state.get('incident_id') == report.get('incident', {}).get('id'):
+                for transfer in state.get('attempts', []) + state.get('transfers', []):
+                    records[(transfer.get('source'), transfer.get('remote_file'))] = transfer
+            phase['artifacts'] = [artifact_evidence(
+                t.get('source'), t.get('remote_file') or 'Remote path unavailable', t.get('result', 'legacy transfer record'),
+                timestamp=t.get('ended_at') or t.get('prepared_at') or t.get('started_at'),
+                verification='Receiver bytes and SHA256 verified' if t.get('verified') is True and t.get('successful') is True else 'Transfer not verified',
+                purpose='Simulated training data only; no real company secrets.',
+                cleanup='Retained for investigation. Remove only the recorded generated file and its incident directory after the exercise.',
+                incident_id=t.get('incident_id'), source_incident_id=t.get('source_incident_id'),
+                source_kind=t.get('source_kind', 'unrecorded'), synthetic=t.get('synthetic'),
+                source_name=t.get('source_name'), remote_path=t.get('remote_file'),
+                local_destination=t.get('local_destination'), expected_size=t.get('expected_size', t.get('source_size')), source_size=t.get('source_size'),
+                received_size=t.get('received_size'), sha256=t.get('sha256'),
+                expected_sha256=t.get('expected_sha256', t.get('sha256')), received_sha256=t.get('received_sha256'),
+                started_at=t.get('started_at'), prepared_at=t.get('prepared_at'), ended_at=t.get('ended_at'),
+                result=t.get('result'), successful=t.get('successful'), verified=t.get('verified'))
+                for t in records.values()]
         if phase['id'] == '05':
             phase['artifacts'], phase['artifact_metrics'] = p05_artifacts(report, phase)
             phase['artifact_overview'] = 'Data Staging Findings (T1074): ' + '; '.join(f'{k.replace("_", " ")}: {v if v is not None else "unknown"}' for k, v in phase['artifact_metrics'].items()) + '. Phase completion is separate from host results; staging establishes no new compromise or exfiltration.'
@@ -581,7 +602,7 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
     for key, (filename, variable) in STATE_FILES.items():
         path = Path(environ.get(variable, state_dir / filename) if variable else state_dir / filename)
         sources[key] = str(path)
-        if standalone is not None and (standalone['phase_id'] == '04' or standalone['phase_id'] == '05' and key != 'staging'):
+        if standalone is not None and (standalone['phase_id'] == '04' or standalone['phase_id'] == '05' and key != 'staging' or standalone['phase_id'] == '06' and key != 'exfiltration'):
             # These standalone phases produce their own evidence; unrelated snapshots
             # are not report inputs. Campaign provenance remains in execution logs.
             snapshots[key] = None

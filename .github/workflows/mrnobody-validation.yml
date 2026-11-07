@@ -65,7 +65,9 @@ jobs:
           bash TESTFILES/ATTACKER-V2/tools/build-manifest.sh
           git diff --exit-code -- TESTFILES/ATTACKER-V2/update-manifest.txt
       - name: Verify P06 standalone validation, dispatch and receiver evidence offline
-        run: python tests/mrnobody/p06_standalone.py -v
+        run: |
+          python tests/mrnobody/p06_default.py -v
+          python tests/mrnobody/p06_standalone.py -v
       - name: Verify paired P11 lifecycle, bounded DNS, API and report exports without network
         timeout-minutes: 3
         run: python -u tests/mrnobody/persistence_dns.py -v
@@ -128,5 +130,7 @@ jobs:
         run: python tests/mrnobody/persistence_static.py
       - name: Install isolated DNS test dependencies
         run: python -m pip install 'reportlab>=4,<5' 'flask>=3,<4' 'requests>=2,<3'
+      - name: Verify P06 synthetic Windows script parsing and transport contracts offline
+        run: python tests/mrnobody/p06_default.py -v
       - name: Verify P18 Windows script parsing and offline DNS contracts
         run: python tests/mrnobody/dns_activity.py
