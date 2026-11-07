@@ -188,6 +188,59 @@ async function checkP06(page, phase) {
     }
 }
 
+async function checkP09(page, phase) {
+    await page.locator('[data-page="phases"]').click();
+    await page.evaluate(item => renderPhaseDetail(item), phase);
+    const feedback = page.locator('#phase-09-feedback');
+    assert.equal(await page.locator('#phase-09-protocol').inputValue(), 'WinRM HTTP');
+    assert.equal(await page.locator('#phase-09-port').inputValue(), '5985');
+    for (const field of ['protocol', 'port']) assert.equal(await page.locator('#phase-09-'+field).isEditable(), false);
+    assert.equal(await page.locator('#phase-09-timeout').inputValue(), '60');
+    await page.evaluate(() => {
+        window.p09OriginalFetch = window.fetch; window.p09Submissions = []; window.p09Mode = 'running';
+        window.fetch = async (url, options) => {
+            if (String(url) === '/api/phase/09/run') {
+                window.p09Submissions.push(JSON.parse(options.body));
+                if (p09Mode === 'network') throw new TypeError('fixture disconnect');
+                if (p09Mode === 'html') return new Response('<html>Bad gateway</html>', {status:502});
+                if (p09Mode === 'reject') return new Response(JSON.stringify({message:'P09 requires a private lab IPv4 target'}), {status:400});
+                return new Response(JSON.stringify({incident_id:'MRN-p09-ui',message:'submitted'}));
+            }
+            if (String(url) === '/api/execution-status') return new Response(JSON.stringify({
+                incident_id:'MRN-p09-ui',active:p09Mode === 'running',status:p09Mode === 'running' ? 'running' : p09Mode}));
+            if (String(url) === '/api/log') return new Response(JSON.stringify({log:'PHASE_START\\nWINDOWS_PORT_CHECK\\nwinrm_http_port_unreachable\\nPHASE_FAILED'}));
+            return p09OriginalFetch(url, options);
+        };
+    });
+    try {
+        await page.getByRole('button', {name:'RUN P09',exact:true}).click();
+        assert.ok((await feedback.textContent()).includes('P09 requires:'));
+        assert.equal(await page.evaluate(() => p09Submissions.length), 0);
+        for (const [key,value] of Object.entries({target:'192.168.1.20',username:'student',password:' fixture secret '}))
+            await page.locator('#phase-09-'+key).fill(value);
+        await page.getByRole('button', {name:'RUN P09',exact:true}).click();
+        await page.waitForFunction(() => document.getElementById('phase-09-feedback').textContent.includes('P09 running'));
+        const sent = await page.evaluate(() => p09Submissions[0]);
+        assert.equal(sent.protocol, 'winrm-http'); assert.equal(sent.port, 5985); assert.equal(sent.password, ' fixture secret ');
+        assert.equal(await page.getByRole('button', {name:'RUN P09',exact:true}).isDisabled(), true);
+        assert.equal(await page.locator('#phase-09-password').inputValue(), '');
+        await page.evaluate(() => {p09Mode='failed';});
+        await page.waitForFunction(() => document.getElementById('phase-09-feedback').textContent.includes('P09 failed'));
+        await page.evaluate(() => refreshLog());
+        assert.ok((await page.locator('[data-live-log]').first().textContent()).includes('winrm_http_port_unreachable'));
+        for (const mode of ['complete', 'skipped', 'reject', 'network', 'html']) {
+            await page.locator('#phase-09-password').fill('fixture');
+            await page.evaluate(value => {p09Mode=value;}, mode);
+            await page.getByRole('button', {name:'RUN P09',exact:true}).click();
+            const expected = {complete:'P09 complete',skipped:'P09 skipped',reject:'private lab IPv4',network:'could not be confirmed',html:'invalid response'}[mode];
+            await page.waitForFunction(text => document.getElementById('phase-09-feedback').textContent.includes(text), expected);
+            assert.equal(await feedback.isVisible(), true);
+        }
+    } finally {
+        await page.evaluate(() => {window.fetch=p09OriginalFetch;p09Feedback.pending=false;});
+    }
+}
+
 async function main() {
     const server=spawn(process.env.MRN_TEST_PYTHON || 'python',['-u','tests/mrnobody/ui_server.py'],{stdio:['ignore','pipe','pipe'],env:process.env});
     let browser;
@@ -205,6 +258,7 @@ async function main() {
         await page.waitForFunction(()=>document.getElementById('dashboardPhaseCount').textContent !== '—');
         const catalogue=await (await page.request.get(url+'/api/phases')).json();
         await checkP06(page, catalogue.phases.find(p => p.id === '06'));
+        await checkP09(page, catalogue.phases.find(p => p.id === '09'));
         const nav=page.locator('.sidebar-nav .nav-item');
         assert.deepEqual(await nav.allTextContents().then(a=>a.map(x=>x.trim().replace(/^[^A-Za-z]+/,''))),['Dashboard','Attack Techniques','Scenarios','Scheduler','Reports','MITRE ATT&CK','Settings']);
         assert.equal(await page.locator('#dashboardPhaseCount').textContent(),String(catalogue.count));

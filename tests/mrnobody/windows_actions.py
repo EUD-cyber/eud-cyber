@@ -233,7 +233,9 @@ class ShellIntegration(unittest.TestCase):
             (base / 'venv/bin/python').symlink_to(sys.executable)
             # Only this fixture module is imported as winrm; no network exists.
             (base / 'fake/winrm.py').write_text('''
-import json, os
+import json, os, socket
+from contextlib import nullcontext
+socket.create_connection = lambda *args, **kwargs: nullcontext()
 from types import SimpleNamespace
 class WinRMError(Exception): pass
 exceptions = SimpleNamespace(WinRMError=WinRMError)

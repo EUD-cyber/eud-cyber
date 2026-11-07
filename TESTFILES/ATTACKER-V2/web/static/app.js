@@ -90,7 +90,7 @@ async function apiGet(url) {
 }
 
 
-async function apiPost(url, data = {}) {
+async function apiPost(url, data = {}, timeoutMs = 0) {
 
     const response = await fetch(
         url,
@@ -102,12 +102,14 @@ async function apiPost(url, data = {}) {
                     "application/json"
             },
 
-            body: JSON.stringify(data)
+            body: JSON.stringify(data),
+            ...(timeoutMs ? {signal: AbortSignal.timeout(timeoutMs)} : {})
         }
     );
 
-    const result =
-        await response.json();
+    let result;
+    try { result = await response.json(); }
+    catch (_) { throw new Error(`HTTP ${response.status}: server returned an invalid response. Check the web service and proxy.`); }
 
     if (!response.ok) {
 
@@ -1145,6 +1147,34 @@ async function followP06Job(id) {
     }
 }
 
+
+const p09Feedback = {message: "", type: "info", pending: false, lines: []};
+function showP09Feedback(message, type = "info") {
+    p09Feedback.message = message; p09Feedback.type = type;
+    p09Feedback.lines.push("[P09 UI] " + message);
+    p09Feedback.lines = p09Feedback.lines.slice(-30);
+    const box = document.getElementById("phase-09-feedback");
+    if (box) { box.textContent = message; box.className = `message-box message-${type}`; box.hidden = false; }
+    document.querySelectorAll('[data-p09-control]').forEach(button => { button.disabled = p09Feedback.pending; });
+    refreshLog();
+}
+async function followP09Job(id) {
+    try {
+        const job = await apiGet("/api/execution-status");
+        if (job.incident_id !== id) throw new Error("Job changed; inspect Reports and Logs/Output before retrying.");
+        if (job.active) {
+            if (!p09Feedback.message.includes("running")) showP09Feedback(`P09 running · ${id}. See Logs/Output for progress.`);
+            setTimeout(() => followP09Job(id), 1000); return;
+        }
+        p09Feedback.pending = false;
+        showP09Feedback(`P09 ${job.status} · ${id}. See Logs/Output and Reports for the result.`,
+            job.status === "complete" ? "success" : "error");
+    } catch (_) {
+        p09Feedback.pending = false;
+        showP09Feedback("P09 status unavailable or job changed. Inspect Logs/Output and Reports before retrying.", "error");
+    }
+}
+
 function phaseFieldLabel(parameter) {
 
     const labels = {
@@ -1284,7 +1314,10 @@ function renderPhaseDetail(phase) {
         let input;
 
 
-        if (parameter === "auto") {
+        if (phase.id === "09" && ["protocol", "port"].includes(parameter)) {
+            input = document.createElement("input"); input.type = "text"; input.readOnly = true;
+            input.value = parameter === "protocol" ? "WinRM HTTP" : "5985";
+        } else if (parameter === "auto") {
 
             input =
                 document.createElement("input");
@@ -1356,6 +1389,7 @@ function renderPhaseDetail(phase) {
                 input.max = parameter === "persistence_interval" ? 3600 : 14400;
             }
         }
+        if (phase.id === "09" && parameter === "timeout") { input.type = "number"; input.min = 5; input.max = 300; input.value = 60; }
         if (parameter === "web_path") input.value = "/mrn-lab";
         if (parameter === "archive_name") input.value = "collection";
         input.dataset.parameter =
@@ -1378,6 +1412,12 @@ function renderPhaseDetail(phase) {
 
 
     phaseDetail.appendChild(form);
+    if (phase.id === "09") {
+        const box = document.createElement("div"); box.id = "phase-09-feedback";
+        box.setAttribute("role", "status"); box.setAttribute("aria-live", "polite");
+        box.textContent = p09Feedback.message; box.className = `message-box message-${p09Feedback.type}`;
+        box.hidden = !p09Feedback.message; phaseDetail.appendChild(box);
+    }
     if (phase.id === "06") {
         const help = document.createElement("p");
         help.textContent = "Leave file and staging incident empty to create one corporate-secret-data.txt containing explicitly simulated company data on the target. P06 verifies received size and SHA256. To reuse P05 data, enter both its incident ID and exact registered synthetic file path. Existing user files and directories are never collected.";
@@ -1438,8 +1478,9 @@ function renderPhaseDetail(phase) {
         "DRY RUN";
 
 
-    runButton.disabled = !phase.standalone;
-    dryRunButton.disabled = !phase.standalone;
+    if (phase.id === "09") { runButton.dataset.p09Control = ""; dryRunButton.dataset.p09Control = ""; }
+    runButton.disabled = !phase.standalone || (phase.id === "09" && p09Feedback.pending);
+    dryRunButton.disabled = !phase.standalone || (phase.id === "09" && p09Feedback.pending);
     controls.appendChild(runButton);
     controls.appendChild(dryRunButton);
 
@@ -1486,11 +1527,13 @@ async function runStandalonePhase(
     if (phase.id === "06" && p06Feedback.pending) {
         showP06Feedback("P06 already submitted. Wait for its job status or inspect live output."); return;
     }
+    if (phase.id === "09" && p09Feedback.pending) { showP09Feedback("P09 already submitted; inspect job status and Logs/Output."); return; }
     const data = {
         dry_run: dryRun,
     };
     const feedback = (message, type = "info") => {
-        if (phase.id === "06") showP06Feedback(message, type);
+        if (phase.id === "09") showP09Feedback(message, type);
+        else if (phase.id === "06") showP06Feedback(message, type);
         else showMessage(message, type);
     };
 
@@ -1591,7 +1634,16 @@ async function runStandalonePhase(
         }
     }
 
-    if (!dryRun && phase.id !== "06") {
+    if (phase.id === "09") {
+        data.protocol = "winrm-http"; data.port = 5985;
+        const missing = ["target", "username", "password"].filter(key => !data[key]?.trim());
+        if (missing.length) { feedback("P09 requires: " + missing.map(phaseFieldLabel).join(", "), "error");
+            document.getElementById(`phase-09-${missing[0]}`)?.focus(); return; }
+        if (data.timeout && (!/^\d+$/.test(data.timeout) || +data.timeout < 5 || +data.timeout > 300)) {
+            feedback("P09 timeout must be 5–300 seconds.", "error"); return;
+        }
+    }
+    if (!dryRun && !["06", "09"].includes(phase.id)) {
 
         const confirmed =
             window.confirm(
@@ -1611,13 +1663,14 @@ async function runStandalonePhase(
     );
 
 
+    if (phase.id === "09") { p09Feedback.pending = true; feedback("P09 submitting… Waiting for the API."); }
     if (phase.id === "06") p06Feedback.pending = true;
     try {
 
         const result =
             await apiPost(
                 `/api/phase/${phase.id}/run`,
-                data
+                data, phase.id === "09" ? 20000 : 0
             );
 
 
@@ -1630,6 +1683,11 @@ async function runStandalonePhase(
 
         for (const key of ["password", "powershell"]) {
             const input = document.getElementById(`phase-${phase.id}-${key}`); if (input) input.value = "";
+        }
+        if (phase.id === "09") {
+            if (!result.incident_id) throw new Error("P09 API response missing job ID. Inspect Logs/Output before retrying.");
+            feedback(`P09 submitted · ${result.incident_id}. Waiting for job status…`);
+            followP09Job(result.incident_id);
         }
         MrnStandaloneReport.track(phase.id, result.incident_id);
         if (phase.id === "06") {
@@ -1647,6 +1705,7 @@ async function runStandalonePhase(
 
     catch (error) {
         if (phase.id === "06") p06Feedback.pending = false;
+        if (phase.id === "09") p09Feedback.pending = false;
 
         console.error(
             "Attack Technique execution error:",
@@ -1655,7 +1714,9 @@ async function runStandalonePhase(
 
 
         feedback(
-            error.message,
+            phase.id === "09" && ["TimeoutError", "TypeError", "AbortError"].includes(error.name)
+                ? "P09 submission could not be confirmed: request timed out or connection failed. Inspect Logs/Output and job status before retrying."
+                : error.message,
             "error"
         );
     }
@@ -3012,7 +3073,7 @@ async function refreshLog() {
             if (panel.clientHeight === 0) return;
             const wasNearBottom =
                 panel.scrollHeight - panel.scrollTop - panel.clientHeight < 100;
-            panel.textContent = data.log || "Waiting for output...";
+            panel.textContent = [data.log || "", ...p09Feedback.lines].filter(Boolean).join("\n") || "Waiting for output...";
             if (wasNearBottom) panel.scrollTop = panel.scrollHeight;
         });
         document.querySelectorAll("[data-log-status]").forEach(status => {
@@ -3021,6 +3082,9 @@ async function refreshLog() {
     } catch (error) {
         document.querySelectorAll("[data-log-status]").forEach(status => {
             status.textContent = "Unable to refresh output. Retrying automatically; you can also press REFRESH.";
+        });
+        document.querySelectorAll("[data-live-log]").forEach(panel => {
+            if (p09Feedback.lines.length) panel.textContent = p09Feedback.lines.join("\n") + "\nLogs unavailable: check web service/proxy connectivity.";
         });
         console.error("Log error:", error);
     } finally {

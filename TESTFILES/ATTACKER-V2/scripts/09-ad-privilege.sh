@@ -16,10 +16,19 @@
 # MITRE_TECHNIQUES="T1136.002,T1098.007,T1078.002"
 # MITRE_TECHNIQUE_NAMES="Domain Account|Additional Local or Domain Groups|Domain Accounts"
 set -eu
+printf '%s\n' 'P09 dispatch started: preparing WinRM worker (credentials omitted).'
+trap 'rc=$?; if [ "$rc" -ne 0 ]; then printf "%s\\n" "P09 dispatch failed (exit $rc). Check config/defaults.conf and venv/bin/python with pywinrm/NTLM dependencies." >&2; fi' EXIT
 INCIDENT_ID="${NORDIC_INCIDENT_ID:-MRN-$(date +%Y%m%d-%H%M%S)}"
 export NORDIC_INCIDENT_ID="$INCIDENT_ID"
 BASE_DIR="${NORDIC_BASE_DIR:-/opt/nordic-attack}"
 set -a
 source "$BASE_DIR/config/defaults.conf"
 set +a
+if [[ "${MRNOBODY_RUN_MODE:-}" == "standalone" ]]; then
+    export MRNOBODY_PROTOCOL=winrm-http MRNOBODY_PORT=5985
+fi
+if [[ ! -x "$BASE_DIR/venv/bin/python" ]]; then
+    printf '%s\n' 'P09 failed: WinRM Python runtime missing; repair the installation.' >&2
+    exit 1
+fi
 exec "$BASE_DIR/venv/bin/python" "$BASE_DIR/web/windows_actions.py" 09

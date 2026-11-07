@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import socket
 import sys
 from datetime import datetime, timezone
 
@@ -243,6 +244,8 @@ def run(pid, env, invoke=subprocess.run):
     base = Path(env.get('NORDIC_BASE_DIR', '/opt/nordic-attack'))
     if pid not in {'09', '10'} or not INCIDENT_ID.fullmatch(env.get('NORDIC_INCIDENT_ID', '')):
         raise ValueError('Invalid phase/incident')
+    if pid == '09' and env.get('MRNOBODY_RUN_MODE') == 'standalone':
+        env = dict(env, MRNOBODY_PROTOCOL='winrm-http', MRNOBODY_PORT='5985')
     emit(base, env, pid, 'PHASE_START', phase=pid, method='winrm_ntlm')
     outcomes = []
     try:
@@ -255,6 +258,9 @@ def run(pid, env, invoke=subprocess.run):
             outcomes.append('skipped' if pid == '09' else 'failed')
         for target in selected_targets:
             emit(base, env, pid, 'WINDOWS_ACTION_START', target=target['target'], protocol=target['protocol'], method='winrm_ntlm')
+            if pid == '09' and env.get('MRNOBODY_RUN_MODE') == 'standalone':
+                emit(base, env, pid, 'WINDOWS_PORT_CHECK', target=target['target'], port=5985,
+                     reason='Checking WinRM HTTP TCP reachability before authentication')
             child_env = dict(env, MRN_WINDOWS_TARGET=json.dumps(target))
             try:
                 child = invoke([sys.executable, str(Path(__file__).resolve()), pid, '--worker'],
@@ -317,10 +323,21 @@ if __name__ == '__main__':
             import winrm
             from requests.exceptions import RequestException
         except ImportError:
-            print(json.dumps({'result': 'failed', 'warning': 'invalid_or_missing_runtime_configuration'}))
+            print(json.dumps({'result': 'failed', 'warning': 'missing_pywinrm_or_ntlm_dependencies'}))
             raise SystemExit(0)
         try:
-            print(json.dumps(perform(phase, json.loads(os.environ['MRN_WINDOWS_TARGET']), os.environ)))
+            target = json.loads(os.environ['MRN_WINDOWS_TARGET'])
+            if phase == '09' and os.environ.get('MRNOBODY_RUN_MODE') == 'standalone':
+                try:
+                    with socket.create_connection((private(target['target']), 5985),
+                                                  timeout=min(timeout_value(os.environ.get('MRNOBODY_TIMEOUT') or '60'), 5)):
+                        pass
+                except OSError:
+                    print(json.dumps(dict(result='failed', warning='winrm_http_port_unreachable',
+                        reason='TCP 5985 unavailable; check target address, WinRM HTTP listener, routing and firewall')))
+                    raise SystemExit(0)
+                target = dict(target, protocol='winrm-http', port=5985)
+            print(json.dumps(perform(phase, target, os.environ)))
         except (ImportError, ValueError, KeyError, TypeError):
             print(json.dumps({'result': 'failed', 'warning': 'invalid_or_missing_runtime_configuration'}))
         except (winrm.exceptions.WinRMError, RequestException):
