@@ -23,7 +23,7 @@
         };
         visit("01"); enabled().forEach(p => visit(p.id));
         draft.phases.filter(p => !seen.has(p.id)).forEach(p => {if (!["10", "11", "12", "13", "14", "15", "16", "17", "18"].includes(p.id)) p.parameters = {}; result.push(p);});
-        const edges = [["14","18"],["18","16"],["18","04"],["18","17"],["18","05"],["18","06"],["18","07"],["02","15"],["15","03"],["10","16"],["11","16"],["12","16"],["13","16"],["14","16"],["16","17"],["17","05"],["17","06"],["17","07"],["16","05"],["16","06"],["16","07"]];
+        const edges = [["05","06"],["14","18"],["18","16"],["18","04"],["18","17"],["18","05"],["18","06"],["18","07"],["02","15"],["15","03"],["10","16"],["11","16"],["12","16"],["13","16"],["14","16"],["16","17"],["17","05"],["17","06"],["17","07"],["16","05"],["16","06"],["16","07"]];
         for (let pass = 0; pass < result.length; pass++) for (const [a,b] of edges) {
             const i = result.findIndex(p => p.id === a), j = result.findIndex(p => p.id === b);
             if (i >= 0 && j >= 0 && i > j) result.splice(j, 0, result.splice(i, 1)[0]);
@@ -35,7 +35,7 @@
     }
     function validOrder(phases) {
         const ids = phases.filter(p => p.enabled !== false).map(p => p.id);
-        const edges = [["14","18"],["18","16"],["18","04"],["18","17"],["18","05"],["18","06"],["18","07"],["02","15"],["15","03"],["10","16"],["11","16"],["12","16"],["13","16"],["14","16"],["16","17"],["17","05"],["17","06"],["17","07"],["16","05"],["16","06"],["16","07"]];
+        const edges = [["05","06"],["14","18"],["18","16"],["18","04"],["18","17"],["18","05"],["18","06"],["18","07"],["02","15"],["15","03"],["10","16"],["11","16"],["12","16"],["13","16"],["14","16"],["16","17"],["17","05"],["17","06"],["17","07"],["16","05"],["16","06"],["16","07"]];
         if (edges.some(([a,b]) => ids.includes(a) && ids.includes(b) && ids.indexOf(a) > ids.indexOf(b))) return false;
         if (draft.target_mode !== "auto") return true;
         const prior = new Set();
@@ -167,7 +167,7 @@
         return "";
     }
     function dataHint(id) {
-        return {"01": "Discovers hosts on configured lab networks.", "02": "Uses hosts discovered by P01.", "03": "Uses hosts discovered by P01.", "04": "Uses compromised hosts from P03 as source and target.", "05": "Uses compromised hosts from P03.", "06": "Uses compromised hosts from P03 and staged data from P05.", "07": "Uses compromised hosts from P03.", "09": "Requires Windows access from P03. Select a lab DC with AD management rights; P03 authentication alone does not grant them.", "10": "Uses P03 Windows/WinRM or Linux/SSH access. Auto chooses a compatible host; optional target override filters established access.", "11": "Uses P03 access. Auto chooses paired task + service on Windows or cron + user systemd on Linux. DNS is optional; activity stops at a fixed deadline, while artifacts require manual cleanup. Cleanup uses the same target, username, method and artifact suffix.", "08": "Uses discovery from P01 and access results from P03; wordlist is supplied only at execution."}[id] || "";
+        return {"01": "Discovers hosts on configured lab networks.", "02": "Uses hosts discovered by P01.", "03": "Uses hosts discovered by P01.", "04": "Uses compromised hosts from P03 as source and target.", "05": "Uses compromised hosts from P03.", "06": "Auto uses compromised hosts from P03 and staged data from P05. Fixed P06 alone creates one simulated corporate-secret-data.txt; when P05 is selected, P06 uses this incident’s staging output.", "07": "Uses compromised hosts from P03.", "09": "Requires Windows access from P03. Select a lab DC with AD management rights; P03 authentication alone does not grant them.", "10": "Uses P03 Windows/WinRM or Linux/SSH access. Auto chooses a compatible host; optional target override filters established access.", "11": "Uses P03 access. Auto chooses paired task + service on Windows or cron + user systemd on Linux. DNS is optional; activity stops at a fixed deadline, while artifacts require manual cleanup. Cleanup uses the same target, username, method and artifact suffix.", "08": "Uses discovery from P01 and access results from P03; wordlist is supplied only at execution."}[id] || "";
     }
     function scheduleSummary(value) {
         return value.mode === "now" ? "Run now / save only" : `${value.mode === "recurring" ? "Repeat every " + intervalText(value.interval) : "Run once"} · ${new Date(value.at).toLocaleString()} · ${Intl.DateTimeFormat().resolvedOptions().timeZone}`;

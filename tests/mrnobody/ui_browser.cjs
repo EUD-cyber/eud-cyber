@@ -172,6 +172,13 @@ async function checkP06(page, phase) {
         await page.getByRole('button', {name:'RUN P06',exact:true}).click();
         await page.waitForFunction(() => document.getElementById('phase-06-feedback').textContent.includes('P06 complete'));
         await page.locator('#phase-06-password').fill('fixture');
+        await page.locator('#phase-06-file').fill('');
+        await page.locator('#phase-06-staging_incident').fill('');
+        await page.getByRole('button', {name:'RUN P06',exact:true}).click();
+        await page.waitForFunction(() => document.getElementById('phase-06-feedback').textContent.includes('P06 complete'));
+        const synthetic = await page.evaluate(() => p06Submissions.at(-1));
+        assert.ok(!synthetic.file); assert.ok(!synthetic.staging_incident);
+        await page.locator('#phase-06-password').fill('fixture');
         await page.evaluate(() => {p06Reject=true;});
         await page.getByRole('button', {name:'RUN P06',exact:true}).click();
         await page.waitForFunction(() => document.getElementById('phase-06-feedback').textContent.includes('Staging incident ID mismatch'));

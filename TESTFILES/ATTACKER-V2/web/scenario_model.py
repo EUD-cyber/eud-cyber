@@ -69,8 +69,6 @@ def required_fields(pid):
     required = {'subnet'} if pid == '01' else {'target'}
     if pid in {'03', '08', '09', '10', '11', '12', '13', '14', '16', '17', '18'}:
         required.add('protocol')
-    if pid == '06':
-        required.add('file')
     if pid == '04':
         required.add('source')
     return required
@@ -426,7 +424,7 @@ def validate(value, capabilities, *, template=False):
                 raise ValueError(f'Phase {pid} requires earlier phases: {", ".join(sorted(needed))}')
             prior.add(pid)
     positions = {pid: i for i, pid in enumerate(enabled)}
-    for first, later in [('14', '18'), ('18', '16'), ('18', '04'), ('18', '17'), ('18', '05'), ('18', '06'), ('18', '07'), ('02', '15'), ('15', '03'), ('10', '16'), ('11', '16'), ('12', '16'), ('13', '16'), ('14', '16'), ('16', '17'), ('17', '05'), ('17', '06'), ('17', '07'), ('16', '05'), ('16', '06'), ('16', '07')]:
+    for first, later in [('05', '06'), ('14', '18'), ('18', '16'), ('18', '04'), ('18', '17'), ('18', '05'), ('18', '06'), ('18', '07'), ('02', '15'), ('15', '03'), ('10', '16'), ('11', '16'), ('12', '16'), ('13', '16'), ('14', '16'), ('16', '17'), ('17', '05'), ('17', '06'), ('17', '07'), ('16', '05'), ('16', '06'), ('16', '07')]:
         if first in positions and later in positions and positions[first] > positions[later]:
             raise ValueError(f'Phase {first} must precede {later}')
     if not template:

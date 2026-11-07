@@ -13,7 +13,7 @@ IID = re.compile(r'(?:MRN|H3)-[A-Za-z0-9_-]{1,100}')
 def validate(data, staging_path):
     if not isinstance(data, dict):
         raise ValueError('P06 request must be a JSON object')
-    for key in ('target', 'protocol', 'username', 'password', 'file', 'staging_incident'):
+    for key in ('target', 'protocol', 'username', 'password'):
         value = data.get(key)
         if not isinstance(value, str) or not value.strip():
             raise ValueError('P06 requires ' + key)
@@ -23,9 +23,21 @@ def validate(data, staging_path):
     protocol = data['protocol']
     if protocol not in {'ssh', 'winrm', 'winrm-http', 'winrm-https'}:
         raise ValueError('P06 protocol must be ssh, winrm-http or winrm-https')
+    if isinstance(data.get('port'), bool):
+        raise ValueError('P06 port must be 1–65535')
     port = str(data.get('port') or {'ssh': 22, 'winrm': 5985, 'winrm-http': 5985, 'winrm-https': 5986}[protocol])
     if not port.isdigit() or not 1 <= int(port) <= 65535:
         raise ValueError('P06 port must be 1–65535')
+    if data['username'].startswith('-') or not re.fullmatch(r'[A-Za-z0-9_.@\\-]{1,128}', data['username']):
+        raise ValueError('Invalid P06 username')
+    for key in ('file', 'staging_incident'):
+        value = data.get(key, '')
+        if not isinstance(value, str) or any(ch in value for ch in ('|', '\r', '\n', '\0')):
+            raise ValueError('Invalid P06 ' + key)
+    if not data.get('file') and not data.get('staging_incident'):
+        return {'source_kind': 'synthetic-default', 'synthetic': True, 'platform': 'linux' if protocol == 'ssh' else 'windows'}
+    if not data.get('file') or not data.get('staging_incident'):
+        raise ValueError('P06 staged reuse requires both remote file and staging incident ID')
     origin = data['staging_incident']
     if not IID.fullmatch(origin):
         raise ValueError('Invalid staging incident ID')
@@ -52,8 +64,14 @@ def validate(data, staging_path):
 
 def received(path, size, sha256):
     import hashlib
-    raw = Path(path).read_bytes()
-    return len(raw) == int(size) and hashlib.sha256(raw).hexdigest() == sha256.lower()
+    source = Path(path)
+    if source.stat().st_size != int(size):
+        return False
+    digest = hashlib.sha256()
+    with source.open('rb') as handle:
+        for chunk in iter(lambda: handle.read(65536), b''):
+            digest.update(chunk)
+    return digest.hexdigest() == sha256.lower()
 
 
 if __name__ == '__main__':

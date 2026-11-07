@@ -40,7 +40,7 @@ class Model(unittest.TestCase):
         self.assertEqual(CAPS['06']['dependencies'], ['03', '05'])
         self.assertEqual(CAPS['08']['dependencies'], ['01', '03'])
         self.assertEqual(CAPS['04']['required_fields'], ['source', 'target'])
-        self.assertEqual(CAPS['06']['required_fields'], ['file', 'target'])
+        self.assertEqual(CAPS['06']['required_fields'], ['target'])
         for pid, cap in CAPS.items():
             self.assertTrue(set(cap['required_fields']) <= set(cap['fields']))
             if pid == '01':
