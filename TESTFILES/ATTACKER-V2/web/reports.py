@@ -671,6 +671,22 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
     prerequisite_skip = standalone is not None and standalone['phase_id'] in {'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'} and exit_code == 78
     status = "complete" if campaign.get("status") == "complete" and (exit_code == 0 or prerequisite_skip) else (
         "partial" if standalone is not None and standalone["phase_id"] == "18" and exit_code == 80 else "interrupted" if exit_code in {130, 137, 143} else "failed")
+    # A zero process exit does not prove that every selected phase finished.
+    # Only explicit plan/state entries count; legacy reports include implicit
+    # phase rows that were never selected.
+    if standalone is None and status == "complete":
+        expected = set(selected) | set(campaign.get("phases", {}))
+        unfinished = [p for p in phases if p["id"] in expected
+                      and p["runtime_status"] in {"pending", "running"}]
+        if unfinished:
+            status = "failed"
+            for phase in unfinished:
+                phase["status_reason"] = (
+                    "Campaign ended without a recorded terminal phase status; "
+                    "the prerequisite or execution cause is unknown.")
+            warnings.append("Campaign completion is inconsistent: selected phases "
+                            + ", ".join(p["id"] for p in unfinished)
+                            + " have no recorded terminal status.")
     report = {
         "schema_version": 1, "generated_at": now,
         "report_type": "standalone_phase" if standalone is not None else "campaign",

@@ -78,6 +78,33 @@ class Reports(unittest.TestCase):
         for p, content in before.items():
             self.assertEqual(p.read_bytes(), content)
 
+    def test_complete_campaign_with_unfinished_selected_phase(self):
+        for phase_state in ("pending", "running"):
+            with self.subTest(phase_state=phase_state):
+                self.write("campaign.json", {
+                    "status": "complete", "phases": {"01": "complete", "09": phase_state},
+                    "execution": {"phases": [{"id": "01"}, {"id": "09"}]}})
+                before = (self.base / "state/campaign.json").read_bytes()
+                report = build_report(self.base, self.id)
+                self.assertEqual(report["incident"]["status"], "failed")
+                phase = next(p for p in report["phases"] if p["id"] == "09")
+                self.assertEqual(phase["runtime_status"], phase_state)
+                self.assertIn("cause is unknown", phase["status_reason"])
+                self.assertTrue(any("completion is inconsistent" in w for w in report["warnings"]))
+                self.assertEqual((self.base / "state/campaign.json").read_bytes(), before)
+
+    def test_missing_selected_state_and_disabled_phase(self):
+        self.write("campaign.json", {
+            "status": "complete", "phases": {"01": "complete", "08": "disabled"},
+            "execution": {"phases": [{"id": "01"}, {"id": "09"}]}})
+        report = build_report(self.base, self.id)
+        self.assertEqual(report["incident"]["status"], "failed")
+        self.assertEqual(next(p for p in report["phases"] if p["id"] == "09")["status"], "not_run")
+        self.write("campaign.json", {
+            "status": "complete", "phases": {"01": "complete", "09": "skipped"},
+            "execution": {"phases": [{"id": "01"}, {"id": "09"}]}})
+        self.assertEqual(build_report(self.base, self.id)["incident"]["status"], "complete")
+
     def test_missing_corrupt_and_foreign_state(self):
         self.write("impact.json", {"incident_id": "MRN-other", "hosts": [{"ip": "foreign"}]})
         (self.base / "state/web-targets.json").write_text("{broken", encoding="utf8")
