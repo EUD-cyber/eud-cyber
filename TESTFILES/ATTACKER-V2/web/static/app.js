@@ -3133,6 +3133,7 @@ async function runUpdate() {
 // ==========================================================
 
 function showPage(pageName) {
+    if (pageName) ++reportNavigationVersion;
     if (["dashboard", "system"].includes(pageName)) MrnUI.refreshDashboard(true);
     const primaryPage = {builder: "scenarios", campaigns: "scenarios", inventory: "system"}[pageName] || pageName;
 
@@ -3225,6 +3226,7 @@ let reportHistory = [];
 const reportCache = new Map();
 let reportFilterVersion = 0;
 let reportOpenVersion = 0;
+let reportNavigationVersion = 0;
 let reportRefreshVersion = 0;
 
 function reportStatus(value) {
@@ -3388,7 +3390,7 @@ async function filterReports() {
             .forEach(value => reportNode("td", value ?? "Unavailable", row));
         const button = reportNode("button", "Open report", reportNode("td", null, row));
         button.type = "button";
-        button.addEventListener("click", () => openReport(report.id));
+        button.addEventListener("click", () => openReport(report.id, {reveal: true}));
     });
     if (!reports.length) {
         reportNode("td", reportHistory.length ? "No reports match these filters." :
@@ -3634,17 +3636,44 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
     }
 }
 
-async function openReport(id) {
+// Only history-row clicks request a reveal. Recheck after the browser has laid
+// out the rendered report: another selection or page navigation cancels it.
+function revealReportDetails(version, navigationVersion) {
+    window.requestAnimationFrame(() => {
+        if (version !== reportOpenVersion || navigationVersion !== reportNavigationVersion) return;
+        const heading = document.getElementById("reportDetailsHeading");
+        if (!heading || !heading.getClientRects().length) return;
+        let inset = 16;
+        document.querySelectorAll("header, .topbar, .app-header").forEach(header => {
+            const position = window.getComputedStyle(header).position;
+            const rect = header.getBoundingClientRect();
+            if (["sticky", "fixed"].includes(position) && rect.top <= 0 && rect.bottom > 0) {
+                inset = Math.max(inset, rect.bottom + 16);
+            }
+        });
+        heading.style.scrollMarginTop = inset + "px";
+        heading.focus({preventScroll: true});
+        heading.scrollIntoView({
+            block: "start",
+            behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth"
+        });
+    });
+}
+
+async function openReport(id, {reveal = false} = {}) {
     const detail = document.getElementById("reportDetail");
     if (!detail) return;
     const version = ++reportOpenVersion;
+    const navigationVersion = reportNavigationVersion;
     detail.replaceChildren();
     reportNode("p", "Loading report…", detail);
     try {
         const report = await fetchReport(id);
         if (version !== reportOpenVersion) return;
+        if (report.incident?.id !== id) throw new Error("Report identity does not match the selected incident.");
         detail.replaceChildren();
         renderReport(detail, report, id);
+        if (reveal) revealReportDetails(version, navigationVersion);
     } catch (error) {
         if (version !== reportOpenVersion) return;
         detail.replaceChildren();

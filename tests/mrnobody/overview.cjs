@@ -68,8 +68,10 @@ assert.deepEqual(order,['dashboard','phases','scenarios','schedules','reports','
 const navItems=order.map(page=>({dataset:{page},setAttribute(){},removeAttribute(){},classList:{toggle(cls,active){this.active=active;}}}));
 context.document.querySelectorAll=s=>s==='.nav-item'?navItems:[];
 context.document.getElementById=()=>({classList:{add(){}}});
+context.reportNavigationVersion=0;
 context.MrnUI={refreshDashboard(){}};context.refreshLog=()=>{};context.refreshReports=()=>{};
 const app=fs.readFileSync('TESTFILES/ATTACKER-V2/web/static/app.js','utf8');
 vm.runInContext(app.slice(app.indexOf('function showPage('),app.indexOf('// Ground truth is rendered')),context);
 for(const page of order) {context.showPage(page);assert.equal(navItems.filter(n=>n.classList.active).length,1);assert.equal(navItems.find(n=>n.classList.active).dataset.page,page);}
+assert.equal(context.reportNavigationVersion, order.length, 'Each page selection cancels pending report reveals');
 console.log('Overview DOM tests passed: idle, campaign/custom/standalone, timing, scheduler, progress, terminal summaries, reports, safe rendering and navigation.');

@@ -99,6 +99,7 @@ jobs:
           node tests/mrnobody/scenarios.cjs
           node tests/mrnobody/logs.cjs
           node tests/mrnobody/reports.cjs
+          node tests/mrnobody/report_reveal.cjs
           python tests/mrnobody/staging_artifacts.py
           python tests/mrnobody/p04_evidence.py
           python tests/mrnobody/report_exports.py
