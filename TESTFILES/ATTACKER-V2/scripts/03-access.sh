@@ -20,5 +20,6 @@ BASE_DIR="${NORDIC_BASE_DIR:-/opt/nordic-attack}"
 set -a
 source "$BASE_DIR/config/defaults.conf"
 set +a
-export NORDIC_INCIDENT_ID="${NORDIC_INCIDENT_ID:-MRN-$(date +%Y%m%d-%H%M%S)}"
+INCIDENT_ID="${NORDIC_INCIDENT_ID:-MRN-$(date +%Y%m%d-%H%M%S)}"
+export NORDIC_INCIDENT_ID="$INCIDENT_ID"
 exec "$BASE_DIR/venv/bin/python" "$BASE_DIR/web/access_pipeline.py" 03
