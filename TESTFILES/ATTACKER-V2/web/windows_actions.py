@@ -173,9 +173,10 @@ $r | ConvertTo-Json -Compress
 """
 
 
-def probe_dc(target, env, session_factory=None, connect=socket.create_connection):
+def probe_dc(target, env, session_factory=None, connect=None):
     """One bounded TCP probe and one authenticated, strictly read-only role check."""
     private(target['target'])
+    connect = connect or socket.create_connection
     try:
         with connect((target['target'], 5985), timeout=2):
             pass

@@ -260,6 +260,10 @@ class Session:
             Response.std_out = json.dumps(data).encode()
         if 'Get-ADDomain' not in command and os.environ.get('FIXTURE_P10') == 'invalid':
             Response.status_code = 1
+        if os.environ.get('MRN_P09_DISCOVERY_ONLY') == '1':
+            Response.std_out = json.dumps(dict(result='rejected' if mode in {'workgroup', 'mixed'} else 'eligible',
+                warning='target_must_be_domain_controller' if mode in {'workgroup', 'mixed'} else 'none',
+                domain='lab.example', dc='dc.lab.example')).encode()
         return Response()
 ''')
             env = dict(os.environ, NORDIC_BASE_DIR=tmp, MRN_POWERSHELL_SECRET=COMMAND,
@@ -293,6 +297,19 @@ class Session:
             self.assertTrue(any(e['event'] == 'PHASE_SKIPPED' for e in p09['events']))
             self.assertEqual(next(p for p in full['phases'] if p['id'] == '10')['status'], 'skipped')
             access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[{"ip":"192.168.1.10","compromised":true,"platform":"windows","access":"rdp","domain_controller":true}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
+            # P01 supplies the independent candidate/scope inventories each run.
+            discovery = next((base / 'scripts').glob('01-*.sh'))
+            discovery.write_text("""#!/bin/sh
+python3 - <<'PY'
+import json, os
+from pathlib import Path
+state = Path(os.environ['NORDIC_BASE_DIR']) / 'state'
+iid = os.environ['NORDIC_INCIDENT_ID']
+for name, fields in [('networks.json', dict(networks=[dict(network='192.168.1.0/24')])),
+                     ('discovered-hosts.json', dict(hosts=[dict(ip='192.168.1.10'), dict(ip='192.168.1.11')]))]:
+    (state / name).write_text(json.dumps(dict(incident_id=iid, **fields)))
+PY
+""")
             env.update(NORDIC_INCIDENT_ID='MRN-full-enabled', MRN_POWERSHELL_ENABLED='1')
             result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -325,15 +342,16 @@ class Session:
                 env.pop('MRN_EXECUTION')
                 access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[{"ip":"192.168.1.10","compromised":true,"platform":"windows","access":"rdp","domain_controller":true},{"ip":"192.168.1.11","compromised":true,"platform":"windows","access":"rdp","domain_controller":true}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
                 env.update(NORDIC_INCIDENT_ID='MRN-full-' + mode, MRN_POWERSHELL_ENABLED='0')
+                campaign_expected = 'skipped' if mode == 'unreachable' else expected
                 result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)
-                self.assertEqual(result.returncode, 0 if expected == 'skipped' else 1, result.stdout + result.stderr)
+                self.assertEqual(result.returncode, 0 if campaign_expected == 'skipped' else 1, result.stdout + result.stderr)
                 full = load_report(base / 'reports', env['NORDIC_INCIDENT_ID'])
                 p09 = next(p for p in full['phases'] if p['id'] == '09')
-                self.assertEqual(p09['status'], expected)
-                self.assertEqual(next(p for p in full['phases'] if p['id'] == '04')['status'], 'success' if expected == 'skipped' else 'not_run')
+                self.assertEqual(p09['status'], campaign_expected)
+                self.assertEqual(next(p for p in full['phases'] if p['id'] == '04')['status'], 'success' if campaign_expected == 'skipped' else 'not_run')
                 events = [e['event'] for e in p09['events']]
-                self.assertIn('PHASE_SKIPPED' if expected == 'skipped' else 'PHASE_FAILED', events)
-                if expected == 'skipped':
+                self.assertIn('PHASE_SKIPPED' if campaign_expected == 'skipped' else 'PHASE_FAILED', events)
+                if campaign_expected == 'skipped':
                     self.assertNotIn('PHASE_COMPLETE', events)
                     self.assertNotIn('PHASE_FAILED', events)
             # A partial P09 remains partial in standalone and campaign reports,
