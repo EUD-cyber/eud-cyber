@@ -143,6 +143,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/mrnobody/ad_enabled.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/mrnobody/p03_winrm.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/mrnobody/p09_discovery.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/mrnobody/p09_regression.py -v

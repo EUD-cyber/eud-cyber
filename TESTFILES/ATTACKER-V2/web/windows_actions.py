@@ -169,6 +169,7 @@ def campaign_dc_candidates(env):
         if not isinstance(hosts, list) or len(hosts) > 4096:
             raise ValueError()
         eligible = set()
+        scoped_addresses = {target['target'] for target in scoped}
         for host in hosts:
             if not isinstance(host, dict):
                 raise ValueError()
@@ -178,7 +179,8 @@ def campaign_dc_candidates(env):
                     type(method.get('port')) is int and method['port'] == 5985
                     and method.get('protocol') == 'winrm-http'
                     and method.get('verification') == 'read_only_windows_identity'):
-                eligible.add(private(host.get('ip')))
+                if host.get('ip') in scoped_addresses:
+                    eligible.add(host['ip'])
     except DiscoveryError:
         raise
     except (ValueError, TypeError, UnicodeError):
