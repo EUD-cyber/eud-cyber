@@ -254,6 +254,10 @@ class Session:
             Response.std_out = json.dumps({'result': 'skipped', 'warning': 'target_must_be_domain_controller', 'account': 'not_attempted', 'group': 'not_attempted', 'domain': 'WORKGROUP', 'dc': 'unknown', 'exit_code': 0, 'domain_sid': 'unknown', 'account_sid': 'none', 'group_sid': 'unknown', 'exists': False, 'enabled': False, 'member': False, 'owned': False, 'verified': False, 'stage': 'dc'}).encode()
         if 'Get-ADDomain' in command and mode == 'dc-error':
             Response.std_out = json.dumps({'result': 'failed', 'warning': 'ad_action_failed_check_rights_module_and_dc_logs', 'account': 'created_enabled', 'group': 'not_attempted', 'domain': 'lab.example', 'dc': 'dc.lab.example', 'exit_code': 0, 'domain_sid': 'S-1-5-21-123-456-789', 'account_sid': 'S-1-5-21-123-456-789-1001', 'group_sid': 'S-1-5-21-123-456-789-512', 'exists': True, 'enabled': True, 'member': True, 'owned': True, 'verified': True, 'stage': 'complete'}).encode()
+        if 'Get-ADDomain' in command and mode == 'partial':
+            data = json.loads(Response.std_out)
+            data.update(member=False, verified=False, group='missing')
+            Response.std_out = json.dumps(data).encode()
         if 'Get-ADDomain' not in command and os.environ.get('FIXTURE_P10') == 'invalid':
             Response.status_code = 1
         return Response()
@@ -332,6 +336,34 @@ class Session:
                 if expected == 'skipped':
                     self.assertNotIn('PHASE_COMPLETE', events)
                     self.assertNotIn('PHASE_FAILED', events)
+            # A partial P09 remains partial in standalone and campaign reports,
+            # and cannot be overwritten by the next inert phase's success.
+            env.pop('MRN_EXECUTION', None)
+            env.update(FIXTURE_AD='partial', MRN_POWERSHELL_ENABLED='0')
+            result = subprocess.run(['bash', str(base / 'scripts/run-phase.sh'), '09',
+                '--target', '192.168.1.11', '--protocol', 'winrm-http'],
+                env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 80, result.stdout + result.stderr)
+            path = next(line.removeprefix('Report: ') for line in result.stdout.splitlines() if line.startswith('Report: '))
+            report = json.loads(Path(path).read_text())
+            self.assertEqual(report['incident']['status'], 'partial')
+            self.assertEqual(report['phases'][0]['status'], 'partial')
+            for custom_mode in (False, True):
+                env.update(NORDIC_INCIDENT_ID='MRN-p09-partial-' + str(custom_mode))
+                env.pop('MRN_EXECUTION', None)
+                if custom_mode:
+                    spec = definition(('09', '04'))
+                    spec['phases'][1]['parameters'].update(source='192.168.1.10', target='192.168.1.11')
+                    value = plan(validate(spec, CAPS)); value['id'] = 'custom-' + 'e' * 32
+                    env['MRN_EXECUTION'] = json.dumps(value)
+                result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')],
+                    env=env, capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                report = load_report(base / 'reports', env['NORDIC_INCIDENT_ID'])
+                self.assertEqual(report['incident']['status'], 'partial')
+                self.assertEqual(next(p for p in report['phases'] if p['id'] == '09')['status'], 'partial')
+                self.assertEqual(next(p for p in report['phases'] if p['id'] == '04')['status'], 'success')
+            env.pop('MRN_EXECUTION', None)
             # Real campaign/custom wrappers must consume the corrected exit 0
             # after the first candidate fails transport and the second DC works.
             for custom_mode in (False, True):
