@@ -34,7 +34,7 @@ def definition(ids=('09', '10'), mode='fixed'):
 class Model(unittest.TestCase):
     def test_metadata_dependencies_and_full_campaign(self):
         for pid in ('09', '10'):
-            self.assertEqual(CAPS[pid]['dependencies'], ['03'])
+            self.assertEqual(CAPS[pid]['dependencies'], ['01'] if pid == '09' else ['03'])
             self.assertTrue(CAPS[pid]['credentials'])
             self.assertTrue(CAPS[pid]['standalone'])
             self.assertEqual(CAPS[pid]['timing'], ['start_offset'])
@@ -43,7 +43,8 @@ class Model(unittest.TestCase):
         for ids in [('09',), ('10',), ('10', '09')]:
             validate(definition(ids), CAPS)  # Direct targeting needs no discovery.
         validate(definition(('01', '03', '09', '10'), 'auto'), CAPS)
-        for ids in [('01', '09', '03'), ('01', '10'), ('10', '01', '03')]:
+        validate(definition(('01', '09'), 'auto'), CAPS)
+        for ids in [('09', '01'), ('01', '10'), ('10', '01', '03')]:
             with self.assertRaises(ValueError):
                 validate(definition(ids, 'auto'), CAPS)
 
@@ -310,6 +311,15 @@ for name, fields in [('networks.json', dict(networks=[dict(network='192.168.1.0/
     (state / name).write_text(json.dumps(dict(incident_id=iid, **fields)))
 PY
 """)
+            access_fixture = access.read_text()
+            access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
+            env.update(NORDIC_INCIDENT_ID='MRN-p01-no-p03', MRN_POWERSHELL_ENABLED='0')
+            result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')],
+                env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            no_p03 = load_report(base / 'reports', 'MRN-p01-no-p03')
+            self.assertEqual(next(p for p in no_p03['phases'] if p['id'] == '09')['status'], 'success')
+            access.write_text(access_fixture)
             env.update(NORDIC_INCIDENT_ID='MRN-full-enabled', MRN_POWERSHELL_ENABLED='1')
             result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -397,7 +407,7 @@ PY
                 p09 = next(p for p in report['phases'] if p['id'] == '09')
                 self.assertEqual(p09['status'], 'success')
                 self.assertEqual(next(p for p in report['phases'] if p['id'] == '04')['status'], 'success')
-                self.assertTrue(any(e['event'] == 'WINDOWS_ACTION_FAILED' for e in p09['events']))
+                self.assertTrue(any(e['event'] == 'P09_DC_VERIFICATION' and e['fields'].get('eligible') == 'False' for e in p09['events']))
                 self.assertTrue(any(e['event'] == 'PHASE_COMPLETE' for e in p09['events']))
                 self.assertFalse(any(e['event'] == 'PHASE_FAILED' for e in p09['events']))
             # Controlled P10 errors must continue through both actual campaign paths.
