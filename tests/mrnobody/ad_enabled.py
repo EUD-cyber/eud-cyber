@@ -61,14 +61,14 @@ class EnabledResults(prerequisite.Prerequisite):
                 factory.return_value.run_ps.return_value = Mock(status_code=0,
                     std_out=json.dumps(data).encode(), std_err=b'#< CLIXML PRIVATE_STDERR')
                 result = actions.perform('09', actions.targets(self.env)[0], self.env, factory)
-                self.assertEqual((result['result'], result['account'], result['group']), ('success', account, group))
+                self.assertEqual((result['result'], result['account'], result['group']), ('success', 'already_enabled', 'already_member'))
                 self.assertGreater(result['stderr_bytes'], 0)
                 self.assertNotIn('PRIVATE_', json.dumps(result))
                 self.assertNotIn('DO_NOT_PERSIST', json.dumps(result))
                 self.assertEqual(self.run_candidates([result])[0], 0)
         for change in ({'account': 'created_disabled'}, {'group': 'not_attempted'}, {'domain': None}):
             factory.return_value.run_ps.return_value.std_out = json.dumps(dict(DC, **change)).encode()
-            self.assertEqual(actions.perform('09', actions.targets(self.env)[0], self.env, factory)['result'], 'failed')
+            self.assertIn(actions.perform('09', actions.targets(self.env)[0], self.env, factory)['result'], {'failed', 'partial'})
 
     def test_reports_exports_and_live_timeline_after_fallback(self):
         self.assertEqual(self.run_candidates([TRANSPORT, dict(DC, account='created_enabled', group='added', stderr_bytes=2248)])[0], 0)
@@ -121,24 +121,28 @@ class EnabledResults(prerequisite.Prerequisite):
 
 # Actual P09 PowerShell runs against these doubles, including post-action reads.
 AD_DOUBLES = r'''
-function Get-CimInstance { [pscustomobject]@{ Domain='lab.example'; DomainRole=5 } }
+function Get-CimInstance { [pscustomobject]@{ Domain='lab.example'; DomainRole=$script:role } }
 function Import-Module { param($Name, $ErrorAction) }
-function Get-ADDomain { [pscustomobject]@{ DNSRoot='lab.example'; DomainSID=[pscustomobject]@{Value='S-1-5-21-123'} } }
-function Get-ADGroup { [pscustomobject]@{SID='S-1-5-21-123-512'} }
+function Get-ADDomain { [pscustomobject]@{ DNSRoot='lab.example'; DomainSID=[pscustomobject]@{Value='S-1-5-21-123-456-789'} } }
+$env:COMPUTERNAME='dc'
+function Get-ADDomainController { [pscustomobject]@{Name='dc'; HostName='dc.lab.example'; Domain='lab.example'; IsReadOnly=$false} }
+function Get-ADGroup { [pscustomobject]@{SID=[pscustomobject]@{Value='S-1-5-21-123-456-789-512'}; DistinguishedName='CN=Domain Admins,DC=lab,DC=example'} }
 function Get-ADUser {
-    if ($script:exists) { [pscustomobject]@{ SID='S-1-5-21-123-1001'; Enabled=$script:enabled } }
+    if ($script:exists) { [pscustomobject]@{ SID=[pscustomobject]@{Value='S-1-5-21-123-456-789-1001'}; ObjectGUID='fixture-guid'; SamAccountName='mrnobody'; Name='mrnobody'; Description=$script:description; Enabled=$script:enabled; MemberOf=@(if ($script:member) {'CN=Domain Admins,DC=lab,DC=example'}) } }
 }
 function Assert-Password($Secure) {
     $actual = [System.Net.NetworkCredential]::new('', $Secure).Password
     if ($actual -cne $script:expected) { throw 'wrong_password' }
 }
 function New-ADUser {
-    param($Name, $SamAccountName, $AccountPassword, $Enabled, $Description, $Server)
+    param($Name, $SamAccountName, $AccountPassword, $Enabled, $Description, $Server, [switch]$PassThru)
     $script:created++
     if ($script:failure -eq 'create') { throw 'PRIVATE_CREATE_FAILURE' }
     Assert-Password $AccountPassword
     $script:exists = $true
+    $script:description = $Description
     $script:enabled = $Enabled
+    Get-ADUser
 }
 function Set-ADAccountPassword {
     param($Identity, [switch]$Reset, $NewPassword, $Server)
@@ -164,19 +168,26 @@ function Add-ADGroupMember {
 
 @unittest.skipUnless(shutil.which('pwsh') or shutil.which('powershell'), 'PowerShell unavailable')
 class AccountAction(unittest.TestCase):
-    def invoke(self, exists=False, enabled=False, member=False, failure='', twice=False):
+    def invoke(self, exists=False, enabled=False, member=False, failure='', twice=False, description='MrNobody controlled lab account', role=5):
         # Non-secret fixture includes quotes, unicode and PowerShell metacharacters.
         password = "Lab'\";$(throw 'injected')&æ_TEST_ONLY"
         setup = "$script:exists=$%s; $script:enabled=$%s; $script:member=$%s; $script:failure='%s'; $script:created=0; $script:reset=0; $script:enableCalls=0; $script:added=0; $script:expected=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('%s'))\n" % (
             str(exists).lower(), str(enabled).lower(), str(member).lower(), failure,
             base64.b64encode(password.encode('utf-16-le')).decode())
-        script = setup + AD_DOUBLES + '\n' + actions.ad_script(password)
+        from p09_actions import script as ad_script
+        before = dict(domain_sid='S-1-5-21-123-456-789', dc='dc.lab.example', account_sid='S-1-5-21-123-456-789-1001' if exists else 'none')
+        def cycle(identity):
+            return '\n$r = (& {\n' + ad_script('apply', password, identity) + '\n} | ConvertFrom-Json)\n' + '$post = (& {\n' + ad_script() + '\n} | ConvertFrom-Json)\nif (-not $post.verified) { $r.result="failed"; $r.warning=$post.warning; if ($r.warning -eq "none") {$r.warning="ad_action_failed_check_rights_module_and_dc_logs"} }\n$r | ConvertTo-Json -Compress\n'
+        script = setup + "$script:role=%d; $script:description='%s'\n" % (role, description) + AD_DOUBLES + cycle(before)
         if twice:
-            script += '\n' + actions.ad_script(password)
+            script += cycle(dict(before, account_sid='S-1-5-21-123-456-789-1001'))
         script += "\n@{created=$script:created; reset=$script:reset; enabled=$script:enabled; enableCalls=$script:enableCalls; added=$script:added; member=$script:member} | ConvertTo-Json -Compress"
-        encoded = base64.b64encode(script.encode('utf-16-le')).decode()
-        child = subprocess.run([shutil.which('pwsh') or shutil.which('powershell'),
-            '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], capture_output=True, timeout=30)
+        import tempfile
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[2]) as tmp:
+            fixture = Path(tmp) / 'fixture.ps1'
+            fixture.write_text(script, encoding='utf-8-sig')
+            child = subprocess.run([shutil.which('pwsh') or shutil.which('powershell'),
+                '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', str(fixture)], capture_output=True, timeout=30)
         self.assertEqual(child.returncode, 0, child.stderr.decode(errors='replace'))
         rows = [json.loads(line) for line in child.stdout.decode('utf-8-sig').splitlines() if line.startswith('{')]
         self.assertEqual(len(rows), 3 if twice else 2, child.stdout)
@@ -204,6 +215,13 @@ class AccountAction(unittest.TestCase):
         self.assertEqual((state['created'], state['added'], state['reset']), (1, 1, 0))
         result, state = self.invoke(exists=True, enabled=True, member=True)
         self.assertEqual((result['group'], state['added']), ('already_member', 0))
+
+    def test_unrelated_account_and_non_dc_make_no_changes(self):
+        for options, warning in ((dict(exists=True, description='Unrelated account'), 'account_ownership_conflict'),
+                                 (dict(role=3), 'target_must_be_domain_controller')):
+            result, state = self.invoke(**options)
+            self.assertEqual(result['warning'], warning)
+            self.assertEqual((state['created'], state['reset'], state['enableCalls'], state['added']), (0, 0, 0, 0))
 
     def test_account_group_and_verification_failures(self):
         for failure in ('create', 'password', 'enable', 'group', 'verify_account', 'verify_group'):

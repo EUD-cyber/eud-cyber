@@ -14,3 +14,46 @@ At main 6dabd2d3297815c945d7d657b0f4d5971c4eb0d2, standalone Attack Techniques r
 
 ## Verification and limitations
 GitHub Actions runs Python/JavaScript/Bash syntax, updater manifest consistency, offline regression suites and browser tests. No deployment or lab command is executed by this change. Live target reachability and NTLM/AD permissions are checked only when an operator runs P09; no access to a user's target is assumed.
+# P09 verification and repeat runs
+
+P09 uses authenticated NTLM WinRM and verifies that the remote system is a
+writable domain controller before any AD write. TCP reachability or an HTTP 405
+from `/wsman` confirms the listener only; neither proves the host is a DC.
+For this CyberLab installation, select the Windows Server 2025 DC at
+`192.168.2.200` with WinRM HTTP port `5985`. Do not select an ordinary RDP/SSH
+endpoint such as `192.168.1.120`.
+
+For Full Campaign, set `NORDIC_AD_DC_TARGET=192.168.2.200` in the runtime
+environment to pin P09 to that DC, or use a fixed-target scenario with P09's DC
+target. With no pin, campaign Windows-access inventory entries are candidates
+only: each must pass the authenticated DC precheck. SSH inventory entries alone
+are not DC candidates. Credentials remain runtime-only.
+
+The precheck reads the exact `mrnobody` account and Domain Admins resolved by the
+current domain SID plus RID 512. Existing accounts must have the exact name and
+description `MrNobody controlled lab account`, including accounts created by old
+P09 releases. Name or privileged membership alone is insufficient ownership.
+An ownership conflict blocks changes; P09 never automatically adopts an account.
+Only a missing account, a disabled owned account, or missing direct group
+membership is changed. Enabled accounts retain their password. Writes use the
+resolved account identity, and DC/domain/account identities are checked again.
+
+An independent session then reads Enabled and direct Domain Admins membership.
+Only confirmed postconditions produce SUCCESS. Evidence distinguishes
+`created_enabled`, `enabled_existing`, `already_enabled`, `added` and
+`already_member`, with SID/DC identity and `verified` fields. An uncertain write
+followed by a successful postcheck reports the observed existing state rather
+than claiming which write completed. Exceptions and raw remote output are omitted.
+
+The configured 5–300 second value bounds each read wait. WinRM operation timeout
+is at most 60 seconds, read timeout is the configured value plus 10 seconds, and
+the three-stage worker budget is `3 * (timeout + 10) + 20` seconds (230 seconds
+at the default 60). A worker timeout starts a separate read-only verification
+worker with budget `2 * (timeout + 10) + 20`; it never replays the write.
+Unconfirmed or unknown state after an attempted write reports PARTIAL (exit 80),
+not SUCCESS. Precheck connection/configuration errors report FAILED; a confirmed
+non-DC reports SKIPPED. Full Campaign retains partial phase evidence and continues;
+its final report remains partial. No automatic rollback is performed.
+
+The update manifest and fresh-install cloud-init include `web/p09_actions.py`.
+This repository change does not deploy or run P09 against the lab VM.
