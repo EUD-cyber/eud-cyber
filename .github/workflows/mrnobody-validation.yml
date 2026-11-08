@@ -140,7 +140,7 @@ jobs:
         run: python tests/mrnobody/p06_default.py -v
       - name: Verify P09 AD scripts, reconciliation and timeout recovery offline
         run: |
-          python -m pip install 'pypdf>=5,<7'
+          python -m pip install 'pypdf>=5,<7' 'pywinrm>=0.4.3,<0.6'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/mrnobody/ad_enabled.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -152,4 +152,6 @@ jobs:
           python tests/mrnobody/p09_regression.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/mrnobody/p09_standalone.py -v
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          python tests/mrnobody/p09_powershell.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

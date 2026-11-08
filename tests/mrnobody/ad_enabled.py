@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import unittest
+from p09_fixtures import p09_factory
 from unittest.mock import Mock, patch
 
 from pypdf import PdfReader
@@ -54,7 +55,7 @@ class EnabledResults(prerequisite.Prerequisite):
                 self.assertEqual(self.run_candidates([dict(DC, **change)])[0], 1)
 
     def test_worker_validates_states_and_ignores_stderr(self):
-        factory = Mock()
+        factory = p09_factory()
         for account in actions.AD_ENABLED_STATES:
             for group in ('added', 'already_member'):
                 data = dict(DC, account=account, group=group, password='PRIVATE_OUTPUT')

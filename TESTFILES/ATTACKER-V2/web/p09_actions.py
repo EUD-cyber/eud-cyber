@@ -3,14 +3,18 @@
 All remote output is an allowlisted protocol. Never log scripts or exceptions.
 """
 import base64
+import gzip
 import json
 import re
+from types import SimpleNamespace
 
 
 # The legacy description is deliberately accepted for accounts created by older
 # P09 releases. An equal name or existing privileged membership is NOT ownership.
 AD_ACTION = r'''
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
 $r = @{domain='unknown'; dc='unknown'; domain_sid='unknown'; account_sid='none'; group_sid='unknown';
     account='not_attempted'; group='not_attempted'; exists=$false; enabled=$false; member=$false;
     owned=$false; verified=$false; result='failed'; warning='none'; stage='dc'}
@@ -34,13 +38,17 @@ function Read-P09Account {
     return $user
 }
 try {
-    $system = Get-CimInstance Win32_ComputerSystem
+    $r.stage='cim'
+    $system = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop
     if ($system.Domain) { $r.domain = [string]$system.Domain }
     if ($system.DomainRole -notin @(4,5)) {
         $r.result='skipped'; $r.warning='target_must_be_domain_controller'; throw 'not_dc'
     }
+    $r.stage='module'
     Import-Module ActiveDirectory -ErrorAction Stop
+    $r.stage='domain'
     $d = Get-ADDomain -Server localhost
+    $r.stage='controller'
     $controller = Get-ADDomainController -Identity $env:COMPUTERNAME -Server localhost
     if ($controller.IsReadOnly -ne $false -or $controller.Domain -ine $d.DNSRoot -or
         $system.Domain -ine $d.DNSRoot -or $controller.Name -ine $env:COMPUTERNAME) {
@@ -96,6 +104,12 @@ try {
 } catch {
     if ($r.result -ne 'skipped') { $r.result='failed' }
     if ($r.warning -eq 'none') { $r.warning='ad_action_failed_check_rights_module_and_dc_logs' }
+    # Only fixed category codes cross the boundary; never exception text/IDs.
+    $category = [string]$_.CategoryInfo.Category
+    $r.error_kind='other'
+    if ($category -in @('PermissionDenied','ObjectNotFound','InvalidArgument',
+        'InvalidOperation','ResourceUnavailable','NotSpecified')) { $r.error_kind=$category }
+    if ($_.Exception -is [System.Management.Automation.CommandNotFoundException]) { $r.error_kind='command_not_found' }
 }
 $r | ConvertTo-Json -Compress
 '''
@@ -128,6 +142,78 @@ def script(mode='read', password='', before=None):
     return value
 
 
+def invocation(command):
+    """Bound the encoded payload below CreateProcess's command-line limit.
+
+    P09 bypasses cmd.exe. Compression is framing, not secrecy. The
+    outer parser catches payload syntax errors before any AD cmdlet can run.
+    """
+    payload = base64.b64encode(gzip.compress(command.encode('utf-8'), mtime=0)).decode('ascii')
+    wrapper = r'''
+$ErrorActionPreference='Stop'
+$ProgressPreference='SilentlyContinue'
+[Console]::OutputEncoding=New-Object System.Text.UTF8Encoding($false)
+$stage='payload_decode'
+try {
+    $bytes=[Convert]::FromBase64String('__PAYLOAD__')
+    $stream=New-Object IO.MemoryStream(,$bytes)
+    $gzip=New-Object IO.Compression.GZipStream($stream,[IO.Compression.CompressionMode]::Decompress)
+    $reader=New-Object IO.StreamReader($gzip,[Text.Encoding]::UTF8)
+    try { $source=$reader.ReadToEnd() } finally { $reader.Dispose(); $stream.Dispose() }
+    $stage='payload_parse'
+    $block=[ScriptBlock]::Create($source)
+    $stage='payload_execute'
+    & $block
+    exit 0
+} catch {
+    @{protocol='p09_failure'; stage=$stage; result='failed'; warning='powershell_payload_failed'} | ConvertTo-Json -Compress
+    exit 0
+}
+'''.replace('__PAYLOAD__', payload)
+    if 100 + len(base64.b64encode(wrapper.encode('utf-16-le'))) > 30000:
+        raise PayloadError()
+    return wrapper
+
+
+class PayloadError(ValueError):
+    pass
+
+
+def run_powershell(session, command):
+    # Session.run_ps uses cmd.exe, whose 8191-character limit truncates P09.
+    # Use the supported WinRS bypass and separate fixed executable/arguments.
+    encoded = base64.b64encode(invocation(command).encode('utf-16-le')).decode('ascii')
+    protocol = session.protocol
+    shell = protocol.open_shell(noprofile=True)
+    command_id = None
+    try:
+        command_id = protocol.run_command(shell, 'powershell.exe',
+            ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
+            skip_cmd_shell=True)
+        stdout, stderr, code = protocol.get_command_output(shell, command_id)
+        return SimpleNamespace(status_code=code, std_out=stdout, std_err=stderr)
+    finally:
+        # Cleanup cannot turn an uncertain write into a replay or hide its result.
+        try:
+            if command_id is not None:
+                protocol.cleanup_command(shell, command_id)
+        except Exception:
+            pass
+        try:
+            protocol.close_shell(shell)
+        except Exception:
+            pass
+
+
+class RemoteProcessError(RuntimeError):
+    """A genuine remote nonzero exit, never a JSON schema error."""
+    def __init__(self, response):
+        super().__init__('P09 remote process failed')
+        self.diagnostic = dict(exit_code=response.status_code, remote_stage='process',
+            stdout_bytes=len(response.std_out) if isinstance(response.std_out, bytes) else 0,
+            stderr_bytes=len(response.std_err) if isinstance(response.std_err, bytes) else 0)
+
+
 class SchemaError(ValueError):
     """Fixed field/reason/type codes only: never retain remote values or text."""
     def __init__(self, field, reason, value=None):
@@ -138,16 +224,27 @@ class SchemaError(ValueError):
 
 
 def parse(response):
-    if type(response.status_code) is not int or response.status_code != 0:
-        raise SchemaError('status_code', 'nonzero_or_invalid_status', response.status_code)
+    if type(response.status_code) is not int:
+        raise SchemaError('status_code', 'invalid_status_type', response.status_code)
+    if response.status_code != 0:
+        raise RemoteProcessError(response)
     if not isinstance(response.std_out, bytes) or len(response.std_out) > 8192:
         raise SchemaError('stdout', 'invalid_type_or_size')
+    if not isinstance(response.std_err, bytes):
+        raise SchemaError('stderr', 'invalid_type')
     try:
         data = json.loads(response.std_out.decode('utf-8-sig'))
     except (ValueError, UnicodeError):
         raise SchemaError('json', 'invalid_json') from None
     if not isinstance(data, dict):
         raise SchemaError('json', 'expected_object', data)
+    if data.get('protocol') == 'p09_failure':
+        if (set(data) != {'protocol', 'stage', 'result', 'warning'} or
+                data.get('stage') not in {'payload_decode', 'payload_parse', 'payload_execute'} or
+                data.get('result') != 'failed' or data.get('warning') != 'powershell_payload_failed'):
+            raise SchemaError('protocol', 'invalid_failure_envelope')
+        return dict(result='failed', warning='powershell_payload_failed',
+                    stage=data['stage'], verified=False, exit_code=0)
     safe = {}
     for key in ('exists', 'enabled', 'member', 'owned', 'verified'):
         if type(data.get(key)) is not bool:
@@ -164,13 +261,18 @@ def parse(response):
         safe[key] = val
     for key, allowed in {
         'result': {'ready', 'success', 'failed', 'skipped'}, 'warning': WARNINGS,
-        'stage': {'dc', 'group', 'account', 'account_write', 'group_write', 'postread', 'complete'},
+        'stage': {'dc', 'cim', 'module', 'domain', 'controller', 'group', 'account', 'account_write', 'group_write', 'postread', 'complete'},
         'account': STATES | {'missing', 'existing_disabled', 'not_attempted'},
         'group': {'added', 'already_member', 'missing', 'not_attempted'},
     }.items():
         if not isinstance(data.get(key), str) or data[key] not in allowed:
             raise SchemaError(key, 'invalid_enum', data.get(key))
         safe[key] = data[key]
+    if 'error_kind' in data:
+        if not isinstance(data['error_kind'], str) or data['error_kind'] not in {'other', 'PermissionDenied', 'ObjectNotFound', 'InvalidArgument',
+                'InvalidOperation', 'ResourceUnavailable', 'NotSpecified', 'command_not_found'}:
+            raise SchemaError('error_kind', 'invalid_enum')
+        safe['error_kind'] = data['error_kind']
     safe.update(exit_code=0, stdout_bytes=len(response.std_out), stderr_bytes=len(response.std_err))
     if safe['result'] == 'skipped' and not (
             safe['warning'] == 'target_must_be_domain_controller'
@@ -225,7 +327,7 @@ def perform(target, env, session_factory, limit, verify_only=False):
         session = session_factory(f"{scheme}://{target['target']}:{target['port']}/wsman",
             auth=(target['username'], password), transport='ntlm', server_cert_validation='ignore',
             operation_timeout_sec=min(limit, 60), read_timeout_sec=limit + 10)
-        return parse(session.run_ps(command))
+        return parse(run_powershell(session, command))
 
     before = None
     action = None
@@ -243,8 +345,11 @@ def perform(target, env, session_factory, limit, verify_only=False):
             action = execute(script('apply', password, before))
     except Exception as error:
         # Never serialize exception text: transport errors can contain secrets.
-        diagnostic = 'invalid_ad_response' if isinstance(error, (ValueError, UnicodeError, TypeError)) else 'transport_error_details_omitted'
-        if isinstance(error, SchemaError):
+        diagnostic = ('remote_powershell_nonzero_exit' if isinstance(error, RemoteProcessError) else
+                      'powershell_payload_too_large' if isinstance(error, PayloadError) else
+                      'invalid_ad_response' if isinstance(error, (ValueError, UnicodeError, TypeError)) else
+                      'transport_error_details_omitted')
+        if isinstance(error, (SchemaError, RemoteProcessError)):
             schema_diagnostic = error.diagnostic
         if before is None:
             return dict(result='failed', warning=diagnostic, stage='precheck', verified=False, **schema_diagnostic)
@@ -253,14 +358,23 @@ def perform(target, env, session_factory, limit, verify_only=False):
     except Exception as error:
         return dict(result='partial' if attempted or verify_only else 'failed',
                     warning='postcheck_unavailable_state_unknown', stage='postcheck', verified=False,
-                    **(error.diagnostic if isinstance(error, SchemaError) else schema_diagnostic))
-    same = (before is not None and all(before[k] == after[k] for k in ('domain_sid', 'group_sid', 'dc'))
-            and (before['account_sid'] == 'none' or before['account_sid'] == after['account_sid']))
+                    **(error.diagnostic if isinstance(error, (SchemaError, RemoteProcessError)) else schema_diagnostic))
+    same = (before is not None and all(before[k] == after.get(k) for k in ('domain_sid', 'group_sid', 'dc'))
+            and (before['account_sid'] == 'none' or before['account_sid'] == after.get('account_sid')))
     after['transport_diagnostic'] = diagnostic
-    after.update(schema_diagnostic)
+    # Keep a failed write's process status separate from the independent read.
+    after.update({('remote_' + key if key in {'exit_code', 'stdout_bytes', 'stderr_bytes'} else key): value
+                  for key, value in schema_diagnostic.items()})
     if action:
-        after.update(action_account=action['account'], action_group=action['group'],
+        after.update(action_account=action.get('account', 'not_attempted'), action_group=action.get('group', 'not_attempted'),
                      action_stage=action['stage'], action_warning=action['warning'])
+        if 'error_kind' in action:
+            after['action_error_kind'] = action['error_kind']
+    if after['result'] not in {'ready', 'success'}:
+        # Preserve the independently observed failing PowerShell/AD stage.
+        after.update(result='partial' if attempted or verify_only else 'failed',
+                     verified=False, verification='independent_read_only')
+        return after
     if confirmed(after) and same:
         after.update(result='success', verified=True, verification='independent_read_only',
                      recovery='state_verified_after_uncertain_action' if diagnostic != 'none' or verify_only else 'none')

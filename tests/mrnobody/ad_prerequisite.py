@@ -4,6 +4,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from p09_fixtures import p09_factory
 from unittest.mock import Mock, patch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -74,7 +75,7 @@ class Prerequisite(unittest.TestCase):
     def test_authenticated_worker_response_and_nonzero_remote_exit(self):
         target = actions.targets(self.env)[0]
         for response_code in (0, 1):
-            factory = Mock()
+            factory = p09_factory()
             factory.return_value.run_ps.return_value = Mock(status_code=response_code, std_out=json.dumps(WORKGROUP).encode(), std_err=b'')
             result = actions.perform('09', target, self.env, factory)
             self.assertEqual(result['result'], 'skipped' if response_code == 0 else 'failed')
