@@ -256,7 +256,7 @@ class Session:
             Response.std_out = json.dumps({'result': 'failed', 'warning': 'ad_action_failed_check_rights_module_and_dc_logs', 'account': 'created_enabled', 'group': 'not_attempted', 'domain': 'lab.example', 'dc': 'dc.lab.example', 'exit_code': 0, 'domain_sid': 'S-1-5-21-123-456-789', 'account_sid': 'S-1-5-21-123-456-789-1001', 'group_sid': 'S-1-5-21-123-456-789-512', 'exists': True, 'enabled': True, 'member': True, 'owned': True, 'verified': True, 'stage': 'complete'}).encode()
         if 'Get-ADDomain' in command and mode == 'partial':
             data = json.loads(Response.std_out)
-            data.update(member=False, verified=False, group='missing')
+            data.update(result='ready', member=False, verified=False, group='missing')
             Response.std_out = json.dumps(data).encode()
         if 'Get-ADDomain' not in command and os.environ.get('FIXTURE_P10') == 'invalid':
             Response.status_code = 1
@@ -292,7 +292,7 @@ class Session:
             self.assertEqual(p09['status'], 'skipped')
             self.assertTrue(any(e['event'] == 'PHASE_SKIPPED' for e in p09['events']))
             self.assertEqual(next(p for p in full['phases'] if p['id'] == '10')['status'], 'skipped')
-            access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[{"ip":"192.168.1.10","compromised":true,"platform":"windows","access":"rdp"}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
+            access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[{"ip":"192.168.1.10","compromised":true,"platform":"windows","access":"rdp","domain_controller":true}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
             env.update(NORDIC_INCIDENT_ID='MRN-full-enabled', MRN_POWERSHELL_ENABLED='1')
             result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -323,7 +323,7 @@ class Session:
                 self.assertEqual(custom_report['phases'][0]['status'], expected)
                 self.assertEqual(custom_report['phases'][1]['status'], 'success' if expected == 'skipped' else 'not_run')
                 env.pop('MRN_EXECUTION')
-                access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[{"ip":"192.168.1.10","compromised":true,"platform":"windows","access":"rdp"},{"ip":"192.168.1.11","compromised":true,"platform":"windows","access":"rdp"}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
+                access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[{"ip":"192.168.1.10","compromised":true,"platform":"windows","access":"rdp","domain_controller":true},{"ip":"192.168.1.11","compromised":true,"platform":"windows","access":"rdp","domain_controller":true}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
                 env.update(NORDIC_INCIDENT_ID='MRN-full-' + mode, MRN_POWERSHELL_ENABLED='0')
                 result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)
                 self.assertEqual(result.returncode, 0 if expected == 'skipped' else 1, result.stdout + result.stderr)

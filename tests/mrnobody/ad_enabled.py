@@ -125,7 +125,7 @@ function Get-CimInstance { [pscustomobject]@{ Domain='lab.example'; DomainRole=$
 function Import-Module { param($Name, $ErrorAction) }
 function Get-ADDomain { [pscustomobject]@{ DNSRoot='lab.example'; DomainSID=[pscustomobject]@{Value='S-1-5-21-123-456-789'} } }
 $env:COMPUTERNAME='dc'
-function Get-ADDomainController { [pscustomobject]@{Name='dc'; HostName='dc.lab.example'; Domain='lab.example'; IsReadOnly=$false} }
+function Get-ADDomainController { [pscustomobject]@{Name='dc'; HostName='dc.lab.example'; Domain=$(if ($script:failure -eq 'domain_mismatch') {'other.example'} else {'lab.example'}); IsReadOnly=($script:failure -eq 'read_only')} }
 function Get-ADGroup { [pscustomobject]@{SID=[pscustomobject]@{Value='S-1-5-21-123-456-789-512'}; DistinguishedName='CN=Domain Admins,DC=lab,DC=example'} }
 function Get-ADUser {
     if ($script:exists) { [pscustomobject]@{ SID=[pscustomobject]@{Value='S-1-5-21-123-456-789-1001'}; ObjectGUID='fixture-guid'; SamAccountName='mrnobody'; Name='mrnobody'; Description=$script:description; Enabled=$script:enabled; MemberOf=@(if ($script:member) {'CN=Domain Admins,DC=lab,DC=example'}) } }
@@ -168,7 +168,7 @@ function Add-ADGroupMember {
 
 @unittest.skipUnless(shutil.which('pwsh') or shutil.which('powershell'), 'PowerShell unavailable')
 class AccountAction(unittest.TestCase):
-    def invoke(self, exists=False, enabled=False, member=False, failure='', twice=False, description='MrNobody controlled lab account', role=5):
+    def invoke(self, exists=False, enabled=False, member=False, failure='', twice=False, description='MrNobody controlled lab account', role=5, mode='apply'):
         # Non-secret fixture includes quotes, unicode and PowerShell metacharacters.
         password = "Lab'\";$(throw 'injected')&æ_TEST_ONLY"
         setup = "$script:exists=$%s; $script:enabled=$%s; $script:member=$%s; $script:failure='%s'; $script:created=0; $script:reset=0; $script:enableCalls=0; $script:added=0; $script:expected=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('%s'))\n" % (
@@ -177,7 +177,8 @@ class AccountAction(unittest.TestCase):
         from p09_actions import script as ad_script
         before = dict(domain_sid='S-1-5-21-123-456-789', dc='dc.lab.example', account_sid='S-1-5-21-123-456-789-1001' if exists else 'none')
         def cycle(identity):
-            return '\n$r = (& {\n' + ad_script('apply', password, identity) + '\n} | ConvertFrom-Json)\n' + '$post = (& {\n' + ad_script() + '\n} | ConvertFrom-Json)\nif (-not $post.verified) { $r.result="failed"; $r.warning=$post.warning; if ($r.warning -eq "none") {$r.warning="ad_action_failed_check_rights_module_and_dc_logs"} }\n$r | ConvertTo-Json -Compress\n'
+            # Parse the actual generated protocol without repairing/masking it.
+            return '\n& {\n' + ad_script(mode, password, identity) + '\n}\n'
         script = setup + "$script:role=%d; $script:description='%s'\n" % (role, description) + AD_DOUBLES + cycle(before)
         if twice:
             script += cycle(dict(before, account_sid='S-1-5-21-123-456-789-1001'))
@@ -191,10 +192,23 @@ class AccountAction(unittest.TestCase):
         self.assertEqual(child.returncode, 0, child.stderr.decode(errors='replace'))
         rows = [json.loads(line) for line in child.stdout.decode('utf-8-sig').splitlines() if line.startswith('{')]
         self.assertEqual(len(rows), 3 if twice else 2, child.stdout)
+        from p09_actions import parse
+        for row in rows[:-1]:
+            parse(Mock(status_code=0, std_out=json.dumps(row).encode(), std_err=b''))
         return rows
+
+    def test_read_precheck_is_accurate_and_never_writes(self):
+        for exists, enabled, member in ((False, False, False), (True, True, False),
+                                         (True, False, True), (True, True, True)):
+            result, state = self.invoke(exists=exists, enabled=enabled, member=member, mode='read')
+            self.assertEqual((result['exists'], result['enabled'], result['member']), (exists, enabled, member))
+            self.assertEqual(result['verified'], exists and enabled and member)
+            self.assertEqual(result['result'], 'success' if result['verified'] else 'ready')
+            self.assertEqual((state['created'], state['added'], state['reset'], state['enableCalls']), (0, 0, 0, 0))
 
     def test_new_account_enabled_and_added(self):
         result, state = self.invoke()
+        self.assertTrue(all(result[k] is True for k in ('exists', 'owned', 'enabled', 'member', 'verified')))
         self.assertEqual((result['result'], result['account'], result['group']), ('success', 'created_enabled', 'added'))
         self.assertEqual(state, dict(created=1, reset=0, enabled=True, enableCalls=0, added=1, member=True))
 
@@ -221,6 +235,13 @@ class AccountAction(unittest.TestCase):
                                  (dict(role=3), 'target_must_be_domain_controller')):
             result, state = self.invoke(**options)
             self.assertEqual(result['warning'], warning)
+            self.assertEqual((state['created'], state['reset'], state['enableCalls'], state['added']), (0, 0, 0, 0))
+
+    def test_authenticated_read_only_or_mismatched_dc_never_writes(self):
+        for failure in ('read_only', 'domain_mismatch'):
+            result, state = self.invoke(failure=failure)
+            self.assertEqual(result['result'], 'failed')
+            self.assertEqual(result['warning'], 'dc_identity_mismatch_or_read_only')
             self.assertEqual((state['created'], state['reset'], state['enableCalls'], state['added']), (0, 0, 0, 0))
 
     def test_account_group_and_verification_failures(self):

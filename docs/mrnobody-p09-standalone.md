@@ -25,9 +25,13 @@ endpoint such as `192.168.1.120`.
 
 For Full Campaign, set `NORDIC_AD_DC_TARGET=192.168.2.200` in the runtime
 environment to pin P09 to that DC, or use a fixed-target scenario with P09's DC
-target. With no pin, campaign Windows-access inventory entries are candidates
-only: each must pass the authenticated DC precheck. SSH inventory entries alone
-are not DC candidates. Credentials remain runtime-only.
+target. This address is a lab-specific example, never a global default. The
+standalone/fixed scenario target takes precedence over a campaign DC pin.
+With no pin, inventory candidates must explicitly identify a DC using boolean
+`domain_controller=true` or integer `domain_role=4/5`; ordinary RDP/Windows
+classification is insufficient. Each candidate must then pass the authenticated
+DC precheck. No candidates produces SKIPPED with
+`no_dc_candidates_configure_dc_target`. Credentials remain runtime-only.
 
 The precheck reads the exact `mrnobody` account and Domain Admins resolved by the
 current domain SID plus RID 512. Existing accounts must have the exact name and
@@ -43,7 +47,21 @@ Only confirmed postconditions produce SUCCESS. Evidence distinguishes
 `created_enabled`, `enabled_existing`, `already_enabled`, `added` and
 `already_member`, with SID/DC identity and `verified` fields. An uncertain write
 followed by a successful postcheck reports the observed existing state rather
-than claiming which write completed. Exceptions and raw remote output are omitted.
+than claiming which write completed. The generated PowerShell refreshes all
+account flags after writes, and the Python coordinator performs another read in
+a separate authenticated session. An incomplete read returns internal `ready`,
+never `success`; it is only a prerequisite for the guarded write.
+Exceptions and raw remote output are omitted.
+
+`invalid_ad_response` means response validation failed, not that TCP 5985 is
+unreachable. Diagnostics now include only fixed `schema_field`, `schema_reason`
+and `schema_type` codes, covering nonzero PowerShell status, malformed JSON,
+SID/domain identity, enum and boolean type errors. String booleans and serialized
+SID objects/arrays are rejected; PowerShell emits explicit string identities and
+boolean flags. Neither values, unknown keys, exception text nor remote stream
+previews are logged. The 2026-11-08 log confirms precheck validation failure but
+does not identify the rejected field; that exact live cause cannot be recovered
+from the old log. Valid typed responses pass the actual PowerShell fixture tests.
 
 The configured 5–300 second value bounds each read wait. WinRM operation timeout
 is at most 60 seconds, read timeout is the configured value plus 10 seconds, and
@@ -57,3 +75,15 @@ its final report remains partial. No automatic rollback is performed.
 
 The update manifest and fresh-install cloud-init include `web/p09_actions.py`.
 This repository change does not deploy or run P09 against the lab VM.
+
+After this fix is merged into `main`, run `sudo mrnobody update`. For this lab,
+set `NORDIC_AD_DC_TARGET="192.168.2.200"` in
+`/opt/nordic-attack/config/defaults.conf` for Full Campaign, or select that target
+in standalone P09. Do not configure Kali `192.168.1.120` as the DC.
+Run standalone P09 twice using the GUI with runtime administrator credentials.
+The second run must show `WINDOWS_ACTION_SUCCESS`, `verified=True`,
+`account=already_enabled`, `group=already_member`,
+`verification=independent_read_only` and `PHASE_COMPLETE`.
+If ownership conflicts, inspect the account manually: only the exact historical
+P09 description plus matching name and domain SID permits reuse. An unmarked
+legacy-looking account is never adopted automatically.

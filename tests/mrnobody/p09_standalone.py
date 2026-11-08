@@ -65,7 +65,7 @@ def Session(*args, **kwargs): raise AssertionError('Authentication before failed
 """)
             env = dict(os.environ, PYTHONPATH=str(root), NORDIC_INCIDENT_ID='MRN-p09-fixture',
                        MRNOBODY_RUN_MODE='standalone', MRNOBODY_PASSWORD=PAYLOAD['password'],
-                       MRN_WINDOWS_TARGET=json.dumps(dict(target=PAYLOAD['target'], protocol='ssh', port=22, username='student')))
+                       MRN_WINDOWS_TARGET=json.dumps(dict(target=PAYLOAD['target'], protocol='winrm-http', port=5985, username='student')))
             worker = subprocess.run([sys.executable, str(BASE/'web/windows_actions.py'), '09', '--worker'],
                                     env=env, capture_output=True, text=True, timeout=10)
             self.assertEqual(worker.returncode, 0, worker.stderr)

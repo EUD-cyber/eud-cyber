@@ -14,36 +14,45 @@ $ErrorActionPreference = 'Stop'
 $r = @{domain='unknown'; dc='unknown'; domain_sid='unknown'; account_sid='none'; group_sid='unknown';
     account='not_attempted'; group='not_attempted'; exists=$false; enabled=$false; member=$false;
     owned=$false; verified=$false; result='failed'; warning='none'; stage='dc'}
+function Read-P09Account {
+    # Each invocation reads AD again; never infer postconditions from write calls.
+    $users = @(Get-ADUser -Filter "SamAccountName -eq 'mrnobody'" -Properties Enabled,Description,MemberOf -Server localhost)
+    if ($users.Count -gt 1) { throw 'ambiguous_account' }
+    $r.exists=$false; $r.enabled=$false; $r.owned=$false; $r.member=$false
+    $r.account_sid='none'; $r.account='missing'; $r.group='missing'; $r.verified=$false
+    if ($users.Count -eq 0) { return $null }
+    $user = $users[0]
+    $r.exists=$true; $r.enabled=[bool]$user.Enabled; $r.account_sid=[string]$user.SID.Value
+    $r.owned=[bool]($user.SamAccountName -ceq 'mrnobody' -and $user.Name -ceq 'mrnobody' -and
+        $user.Description -ceq 'MrNobody controlled lab account' -and
+        $r.account_sid.StartsWith($r.domain_sid + '-'))
+    $r.member=[bool](@($user.MemberOf) -icontains $g.DistinguishedName)
+    $r.account='already_enabled'; if (-not $r.enabled) { $r.account='existing_disabled' }
+    if ($r.member) { $r.group='already_member' }
+    if (-not $r.owned) { $r.warning='account_ownership_conflict'; throw 'ownership_conflict' }
+    $r.verified=[bool]($r.exists -and $r.owned -and $r.enabled -and $r.member)
+    return $user
+}
 try {
     $system = Get-CimInstance Win32_ComputerSystem
-    $r.domain = $system.Domain
+    if ($system.Domain) { $r.domain = [string]$system.Domain }
     if ($system.DomainRole -notin @(4,5)) {
         $r.result='skipped'; $r.warning='target_must_be_domain_controller'; throw 'not_dc'
     }
     Import-Module ActiveDirectory -ErrorAction Stop
     $d = Get-ADDomain -Server localhost
     $controller = Get-ADDomainController -Identity $env:COMPUTERNAME -Server localhost
-    if ($controller.IsReadOnly -or $controller.Domain -ine $d.DNSRoot -or
+    if ($controller.IsReadOnly -ne $false -or $controller.Domain -ine $d.DNSRoot -or
         $system.Domain -ine $d.DNSRoot -or $controller.Name -ine $env:COMPUTERNAME) {
         $r.warning='dc_identity_mismatch_or_read_only'; throw 'dc_mismatch'
     }
-    $r.domain=$d.DNSRoot; $r.dc=$controller.HostName; $r.domain_sid=$d.DomainSID.Value
+    $r.domain=[string]$d.DNSRoot; $r.dc=[string]$controller.HostName; $r.domain_sid=[string]$d.DomainSID.Value
     $r.stage='group'
     $g = Get-ADGroup -Identity ($d.DomainSID.Value + '-512') -Server localhost
     if ($g.SID.Value -ne ($d.DomainSID.Value + '-512')) { throw 'wrong_group' }
-    $r.group_sid=$g.SID.Value
+    $r.group_sid=[string]$g.SID.Value
     $r.stage='account'
-    $u = Get-ADUser -Filter "SamAccountName -eq 'mrnobody'" -Properties Enabled,Description,MemberOf -Server localhost
-    if ($null -ne $u) {
-        $r.exists=$true; $r.enabled=[bool]$u.Enabled; $r.account_sid=$u.SID.Value
-        $r.owned=($u.SamAccountName -ceq 'mrnobody' -and $u.Name -ceq 'mrnobody' -and
-            $u.Description -ceq 'MrNobody controlled lab account' -and
-            $u.SID.Value.StartsWith($d.DomainSID.Value + '-'))
-        $r.member=(@($u.MemberOf) -icontains $g.DistinguishedName)
-        $r.account='already_enabled'; if (-not $u.Enabled) { $r.account='existing_disabled' }
-        $r.group='missing'; if ($r.member) { $r.group='already_member' }
-        if (-not $r.owned) { $r.warning='account_ownership_conflict'; throw 'ownership_conflict' }
-    } else { $r.account='missing'; $r.group='missing' }
+    $u = Read-P09Account
     # __MODE__ is a fixed internal literal, never operator-provided PowerShell.
     if ('__MODE__' -eq 'apply') {
         # Recheck identity and ownership immediately before any write. A change
@@ -64,17 +73,28 @@ try {
                 $r.account='enabled_existing'
             }
         }
-        $u = Get-ADUser -Identity $u.ObjectGUID -Properties Enabled,Description,MemberOf -Server localhost
-        if ($u.Description -cne 'MrNobody controlled lab account' -or -not $u.Enabled) { throw 'account_changed' }
+        $accountAction=$r.account
+        $writtenGuid=$u.ObjectGUID
+        $writtenSid=[string]$u.SID.Value
+        $u = Read-P09Account
+        if ($null -eq $u -or $u.ObjectGUID -ne $writtenGuid -or $r.account_sid -ne $writtenSid -or
+            -not $r.owned -or -not $r.enabled) { throw 'account_changed' }
         $r.stage='group_write'
         if (-not (@($u.MemberOf) -icontains $g.DistinguishedName)) {
             Add-ADGroupMember -Identity $g -Members $u -Server localhost
             $r.group='added'
         } else { $r.group='already_member' }
+        $groupAction=$r.group
+        $r.stage='postread'
+        $u = Read-P09Account
+        if ($null -eq $u -or $u.ObjectGUID -ne $writtenGuid -or $r.account_sid -ne $writtenSid -or
+            -not $r.verified) { throw 'postconditions_missing' }
+        $r.account=$accountAction; $r.group=$groupAction
     }
-    $r.verified=($r.owned -and $r.enabled -and $r.member)
-    $r.stage='complete'; $r.result='success'
+    $r.stage='complete'; $r.result='ready'
+    if ($r.verified) { $r.result='success' }
 } catch {
+    if ($r.result -ne 'skipped') { $r.result='failed' }
     if ($r.warning -eq 'none') { $r.warning='ad_action_failed_check_rights_module_and_dc_logs' }
 }
 $r | ConvertTo-Json -Compress
@@ -108,41 +128,83 @@ def script(mode='read', password='', before=None):
     return value
 
 
+class SchemaError(ValueError):
+    """Fixed field/reason/type codes only: never retain remote values or text."""
+    def __init__(self, field, reason, value=None):
+        super().__init__('Invalid P09 response')
+        kind = {str: 'string', bool: 'boolean', int: 'integer', float: 'number',
+                dict: 'object', list: 'array', type(None): 'null'}.get(type(value), 'other')
+        self.diagnostic = dict(schema_field=field, schema_reason=reason, schema_type=kind)
+
+
 def parse(response):
-    if response.status_code != 0 or len(response.std_out) > 8192:
-        raise ValueError('Invalid P09 response')
-    data = json.loads(response.std_out.decode('utf-8-sig'))
+    if type(response.status_code) is not int or response.status_code != 0:
+        raise SchemaError('status_code', 'nonzero_or_invalid_status', response.status_code)
+    if not isinstance(response.std_out, bytes) or len(response.std_out) > 8192:
+        raise SchemaError('stdout', 'invalid_type_or_size')
+    try:
+        data = json.loads(response.std_out.decode('utf-8-sig'))
+    except (ValueError, UnicodeError):
+        raise SchemaError('json', 'invalid_json') from None
+    if not isinstance(data, dict):
+        raise SchemaError('json', 'expected_object', data)
     safe = {}
     for key in ('exists', 'enabled', 'member', 'owned', 'verified'):
         if type(data.get(key)) is not bool:
-            raise ValueError('Invalid P09 boolean')
+            raise SchemaError(key, 'expected_boolean', data.get(key))
         safe[key] = data[key]
     for key in ('domain', 'dc', 'domain_sid', 'account_sid', 'group_sid'):
         val = data.get(key)
-        if not isinstance(val, str) or not re.fullmatch(r'[A-Za-z0-9_.-]{1,253}', val):
-            raise ValueError('Invalid P09 identity')
+        pattern = (r'S-1-5-21-\d+-\d+-\d+' if key == 'domain_sid' else
+                   r'S-1-5-21-\d+-\d+-\d+-\d+' if key.endswith('_sid') else
+                   r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,252}')
+        sentinel = val in ('unknown', 'none') if isinstance(val, str) else False
+        if not isinstance(val, str) or not (sentinel or re.fullmatch(pattern, val)):
+            raise SchemaError(key, 'invalid_identity', val)
         safe[key] = val
     for key, allowed in {
-        'result': {'success', 'failed', 'skipped'}, 'warning': WARNINGS,
-        'stage': {'dc', 'group', 'account', 'account_write', 'group_write', 'complete'},
+        'result': {'ready', 'success', 'failed', 'skipped'}, 'warning': WARNINGS,
+        'stage': {'dc', 'group', 'account', 'account_write', 'group_write', 'postread', 'complete'},
         'account': STATES | {'missing', 'existing_disabled', 'not_attempted'},
         'group': {'added', 'already_member', 'missing', 'not_attempted'},
     }.items():
-        if data.get(key) not in allowed:
-            raise ValueError('Invalid P09 evidence')
+        if not isinstance(data.get(key), str) or data[key] not in allowed:
+            raise SchemaError(key, 'invalid_enum', data.get(key))
         safe[key] = data[key]
     safe.update(exit_code=0, stdout_bytes=len(response.std_out), stderr_bytes=len(response.std_err))
     if safe['result'] == 'skipped' and not (
             safe['warning'] == 'target_must_be_domain_controller'
             and safe['account'] == safe['group'] == 'not_attempted'
             and safe['dc'] == 'unknown'):
-        raise ValueError('Invalid P09 prerequisite evidence')
+        raise SchemaError('result', 'inconsistent_prerequisite')
+    if safe['result'] in {'ready', 'success'}:
+        if not dc_valid(safe):
+            raise SchemaError('domain_sid', 'inconsistent_dc_identity')
+        if safe['exists'] != (safe['account_sid'] != 'none') or (
+                not safe['exists'] and any(safe[k] for k in ('owned', 'enabled', 'member'))):
+            raise SchemaError('exists', 'inconsistent_account_state')
+        if safe['verified'] != all(safe[k] for k in ('exists', 'owned', 'enabled', 'member')):
+            raise SchemaError('verified', 'inconsistent_postconditions')
+        if safe['result'] == 'success' and not confirmed(safe):
+            raise SchemaError('result', 'unconfirmed_success')
+        if safe['result'] == 'ready' and safe['verified']:
+            raise SchemaError('result', 'inconsistent_ready')
     return safe
+
+
+def dc_valid(data):
+    sid = data.get('domain_sid', '')
+    return (data.get('stage') == 'complete' and data.get('warning') == 'none'
+            and re.fullmatch(r'S-1-5-21-\d+-\d+-\d+', sid) is not None
+            and data.get('group_sid') == sid + '-512'
+            and (data.get('account_sid') == 'none' or
+                 re.fullmatch(re.escape(sid) + r'-\d+', data.get('account_sid', '')) is not None)
+            and all(data.get(k) not in {'', 'unknown', 'none', None} for k in ('domain', 'dc')))
 
 
 def confirmed(data):
     sid = data.get('domain_sid', '')
-    return (data.get('result') == 'success' and data.get('warning') == 'none'
+    return (data.get('result') == 'success' and dc_valid(data) and data.get('warning') == 'none'
             and type(data.get('exit_code')) is int and data['exit_code'] == 0
             and data.get('account') in STATES and data.get('group') in {'added', 'already_member'}
             and all(data.get(k) is True for k in ('exists', 'enabled', 'owned', 'member', 'verified'))
@@ -169,26 +231,33 @@ def perform(target, env, session_factory, limit, verify_only=False):
     action = None
     attempted = False
     diagnostic = 'none'
+    schema_diagnostic = {}
     try:
         before = execute(script())
-        if before['result'] != 'success':
+        if before['result'] not in {'ready', 'success'}:
             return before
+        if not dc_valid(before):
+            raise SchemaError('domain_sid', 'inconsistent_dc_identity')
         if not verify_only and not confirmed(before):
             attempted = True
             action = execute(script('apply', password, before))
     except Exception as error:
         # Never serialize exception text: transport errors can contain secrets.
         diagnostic = 'invalid_ad_response' if isinstance(error, (ValueError, UnicodeError, TypeError)) else 'transport_error_details_omitted'
+        if isinstance(error, SchemaError):
+            schema_diagnostic = error.diagnostic
         if before is None:
-            return dict(result='failed', warning=diagnostic, stage='precheck', verified=False)
+            return dict(result='failed', warning=diagnostic, stage='precheck', verified=False, **schema_diagnostic)
     try:
         after = execute(script())
-    except Exception:
+    except Exception as error:
         return dict(result='partial' if attempted or verify_only else 'failed',
-                    warning='postcheck_unavailable_state_unknown', stage='postcheck', verified=False)
+                    warning='postcheck_unavailable_state_unknown', stage='postcheck', verified=False,
+                    **(error.diagnostic if isinstance(error, SchemaError) else schema_diagnostic))
     same = (before is not None and all(before[k] == after[k] for k in ('domain_sid', 'group_sid', 'dc'))
             and (before['account_sid'] == 'none' or before['account_sid'] == after['account_sid']))
     after['transport_diagnostic'] = diagnostic
+    after.update(schema_diagnostic)
     if action:
         after.update(action_account=action['account'], action_group=action['group'],
                      action_stage=action['stage'], action_warning=action['warning'])
