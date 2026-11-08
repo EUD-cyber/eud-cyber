@@ -60,7 +60,7 @@ def timeout_value(value):
 
 
 def targets(env, pid=None):
-    if pid == '09' and env.get('MRNOBODY_RUN_MODE') == 'campaign':
+    if pid == '09' and env.get('MRNOBODY_RUN_MODE') != 'standalone':
         return campaign_dc_candidates(env)
     protocol = env.get('MRNOBODY_PROTOCOL') or 'winrm-http'
     if protocol not in {'winrm', 'winrm-http', 'winrm-https'}:
@@ -444,8 +444,8 @@ def emit_p03_evidence(base, env):
 
 
 def run(pid, env, invoke=subprocess.run):
-    if pid == '09' and env.get('MRNOBODY_RUN_MODE') == 'campaign':
-        env = dict(env, MRNOBODY_PASSWORD=env.get('NORDIC_RDP_PASSWORD') or env.get('MRNOBODY_PASSWORD', ''))
+    if pid == '09' and env.get('MRNOBODY_RUN_MODE') != 'standalone':
+        env = dict(env, MRNOBODY_RUN_MODE='campaign', MRNOBODY_PASSWORD=env.get('NORDIC_RDP_PASSWORD') or env.get('MRNOBODY_PASSWORD', ''))
     base = Path(env.get('NORDIC_BASE_DIR', '/opt/nordic-attack'))
     if pid not in {'09', '10'} or not INCIDENT_ID.fullmatch(env.get('NORDIC_INCIDENT_ID', '')):
         raise ValueError('Invalid phase/incident')

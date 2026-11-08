@@ -32,6 +32,15 @@ class Consumer(Fixture):
         self.assertIn('P03_WINRM_EVIDENCE target=192.168.2.200 authenticated=False warning=candidate_probe_timeout',log)
         self.assertNotIn('WINDOWS_ACTION_SUCCESS',log)
 
+    def test_omitted_mode_cannot_fall_back_to_rdp_inference(self):
+        self.env.pop('MRNOBODY_RUN_MODE')
+        self.p03([dict(ip='192.168.1.120',platform='windows',access='rdp',compromised=True,
+                       access_methods={'rdp':{'authenticated':True}})])
+        self.assertEqual(actions.targets(self.env,'09'),[])
+        code,log,invoke=self.campaign([])
+        self.assertEqual(code,78); invoke.assert_not_called()
+        self.assertIn('no_authenticated_winrm_targets',log)
+
     def test_stale_missing_incomplete_legacy_and_standalone_p03_fail_closed(self):
         for change in ({'complete':False},{'producer':'P01'},{'schema_version':1},{'run_mode':'standalone'},
                        {'source_inventory_id':''}):
