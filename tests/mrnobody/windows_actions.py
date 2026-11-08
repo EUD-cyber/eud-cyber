@@ -317,7 +317,11 @@ PY
                 env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             no_p03 = load_report(base / 'reports', 'MRN-p01-no-p03')
-            self.assertEqual(next(p for p in no_p03['phases'] if p['id'] == '09')['status'], 'skipped')
+            # The real campaign/worker path must independently discover from P01,
+            # even when P03 has not authenticated any access method.
+            no_p03_dc = next(p for p in no_p03['phases'] if p['id'] == '09')
+            self.assertEqual(no_p03_dc['status'], 'success')
+            self.assertTrue(any(e['event'] == 'P09_DC_SELECTED' for e in no_p03_dc['events']))
             access.write_text(access_fixture)
             env.update(NORDIC_INCIDENT_ID='MRN-full-enabled', MRN_POWERSHELL_ENABLED='1')
             result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)
