@@ -181,48 +181,12 @@ write_files:
 
 
       download_file \
-          "scripts/15-web-app.sh" \
-          "$INSTALL_DIR/scripts/15-web-app.sh"
-
-      download_file \
-          "scripts/16-defense-evasion.sh" \
-          "$INSTALL_DIR/scripts/16-defense-evasion.sh"
-
-      download_file \
-          "scripts/17-collection.sh" \
-          "$INSTALL_DIR/scripts/17-collection.sh"
-
-      download_file \
-          "scripts/18-dns.sh" \
-          "$INSTALL_DIR/scripts/18-dns.sh"
-
-      download_file \
-          "web/dns_actions.py" \
-          "$INSTALL_DIR/web/dns_actions.py"
-
-      download_file \
-          "web/exercise_actions.py" \
-          "$INSTALL_DIR/web/exercise_actions.py"
-
-      download_file \
           "web/p06_synthetic.py" \
           "$INSTALL_DIR/web/p06_synthetic.py"
 
       download_file \
           "web/exfil_validation.py" \
           "$INSTALL_DIR/web/exfil_validation.py"
-
-      download_file \
-          "web/collection_state.py" \
-          "$INSTALL_DIR/web/collection_state.py"
-
-      download_file \
-          "web/web_profiles.py" \
-          "$INSTALL_DIR/web/web_profiles.py"
-
-      download_file \
-          "web/web_lab.py" \
-          "$INSTALL_DIR/web/web_lab.py"
 
       # ------------------------------------------------------
       # CONFIG
@@ -282,10 +246,6 @@ write_files:
           "$INSTALL_DIR/scripts/11-persistence.sh"
 
       download_file \
-          "scripts/13-native-tools.sh" \
-          "$INSTALL_DIR/scripts/13-native-tools.sh"
-
-      download_file \
           "scripts/update.sh" \
           "$INSTALL_DIR/scripts/update.sh"
 
@@ -296,18 +256,6 @@ write_files:
       download_file \
         "scripts/run-phase.sh" \
         "$INSTALL_DIR/scripts/run-phase.sh"
-
-      download_file \
-          "scripts/12-credential-access.sh" \
-          "$INSTALL_DIR/scripts/12-credential-access.sh"
-
-      download_file \
-          "scripts/14-c2.sh" \
-          "$INSTALL_DIR/scripts/14-c2.sh"
-
-      download_file \
-          "web/lab_actions.py" \
-          "$INSTALL_DIR/web/lab_actions.py"
 
       # ------------------------------------------------------
       # ORCHESTRATOR
@@ -327,6 +275,14 @@ write_files:
           "$INSTALL_DIR/web/windows_actions.py"
 
       download_file \
+          "web/unavailable.py" \
+          "$INSTALL_DIR/web/unavailable.py"
+
+      download_file \
+          "web/retired_files.py" \
+          "$INSTALL_DIR/web/retired_files.py"
+
+      download_file \
           "web/remote_actions.py" \
           "$INSTALL_DIR/web/remote_actions.py"
 
@@ -337,10 +293,6 @@ write_files:
       download_file \
           "web/persistence_actions.py" \
           "$INSTALL_DIR/web/persistence_actions.py"
-
-      download_file \
-          "web/native_actions.py" \
-          "$INSTALL_DIR/web/native_actions.py"
 
       download_file \
           "web/scenario_model.py" \

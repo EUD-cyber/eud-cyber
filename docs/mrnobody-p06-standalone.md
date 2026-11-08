@@ -32,7 +32,7 @@ The form preserves visible validation/submission/running/final job feedback and 
 incident correlation introduced by the P06 RUN fix. An acknowledgement is insufficient:
 received bytes must match the expected size and SHA256 before success is recorded.
 
-## Reuse registered P05/P17 synthetic evidence
+## Reuse registered P05 synthetic evidence
 
 For backward-compatible standalone reuse, supply **both** the exact remote synthetic
 `file` and its original `staging_incident`. The selected artifact must exist in the

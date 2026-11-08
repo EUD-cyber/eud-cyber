@@ -15,6 +15,7 @@ PLATFORM = ROOT / 'TESTFILES/ATTACKER-V2'
 sys.path.insert(0, str(PLATFORM / 'web'))
 from reports import read_metadata
 from scenario_model import catalogue
+from retired_files import RETIRED_FILES
 
 
 def installer():
@@ -26,6 +27,12 @@ def installer():
 
 
 class FreshInstall(unittest.TestCase):
+    def test_nginx_removes_beacons_and_preserves_gui_proxy(self):
+        config = (PLATFORM / 'nginx/nordic-incident.conf').read_text()
+        self.assertNotIn('mrnobody-beacon', config)
+        self.assertIn('location / { return 301 https://$host$request_uri; }', config)
+        self.assertRegex(config, r'location / \{\s+proxy_pass\s+http://127\.0\.0\.1:8082;')
+
     def test_installer_downloads_every_distributed_runtime_file(self):
         userdata, script = installer()
         pairs = re.findall(r'download_file\s*\\\s*\n\s*"([^"]+)"\s*\\\s*\n\s*"\$INSTALL_DIR/([^"]+)"', script)
@@ -34,6 +41,7 @@ class FreshInstall(unittest.TestCase):
         self.assertEqual(expected, set(downloaded))
         self.assertEqual(len(downloaded), len(pairs), 'Duplicate downloads')
         self.assertTrue(all(source == target for source, target in pairs))
+        self.assertTrue(set(RETIRED_FILES).isdisjoint(downloaded))
         self.assertIn('main/TESTFILES/ATTACKER-V2', script)
         self.assertIn('  - /usr/local/sbin/install-mrnobody', userdata)
         self.assertIn('-m compileall -q', script)
@@ -47,14 +55,13 @@ class FreshInstall(unittest.TestCase):
             for path in (base / 'web').glob('*.py'):
                 ast.parse(path.read_text(encoding='utf-8'), filename=path.name)
             caps = catalogue(base / 'scripts', read_metadata)
-            self.assertTrue({'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'} <= set(caps))
+            self.assertTrue({f'{n:02}' for n in range(1, 12)} == set(caps))
             self.assertTrue((base / 'web/windows_actions.py').is_file())
             phases = read_metadata(base / 'scenarios/full-incident.sh')['SCENARIO_PHASES'].split(',')
             self.assertTrue(set(phases) <= set(caps))
             self.assertIn('09', phases)
             self.assertIn('10', phases)
             self.assertIn('11', phases)
-            self.assertIn('13', phases)
 
             # Use only the files downloaded by cloud-init, without an updater
             # overlay. Import in a child so repository modules cannot mask gaps.
@@ -62,7 +69,6 @@ class FreshInstall(unittest.TestCase):
             smoke = '''
 import app
 import remote_actions
-import lab_actions
 import reportlab
 from pathlib import Path
 import os
@@ -77,7 +83,7 @@ for url in ('/', '/api/health', '/api/phases', '/api/planning/capabilities',
     response = client.get(url)
     assert response.status_code == 200, (url, response.status_code)
 assert client.get('/api/health').get_json()['status'] == 'ok'
-assert {'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'} <= set(app.planning.capabilities())
+assert {f'{n:02}' for n in range(1, 12)} == set(app.planning.capabilities())
 assert app.planning.store.path == base / 'data/planning/execution.sqlite3'
 assert app.planning.store.path.is_file()
 if os.name != 'nt':

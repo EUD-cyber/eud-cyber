@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import ipaddress
+from scenario_model import ACTIVE_PHASE_IDS, RETIRED_PRESETS, scenario_readiness, unavailable_phases
 import sys
 import time
 import uuid
@@ -473,6 +474,9 @@ def api_phases():
             path.name.split("-", 1)[0],
         )
 
+        if phase_id not in capabilities:
+            continue
+
         name = metadata.get(
             "ATTACK_NAME",
             path.stem,
@@ -581,6 +585,9 @@ def api_run_phase(phase_id):
     # --------------------------------------------------------
     # Locate phase script
     # --------------------------------------------------------
+
+    if phase_id not in ACTIVE_PHASE_IDS:
+        return jsonify({'status': 'error', 'message': f'Phase P{phase_id} is unavailable in the active product.'}), 410
 
     matches = list(
         SCRIPT_DIR.glob(
@@ -693,7 +700,7 @@ def api_run_phase(phase_id):
         phase_env['MRNOBODY_STAGING_INCIDENT'] = data.get('staging_incident', '')
     phase_env["NORDIC_INCIDENT_ID"] = "MRN-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:12]
     phase_env['MRNOBODY_PASSWORD'] = str(data.get('password', ''))
-    if phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'}:
+    if phase_id in {'09', '10', '11'}:
         try:
             from windows_actions import runtime_command
             # Validate even legacy standalone callers without a profile.
@@ -786,9 +793,6 @@ def api_run_phase(phase_id):
         "action": "--action",
         "artifact": "--artifact",
         **{key: "--" + key.replace("_", "-") for key in ("persistence_dns", "persistence_domain", "persistence_resolver", "persistence_interval", "persistence_duration")},
-        "behavior": "--behavior",
-        "web_profile": "--web-profile", "web_path": "--web-path",
-        "dataset": "--dataset", "archive_name": "--archive-name",
     }
 
 
@@ -1152,7 +1156,7 @@ def api_scenarios():
                 and job['execution'].get('id') == scenario_id]
         return {'schedule_count': len(jobs), 'enabled_schedule_count': sum(bool(job.get('enabled')) for job in jobs)}
 
-    scenarios = [dict(x, custom=True, phases=[p["id"] for p in x["phases"] if p.get("enabled", True)],
+    scenarios = [dict(x, custom=True, readiness=scenario_readiness(x, planning.capabilities()), runnable=not unavailable_phases(x), phases=[p["id"] for p in x["phases"] if p.get("enabled", True)],
                       **schedule_counts(x['id'], 'custom')) for x in planning.store.scenarios()]
     scenarios.extend(dict(x, **schedule_counts(x['id'], 'campaign')) for x in preset_cards(planning.capabilities()))
 
@@ -1245,6 +1249,9 @@ def api_scenarios():
 )
 def api_start(scenario_id="full-incident"):
     global campaign_process
+
+    if scenario_id.removeprefix('preset-') in RETIRED_PRESETS:
+        return jsonify({'status': 'error', 'message': 'Unavailable: this preset used removed phases. Choose a new scenario explicitly.'}), 410
 
     with campaign_lock:
 

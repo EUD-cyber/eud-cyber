@@ -22,11 +22,14 @@ Report lists add recorded technique names/statuses from saved report snapshots. 
 
 ## Distribution
 
-Only existing distributed runtime files changed, including script metadata comments. `update-manifest.txt` is regenerated for their exact bytes. No runtime file or asset was added, so `MRNOBODY/mrnobody_userdata.yaml` and cloud-init remain unchanged. No schema migration, deployment or VM operation is included.
+The current product exposes P01–P11. The userdata download list and update manifest
+also include retirement handling for old installations. See the
+[phase removal and migration instructions](mrnobody-phase-retirement.md).
+The screenshots below reflect the reduced active catalogue. No VM deployment is included.
 
 ## Validation
 
-- Existing Python backend, install, planning, remote actions, P09–P18, execution overview, reports and export suites run with isolated fixtures.
+- Existing Python backend, install, planning, remote actions, P09–P11, execution overview, reports and export suites run with isolated fixtures.
 - Existing JavaScript builder, scenario, live-log, report, P10 dual-command and execution overview suites retain behavior checks; expected visible terminology/navigation is updated.
 - `python tests/mrnobody/ui.py` verifies additive metadata against actual installed scripts, supported modes, mappings, read-only APIs, historical list metadata, semantic HTML and backed Settings controls.
 - `node tests/mrnobody/ui_browser.cjs` uses Playwright and `ui_server.py`, which binds an ephemeral loopback port, blocks all mutation requests, disables process launch and never starts the scheduler. It verifies real registry search/filter/detail, safe text rendering, MITRE navigation, builder dependencies, scheduler/report/settings shells and layouts at 1440/1024/768/390px. Install Playwright 1.62.1 and Chromium first; `MRN_TEST_PYTHON` can select Python. `MRN_UI_ARTIFACTS` optionally saves page screenshots.

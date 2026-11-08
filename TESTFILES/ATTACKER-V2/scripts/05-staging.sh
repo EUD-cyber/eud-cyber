@@ -32,7 +32,7 @@ set -u
 # ATTACK_TEACHING_PURPOSE="Follow synthetic data preparation into collection and exfiltration evidence."
 # ATTACK_DETECTION_FOCUS="Remote file creation|Staging directory activity|Synthetic data markers"
 # ATTACK_PLATFORMS="Linux|Windows"
-# ATTACK_PREREQUISITES="Authenticated remote access; auto mode uses P03 access and can consume P17 collection artifacts."
+# ATTACK_PREREQUISITES="Authenticated remote access; auto mode uses P03 access."
 # ATTACK_TARGET_TYPE="Authenticated lab hosts"
 # ATTACK_CLEANUP="Synthetic staging artifacts are retained for downstream exfiltration; no cleanup action is exposed here."
 # ATTACK_NAME="Data Staging"
@@ -473,13 +473,6 @@ for RECORD in "${COMPROMISED[@]}"; do
         ACCESS_USER \
         ACCESS_PASSWORD \
         <<< "$RECORD"
-
-    # P17 already produced a verified synthetic archive for this incident/host.
-    if "$BASE_DIR/venv/bin/python" "$BASE_DIR/web/collection_state.py" "$STAGING_STATE" "$INCIDENT_ID" "$HOST"; then
-        ground_truth "STAGING_SUCCESS host=$HOST producer_phase=17 linkage=retained_collection_archive"
-        STAGED_COUNT=$(( STAGED_COUNT + 1 ))
-        continue
-    fi
 
     if [[ -z "$ACCESS_PASSWORD" ]]; then
 
@@ -1152,7 +1145,7 @@ incident_id = sys.argv[3]
 
 from pathlib import Path
 prior = json.loads(Path(output_file).read_text()) if Path(output_file).exists() else {}
-hosts = [h for h in prior.get('hosts', []) if prior.get('incident_id') == incident_id and h.get('producer_phase') == '17' and h.get('staged') and h.get('data_type') == 'synthetic-training-data']
+hosts = []
 
 
 with open(

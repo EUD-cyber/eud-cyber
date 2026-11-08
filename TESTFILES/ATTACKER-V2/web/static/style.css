@@ -1953,7 +1953,7 @@ footer {
 .overview-log { white-space: pre-wrap; font-size: 12px; max-height: 140px; overflow: auto; }
 @media (max-width: 620px) { .overview-fields { grid-template-columns: 1fr; gap: 4px; } .overview-fields dd { margin-bottom: 8px; } }
 
-/* Bounded P18 DNS runs can complete only some check-ins. */
+/* Historical reports may contain partially completed actions. */
 .report-status-partial, .overview-partial { color: #e9cb79; }
 
 /* MrNobody operator workspace: shared tokens and page components. */

@@ -209,7 +209,7 @@ class APIIntegration(unittest.TestCase):
             self.assertEqual(phase['parameters'], params)
             ids = [p['id'] for p in execution['phases']]
             self.assertLess(ids.index('03'), ids.index('11'))
-            self.assertLess(ids.index('11'), ids.index('12'))
+            self.assertLess(ids.index('11'), ids.index('04'))
             result = fixture.client.post('/api/executions/run', json=dict(execution=spec, credentials=dict(ssh_password='LAB_ONLY', rdp_password='LAB_ONLY')))
             self.assertEqual(result.status_code, 200, result.json)
             web.campaign_process = None

@@ -12,7 +12,7 @@ import unittest
 
 
 SOURCE = Path(__file__).resolve().parents[2] / "TESTFILES/ATTACKER-V2/scenarios/full-incident.sh"
-IDS = "01 02 15 03 09 11 12 13 14 18 16 04 17 05 06 07".split()
+IDS = "01 02 03 09 11 04 05 06 07".split()
 INCIDENT = "MRN-20261107-125354-69f8804a7a49"
 
 
@@ -72,7 +72,7 @@ else:
         if corrupt == "missing": data["phases"].pop(ids[0])
         else: data["phases"][ids[0]] = corrupt
         path.write_text(json.dumps(data))
-    sys.exit(int(os.environ["TEST_CHILD_CODE"]) if pid == "15" else 0)
+    sys.exit(int(os.environ["TEST_CHILD_CODE"]) if pid == "11" else 0)
 ''')
             env = {key: value for key, value in os.environ.items()
                    if not key.startswith(("NORDIC_", "MRN_", "MRNOBODY_"))}
@@ -94,7 +94,7 @@ else:
         self.assertEqual(dispatched, IDS)
         self.assertEqual(state["incident_id"], INCIDENT)
         self.assertEqual(state["status"], "complete")
-        self.assertEqual(state["phases"]["15"], "skipped")
+        self.assertEqual(state["phases"]["11"], "skipped")
         for pid in ("08", "10"):
             self.assertEqual(state["phases"][pid], "disabled")
         self.assertNotIn("pending", state["phases"].values())
@@ -119,9 +119,9 @@ else:
     def test_child_failure_stops_and_records_failure(self):
         result, dispatched, state, truth = self.run_campaign(child_code=23)
         self.assertNotEqual(result.returncode, 0)
-        self.assertEqual(dispatched, IDS[:3])
+        self.assertEqual(dispatched, IDS[:5])
         self.assertEqual(state["status"], "failed")
-        self.assertEqual(state["phases"]["15"], "failed")
+        self.assertEqual(state["phases"]["11"], "failed")
         self.assertNotIn("completed", state)
         self.assertNotIn("CAMPAIGN_COMPLETE", truth)
 

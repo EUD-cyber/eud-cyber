@@ -303,7 +303,7 @@ filename, byte size, full SHA256, timestamp and synthetic-data classification.
 Long values wrap; the GUI offers SHA256 copy when browser clipboard access exists.
 Metrics distinguish successfully staged hosts, unique artifacts created/recorded,
 known total bytes, unknown sizes, failed/skipped outcomes and overall phase status.
-Retained P17 archives count as staged, never newly created P05 files. P17 adopts
+For historical reports only (P12–P18 are unavailable in the active product), retained P17 archives count as staged, never newly created P05 files. P17 adopts
 the shared component only for already-recorded successful archive creation;
 other phases keep their current reports until explicit adapters are implemented.
 The generic model supports those artifact types without inventing observations.

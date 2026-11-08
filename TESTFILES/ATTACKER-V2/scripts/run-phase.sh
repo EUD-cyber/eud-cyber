@@ -60,7 +60,6 @@ PLATFORM=""
 METHOD=""
 ACTION=""
 ARTIFACT=""
-BEHAVIOR=""
 SUBNET=""
 AUTO_DISCOVERY=""
 
@@ -138,8 +137,7 @@ metadata() {
 #
 #   scripts/NN-*.sh
 #
-# Future attacks therefore automatically become available
-# without modifying this runner.
+# Only P01-P11 are active. New phases require an explicit product milestone.
 #
 discover_attacks() {
 
@@ -147,7 +145,7 @@ discover_attacks() {
         -maxdepth 1 \
         -type f \
         -regextype posix-extended \
-        -regex '.*/[0-9]+-[^/]+\.sh' \
+        -regex '.*/(0[1-9]|1[01])-[^/]+\.sh' \
         -print \
         | sort -V
 }
@@ -511,7 +509,6 @@ run_attack() {
     export MRNOBODY_PLATFORM="${PLATFORM:-${MRNOBODY_PLATFORM:-}}"
     export MRNOBODY_METHOD="${METHOD:-${MRNOBODY_METHOD:-}}"
     export MRNOBODY_ACTION="${ACTION:-${MRNOBODY_ACTION:-}}"
-    export MRNOBODY_BEHAVIOR="${BEHAVIOR:-${MRNOBODY_BEHAVIOR:-}}"
     export MRNOBODY_ARTIFACT="${ARTIFACT:-${MRNOBODY_ARTIFACT:-}}"
     export MRNOBODY_FILE="$FILE"
     export MRNOBODY_TIMEOUT="${ACTION_TIMEOUT:-${MRNOBODY_TIMEOUT:-60}}"
@@ -623,12 +620,6 @@ Options:
   --persistence-resolver <private lab IPv4> (required for DNS; no default)
   --persistence-interval <10-3600 seconds> (default 60)
   --persistence-duration <60-14400 seconds> (default 3600; artifacts require Cleanup)
-  --web-profile <sqli|traversal> --web-path </mrn-lab> (P15)
-  --behavior <config-toggle|log-rename> --action <run|cleanup> (P16)
-  --dataset <finance|engineering> --archive-name <suffix> --action <run|cleanup> (P17)
-  --dns-behavior <standard|low-and-slow|encoded-marker> --dns-endpoint <private-ip> --dns-domain <lab.test> --dns-pattern <mrn-{seq}> --dns-interval <seconds> --dns-jitter <0-0.5> --dns-count <1-40> --dns-duration <3-240 seconds> (P18)
-  --transport <http|https> --beacon-interval <seconds> --beacon-jitter <0-0.5> --beacon-count <1-20> --uri-profile <heartbeat|status> (P14)
-  --behavior <encoded-powershell|certutil-decode|bits-job> (P13)
   --timeout <seconds> (P09/P10/P11, 5–300)
   P10 command: MRN_POWERSHELL_SECRET environment input only; never a CLI argument.
   --dry-run
@@ -772,19 +763,18 @@ case "$COMMAND" in
                     shift 2
                     ;;
 
-                --platform|--method|--action|--artifact|--behavior)
+                --platform|--method|--action|--artifact)
                     [[ $# -ge 2 ]] || die "$1 requires a value"
                     case "$1" in
                         --platform) PLATFORM="$2" ;;
                         --method) METHOD="$2" ;;
                         --action) ACTION="$2" ;;
                         --artifact) ARTIFACT="$2" ;;
-                        --behavior) BEHAVIOR="$2" ;;
                     esac
                     shift 2
                     ;;
 
-                --staging-incident|--persistence-dns|--persistence-domain|--persistence-resolver|--persistence-interval|--persistence-duration|--dns-behavior|--dns-endpoint|--dns-domain|--dns-pattern|--dns-interval|--dns-jitter|--dns-count|--dns-duration|--web-profile|--web-path|--dataset|--archive-name|--transport|--beacon-interval|--beacon-jitter|--beacon-count|--uri-profile)
+                --staging-incident|--persistence-dns|--persistence-domain|--persistence-resolver|--persistence-interval|--persistence-duration)
                     [[ $# -ge 2 ]] || die "$1 requires a value"
                     key="${1#--}"
                     key="${key//-/_}"

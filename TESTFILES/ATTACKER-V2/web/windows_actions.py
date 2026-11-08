@@ -226,7 +226,7 @@ def emit(base, env, pid, event, **fields):
         # physical lines. Historical unquoted P11 logs remain readable.
         safe = {key: json.dumps(value, ensure_ascii=True).replace(' ', r'\u0020').replace('=', r'\u003d')
                 if isinstance(value, str) else value for key, value in safe.items()}
-    if pid in {'10', '13'}:
+    if pid in {'10'}:
         # JSON quoting keeps multiline output and forged key=value/event text
         # inside one field on one physical log line. Scrub BEFORE encoding.
         for key in ('stdout_preview', 'stderr_preview'):

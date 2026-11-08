@@ -265,14 +265,15 @@ async function main() {
         await page.locator('[data-page="phases"]').click();
         await page.locator('#phaseGrid .technique-card').first().waitFor();
         assert.equal(await page.locator('#phaseGrid .technique-card').count(),catalogue.count);
-        await page.evaluate(()=>updatePhases({'18':'partial'}));
-        await page.locator('#techniqueSearch').fill('P18');
-        assert.equal(await page.locator('#phaseGrid .phase-status').textContent(),'Partial');
-        assert.equal(await page.locator('#phaseGrid .technique-card').count(),1);
+        assert.deepEqual(catalogue.phases.map(p=>p.id), Array.from({length:11},(_,i)=>String(i+1).padStart(2,'0')));
+        for (const id of ['12','13','14','15','16','17','18']) {
+            await page.locator('#techniqueSearch').fill('P'+id);
+            assert.equal(await page.locator('#phaseGrid .technique-card').count(),0);
+        }
+        await page.locator('#techniqueSearch').fill('P11');
         await page.locator('#phaseGrid .technique-card').click();
         for (const title of ['What does it do?','What should students detect?','MITRE ATT&CK','Teaching purpose','Execution']) assert.ok(await page.locator('#phaseDetail').getByRole('heading',{name:title,exact:true}).count());
-        assert.ok((await page.locator('#phaseDetail').textContent()).includes(catalogue.phases.find(x=>x.id==='18').education.prerequisites));
-        assert.equal(await page.locator('#phaseDetail a[href="https://attack.mitre.org/techniques/T1071/004/"]').count(),1);
+        assert.ok((await page.locator('#phaseDetail').textContent()).includes(catalogue.phases.find(x=>x.id==='11').education.prerequisites));
         await page.locator('#techniqueSearch').fill('');
         await page.locator('#techniquePlatform').selectOption('Windows');
         assert.equal(await page.locator('#phaseGrid .technique-card').count(),catalogue.phases.filter(x=>x.education.platforms.includes('Windows')).length);
@@ -328,7 +329,7 @@ async function main() {
         assert.equal(await page.locator('#scheduleEditor').isVisible(),true);
         await page.locator('[data-page="reports"]').click();
         await page.waitForFunction(()=>document.getElementById('reportTable').textContent.includes('No incident reports'));
-        assert.equal(await page.locator('#reportPhaseFilter option[value="18"]').count(),1);
+        assert.equal(await page.locator('#reportPhaseFilter option[value="18"]').count(),0);
         await page.locator('[data-page="system"]').click();
         await page.waitForFunction(()=>document.getElementById('settingsRuntime').textContent.includes('Version'));
         assert.equal(await page.locator('#page-system input[type=checkbox]').count(),0);
