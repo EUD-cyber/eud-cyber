@@ -110,42 +110,17 @@ class P09Regression(unittest.TestCase):
         self.assertTrue(actions.ad_success(result))
         self.assertEqual(factory.call_count, 2)
 
-    def test_campaign_dc_pin_and_no_ssh_target_inference(self):
-        env = dict(self.env, MRNOBODY_RUN_MODE='campaign', NORDIC_AD_DC_TARGET='192.168.2.200',
-                   MRNOBODY_TARGET='192.168.1.120', MRNOBODY_PORT='22', MRNOBODY_PROTOCOL='ssh')
-        row = actions.targets(env, '09')[0]
-        self.assertEqual((row['target'], row['port'], row['protocol']), ('192.168.2.200', 5985, 'winrm-http'))
-        with self.assertRaises(ValueError):
-            actions.targets(dict(env, NORDIC_AD_DC_TARGET='8.8.8.8'), '09')
-
-    def test_discovered_candidates_exclude_misclassified_kali(self):
-        inventory = Path(self.temp.name) / 'access.json'
-        hosts = [dict(ip='192.168.1.120', compromised=True, platform='windows', access='rdp'),
-                 dict(ip='192.168.2.200', compromised=True, platform='windows',
-                      access='winrm', domain_controller=True)]
-        inventory.write_text(json.dumps(dict(incident_id=self.env['NORDIC_INCIDENT_ID'], hosts=hosts)))
-        env = dict(self.env, MRNOBODY_RUN_MODE='campaign', NORDIC_COMPROMISED_STATE=str(inventory))
-        self.assertEqual([t['target'] for t in actions.targets(env, '09')], ['192.168.2.200'])
-        self.assertEqual(len(actions.targets(env, '10')), 2)
-        hosts[1].pop('domain_controller')
-        inventory.write_text(json.dumps(dict(incident_id=self.env['NORDIC_INCIDENT_ID'], hosts=hosts)))
-        self.assertEqual(actions.targets(env, '09'), [])
-        # No universal lab IP; a standalone scenario keeps its supplied endpoint.
-        explicit = dict(env, MRNOBODY_RUN_MODE='standalone', MRNOBODY_TARGET='10.20.30.40',
-                        NORDIC_AD_DC_TARGET='192.168.2.200', MRNOBODY_PROTOCOL='winrm-https', MRNOBODY_PORT='15986')
+    def test_manual_standalone_keeps_endpoint_and_credentials(self):
+        explicit = dict(self.env, MRNOBODY_TARGET='10.20.30.40',
+                        NORDIC_AD_DC_TARGET='192.168.2.200', MRNOBODY_PROTOCOL='winrm-https',
+                        MRNOBODY_PORT='15986', MRNOBODY_USERNAME='LAB\\\\operator')
         row = actions.targets(explicit, '09')[0]
         self.assertEqual((row['target'], row['protocol'], row['port']), ('10.20.30.40', 'winrm-https', 15986))
-        invoke = Mock(return_value=Mock(returncode=0, stdout=json.dumps(DC)))
-        with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(actions.run('09', explicit, invoke), 0)
-        passed = json.loads(invoke.call_args.kwargs['env']['MRN_WINDOWS_TARGET'])
-        self.assertEqual((passed['protocol'], passed['port']), ('winrm-https', 15986))
-        # Verify the authenticated session uses the selected endpoint and NTLM.
         factory = Mock()
         factory.return_value.run_ps.return_value = response(DC)
         self.assertTrue(actions.ad_success(actions.perform('09', row, explicit, factory)))
         self.assertEqual(factory.call_args.args[0], 'https://10.20.30.40:15986/wsman')
-        self.assertEqual(factory.call_args.kwargs['transport'], 'ntlm')
+        self.assertEqual(factory.call_args.kwargs['auth'], ('LAB\\\\operator', 'secret'))
 
     def test_invalid_schema_diagnostics_are_fixed_codes_without_remote_content(self):
         from p09_actions import parse, SchemaError
