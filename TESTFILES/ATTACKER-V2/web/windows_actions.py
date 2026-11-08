@@ -411,6 +411,10 @@ def save_winrm_access(base, env, results):
         raise ValueError('Invalid Windows username')
     for target, evidence in results:
         evidence = access_evidence(evidence)
+        scrubbed = redact_environment(evidence, env)
+        for field in ('hostname', 'domain'):
+            if field in evidence and scrubbed.get(field) != evidence[field]:
+                evidence[field] = 'redacted'
         ip = target['target']
         service = dict(evidence, protocol=target['protocol'], port=target['port'])
         known = discovery_hosts.get(ip)
@@ -456,6 +460,8 @@ def run_winrm_access(env, invoke=subprocess.run):
         raise ValueError('Invalid incident')
     try:
         direct = env.get('MRNOBODY_RUN_MODE') == 'standalone'
+        if direct:
+            emit(base, env, '03', 'PHASE_START', phase='03', method='winrm_ntlm')
         if not direct:
             env = dict(env, MRNOBODY_PASSWORD=env.get('NORDIC_RDP_PASSWORD', ''),
                        MRNOBODY_USERNAME=env.get('NORDIC_RDP_USERNAME') or 'Administrator')
@@ -490,7 +496,10 @@ def run_winrm_access(env, invoke=subprocess.run):
         save_winrm_access(base, env, results)
         emit(base, env, '03', 'WINRM_DISCOVERY_COMPLETE', checked=len(results),
              authenticated=sum(e['authenticated'] for _, e in results))
-        return 0 if not direct or any(e['authenticated'] for _, e in results) else 1
+        success = not direct or any(e['authenticated'] for _, e in results)
+        if direct:
+            emit(base, env, '03', 'PHASE_COMPLETE' if success else 'PHASE_FAILED', phase='03')
+        return 0 if success else 1
     except (DiscoveryError, ValueError, TypeError, KeyError, OSError):
         emit(base, env, '03', 'WINRM_DISCOVERY_FAILED', warning='invalid_or_missing_access_inventory_or_configuration')
         return 1

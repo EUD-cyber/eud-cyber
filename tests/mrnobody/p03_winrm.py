@@ -77,6 +77,14 @@ class WinRMAccess(unittest.TestCase):
         self.assertTrue(inventory['hosts'][1]['services']['winrm']['authenticated'])
         self.assertNotIn('WIN_SECRET', json.dumps(inventory) + json.dumps(state))
 
+    def test_known_runtime_secrets_are_scrubbed_from_remote_identity_before_persistence(self):
+        code, log, invoke = self.run_access([CLOSED, dict(AUTH, hostname='WIN_SECRET', domain='WIN_SECRET')])
+        self.assertEqual(code, 0)
+        state = self.read('compromised-hosts.json')
+        inventory = self.read('discovered-hosts.json')
+        self.assertNotIn('WIN_SECRET', json.dumps(state) + json.dumps(inventory))
+        self.assertEqual(state['hosts'][1]['hostname'], 'redacted')
+
     def test_open_port_or_denied_credentials_never_establish_access(self):
         code, log, invoke = self.run_access([DENIED, dict(DENIED, auth='unconfirmed',
             warning='windows_identity_unverified')])
@@ -152,6 +160,7 @@ class WinRMAccess(unittest.TestCase):
         caps = catalogue(PLATFORM / 'scripts', read_metadata)
         self.assertIn('winrm-http', caps['03']['fields']['protocol']['options'])
         self.assertEqual(caps['09']['dependencies'], ['03'])
+        self.assertIn('PHASE_COMPLETE', log)
 
     @unittest.skipUnless(sys.platform == 'win32', 'Windows PowerShell syntax check')
     def test_access_script_parses_without_execution(self):
