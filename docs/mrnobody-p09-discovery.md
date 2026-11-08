@@ -1,31 +1,39 @@
-# P09 independent Full Campaign DC discovery
+# Full Campaign: producer → validator → consumer
 
-Full Campaign P09 reads candidates directly from P01's `discovered-hosts.json`, within the current incident's `networks.json` scope. P03 authentication, WinRM service flags, RDP classification and `compromised-hosts.json` do not gate P09. A prior P03 `candidate_probe_timeout` cannot exclude a P01 host.
+P01 owns where and which TCP ports; P03 owns authenticated access; P09 owns AD role validation and the controlled AD action. These are three stages of one pipeline. P09 has no independent host or port discovery path.
 
-Candidates must be private IPv4 addresses in the incident-matched P01 networks. Network exclusions, network/broadcast rejection, deduplication, numeric ordering, inventory size limits and the configured host maximum (hard maximum 254) apply. An optional `NORDIC_AD_DC_TARGET` must be present in current P01 scope; no manual pin or fixed DC address is required. Campaign discovery uses HTTP TCP 5985.
+## P01: produce the inventory
 
-For each candidate, a separate bounded P09 worker:
-1. Probes TCP 5985 with a two-second connection timeout.
-2. Authenticates through WinRM/NTLM with runtime Windows credentials.
-3. Executes a fixed read-only query verifying Windows OS, local computer identity, DomainRole 4/5, matching local AD domain/controller identity and `IsReadOnly=false`.
-4. Returns only allowlisted outcome and identity fields.
+Existing CyberLab private-network/interface discovery, exclusions, host limits and assigned manual subnets are retained. P01 performs a bounded TCP connect scan on the discovered in-scope hosts. The initial set includes configured SSH (22), RDP (3389), WinRM HTTP (5985) and existing web ports (80,443,3010,8080,8443). `NORDIC_DISCOVERY_TCP_PORTS` supplies additional inventory ports (at most 64 total); service port overrides remain included. No WMI or SMB consumer is implemented.
 
-An open port, HTTP 405 from GET /wsman, RDP success or misleading Windows metadata alone cannot qualify a DC. Kali and other non-Windows endpoints are rejected. The lowest numeric successfully verified writable DC is selected; probing stops at that first eligible candidate, and one AD action worker is dispatched. There is a 120-second discovery budget and a maximum 12 seconds per candidate worker. Budget exhaustion records the actual attempted count.
+`discovered-hosts.json` has `schema_version: 2`, `producer: P01`, `incident_id`, a new `inventory_id`, `complete`, `configured_tcp_ports` and `hosts`. Each host has `tcp_ports`, keyed by decimal port number. Each entry records `transport: tcp`, `port`, `state` (open/closed/filtered/timeout), `started`, `observed` and `evidence` (tool/reason). Missing results, malformed scans and scan deadlines become timeout with a diagnostic reason, never open. Nmap explicit filtering remains filtered. The default per-host scan timeout is 20 seconds plus a 3-second process allowance. Interrupted inventory generations remain incomplete. Ground Truth records each port observation.
 
-P09 logs `P09_DISCOVERY_START`, `P09_CANDIDATE source=p01_discovered_hosts`, `P09_DC_VERIFICATION` (probe, authentication and verification outcome), and `P09_DC_SELECTED` or `P09_DISCOVERY_EXHAUSTED`. Missing/stale P01 inventory, empty scope, closed ports, credential denial, non-Windows identity, non-DC, read-only/mismatched DC and timeouts have fixed diagnostic reasons. Mixed failures retain their individual candidate reasons and end with `no_verified_writable_dc`. Credentials, raw responses, scripts and exception text are never logged.
+An open port proves neither login, Windows identity nor DC role. P03 does not write authentication results into this inventory. Future service validators can consume the same TCP facts.
 
-The existing P09 ownership checks, idempotent precheck/apply, independent postcheck and timeout recovery remain unchanged. Before writes, the action worker independently rechecks local DC identity and ownership. SUCCESS requires an enabled owned lab account and confirmed direct Domain Admins membership (domain SID plus RID 512). Existing valid state requires no unnecessary writes; uncertain writes are verified without replay.
+## P03: validate access
 
-Standalone P09 continues to use the manually entered endpoint, port and runtime credentials, with TCP preflight and DC-role verification. Campaign ordering and other phases are unchanged. P03 still records its own service evidence, but P09 does not require that evidence.
+Campaign P03 accepts only completed, same-incident P01 schema-v2 inventory within the incident network scope and exclusions. Only an open required port creates an authentication attempt. SSH, RDP and WinRM results are independent. SSH requires a successful session marker; RDP uses the existing FreeRDP auth-only client; WinRM uses runtime Windows credentials with NTLM and a fixed read-only Windows identity response. RDP/OS metadata never establishes WinRM access.
 
-Offline regression tests reproduce all ten supplied P01 hosts, including a DC with failed P03 WinRM authentication and an RDP-classified Kali false positive. They cover absent/invalid/stale P03 inventories, stale P01, exclusions, no WinRM, non-DC/read-only DC, deterministic multiple DC selection, limits/deadlines, read-only probes, secret-safe evidence and reports. Existing standalone, ownership/idempotence and timeout recovery tests remain in CI. No VM deployment is included.
+P03 replaces `compromised-hosts.json` with an incomplete empty state before validation, so failed reruns cannot preserve old successes. Completed output has `producer: P03`, `run_mode: campaign`, `source_inventory_id`, `complete`, `results` (including failures and attempts), and `hosts` containing only verified successes with independent `access_methods`. Passwords, raw remote output and exception text are omitted. Each result has a timestamp; Ground Truth includes failures and every WinRM attempt.
 
-## Update and verify in the lab
+The former 12-second WinRM worker limit covered NTLM authentication, shell creation, PowerShell startup, output retrieval and cleanup together. A responsive TCP 5985 or HTTP 405 does not complete those steps. P03 now uses a 20-second SOAP operation timeout, 30-second HTTP read timeout and a 90-second outer worker limit, with one retry only for timeout/transient transport failure. These are configurable with `NORDIC_WINRM_OPERATION_TIMEOUT`, `NORDIC_WINRM_READ_TIMEOUT`, `NORDIC_WINRM_WORKER_TIMEOUT`, and `NORDIC_WINRM_RETRIES` (0–2). Timeouts record the last stage: `ntlm_shell`, `powershell_start`, `identity_read`, or `cleanup`; missing worker progress is `worker`. No-profile, non-interactive PowerShell and a lightweight environment identity check avoid CIM startup in the access stage. Credential denial is not retried. Timeout is always unconfirmed access, including after a failed retry. An authenticated later attempt is required for success.
 
-After this change is merged to main, finish or stop the active campaign, then run:
+The timeout mismatch is a code-level diagnosis; actual Server 2025 credentials, WinRM policy and logs must be checked during a new lab run if authentication still times out. No running VM was contacted for this change.
 
-```bash
-sudo mrnobody update
-```
+## P09: consume authenticated access
 
-Start a new Full Campaign with the normal runtime Windows credentials and without a mandatory DC IP. Check the new incident log for `P09_CANDIDATE source=p01_discovered_hosts`, per-host verification reasons, the selected writable DC, and P09's final account/group postverification. Standalone remains available with an explicit target. P11 is outside this fix.
+Campaign P09 reads only completed same-incident P03 campaign state. It does not read P01 hosts/networks, scan ports, use RDP as a substitute, or accept a DC/Windows classification as proof. An optional `NORDIC_AD_DC_TARGET` only narrows P03-success candidates; it cannot introduce a target.
+
+P09 checks each numerically ordered authenticated WinRM candidate with a read-only local writable-DC identity query. It continues after a non-DC or rejected candidate. Local DomainRole, AD domain/controller identity and `IsReadOnly=false` must agree before the first eligible DC is selected. Role checks have a 90-second per-worker limit within a 120-second selection budget. Rejection reasons remain visible per host.
+
+No authenticated WinRM targets produces `no_authenticated_winrm_targets`, visible P03 evidence, and a skipped phase. Candidates without a verified writable DC produce `no_writable_dc_verified` and per-candidate reasons. There is no fallback to P01.
+
+On a verified DC, the existing controlled `mrnobody` ownership checks, idempotent account enable/create, domain SID + RID 512 membership action, independent final read and uncertain-write recovery remain unchanged. AD success requires independently proven final account and group state. Account rights are separate from successful WinRM authentication.
+
+Standalone P09 remains independent: the manually supplied IP, WinRM credentials and port are used, followed by its own DC validation. No campaign inventory is required. No lab IP is hardcoded in runtime code.
+
+## Update and verify
+
+After this change reaches main, finish or stop the active campaign and run `sudo mrnobody update`. The manifest installs the new inventory/access module and changed dispatchers. Start a **new** Full Campaign so P01 produces schema-v2 inventory; legacy inventory is deliberately rejected. Supply the normal runtime SSH/Windows credentials. Confirm P01 `PORT_OBSERVATION`, P03 `ACCESS_SUCCESS`/`ACCESS_FAILED` and `WINRM_AUTH_ATTEMPT`, P09 `source=p03_authenticated_winrm`, DC rejection/selection, and the independent final AD account/group evidence.
+
+Offline tests cover the ten-host inventory, all TCP states, scope/incident isolation, forbidden phase crossings, separate protocol evidence, timeout retries/stages, reruns, role rejection, Ground Truth/report exports, actual process dispatch, standalone and existing AD reconciliation/recovery. P11 is untouched; P12–P18 and WMI are not added.

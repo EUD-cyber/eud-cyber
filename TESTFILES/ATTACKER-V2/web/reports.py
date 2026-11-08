@@ -378,18 +378,29 @@ def add_analysis(report):
                 if report.get('summary') is not None:
                     involved = {s['source'] for s in discovery['sources']} | {p['target'] for p in discovery['targets']}
                     report['summary']['involved_hosts'] = len(involved | {h.get('ip') for h in (report.get('inventory') or {}).get('hosts', []) if h.get('ip')})
+        if phase['id'] == '03':
+            checks = [e for e in events if e['event'] in {'ACCESS_SUCCESS', 'ACCESS_FAILED'}]
+            successes = sum(e['event'] == 'ACCESS_SUCCESS' for e in checks)
+            skipped = sum(e['event'].endswith('AUTH_SKIPPED') for e in events)
+            phase['action_result'] = 'authenticated_access_verified' if successes else 'no_authenticated_access' if events else 'not_attempted'
+            phase['action_outcome'] = (f'Access validation recorded: {successes} verified protocol successes, {len(checks) - successes} unsuccessful checks, {skipped} skipped checks. Port reachability alone is not authenticated access.'
+                                       if events else 'Access validation not attempted; no authenticated protocol evidence recorded.')
+            # Preserve historical auth-skip and service evidence as well as v2 attempts.
+            phase['action_evidence'] = [str(e.get('message') or e.get('evidence') or e['event']) for e in events if e['event'] not in {'PHASE_START', 'PHASE_COMPLETE', 'PHASE_FAILED'}]
+            phase['analysis']['what_happened'] = phase['action_outcome']
+            phase['analysis']['findings'] = phase['action_evidence'] or ['No authenticated protocol success recorded; inspect P01 inventory and P03 configuration.']
         if phase['id'] == '09' and phase.get('status') == 'skipped':
             # Operational prerequisite information belongs in both report views.
             phase['prerequisite_outcome'] = next((e['fields'].get('reason') for e in reversed(events)
                 if e['event'] == 'PHASE_SKIPPED' and e['fields'].get('reason')),
                 'Active Directory prerequisite unavailable; privileged AD action not attempted')
-            details = [e['message'] for e in events if e['event'] == 'WINDOWS_ACTION_SKIPPED' or e['event'].startswith('P09_')]
+            details = [e['message'] for e in events if e['event'] == 'WINDOWS_ACTION_SKIPPED' or e['event'].startswith(('P09_', 'P03_'))]
             phase['prerequisite_evidence'] = details
             phase['analysis']['what_happened'] = phase['prerequisite_outcome']
             phase['analysis']['findings'] = details or [phase['prerequisite_outcome']]
         if phase['id'] == '09' and phase.get('status') in {'success', 'failure', 'partial'}:
             details = [e['timestamp'] + ' · ' + e['message'] for e in events
-                       if e['event'].startswith(('WINDOWS_ACTION_', 'P09_')) and e['event'] != 'WINDOWS_ACTION_START']
+                       if e['event'].startswith(('WINDOWS_ACTION_', 'P09_', 'P03_')) and e['event'] != 'WINDOWS_ACTION_START']
             phase['action_result'] = phase['status']
             phase['action_outcome'] = ('Active Directory account and Domain Admins action completed'
                                        if phase['status'] == 'success' else 'Active Directory action partial; postconditions not confirmed' if phase['status'] == 'partial' else 'Active Directory action failed')

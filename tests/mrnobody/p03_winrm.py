@@ -1,220 +1,189 @@
-"""Offline P03 WinRM service discovery, inventory merge and P09 handoff."""
-import contextlib
-import io
-import json
+"""P03 access validation boundaries and staged WinRM timeouts; no lab I/O."""
+import base64
 import os
-from pathlib import Path
-import shutil
-import subprocess
-import sys
-import tempfile
-import unittest
-from unittest.mock import Mock, MagicMock, patch
-
-ROOT = Path(__file__).resolve().parents[2]
-PLATFORM = ROOT / 'TESTFILES/ATTACKER-V2'
-sys.path.insert(0, str(PLATFORM / 'web'))
-import windows_actions as actions
-from scenario_model import catalogue, validate
-from reports import read_metadata
-
-AUTH = dict(reachable=True, authenticated=True, auth='authenticated', warning='none',
-            hostname='DC01', domain='lab.example')
-CLOSED = dict(reachable=False, authenticated=False, auth='not_attempted', warning='winrm_port_unreachable')
-DENIED = dict(reachable=True, authenticated=False, auth='denied', warning='credentials_denied')
-
-
-class WinRMAccess(unittest.TestCase):
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp.cleanup)
-        self.base = Path(self.temp.name)
-        (self.base / 'state').mkdir()
-        self.env = dict(NORDIC_BASE_DIR=str(self.base), NORDIC_INCIDENT_ID='MRN-p03-winrm',
-            MRNOBODY_RUN_MODE='campaign', NORDIC_RDP_USERNAME='Administrator',
-            NORDIC_RDP_PASSWORD='WIN_SECRET', MRNOBODY_PASSWORD='SSH_SECRET')
-        self.write('networks.json', networks=[dict(network='192.168.1.0/24'), dict(network='192.168.2.0/24')])
-        self.write('discovered-hosts.json', hosts=[dict(ip='192.168.1.120', services={}),
-            dict(ip='192.168.2.200', services={})])
-        self.write('compromised-hosts.json', hosts=[dict(ip='192.168.1.120', platform='windows',
-            access='rdp', primary_access='rdp', compromised=True, access_methods={
-                'rdp': dict(authenticated=True, port=3389, user='Administrator')})])
-
-    def write(self, filename, **fields):
-        (self.base / 'state' / filename).write_text(json.dumps(dict(
-            incident_id=self.env['NORDIC_INCIDENT_ID'], **fields)), encoding='utf-8')
-
-    def read(self, filename):
-        return json.loads((self.base / 'state' / filename).read_text())
-
-    def run_access(self, rows, env=None):
-        invoke = Mock(side_effect=[r if isinstance(r, Exception) else
-            Mock(returncode=0, stdout=json.dumps(r)) for r in rows])
-        with contextlib.redirect_stdout(io.StringIO()):
-            code = actions.run_winrm_access(env or self.env, invoke)
-        log = (self.base / 'logs/incident-ground-truth.log').read_text()
-        self.assertNotIn('WIN_SECRET', log)
-        self.assertNotIn('SSH_SECRET', log)
-        return code, log, invoke
-
-    def test_winrm_only_dc_and_rdp_kali_handoff(self):
-        code, log, invoke = self.run_access([CLOSED, AUTH])
-        self.assertEqual(code, 0)
-        state = self.read('compromised-hosts.json')
-        kali, dc = state['hosts']
-        self.assertEqual(kali['access_methods']['rdp']['port'], 3389)
-        self.assertNotIn('winrm', kali['access_methods'])
-        self.assertEqual(dc['access'], 'winrm')
-        self.assertEqual(dc['access_methods']['winrm']['protocol'], 'winrm-http')
-        self.assertEqual(dc['access_methods']['winrm']['verification'], 'read_only_windows_identity')
-        self.assertEqual([t['target'] for t in actions.targets(self.env, '09')], ['192.168.1.120', '192.168.2.200'])
-        self.assertIn('ACCESS_SUCCESS target=192.168.2.200', log)
-        for call in invoke.call_args_list:
-            self.assertEqual(call.kwargs['env']['MRNOBODY_PASSWORD'], 'WIN_SECRET')
-            self.assertNotIn('WIN_SECRET', str(call.args))
-        inventory = self.read('discovered-hosts.json')
-        self.assertFalse(inventory['hosts'][0]['services']['winrm']['reachable'])
-        self.assertTrue(inventory['hosts'][1]['services']['winrm']['authenticated'])
-        self.assertNotIn('WIN_SECRET', json.dumps(inventory) + json.dumps(state))
-
-    def test_known_runtime_secrets_are_scrubbed_from_remote_identity_before_persistence(self):
-        code, log, invoke = self.run_access([CLOSED, dict(AUTH, hostname='WIN_SECRET', domain='WIN_SECRET')])
-        self.assertEqual(code, 0)
-        state = self.read('compromised-hosts.json')
-        inventory = self.read('discovered-hosts.json')
-        self.assertNotIn('WIN_SECRET', json.dumps(state) + json.dumps(inventory))
-        self.assertEqual(state['hosts'][1]['hostname'], 'redacted')
-
-    def test_open_port_or_denied_credentials_never_establish_access(self):
-        code, log, invoke = self.run_access([DENIED, dict(DENIED, auth='unconfirmed',
-            warning='windows_identity_unverified')])
-        self.assertEqual(code, 0)  # P03 records failed methods and continues.
-        self.assertEqual([t['target'] for t in actions.targets(self.env, '09')], ['192.168.1.120', '192.168.2.200'])
-        self.assertNotIn('ACCESS_SUCCESS', log)
-        self.assertTrue(all(h['services']['winrm']['reachable'] for h in self.read('discovered-hosts.json')['hosts']))
-
-    def test_success_merges_without_dropping_ssh_or_rdp_and_rerun_clears_stale_winrm(self):
-        self.run_access([AUTH, AUTH])
-        first = self.read('compromised-hosts.json')['hosts'][0]
-        self.assertEqual(set(first['access_methods']), {'rdp', 'winrm'})
-        self.assertEqual(first['primary_access'], 'rdp')
-        self.run_access([DENIED, DENIED])
-        hosts = self.read('compromised-hosts.json')['hosts']
-        self.assertEqual(len(hosts), 1)  # WinRM-only stale success is removed.
-        self.assertEqual(set(hosts[0]['access_methods']), {'rdp'})
-        self.assertEqual([t['target'] for t in actions.targets(self.env, '09')], ['192.168.1.120', '192.168.2.200'])
-        self.assertFalse(self.read('discovered-hosts.json')['hosts'][1]['compromised'])
-
-    def test_scope_stale_inventory_and_optional_dc_pin_do_not_expand_probe_scope(self):
-        env = dict(self.env, NORDIC_AD_DC_TARGET='192.168.2.200',
-                   NORDIC_DISCOVERY_EXCLUDE_NETWORKS='192.168.1.0/24')
-        code, log, invoke = self.run_access([AUTH], env)
-        self.assertEqual(code, 0)
-        self.assertEqual(invoke.call_count, 1)
-        self.assertEqual(json.loads(invoke.call_args.kwargs['env']['MRN_WINDOWS_TARGET'])['target'], '192.168.2.200')
-        (self.base / 'state/networks.json').write_text('{"incident_id":"MRN-old","networks":[]}')
-        self.assertEqual(self.run_access([])[0], 1)
-
-    def test_bound_timeouts_and_invalid_worker_evidence_are_not_success(self):
-        code, log, invoke = self.run_access([subprocess.TimeoutExpired('worker', 12),
-                                           dict(AUTH, hostname='WIN_SECRET\nFORGED=1')])
-        self.assertEqual(code, 0)
-        self.assertIn('candidate_probe_timeout', log)
-        self.assertIn('candidate_probe_worker_failed', log)
-        self.assertNotIn('FORGED', log)
-        self.assertEqual([t['target'] for t in actions.targets(self.env, '09')], ['192.168.1.120', '192.168.2.200'])
-        with patch.object(actions.time, 'monotonic', side_effect=[0, 121, 122]):
-            code, log, invoke = self.run_access([])
-        invoke.assert_not_called()
-        self.assertIn('discovery_budget_exhausted', log)
-
-    def test_read_only_windows_identity_not_merely_tcp_or_rdp(self):
-        target = actions.discovered_winrm_targets(self.env)[1]
-        factory, connect = Mock(), MagicMock()
-        factory.return_value.run_ps.return_value = Mock(status_code=0, std_out=json.dumps(
-            dict(result='authenticated', warning='none', hostname='DC01', domain='lab.example')).encode())
-        result = actions.probe_winrm_access(target, self.env, factory, connect)
-        self.assertTrue(result['authenticated'])
-        self.assertEqual(factory.call_args.kwargs['auth'], ('Administrator', 'WIN_SECRET'))
-        # The campaign parent normalizes runtime credentials before worker dispatch.
-        connect.assert_called_once_with(('192.168.2.200', 5985), timeout=2)
-        command = factory.return_value.run_ps.call_args.args[0]
-        self.assertIn('Get-CimInstance', command)
-        self.assertFalse(any(v in command for v in ('New-AD', 'Set-AD', 'Add-AD', 'Enable-AD')))
-        denied = type('InvalidCredentialsError', (Exception,), {})
-        factory.return_value.run_ps.side_effect = denied('WIN_SECRET')
-        self.assertEqual(actions.probe_winrm_access(target, self.env, factory, connect)['warning'], 'credentials_denied')
-        factory.reset_mock()
-        self.assertFalse(actions.probe_winrm_access(target, self.env, factory,
-            Mock(side_effect=OSError('WIN_SECRET')))['reachable'])
-        factory.assert_not_called()
-
-    def test_standalone_winrm_endpoint_and_protocol_metadata(self):
-        env = dict(self.env, MRNOBODY_RUN_MODE='standalone', MRNOBODY_TARGET='10.20.30.40',
-                   MRNOBODY_PROTOCOL='winrm-http', MRNOBODY_PORT='15985',
-                   MRNOBODY_USERNAME='operator', MRNOBODY_PASSWORD='MANUAL_SECRET')
-        code, log, invoke = self.run_access([AUTH], env)
-        self.assertEqual(code, 0)
-        target = json.loads(invoke.call_args.kwargs['env']['MRN_WINDOWS_TARGET'])
-        self.assertEqual((target['target'], target['port'], target['username']), ('10.20.30.40', 15985, 'operator'))
-        caps = catalogue(PLATFORM / 'scripts', read_metadata)
-        self.assertIn('winrm-http', caps['03']['fields']['protocol']['options'])
-        self.assertEqual(caps['09']['dependencies'], ['03'])
-        self.assertIn('PHASE_COMPLETE', log)
-
-    @unittest.skipUnless(sys.platform == 'win32', 'Windows PowerShell syntax check')
-    def test_access_script_parses_without_execution(self):
-        child = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
-            "$ErrorActionPreference='Stop'; [void][ScriptBlock]::Create([Console]::In.ReadToEnd())"],
-            input=actions.WINRM_ACCESS_CHECK, text=True, capture_output=True, timeout=20)
-        self.assertEqual(child.returncode, 0, child.stderr)
-
-    @unittest.skipIf(os.name == 'nt', 'Linux shell integration')
-    def test_real_p03_campaign_shell_and_manual_winrm_with_inert_clients(self):
-        for directory in ('scripts', 'web', 'config', 'venv/bin', 'fake', 'bin'):
-            (self.base / directory).mkdir(parents=True, exist_ok=True)
-        for source in (PLATFORM / 'web').glob('*.py'):
-            shutil.copy(source, self.base / 'web' / source.name)
-        script = self.base / 'scripts/03-access.sh'
-        shutil.copy(PLATFORM / 'scripts/03-access.sh', script)
-        config = (PLATFORM / 'config/defaults.conf').read_text().replace(
-            'NORDIC_BASE_DIR="/opt/nordic-attack"', 'NORDIC_BASE_DIR="' + str(self.base) + '"')
-        (self.base / 'config/defaults.conf').write_text(config)
-        (self.base / 'venv/bin/python').symlink_to(sys.executable)
-        # The shell sees SSH/RDP closed. The Python worker has inert TCP/WinRM.
-        for name in ('ssh', 'sshpass', 'timeout'):
-            tool = self.base / 'bin' / name
-            tool.write_text('#!/bin/sh\nexit 1\n')
-            tool.chmod(0o755)
-        (self.base / 'fake/sitecustomize.py').write_text(
-            'import socket\nfrom contextlib import nullcontext\nsocket.create_connection=lambda *a,**k:nullcontext()\n')
-        (self.base / 'fake/winrm.py').write_text("""
 import json
-class Session:
-    def __init__(self, endpoint, **kwargs): self.endpoint=endpoint
-    def run_ps(self, command):
-        class Response:
-            status_code=0
-            std_err=b''
-            std_out=json.dumps(dict(result='authenticated', warning='none', hostname='DC01', domain='lab.example')).encode() if '192.168.2.200:' in self.endpoint else json.dumps(dict(result='rejected', warning='windows_identity_unverified')).encode()
-        return Response()
-""")
-        env = dict(os.environ, **self.env, NORDIC_SSH_PASSWORD='SSH_SECRET',
-                   PATH=str(self.base / 'bin') + os.pathsep + os.environ['PATH'],
-                   PYTHONPATH=str(self.base / 'fake'))
-        # P03's existing SSH/RDP merger starts with zero authenticated hosts.
-        child = subprocess.run(['bash', str(script)], env=env, text=True, capture_output=True, timeout=30)
-        self.assertEqual(child.returncode, 0, child.stdout + child.stderr)
+from pathlib import Path
+import subprocess
+import unittest
+from unittest.mock import Mock, patch
+from pipeline_fixtures import *
+
+
+class Access(Fixture):
+    def test_exact_open_port_handoff_and_independent_protocol_results(self):
+        before = (self.base/'state/discovered-hosts.json').read_bytes()
+        with patch.object(pipeline.shutil, 'which', return_value='xfreerdp'):
+            code, log, invoke = self.access([
+                Mock(returncode=0, stdout=b'NORDIC_ACCESS_OK\nLinux\nkali\n', stderr=b''),
+                Mock(returncode=1, stdout=b'', stderr=b'STATUS_LOGON_FAILURE'), AUTH])
+        # Supply real subprocess-like replies for SSH/RDP, JSON only for WinRM.
+        self.assertEqual(code, 0)
         state = self.read('compromised-hosts.json')
-        self.assertEqual([h['ip'] for h in state['hosts']], ['192.168.2.200'])
-        self.assertEqual([t['target'] for t in actions.targets(self.env, '09')], ['192.168.1.120', '192.168.2.200'])
-        env.update(MRNOBODY_RUN_MODE='standalone', MRNOBODY_TARGET='192.168.2.200',
-                   MRNOBODY_PROTOCOL='winrm-http', MRNOBODY_USERNAME='manual',
-                   MRNOBODY_PASSWORD='MANUAL_SECRET')
-        child = subprocess.run(['bash', str(script)], env=env, text=True, capture_output=True, timeout=30)
-        self.assertEqual(child.returncode, 0, child.stdout + child.stderr)
-        self.assertNotIn('MANUAL_SECRET', child.stdout + child.stderr)
+        self.assertEqual([h['ip'] for h in state['hosts']], ['192.168.1.120','192.168.2.200'])
+        self.assertEqual(set(state['hosts'][0]['access_methods']), {'ssh'})
+        self.assertEqual(set(state['hosts'][1]['access_methods']), {'winrm'})
+        self.assertEqual(state['results'][1]['warning'], 'credentials_denied')
+        self.assertEqual(before, (self.base/'state/discovered-hosts.json').read_bytes())
+        self.assertEqual([t['target'] for t in actions.targets(self.env,'09')], ['192.168.2.200'])
+        self.assertIn('ACCESS_FAILED', log)
+        self.assertEqual(invoke.call_count, 3)
+
+    def test_closed_filtered_timeout_never_authenticate(self):
+        for status in ('closed','filtered','timeout'):
+            self.p01([('192.168.2.200',{22:status,3389:status,5985:status})])
+            code, log, invoke = self.access([])
+            invoke.assert_not_called()
+            self.assertEqual(self.read('compromised-hosts.json')['hosts'], [])
+            self.assertNotIn('ACCESS_SUCCESS', log)
+
+    def test_missing_stale_incomplete_or_legacy_inventory_fails_closed(self):
+        for changes in ({'incident_id':'MRN-old'}, {'complete':False}, {'schema_version':1}):
+            data = self.read('discovered-hosts.json'); data.update(changes)
+            pipeline.write(self.base/'state/discovered-hosts.json', data)
+            code, _, invoke = self.access([])
+            self.assertEqual(code, 1); invoke.assert_not_called()
+            self.assertFalse(self.read('compromised-hosts.json')['complete'])
+            self.setUp_inventory()
+
+    def setUp_inventory(self):
+        self.p01([('192.168.2.200',{5985:'open'})])
+
+    def test_timeout_retry_is_bounded_and_never_promoted_to_success(self):
+        self.setUp_inventory()
+        code, log, invoke = self.access([subprocess.TimeoutExpired('worker',90), subprocess.TimeoutExpired('worker',90)])
+        self.assertEqual(code, 0)
+        self.assertEqual(invoke.call_count, 2)
+        self.assertTrue(all(c.kwargs['timeout']==90 for c in invoke.call_args_list))
+        state = self.read('compromised-hosts.json')
+        self.assertFalse(state['results'][0]['authenticated'])
+        self.assertEqual(len(state['results'][0]['attempts']), 2)
+        self.assertEqual(state['hosts'], [])
+        self.assertNotIn('ACCESS_SUCCESS',log)
+
+    def test_timeout_then_verified_success_preserves_both_attempts(self):
+        self.setUp_inventory()
+        _, log, invoke = self.access([subprocess.TimeoutExpired('worker',90), AUTH])
+        attempts = self.read('compromised-hosts.json')['results'][0]['attempts']
+        self.assertEqual([a['authenticated'] for a in attempts], [False,True])
+        self.assertIn('candidate_probe_timeout',log)
+        self.assertIn('ACCESS_SUCCESS',log)
+
+    def test_denied_credentials_are_not_retried_and_rerun_removes_old_success(self):
+        self.setUp_inventory()
+        self.access([AUTH])
+        _, _, invoke = self.access([DENIED])
+        self.assertEqual(invoke.call_count,1)
+        self.assertEqual(actions.targets(self.env,'09'),[])
+
+    def test_malformed_worker_and_fake_success_are_rejected(self):
+        self.setUp_inventory()
+        for response in ({}, dict(AUTH, authenticated=False), dict(AUTH, hostname='NEVER_PERSIST\nFORGED=1'),
+                         dict(AUTH, warning='candidate_probe_timeout')):
+            _, _, _ = self.access([response])
+            self.assertEqual(self.read('compromised-hosts.json')['hosts'],[])
+
+    def test_protocols_merge_without_inference(self):
+        self.p01([('192.168.2.200',{22:'open',3389:'open',5985:'open'})])
+        with patch.object(pipeline.shutil,'which',return_value='xfreerdp'):
+            self.access([Mock(returncode=0,stdout=b'NORDIC_ACCESS_OK\nLinux\n',stderr=b''),
+                         Mock(returncode=0,stdout=b'',stderr=b''),AUTH])
+        self.assertEqual(set(self.read('compromised-hosts.json')['hosts'][0]['access_methods']),{'ssh','rdp','winrm'})
+
+    def test_worker_records_timeout_stage_without_raw_details(self):
+        self.setUp_inventory()
+        def timeout(*args,**kwargs):
+            Path(kwargs['env']['MRN_WINRM_PROGRESS']).write_text('identity_read')
+            raise subprocess.TimeoutExpired('secret',90)
+        with patch.object(pipeline,'winrm_auth', wraps=pipeline.winrm_auth):
+            result = pipeline.winrm_auth(pipeline.open_targets(self.env,'winrm')[0],self.env,timeout)
+        self.assertEqual(result['stage'],'identity_read')
+        self.assertFalse(result['authenticated'])
+        self.assertNotIn('secret',json.dumps(result))
+
+    def test_ntlm_stages_no_tcp_probe_and_no_profile_startup(self):
+        target = pipeline.open_targets(self.env,'winrm')[0]
+        factory, connect = Mock(), Mock()
+        protocol = factory.return_value.protocol
+        protocol.get_command_output.return_value=(json.dumps(dict(result='authenticated',warning='none',hostname='DC01',domain='lab.example')).encode(),b'',0)
+        result=actions.probe_winrm_access(target,self.env,factory,connect)
+        self.assertTrue(result['authenticated']); connect.assert_not_called()
+        protocol.open_shell.assert_called_once_with(noprofile=True)
+        args=protocol.run_command.call_args.args[2]
+        self.assertIn('-NoProfile',args); self.assertIn('-NonInteractive',args)
+        command=base64.b64decode(args[-1]).decode('utf-16-le')
+        self.assertNotIn('Get-CimInstance',command)
+        self.assertFalse(any(v in command for v in ('New-AD','Add-AD','Set-AD')))
+        self.assertEqual(factory.call_args.kwargs['transport'],'ntlm')
+        self.assertEqual(factory.call_args.kwargs['operation_timeout_sec'],20)
+        self.assertEqual(factory.call_args.kwargs['read_timeout_sec'],30)
+
+    def test_transport_timeout_and_denial_classification(self):
+        target=pipeline.open_targets(self.env,'winrm')[0]
+        for error,warning in ((TimeoutError('SECRET'),'winrm_operation_timeout'),
+                              (type('InvalidCredentialsError',(Exception,),{})('SECRET'),'credentials_denied')):
+            factory=Mock(); factory.return_value.protocol.open_shell.side_effect=error
+            result=actions.probe_winrm_access(target,self.env,factory)
+            self.assertEqual(result['warning'],warning)
+            self.assertEqual(result['stage'],'ntlm_shell'); self.assertFalse(result['authenticated'])
+
+    def test_real_p03_dispatch_and_worker_use_only_inventory_endpoint(self):
+        self.setUp_inventory()
+        fake=self.base/'fake'; fake.mkdir()
+        (fake/'winrm.py').write_text('''
+import json, socket
+def forbidden(*args,**kwargs): raise AssertionError('No TCP scan allowed in P03')
+socket.create_connection=forbidden
+class Protocol:
+    def open_shell(self,**kwargs):
+        assert kwargs=={'noprofile':True}
+        return 'shell'
+    def run_command(self,*args): return 'command'
+    def get_command_output(self,*args):
+        return json.dumps(dict(result='authenticated',warning='none',hostname='DC01',domain='lab.example')).encode(),b'',0
+    def cleanup_command(self,*args): pass
+    def close_shell(self,*args): pass
+class Session:
+    def __init__(self,endpoint,**kwargs):
+        assert endpoint=='http://192.168.2.200:5985/wsman'
+        assert kwargs['transport']=='ntlm'
+        assert kwargs['auth']==('LAB\\\\operator','NEVER_PERSIST_WIN')
+        self.protocol=Protocol()
+''')
+        runtime=dict(os.environ,**self.env,PYTHONPATH=str(fake))
+        completed=subprocess.run([sys.executable,str(PLATFORM/'web/access_pipeline.py'),'03'],env=runtime,
+                                 capture_output=True,text=True,timeout=15)
+        self.assertEqual(completed.returncode,0,completed.stdout+completed.stderr)
+        self.assertEqual([t['target'] for t in actions.targets(self.env,'09')],['192.168.2.200'])
+        self.assertNotIn('NEVER_PERSIST',completed.stdout)
+
+    def test_ssh_rdp_timeout_protocol_error_and_missing_clients_are_not_success(self):
+        for protocol in ('ssh','rdp'):
+            target=dict(target='192.168.2.200',port=22 if protocol=='ssh' else 3389,protocol=protocol,username='student')
+            with patch.object(pipeline.shutil,'which',return_value='xfreerdp'):
+                for reply,warning in ((subprocess.TimeoutExpired('client',5),'authentication_timeout'),
+                                      (OSError('SECRET'),'client_unavailable')):
+                    result=pipeline.local_auth(target,self.env,Mock(side_effect=reply))
+                    self.assertEqual(result['warning'],warning); self.assertFalse(result['authenticated'])
+
+    def test_secret_like_remote_identity_is_redacted_in_persisted_state(self):
+        self.setUp_inventory()
+        self.access([dict(AUTH,hostname='NEVER_PERSIST_WIN')])
+        self.assertNotIn('NEVER_PERSIST_WIN',(self.base/'state/compromised-hosts.json').read_text())
+
+    def test_reachable_http_405_is_not_winrm_authentication(self):
+        target=pipeline.open_targets(self.env,'winrm')[0]
+        factory=Mock()
+        factory.return_value.protocol.get_command_output.return_value=(b'HTTP 405',b'',405)
+        result=actions.probe_winrm_access(target,self.env,factory)
+        self.assertFalse(result['authenticated'])
+        self.assertEqual(result['warning'],'invalid_winrm_response')
+
+    def test_rdp_success_never_establishes_winrm(self):
+        self.p01([('192.168.1.120',{3389:'open',5985:'open'})])
+        with patch.object(pipeline.shutil,'which',return_value='xfreerdp'):
+            self.access([Mock(returncode=0,stdout=b'',stderr=b''),DENIED])
+        self.assertEqual(actions.targets(self.env,'09'),[])
+        self.assertEqual(set(self.read('compromised-hosts.json')['hosts'][0]['access_methods']),{'rdp'})
 
 
-if __name__ == '__main__':
-    unittest.main()
+if __name__=='__main__': unittest.main()
