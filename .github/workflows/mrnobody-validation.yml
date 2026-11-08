@@ -77,14 +77,13 @@ jobs:
           python tests/mrnobody/backend.py
           python tests/mrnobody/ui.py
           python tests/mrnobody/install.py
+          python tests/mrnobody/phase_retirement.py
+          python tests/mrnobody/full_incident.py
           python tests/mrnobody/release_validation.py
           python tests/mrnobody/scenario_presets.py
           python tests/mrnobody/scenario_portability.py
           python tests/mrnobody/planning.py --bash
           python tests/mrnobody/remote_actions.py
-          python tests/mrnobody/dns_activity.py
-          python tests/mrnobody/lab_phases.py
-          python tests/mrnobody/application_collection.py
           python tests/mrnobody/native_dual.py
           node tests/mrnobody/dual_review.cjs
           python tests/mrnobody/windows_actions.py
@@ -135,5 +134,3 @@ jobs:
         run: python -m pip install 'reportlab>=4,<5' 'flask>=3,<4' 'requests>=2,<3'
       - name: Verify P06 synthetic Windows script parsing and transport contracts offline
         run: python tests/mrnobody/p06_default.py -v
-      - name: Verify P18 Windows script parsing and offline DNS contracts
-        run: python tests/mrnobody/dns_activity.py

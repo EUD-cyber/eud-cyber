@@ -775,6 +775,9 @@ function renderScenarios(scenarios) {
         const profile = scenario.profile;
         meta.textContent = `${scenario.custom ? "Custom" : "Built-in"} · ${scenario.target_mode === "fixed" ? "Fixed Targets" : "Auto Discovery"}${profile?.mode ? " · " + profile.mode : ""}${profile?.duration ? " · target " + profile.duration + " s" : ""}`;
         info.appendChild(meta);
+        if (scenario.custom && scenario.readiness) {
+            const notice = document.createElement("p"); notice.className = "planning-error"; notice.textContent = scenario.readiness; info.appendChild(notice);
+        }
         if (scenario.preset) {
             if (scenario.estimated_seconds) {const estimate = document.createElement("span"); estimate.textContent = `Estimated activity: about ${scenario.estimated_seconds} s plus discovery/access (best effort)`; info.appendChild(estimate);}
             const readiness = document.createElement("span");
@@ -919,6 +922,8 @@ function renderScenarioDetail(
     runButton.type = "button";
     runButton.className = "button button-start";
     runButton.textContent = "RUN";
+    runButton.disabled = originalScenario.runnable === false;
+    if (originalScenario.readiness) {const notice = document.createElement("p"); notice.textContent = originalScenario.readiness; scenarioDetail.appendChild(notice);}
     runButton.addEventListener("click", () => {
         configureScenario(originalScenario);
     });
@@ -928,6 +933,7 @@ function renderScenarioDetail(
 
 
 function configureScenario(scenario) {
+    if (scenario?.runnable === false) {showMessage(scenario.readiness || "Scenario unavailable.", "error"); return;}
     if (scenario?.custom && window.MrnPlanning && !scenario.phases?.includes("08")) {
         window.MrnPlanning.runCustom(scenario.id).catch(error => showMessage(error.message, "error"));
         return;
@@ -1193,17 +1199,10 @@ function phaseFieldLabel(parameter) {
         persistence_resolver: "P11 internal non-forwarding lab DNS resolver",
         persistence_interval: "P11 DNS interval (10–3600 seconds)",
         persistence_duration: "P11 activity lifetime (60–14400 seconds; manual artifact cleanup)",
-        dns_behavior: "DNS behavior", dns_endpoint: "Private lab DNS endpoint (UDP 53)", dns_domain: "Reserved lab domain (.test/.internal/.localhost)", dns_pattern: "Query label pattern (mrn-{seq})", dns_interval: "DNS interval (seconds)", dns_jitter: "DNS jitter (fraction 0-0.5)", dns_count: "DNS query count (1-40)", dns_duration: "DNS duration ceiling (3-240 seconds)",
         file: "File",
         staging_incident: "Staging incident ID (optional; only for P05 reuse)",
         platform: "Execution platform",
         method: "Method",
-        behavior: "Native tool behavior",
-        transport: "Beacon transport",
-        beacon_interval: "Beacon interval (seconds)",
-        beacon_jitter: "Beacon jitter (fraction, 0–0.5)",
-        beacon_count: "Number of beacons (1–20)",
-        uri_profile: "Benign URI profile",
     };
 
     return labels[parameter] || parameter;
@@ -1335,18 +1334,6 @@ function renderPhaseDetail(phase) {
             input = document.createElement("select");
             const choices = {platform: ["auto", "windows", "linux"], method: ["auto", "task-service", "cron-systemd", "scheduled-task", "service", "cron", "systemd"], action: ["create", "cleanup"], protocol: ["", "ssh", "winrm-http", "winrm-https"]}[parameter];
             choices.forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value || "Choose transport"; input.appendChild(option);});
-        } else if (phase.id === "13" && ["behavior", "protocol"].includes(parameter)) {
-            input = document.createElement("select");
-            const choices = parameter === "behavior" ? ["encoded-powershell", "certutil-decode", "bits-job"] : ["winrm-http", "winrm-https"];
-            choices.forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value; input.appendChild(option);});
-        } else if (["12", "14", "18"].includes(phase.id) && ["platform", "method", "protocol", "transport", "uri_profile", "dns_behavior"].includes(parameter)) {
-            input = document.createElement("select");
-            const choices = {platform: ["auto", "windows", "linux"], method: ["read-test-file", "metadata"], protocol: ["", "ssh", "winrm-http", "winrm-https"], transport: ["http", "https"], uri_profile: ["heartbeat", "status"], dns_behavior: ["standard", "low-and-slow", "encoded-marker"]}[parameter];
-            choices.forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value || "Choose transport"; input.appendChild(option);});
-        } else if (["15", "16", "17", "18"].includes(phase.id) && ["web_profile", "protocol", "platform", "behavior", "dataset", "action"].includes(parameter)) {
-            input = document.createElement("select");
-            const choices = {web_profile: ["sqli", "traversal"], protocol: phase.id === "15" ? ["http", "https"] : ["", "ssh", "winrm-http", "winrm-https"], platform: ["auto", "windows", "linux"], behavior: ["config-toggle", "log-rename"], dataset: ["finance", "engineering"], action: ["run", "cleanup"]}[parameter];
-            choices.forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value || "Choose transport"; input.appendChild(option);});
         } else if (phase.id === "11" && parameter === "persistence_dns") {
             input = document.createElement("select");
             ["disabled", "enabled"].forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value; input.appendChild(option);});
@@ -1374,12 +1361,6 @@ function renderPhaseDetail(phase) {
         }
 
 
-        if (["beacon_interval", "beacon_jitter", "beacon_count"].includes(parameter)) {
-            input.type = "number"; input.value = {beacon_interval: 5, beacon_jitter: 0, beacon_count: 5}[parameter];
-            input.min = parameter === "beacon_jitter" ? 0 : 1;
-            input.max = {beacon_interval: 60, beacon_jitter: .5, beacon_count: 20}[parameter];
-            input.step = parameter === "beacon_count" ? 1 : "any";
-        }
         if (phase.id === "11") {
             if (parameter === "persistence_domain") input.value = "evilcorp.test";
             if (["persistence_interval", "persistence_duration"].includes(parameter)) {
@@ -1390,8 +1371,6 @@ function renderPhaseDetail(phase) {
             }
         }
         if (phase.id === "09" && parameter === "timeout") { input.type = "number"; input.min = 5; input.max = 300; input.value = 60; }
-        if (parameter === "web_path") input.value = "/mrn-lab";
-        if (parameter === "archive_name") input.value = "collection";
         input.dataset.parameter =
             parameter;
 
@@ -1427,13 +1406,13 @@ function renderPhaseDetail(phase) {
         feedback.setAttribute("aria-live", "polite"); phaseDetail.appendChild(feedback);
         showP06Feedback(p06Feedback.message, p06Feedback.type);
     }
-    if (["10", "11", "12", "14", "16", "17", "18"].includes(phase.id)) {
+    if (["10", "11"].includes(phase.id)) {
         const platform = document.getElementById(`phase-${phase.id}-platform`);
         const adapt = () => {
             const mode = platform?.value || "auto";
             for (const key of ["protocol", "method"]) {
                 const input = document.getElementById(`phase-${phase.id}-${key}`);
-                if (!input || phase.id === "12" && key === "method") continue;
+                if (!input) continue;
                 for (const option of input.options) {
                     option.hidden = !!option.value && option.value !== "auto" && mode !== "auto" && (["ssh", "cron", "systemd", "cron-systemd"].includes(option.value)) !== (mode === "linux");
                     option.disabled = option.hidden;
@@ -3283,7 +3262,7 @@ function reportType(report) {
 }
 
 const REPORT_PHASES = [
-    ["01", "Discovery"], ["02", "Web"], ["15", "Application Security"], ["03", "Initial Access"], ["08", "Credential Access"], ["09", "AD Privilege Escalation"], ["10", "Custom Remote Command"], ["11", "Persistence"], ["12", "Credential Access"], ["13", "Windows Native Tools / LOLBins"], ["14", "Command & Control"], ["18", "Advanced C2 / DNS Activity"], ["16", "Defense Evasion Simulation"], ["04", "Internal Discovery"], ["17", "Collection / Archive"], ["05", "Staging"], ["06", "Exfiltration"], ["07", "Impact"]
+    ["01", "Discovery"], ["02", "Web"], ["03", "Initial Access"], ["08", "Credential Access"], ["09", "AD Privilege Escalation"], ["10", "Custom Remote Command"], ["11", "Persistence"], ["04", "Internal Discovery"], ["05", "Staging"], ["06", "Exfiltration"], ["07", "Impact"]
 ];
 const reportArray = value => Array.isArray(value) ? value : [];
 let reportHistory = [];
@@ -3627,7 +3606,8 @@ function renderReport(detail, report, id, mode = "investigation", selectedPhase 
         selectedPhase = phase.id;
         renderReportPhase(phaseDetail, phase, groundTruth);
     };
-    const ordered = [...REPORT_PHASES.filter(([phaseId]) => !["09", "10", "11", "12", "13", "14", "15", "16", "17", "18"].includes(phaseId) || phases.some(p => p.id === phaseId)).map(([phaseId, name]) => phases.find(p => p.id === phaseId) ||
+    // Historical retired phases use the saved report order, never today's plan.
+    const ordered = phases.some(p => Number(p.id) >= 12 && Number(p.id) <= 18) ? phases : [...REPORT_PHASES.filter(([phaseId]) => !["09", "10", "11"].includes(phaseId) || phases.some(p => p.id === phaseId)).map(([phaseId, name]) => phases.find(p => p.id === phaseId) ||
         {id: phaseId, name, status: "not_run", absent: true}), ...phases.filter(p => !REPORT_PHASES.some(([phaseId]) => p.id === phaseId))];
     ordered.forEach(phase => {
         const button = reportNode("button", null, timeline);

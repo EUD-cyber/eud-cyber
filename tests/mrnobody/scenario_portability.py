@@ -148,7 +148,8 @@ class Portability(unittest.TestCase):
         self.assertEqual(web.planning.store.scenarios(), [])
 
     def test_import_incomplete_configuration_stays_non_executable(self):
-        value = configured('preset-windows-domain-compromise'); value['phases'][1]['parameters'].pop('target')
+        value = configured('preset-recon-only'); value['target_mode'] = 'fixed'
+        value['phases'][0]['parameters'] = {'subnet': '192.168.1.0/24'}
         result = self.upload(value); self.assertEqual(result.status_code, 201, result.json)
         self.assertEqual(result.json['readiness'], 'Needs configuration')
         sid = result.json['scenario']['id']

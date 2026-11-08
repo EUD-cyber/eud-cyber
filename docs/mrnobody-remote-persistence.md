@@ -109,9 +109,7 @@ Windows uses winrm-http or winrm-https and task-service with lab admin access.
 
 ## Integration and evidence
 
-Full Incident keeps the current order: P01 → P02 → P15 → P03 → optional P08 →
-P09 → optional P10 → **P11** → P12 → P13 → P14 → P18 → P16 → P04 → P17 →
-P05 → P06 → P07. Unsupported prerequisites retain their existing skip behavior. Custom fixed-target runs need no discovery prerequisites. Custom
+Full Incident order: P01 → P02 → P03 → optional P08 → P09 → optional P10 → **P11** → P04 → P05 → P06 → P07. Unsupported prerequisites retain their existing skip behavior. Custom fixed-target runs need no discovery prerequisites. Custom
 Auto runs add/lock dependencies before Review. Normal, Slow and Custom Timing,
 CLI/GUI standalone, scheduler, imports/exports and live status use the existing
 phase registry and structured execution model (schema version remains 1).
@@ -146,7 +144,7 @@ sources. This is investigation guidance, not a claim that sensors observed them.
 ## Fresh installation
 
 `MRNOBODY/mrnobody_userdata.yaml` downloads the remote-action, SSH and
-persistence helpers and the P11/P13 phase scripts before service startup. The
+persistence helpers and the P11 phase script before service startup. The
 existing manifest already distributes these files for later updates; it is
 unchanged. Fresh installation no longer needs an initial Update for these files.
 

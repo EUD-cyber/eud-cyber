@@ -25,14 +25,12 @@ def configured(sid):
     for p in value['phases']:
         if value['target_mode'] == 'fixed':
             p['parameters'].update({'subnet': '192.168.1.0/24'} if p['id'] == '01' else {'target': '192.168.1.20'})
-        if p['id'] == '18': p['parameters']['dns_endpoint'] = '192.168.1.53'
-        if p['id'] == '15': p['parameters'].update(target='192.168.1.30', port=8088, protocol='http')
     return value
 
 
 class Presets(unittest.TestCase):
     def test_all_registry_dependencies_schema_and_secrets(self):
-        self.assertEqual(len(PRESETS), 9)
+        self.assertEqual(len(PRESETS), 1)
         for card in preset_cards(CAPS):
             with self.subTest(card=card['id']):
                 template = preset_definition(card['id'], CAPS)
@@ -55,37 +53,13 @@ class Presets(unittest.TestCase):
         self.assertFalse(any('19' in c['phases'] for c in preset_cards(CAPS)))
 
     def test_readiness_and_drift_fail_closed(self):
+        caps = copy.deepcopy(CAPS); del caps['02']
+        self.assertEqual(preset_cards(caps), [])
         for key in ('web-attack', 'c2-detection', 'windows-domain-compromise', 'full-attack-incident'):
-            value = preset_definition('preset-' + key, CAPS)
-            self.assertTrue(preset_requirements(value))
-            with self.assertRaises(ValueError): validate(value, CAPS)
-        windows = configured('preset-windows-domain-compromise'); windows['target_mode'] = 'auto'
-        self.assertTrue(any('Fixed Targets' in x for x in preset_requirements(windows)))
-        caps = copy.deepcopy(CAPS); del caps['17']
-        with self.assertRaises(ValueError): preset_definition('preset-collection-exfiltration', caps)
-        value = configured('preset-full-attack-incident'); value['phases'].reverse()
+            self.assertIsNone(preset_definition('preset-' + key, CAPS))
+        value = configured('preset-recon-only'); value['phases'].reverse()
         with self.assertRaises(ValueError): validate(value, CAPS)
         self.assertIsNone(preset_definition('unknown', CAPS))
-
-    def test_timing_and_coherent_flows(self):
-        slow = plan(validate(configured('preset-slow-intrusion'), CAPS))
-        self.assertEqual(slow['profile'], {'mode': 'slow', 'duration': 14400})
-        offsets = [p['timing']['start_offset'] for p in slow['phases']]
-        self.assertEqual(offsets, sorted(offsets)); self.assertGreater(offsets[-1], 13000)
-        c2 = configured('preset-c2-detection')
-        self.assertEqual([p['id'] for p in c2['phases']], ['01', '03', '14', '18'])
-        self.assertEqual(c2['phases'][-1]['parameters']['dns_duration'], 60)
-        self.assertEqual(c2['phases'][-2]['parameters']['beacon_count'], 5)
-        for sid in ('collection-exfiltration', 'ransomware-style', 'full-attack-incident'):
-            ids = [p['id'] for p in configured('preset-' + sid)['phases']]
-            self.assertLess(ids.index('03'), ids.index('17'))
-            self.assertLess(ids.index('17'), ids.index('05'))
-            self.assertLess(ids.index('05'), ids.index('06'))
-            if '07' in ids: self.assertLess(ids.index('06'), ids.index('07'))
-        windows = configured('preset-windows-domain-compromise')
-        self.assertEqual(windows['target_mode'], 'fixed')
-        self.assertEqual([p['id'] for p in windows['phases']], ['01','03','09','11','12','13'])
-        self.assertTrue(all(p['parameters']['protocol'] == 'winrm-http' for p in windows['phases'][2:]))
 
 
 class API(unittest.TestCase):
@@ -103,7 +77,7 @@ class API(unittest.TestCase):
 
     def test_duplicate_edit_run_schedule_and_origin(self):
         cards = self.client.get('/api/scenarios').json['scenarios']
-        self.assertEqual(sum(bool(c.get('preset')) for c in cards), 9)
+        self.assertEqual(sum(bool(c.get('preset')) for c in cards), 1)
         for key in PRESETS:
             sid = 'preset-' + key
             with self.subTest(sid=sid):
@@ -133,16 +107,15 @@ class API(unittest.TestCase):
     def test_unconfigured_save_and_direct_run_rejected(self):
         for key in ('web-attack', 'windows-domain-compromise', 'c2-detection', 'full-attack-incident'):
             sid = 'preset-' + key
-            value = self.client.get('/api/scenario-presets/' + sid).json
-            self.assertEqual(self.client.post('/api/custom-scenarios', json=value).status_code, 400)
-            self.assertEqual(self.client.post('/api/scenario/' + sid + '/start', json={}).status_code, 400)
+            self.assertEqual(self.client.get('/api/scenario-presets/' + sid).status_code, 400)
+            self.assertEqual(self.client.post('/api/scenario/' + sid + '/start', json={}).status_code, 410)
         self.launch.assert_not_called()
         result = self.client.post('/api/scenario/preset-recon-only/start', json={})
         self.assertEqual(result.status_code, 200, result.json)
         self.assertEqual(json.loads(self.launch.call_args.kwargs['env']['MRN_EXECUTION'])['phases'][0]['id'], '01')
 
     def test_report_metadata_exports_and_executed_summary(self):
-        execution = plan(validate(configured('preset-full-attack-incident'), CAPS))
+        execution = plan(validate(configured('preset-recon-only'), CAPS))
         execution['id'] = 'custom-' + 'a'*32
         iid = 'MRN-preset-test'
         (self.base/'state').mkdir(); (self.base/'scripts').mkdir()
@@ -157,7 +130,7 @@ class API(unittest.TestCase):
         self.assertTrue(all(set(t['phases']) <= {'01','03'} for t in report['mitre_summary']))
         for view in ('investigation','ground-truth'):
             rendered = str(report_document(report, view))
-            self.assertIn('preset-full-attack-incident', rendered)
+            self.assertIn('preset-recon-only', rendered)
             self.assertIn('Scenario version: 1', rendered)
             self.assertIn('Ordered Attack Technique flow:', rendered)
 

@@ -12,7 +12,7 @@ function element(tag = 'div') {
     };
 }
 for (const id of ['builderBody','planningMessage','customLibrary','scheduleEditor','scheduleList','newCustomScenario']) elements.set(id, element());
-const dependencyMap = {'01':[], '02':['01'], '03':['01'], '04':['03'], '05':['03'], '06':['03','05'], '07':['03'], '08':['01','03'], '09':['03'], '10':['03'], '11':['03'], '12':['03'], '13':['03'], '14':['03']};
+const dependencyMap = {'01':[], '02':['01'], '03':['01'], '04':['03'], '05':['03'], '06':['03','05'], '07':['03'], '08':['01','03'], '09':['03'], '10':['03'], '11':['03']};
 const caps = Object.entries(dependencyMap).map(([id, dependencies]) => ({
     id, dependencies, name:{'01':'Discovery','02':'Web Discovery','03':'Initial Access','04':'Lateral Movement','05':'Staging','06':'Exfiltration','07':'Impact','08':'Wordlist Authentication'}[id],
     fields: id === '01' ? {subnet:{label:'Subnets',type:'networks'}} : {
@@ -21,7 +21,7 @@ const caps = Object.entries(dependencyMap).map(([id, dependencies]) => ({
         ...(id === '06' ? {file:{label:'Synthetic staged file',type:'path'}} : {})},
     required_fields: id === '01' ? ['subnet'] : ['target', ...(['03','08'].includes(id) ? ['protocol'] : []), ...(id === '04' ? ['source'] : [])],
     timing: ['01','02'].includes(id) ? ['start_offset','duration','delay_min','delay_max','jitter'] : ['start_offset'],
-    credentials:['03','04','05','06','07','09','10','11','12','13','14'].includes(id), wordlist:id === '08', standalone:true,
+    credentials:['03','04','05','06','07','09','10','11'].includes(id), wordlist:id === '08', standalone:true,
     runtime_powershell:id === '10'
 }));
 for (const cap of caps.filter(c=>['09','10'].includes(c.id))) {
@@ -30,7 +30,7 @@ for (const cap of caps.filter(c=>['09','10'].includes(c.id))) {
     cap.fields.timeout = {label:'Action timeout',type:'timeout'};
     cap.required_fields = ['target','protocol'];
 }
-for (const cap of caps.filter(c=>['10','11','12','14'].includes(c.id))) {
+for (const cap of caps.filter(c=>['10','11'].includes(c.id))) {
     cap.name = cap.id === '10' ? 'Custom Remote Command' : 'Persistence';
     cap.fields.protocol.options = ['ssh','winrm-http','winrm-https'];
     cap.fields.platform = {label:'Execution platform',options:['auto','windows','linux']};
@@ -42,35 +42,6 @@ for (const cap of caps.filter(c=>['10','11','12','14'].includes(c.id))) {
         cap.fields.artifact = {label:'Artifact suffix',type:'text'};
     }
 }
-const p13=caps.find(c=>c.id==='13');
-p13.fields.protocol.options=['winrm-http','winrm-https']; p13.required_fields=['target','protocol'];
-p13.fields.behavior={label:'Native tool behavior',type:'choice',options:['encoded-powershell','certutil-decode','bits-job']};
-const p12 = caps.find(c=>c.id==='12');
-p12.fields.method = {label:'Synthetic credential action', options:['metadata','read-test-file']};
-const p14 = caps.find(c=>c.id==='14');
-p14.fields.transport = {label:'Beacon transport', options:['http','https']};
-p14.fields.beacon_interval = {label:'Beacon interval', type:'seconds', default:5};
-p14.fields.beacon_jitter = {label:'Beacon jitter (%)', type:'fraction', default:0};
-p14.fields.beacon_count = {label:'Number of beacons', type:'number', default:5};
-p14.fields.uri_profile = {label:'Benign URI profile', options:['heartbeat','status']};
-for (const id of ['15','16','17']) {
-    const fields = {target:{label:'Target IPv4',type:'ipv4'},protocol:{label:'Protocol',options:id==='15'?['http','https']:['ssh','winrm-http','winrm-https']}};
-    if(id==='15') {fields.web_profile={label:'Web behavior',options:['sqli','traversal']};fields.web_path={label:'Lab application base path',default:'/mrn-lab'};}
-    else {fields.platform={label:'Execution platform',options:['auto','windows','linux']};fields.action={label:'Exercise action',options:['run','cleanup']};}
-    if(id==='16')fields.behavior={label:'Reversible synthetic behavior',options:['config-toggle','log-rename']};
-    if(id==='17')fields.dataset={label:'Synthetic dataset',options:['finance','engineering']};
-    caps.push({id,name:'Phase '+id,dependencies:[id==='15'?'02':'03'],fields,required_fields:['target',...(id==='15'?[]:['protocol'])],timing:['start_offset'],credentials:id!=='15',standalone:true});
-}
-const p18fields = {
-    target:{label:'Target IPv4',type:'ipv4'}, protocol:{label:'Protocol',options:['ssh','winrm-http','winrm-https']},
-    platform:{label:'Execution platform',options:['auto','windows','linux']},
-    dns_behavior:{label:'DNS behavior',options:['standard','low-and-slow','encoded-marker']},
-    dns_endpoint:{label:'Private lab DNS endpoint (UDP 53)',type:'ipv4'},
-    dns_domain:{label:'Lab domain',default:'mrnobody.test'}, dns_pattern:{label:'Query label pattern',default:'mrn-{seq}'},
-    dns_interval:{label:'DNS interval',type:'seconds'}, dns_jitter:{label:'DNS jitter (%)',type:'fraction',default:0},
-    dns_count:{label:'DNS count',type:'number',default:3}, dns_duration:{label:'DNS duration ceiling',type:'seconds',default:240}
-};
-caps.push({id:'18',name:'Advanced C2 / DNS Activity',dependencies:['03'],fields:p18fields,required_fields:['target','protocol'],timing:['start_offset'],credentials:true,standalone:true});
 for (const cap of caps) cap.fields = {...presetFixture.capabilities[cap.id].fields, ...cap.fields};
 const definitions = [], plans = [], requests = [];
 const context = vm.createContext({document:{getElementById:id=>elements.get(id) || [...elements.values()].flatMap(walk).find(n=>n.id===id), createElement:element, querySelectorAll:()=>[],addEventListener(){}},
@@ -87,7 +58,7 @@ const context = vm.createContext({document:{getElementById:id=>elements.get(id) 
         if (url === '/api/planning/capabilities') value={phases:caps};
         if (url === '/api/custom-scenarios') {
             if (options.method==='POST') {value={...data,id:'custom-'+definitions.length};definitions.push(value);}
-            else value={scenarios:definitions};
+            else value={scenarios:definitions,readiness:Object.fromEntries(definitions.filter(d=>d.phases.some(p=>Number(p.id)>11)).map(d=>[d.id,'Unavailable: removed phases; original scenario preserved.']))};
         }
         if (url.startsWith('/api/custom-scenarios/') && options.method==='PUT') {
             value = data; definitions.splice(definitions.findIndex(d=>d.id===data.id),1,data);
@@ -321,62 +292,18 @@ async function main() {
     await click(p11Editor,'Save schedule');
     assert.equal(plans.at(-1).execution.parameters.platform,'linux');
     assert.equal(plans.at(-1).execution.parameters.method,'cron');
-    for (const mode of ['auto','fixed']) {
-        await select(mode); await add('13');
-        assert.deepEqual(ids(),mode==='auto'?['01','03','13']:['13']);
-        if(mode==='auto') assert.ok(textButton(row('03'),'Remove').disabled);
-        await next();
-        const behavior=field(body(),'Native tool behavior'); assert.equal(behavior.tag,'select');
-        assert.ok(!text(body()).includes('PowerShell command (Windows, optional)'));
-        assert.deepEqual(field(body(),'Protocol').children.map(c=>c.value),['','winrm-http','winrm-https']);
-        set('Native tool behavior','bits-job');
-        if(mode==='fixed'){set('Common Target (optional)','192.168.1.88');set('Protocol','winrm-http');}
-        await review(); assert.match(text(body()),/bits-job/);
-        await click(body(),'Save');
-        assert.equal(definitions.at(-1).phases.find(p=>p.id==='13').parameters.behavior,'bits-job');
-    }
-    for (const id of ['12','14']) for (const mode of ['auto','fixed']) {
-        await select(mode); await add(id);
-        assert.deepEqual(ids(), mode === 'auto' ? ['01','03',id] : [id]);
-        await next();
-        set('Execution platform','linux');
-        if (mode === 'fixed') {set('Common Target (optional)','192.168.1.88');set('Protocol','ssh');}
-        if (id === '12') set('Synthetic credential action','metadata');
-        else {
-            set('Beacon transport','https'); set('Beacon interval · Seconds','10');
-            set('Beacon jitter (%)','20');set('Number of beacons','3');set('Benign URI profile','status');
-        }
-        await review();await click(body(),'Save');
-        const params=definitions.at(-1).phases.find(p=>p.id===id).parameters;
-        assert.equal(params.platform,'linux');
-        if(id === '12') assert.equal(params.method,'metadata');
-        else {assert.equal(params.beacon_interval,10);assert.equal(params.beacon_jitter,.2);assert.equal(params.beacon_count,3);}
-    }
-    for (const mode of ['auto','fixed']) {
-        await select(mode); await add('18');
-        assert.deepEqual(ids(),mode==='auto'?['01','03','18']:['18']);
-        await next(); set('Execution platform','linux');
-        if(mode==='fixed'){set('Common Target (optional)','192.168.1.88');set('Protocol','ssh');}
-        assert.equal(Number(field(body(),'DNS interval · Seconds').value),5);
-        set('DNS behavior','low-and-slow');assert.equal(Number(field(body(),'DNS interval · Minutes').value),1);set('DNS interval · Minutes','1');
-        set('DNS jitter (%)','20');set('Private lab DNS endpoint (UDP 53)','192.168.1.1');
-        set('Lab domain','public.example'); await next();assert.match(error(),/P18.*domain/);
-        set('Lab domain','mrnobody.test');set('DNS interval · Minutes','0');set('DNS interval · Seconds','5');
-        await next();assert.match(error(),/P18.*30 seconds/);
-        set('DNS interval · Minutes','1');set('DNS interval · Seconds','0');
-        await review();await click(body(),'Save');
-        const params=definitions.at(-1).phases.find(p=>p.id==='18').parameters;
-        assert.equal(params.dns_interval,60);assert.equal(params.dns_jitter,.2);assert.equal(params.dns_behavior,'low-and-slow');
-    }
-    await select('auto');await add('06');await add('17');await add('16');await add('18');await add('14');
-    const dnsOrder=ids();
-    for(const [a,b] of [['14','18'],['18','16'],['18','17'],['18','05'],['18','06']])assert.ok(dnsOrder.indexOf(a)<dnsOrder.indexOf(b));
-    await select('auto');await add('06');await add('16');await add('14');assert.ok(ids().indexOf('16')<ids().indexOf('05'));assert.ok(ids().indexOf('14')<ids().indexOf('16'));
-    await select('auto');await add('17');await add('16');await add('13');await add('15');await add('06');
-    const ordered=ids();
-    for(const [a,b] of [['02','15'],['15','03'],['13','16'],['16','17'],['17','05'],['05','06']])assert.ok(ordered.indexOf(a)<ordered.indexOf(b),a+' before '+b);
-    await next();assert.ok(field(body(),'Web behavior'));assert.ok(field(body(),'Reversible synthetic behavior'));assert.ok(field(body(),'Synthetic dataset'));
-    await select('fixed');await add('15');await next();set('Target IPv4','192.168.1.20');set('Protocol','http');set('Web behavior','traversal');set('Lab application base path','/mrn-lab');await review();assert.match(text(body()),/Required runtime credentials: None/);
-    console.log('Builder DOM tests passed: dependencies, protected actions, target modes, common targets, validation, review, friendly units, P08/P09/P10 runtime inputs, Full Incident toggle and library summaries.');
+    const historical={version:1,id:'custom-retired',name:'Legacy scope',target_mode:'auto',profile:{mode:'normal'},phases:[{id:'01',parameters:{},timing:{}},{id:'12',parameters:{method:'metadata'},timing:{}}]};
+    definitions.push(historical); await context.window.MrnPlanning.refresh();
+    const legacyRow=elements.get('customLibrary').children.find(n=>text(n).includes('Legacy scope'));
+    assert.match(text(legacyRow),/Unavailable:/);
+    assert.equal(textButton(legacyRow,'Run').disabled,true);
+    assert.equal(textButton(legacyRow,'Schedule').disabled,true);
+    context.window.MrnPlanning.newDraft(historical);
+    await next(); await next();
+    assert.match(text(body()),/P12 · Unavailable/);
+    assert.deepEqual(ids(),['01','12']);
+    await next(); await next(); assert.match(error(),/Unavailable: P12/);
+    assert.equal(historical.phases.length,2);
+    console.log('Builder DOM tests passed: dependencies, targets, validation, timing, P08/P09/P10/P11, Full Incident, and non-executable preserved legacy scope.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

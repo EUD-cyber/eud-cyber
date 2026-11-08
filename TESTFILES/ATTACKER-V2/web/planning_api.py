@@ -7,6 +7,8 @@ import subprocess
 import threading
 import time
 import uuid
+from unavailable import UnavailableError
+from scenario_model import RETIRED_PHASE_IDS, RETIRED_PRESETS, unavailable_message
 from pathlib import Path
 
 from flask import jsonify, request, Response
@@ -91,6 +93,10 @@ class Planning:
 
     def execution(self, spec):
         keys(spec, ['type', 'id', 'profile', 'parameters', 'timing', 'target_mode', 'powershell_enabled', 'persistence'], 'execution')
+        if spec.get('type') == 'phase' and spec.get('id') in RETIRED_PHASE_IDS:
+            raise UnavailableError(unavailable_message([spec['id']]))
+        if spec.get('type') == 'campaign' and str(spec.get('id', '')).removeprefix('preset-') in RETIRED_PRESETS:
+            raise UnavailableError('Unavailable: this preset used removed phases. Original schedules are preserved; choose a new scenario explicitly.')
         if spec.get('type') not in {'phase', 'campaign', 'custom'}:
             raise ValueError('Unknown execution type')
         if not isinstance(spec.get('id'), str):
@@ -179,7 +185,7 @@ class Planning:
         if execution['type'] == 'phase':
             data = dict(execution.get('parameters', {}), profile=execution.get('profile', {'mode': 'normal'}),
                         timing=execution.get('timing', {}), target_mode=execution.get('target_mode', 'fixed'))
-            protocol = data.get('protocol', 'winrm-http' if execution['id'] in {'09', '10', '13'} else 'ssh')
+            protocol = data.get('protocol', 'winrm-http' if execution['id'] in {'09', '10'} else 'ssh')
             data['password'] = credentials.get('password') or credentials.get('rdp_password' if protocol.startswith(('rdp', 'winrm')) else 'ssh_password') or os.environ.get('NORDIC_RDP_PASSWORD' if protocol.startswith(('rdp', 'winrm')) else 'NORDIC_SSH_PASSWORD', '')
             cap = self.capabilities()[execution['id']]
             if cap.get('wordlist') and not os.environ.get('NORDIC_WORDLIST_FILE'):
@@ -325,6 +331,11 @@ def install(module):
         if request.method == 'GET':
             rows = service.store.schedules()
             for row in rows:
+                try:
+                    service.execution(row['execution'])
+                    row['readiness'] = 'Available'
+                except ValueError as exc:
+                    row['readiness'] = str(exc)
                 row['credentials_ready'] = row['id'] in service.scheduler.credentials or bool(os.environ.get('NORDIC_SSH_PASSWORD') or os.environ.get('NORDIC_RDP_PASSWORD'))
             return jsonify({'schedules': rows})
         if sid and not any(s['id'] == sid for s in service.store.schedules()):
@@ -356,6 +367,8 @@ def install(module):
         if definition is None:
             raise ValueError('Schedule not found')
         if action in {'enable', 'disable'}:
+            if action == 'enable':
+                service.execution(definition['execution'])
             service.store.update(sid, enabled=action == 'enable')
             return jsonify({'status': action})
         data = request.get_json(silent=True) or {}

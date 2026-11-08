@@ -204,8 +204,14 @@ def snapshot(base, capabilities, process=None, now=None):
 
 
 def phase_environment(pid, environ=None, sleep=time.sleep, clock=time.time):
+    from scenario_model import ACTIVE_PHASE_IDS, unavailable_phases, unavailable_message
+    if pid not in ACTIVE_PHASE_IDS:
+        raise ValueError('Unavailable phase P' + str(pid))
     env = dict(os.environ if environ is None else environ)
     config = json.loads(env['MRN_EXECUTION'])
+    retired = unavailable_phases(config)
+    if retired:
+        raise ValueError(unavailable_message(retired))
     staging_origin = env.get('MRNOBODY_STAGING_INCIDENT')
     phase = next(p for p in config['phases'] if p['id'] == pid)
     timing = phase.get('timing', {})
@@ -233,7 +239,7 @@ def phase_environment(pid, environ=None, sleep=time.sleep, clock=time.time):
         env['MRNOBODY_STAGING_INCIDENT'] = env['NORDIC_INCIDENT_ID']
     if pid == '01':
         env['MRNOBODY_AUTO'] = '1' if config['target_mode'] == 'auto' else '0'
-    protocol = env.get('MRNOBODY_PROTOCOL') or ('winrm-http' if env.get('MRNOBODY_PLATFORM') == 'windows' or pid in {'09', '10', '13'} else 'ssh')
+    protocol = env.get('MRNOBODY_PROTOCOL') or ('winrm-http' if env.get('MRNOBODY_PLATFORM') == 'windows' or pid in {'09', '10'} else 'ssh')
     env['MRNOBODY_PASSWORD'] = env.get('NORDIC_RDP_PASSWORD' if protocol.startswith(('winrm', 'rdp')) else 'NORDIC_SSH_PASSWORD', '')
     env['MRN_TIMING'] = json.dumps(timing)
     env['MRN_PHASE_STARTED'] = str(clock())
@@ -285,7 +291,12 @@ def main():
     parser.add_argument('--pace', nargs=2, type=int)
     args = parser.parse_args()
     if args.list:
-        for p in json.loads(os.environ['MRN_EXECUTION'])['phases']:
+        from scenario_model import unavailable_phases, unavailable_message
+        definition = json.loads(os.environ['MRN_EXECUTION'])
+        retired = unavailable_phases(definition)
+        if retired:
+            raise ValueError(unavailable_message(retired))
+        for p in definition['phases']:
             print(p['id'])
     elif args.discovery:
         discovery(args.discovery)

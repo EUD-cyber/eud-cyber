@@ -119,7 +119,7 @@ async function main() {
     context.presetCards = presetFixture.cards;
     context.window.MrnPlanning = {openPreset: async () => {}};
     vm.runInContext('renderScenarios(presetCards)', context);
-    assert.equal(elements.get('scenarioGrid').children.length, 9);
+    assert.equal(elements.get('scenarioGrid').children.length, 1);
     for (const card of presetFixture.cards) {
         context.presetCard = card;
         vm.runInContext('renderScenarioDetail(presetCard)', context);

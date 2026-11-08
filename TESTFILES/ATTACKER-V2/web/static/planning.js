@@ -11,6 +11,7 @@
     const enabled = () => draft.phases.filter(p => p.enabled !== false);
     const phase = id => ({id, enabled: true, parameters: {}, timing: {}});
     function ensureAuto() {
+        if (draft.phases.some(p => !capFor(p.id))) return; // Preserve unavailable legacy scope for explicit editing.
         if (draft.target_mode !== "auto") return;
         const result = [], seen = new Set();
         const visit = id => {
@@ -18,12 +19,12 @@
             dependencies(id).forEach(visit);
             let item = draft.phases.find(p => p.id === id);
             if (!item) {item = phase(id); autoAdded.add(id);}
-            item.enabled = true; if (!["10", "11", "12", "13", "14", "15", "16", "17", "18"].includes(id)) item.parameters = {};
+            item.enabled = true; if (!["10", "11"].includes(id)) item.parameters = {};
             seen.add(id); result.push(item);
         };
         visit("01"); enabled().forEach(p => visit(p.id));
-        draft.phases.filter(p => !seen.has(p.id)).forEach(p => {if (!["10", "11", "12", "13", "14", "15", "16", "17", "18"].includes(p.id)) p.parameters = {}; result.push(p);});
-        const edges = [["05","06"],["14","18"],["18","16"],["18","04"],["18","17"],["18","05"],["18","06"],["18","07"],["02","15"],["15","03"],["10","16"],["11","16"],["12","16"],["13","16"],["14","16"],["16","17"],["17","05"],["17","06"],["17","07"],["16","05"],["16","06"],["16","07"]];
+        draft.phases.filter(p => !seen.has(p.id)).forEach(p => {if (!["10", "11"].includes(p.id)) p.parameters = {}; result.push(p);});
+        const edges = [["05","06"]];
         for (let pass = 0; pass < result.length; pass++) for (const [a,b] of edges) {
             const i = result.findIndex(p => p.id === a), j = result.findIndex(p => p.id === b);
             if (i >= 0 && j >= 0 && i > j) result.splice(j, 0, result.splice(i, 1)[0]);
@@ -35,7 +36,7 @@
     }
     function validOrder(phases) {
         const ids = phases.filter(p => p.enabled !== false).map(p => p.id);
-        const edges = [["05","06"],["14","18"],["18","16"],["18","04"],["18","17"],["18","05"],["18","06"],["18","07"],["02","15"],["15","03"],["10","16"],["11","16"],["12","16"],["13","16"],["14","16"],["16","17"],["17","05"],["17","06"],["17","07"],["16","05"],["16","06"],["16","07"]];
+        const edges = [["05","06"]];
         if (edges.some(([a,b]) => ids.includes(a) && ids.includes(b) && ids.indexOf(a) > ids.indexOf(b))) return false;
         if (draft.target_mode !== "auto") return true;
         const prior = new Set();
@@ -102,9 +103,11 @@
     }
     function presetWarnings() {
         if (!draft?.preset) return [];
-        return enabled().flatMap(p => p.id === "09" && draft.target_mode !== "fixed" ? ["P09: use Fixed Targets and select a lab DC with AD management rights."] : p.id === "18" && !p.parameters.dns_endpoint ? ["P18: enter a private non-forwarding lab DNS endpoint."] : p.id === "15" && !p.parameters.target ? ["P15: enter the fingerprinted MrNobody Web Lab target and review its base path/profile."] : []);
+        return enabled().flatMap(p => p.id === "09" && draft.target_mode !== "fixed" ? ["P09: use Fixed Targets and select a lab DC with AD management rights."] : []);
     }
     function stepError(index) {
+        const unavailable = draft.phases.filter(p => !capFor(p.id));
+        if (index >= 3 && unavailable.length) return "Unavailable: " + unavailable.map(p => "P" + p.id).join(", ") + ". Remove these phases explicitly in an edited copy before running.";
         if (index === 0) {
             if (!draft.name?.trim() || draft.name.length > 160 || /[\x00-\x1f]/.test(draft.name)) return "Enter a name of 1–160 characters without control characters.";
             if (draft.description && (!draft.description.trim() || draft.description.length > 2000 || /[\x00-\x1f]/.test(draft.description))) return "Description must be at most 2000 characters without control characters.";
@@ -119,7 +122,7 @@
                 for (const key of draft.target_mode === "fixed" ? cap.required_fields || [] : []) if (!params[key]) return `P${p.id}: enter ${cap.fields[key]?.label || key}.`;
                 const platform = params.platform || "auto";
                 const effective = params.protocol === "ssh" ? "linux" : params.protocol ? "windows" : platform;
-                if (["10", "11", "12", "14", "16", "17", "18"].includes(p.id) && platform !== "auto" && platform !== effective) return `P${p.id}: platform and protocol must match.`;
+                if (["10", "11"].includes(p.id) && platform !== "auto" && platform !== effective) return `P${p.id}: platform and protocol must match.`;
                 const methodPlatform = {"scheduled-task":"windows", service:"windows", "task-service":"windows", cron:"linux", systemd:"linux", "cron-systemd":"linux"}[params.method];
                 if (p.id === "11" && methodPlatform && effective !== "auto" && effective !== methodPlatform) return "P11: method and platform must match.";
                 if (p.id === "11") {
@@ -128,17 +131,6 @@
                     if (params.persistence_domain && (params.persistence_domain.length > 120 || !/^(?:[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?\.)+test$/.test(params.persistence_domain))) return "P11: use a lowercase reserved .test domain.";
                     if (params.persistence_resolver && (!privateAddress(params.persistence_resolver) || /\.(0|255)$/.test(params.persistence_resolver))) return "P11: use an internal unicast lab resolver.";
                     if (params.persistence_dns === "enabled" && params.action !== "cleanup" && (!params.persistence_resolver || !["auto", "task-service", "cron-systemd"].includes(params.method || "auto"))) return "P11: DNS requires a paired method and an explicit private non-forwarding resolver.";
-                }
-                if (p.id === "18") {
-                    const behavior = params.dns_behavior || "standard";
-                    const interval = Number(params.dns_interval ?? (behavior === "low-and-slow" ? 60 : 5)), jitter = Number(params.dns_jitter ?? 0), count = Number(params.dns_count ?? 3), duration = Number(params.dns_duration ?? 240);
-                    if (!Number.isFinite(interval) || interval < 1 || interval > 180 || behavior === "low-and-slow" && interval < 30 || !Number.isFinite(jitter) || jitter < 0 || jitter > .5 || !Number.isInteger(count) || count < 1 || count > 40 || !Number.isFinite(duration) || duration < 3 || duration > 240 || (count-1)*interval*(1+jitter)+count*3 > duration) return "P18: DNS interval/count/jitter must fit the 3-240 second duration ceiling; low-and-slow requires at least 30 seconds between queries.";
-                    if (params.dns_domain && (params.dns_domain.length > 120 || !/^(?:[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?\.)+(?:test|internal|localhost)$/.test(params.dns_domain))) return "P18: use a reserved lab domain ending .test, .internal or .localhost.";
-                    if (params.dns_pattern && !/^[a-z0-9-]{1,20}\{seq\}[a-z0-9-]{0,20}$/.test(params.dns_pattern)) return "P18: query pattern requires one {seq} placeholder and lowercase letters/digits/hyphens.";
-                }
-                if (p.id === "14") {
-                    const interval = Number(params.beacon_interval ?? 5), jitter = Number(params.beacon_jitter ?? 0), count = Number(params.beacon_count ?? 5);
-                    if (!Number.isFinite(interval) || interval < 1 || interval > 60 || !Number.isFinite(jitter) || jitter < 0 || jitter > .5 || !Number.isInteger(count) || count < 1 || count > 20 || (count - 1) * interval * (1 + jitter) + count * 3 > 240) return "P14: interval 1-60 seconds, jitter 0-50%, count 1-20; total bounded execution must fit 240 seconds.";
                 }
                 for (const [key, value] of Object.entries(params)) {
                     const spec = cap.fields[key];
@@ -150,7 +142,6 @@
                     if (spec.options && !spec.options.includes(value)) return `P${p.id}: choose a supported protocol.`;
                     if (key === "artifact" && !/^[a-z0-9][a-z0-9-]{0,31}$/.test(value)) return "P11: invalid artifact suffix.";
                     if (key === "username" && !/^[A-Za-z0-9_.@\\-]{1,128}$/.test(value)) return `P${p.id}: enter a valid username.`;
-                    if (key === "web_path" && !/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*$/.test(value)) return "P15: use a simple absolute base path.";
                     if (key === "file" && value !== "@staged" && !/^(?:\/tmp\/\.nordic-(?:MRN|H3)-[A-Za-z0-9_-]+\/nordic-data-(?:MRN|H3)-[A-Za-z0-9_-]+\.txt|C:\\NordicIncident\\(?:MRN|H3)-[A-Za-z0-9_-]+\\staging\\nordic-data-(?:MRN|H3)-[A-Za-z0-9_-]+\.txt)$/.test(value)) return `P${p.id}: use @staged or a synthetic staging file path.`;
                 }
             }
@@ -188,10 +179,10 @@
         node("h3", draft.name, parent); node("p", draft.description || "No description", parent);
         if (draft.teaching_objective) node("p", draft.teaching_objective, parent, "muted");
         node("p", draft.target_mode === "auto" ? "Auto Discovery" : "Custom / Fixed Targets", parent);
-        node("p", `Attack Technique flow: ${enabled().map(p => `P${p.id} ${capFor(p.id)?.name}`).join(" → ")}`, parent);
+        node("p", `Attack Technique flow: ${enabled().map(p => `P${p.id} ${capFor(p.id)?.name || "Unavailable — removed from active product"}`).join(" → ")}`, parent);
         if (commonTarget) node("p", `Common Target: ${commonTarget}`, parent);
         enabled().forEach(p => {
-            node("p", `P${p.id} · ${capFor(p.id)?.name}${required(p.id) ? " · Required" : ""}${autoAdded.has(p.id) ? " · Auto-added prerequisite" : ""}`, parent);
+            node("p", `P${p.id} · ${capFor(p.id)?.name || "Unavailable — removed from active product"}${required(p.id) ? " · Required" : ""}${autoAdded.has(p.id) ? " · Auto-added prerequisite" : ""}`, parent);
             if (draft.target_mode === "fixed") node("p", Object.entries(p.parameters).map(([k,v]) => `${capFor(p.id).fields[k]?.label || k}: ${v}${k === "target" ? inherited.has(p.id) ? " (Common Target)" : " (local)" : ""}`).join(" · "), parent);
             else {node("p", dataHint(p.id), parent, "muted"); node("p", Object.entries(p.parameters).map(([k,v]) => k + ": " + v).join(" · "), parent); }
         });
@@ -247,13 +238,13 @@
         node("p", "Credentials are supplied only when running or arming a schedule. They are never saved in scenario definitions.", parent, "muted");
         let model = execution?.type === "custom" ? custom.find(s => s.id === execution.id) : execution;
         if (model?.type === "phase") model = {target_mode: model.target_mode, phases: [{id: model.id, parameters: model.parameters || {}}]};
-        if (model?.type === "campaign" && model.id === "full-incident") model = {target_mode: "auto", phases: capabilities.filter(c => ["03", "09", "11", "12", "13", "14", "16", "17", ...(execution.powershell_enabled ? ["10"] : [])].includes(c.id)).map(c => ({id: c.id}))};
+        if (model?.type === "campaign" && model.id === "full-incident") model = {target_mode: "auto", phases: capabilities.filter(c => ["03", "09", "11", ...(execution.powershell_enabled ? ["10"] : [])].includes(c.id)).map(c => ({id: c.id}))};
         const required = new Set();
         if (!model?.phases) {required.add("ssh"); required.add("rdp");}
         else model.phases.filter(p => p.enabled !== false).forEach(p => {
             if (!capabilities.find(c => c.id === p.id)?.credentials) return;
             if (model.target_mode === "auto") {required.add("ssh"); required.add("rdp");}
-            else if (["10", "11", "12", "13", "14", "16", "17", "18"].includes(p.id) && !p.parameters?.protocol && (!p.parameters?.platform || p.parameters.platform === "auto")) {required.add("ssh"); required.add("rdp");}
+            else if (["10", "11"].includes(p.id) && !p.parameters?.protocol && (!p.parameters?.platform || p.parameters.platform === "auto")) {required.add("ssh"); required.add("rdp");}
             else required.add(/^(rdp|winrm)/.test(p.parameters?.protocol || (p.parameters?.platform === "windows" ? "winrm-http" : "ssh")) ? "rdp" : "ssh");
         });
         node("p", `Required runtime credentials: ${required.size ? [...required].map(p => p === "ssh" ? "Linux / SSH" : "Windows / RDP / WinRM").join(", ") : "None"}`, parent);
@@ -299,27 +290,22 @@
         if (!cap) return;
         if (!existing) parent = node("div", undefined, parent, "phase-parameters");
         if (cap.runtime_powershell) node("p", "P10 remote command (PowerShell / Bash) is requested on Review or when arming the schedule; it is never stored in the definition.", parent, "muted");
-        if (["15", "16", "17"].includes(phase.id)) node("p", {"15": "Fingerprint required: dedicated MrNobody Web Lab endpoint. Auto uses P02 web services; no compromise is invented.", "16": "Only synthetic monitor.conf or exercise.log in the MRN exercise directory; original state is restored. Cleanup recovers an interrupted run.", "17": "Only fixed marker-verified finance/engineering files. Archives feed staged-data.json for P05/P06. Cleanup removes the selected archive."}[phase.id], parent, "muted");
         if (phase.id === "11") node("p", "Auto: task + native Windows service, or cron + user systemd service. DNS disabled by default. Enable only with an internal non-forwarding resolver for your .test zone. Activity ends at its fixed UTC deadline, independent of campaign timing or completion. Cleanup removes both mechanisms and owned files; reruns preserve the deadline. Existing user-systemd manager required; no linger or elevation.", parent, "muted");
-        if (phase.id === "12") node("p", "Synthetic temporary test file only: inspect metadata or verify its fixed lab marker, then clean up. Auto requires prior P03 access.", parent, "muted");
-        if (phase.id === "18") node("p", "DNS only, UDP 53. Private resolver and reserved lab domain; use a non-forwarding lab DNS zone. Standard defaults: 5s; low-and-slow: 60s (minimum 30s). Three queries, 0% jitter, 4 minute duration ceiling. Internal DNS timing is independent of campaign offsets. Fixed marker only; no remote commands or answer processing.", parent, "muted");
-        if (phase.id === "14") node("p", "Beacons to this MrNobody instance only. Internal interval/count is independent of the technique start offset. Default: HTTP, 5 seconds, 0% jitter, 5 check-ins. Maximum execution budget: 240 seconds. HTTPS uses the lab self-signed certificate policy.", parent, "muted");
-        if (phase.id === "13") node("p", "Windows only. Choose encoded PowerShell, local certutil decode, or an empty BITS job that is cancelled. No arbitrary command or URL is accepted. Default: encoded PowerShell.", parent, "muted");
         if (phase.id === "09") node("p", "P09 requires a lab domain controller and AD management rights. New or disabled mrnobody accounts are enabled using the runtime Windows password; an already enabled account keeps its password. Domain Admins membership is verified.", parent, "muted");
         if (mode === "auto") {
             node("p", dataHint(phase.id), parent, "muted");
-            if (!["10", "11", "12", "13", "14", "15", "16", "17", "18"].includes(phase.id)) return;
+            if (!["10", "11"].includes(phase.id)) return;
         }
         Object.entries(cap.fields).forEach(([key, spec]) => {
             const platform = phase.parameters.platform || "auto";
             let options = spec.options;
-            if (["10", "11", "12", "13", "14", "16", "17", "18"].includes(phase.id)) {
+            if (["10", "11"].includes(phase.id)) {
                 if (key === "protocol") options = options.filter(v => platform === "auto" || (v === "ssh") === (platform === "linux"));
                 if (key === "method" && phase.id === "11") options = options.filter(v => v === "auto" || platform === "auto" || (["cron", "systemd", "cron-systemd"].includes(v)) === (platform === "linux"));
                 if (key === "source" || key === "subnet" || key === "file") return;
             }
             if (spec.type === "seconds") {
-                const fallback = phase.id === "18" && key === "dns_interval" ? (phase.parameters.dns_behavior === "low-and-slow" ? 60 : 5) : spec.default;
+                const fallback = spec.default;
                 durationForm(parent, spec.label, phase.parameters[key] ?? fallback, v => {phase.parameters[key] = v;}); return;
             }
             if (spec.type === "fraction") {
@@ -333,9 +319,6 @@
                 if (key === "platform") {
                     delete phase.parameters.protocol; delete phase.parameters.port; delete phase.parameters.username;
                     if (phase.id === "11") delete phase.parameters.method;
-                    parent.replaceChildren(); parameterForm(parent, phase, mode, common, true, onChange);
-                }
-                if (phase.id === "18" && key === "dns_behavior") {
                     parent.replaceChildren(); parameterForm(parent, phase, mode, common, true, onChange);
                 }
                 if (["platform", "protocol"].includes(key)) onChange();
@@ -458,7 +441,7 @@
                 const row = node("div", undefined, flow, "planning-row");
                 const input = node("input", undefined, row); input.type = "checkbox"; input.checked = phase.enabled !== false; input.disabled = required(phase.id); input.setAttribute?.("aria-label", `Enable P${phase.id}`);
                 input.addEventListener("change", () => {if (!required(phase.id)) {phase.enabled = input.checked; ensureAuto();} renderBuilder();});
-                node("span", `P${phase.id} · ${capabilities.find(c => c.id === phase.id)?.name}`, row);
+                node("span", `P${phase.id} · ${capabilities.find(c => c.id === phase.id)?.name || "Unavailable — removed from active product"}`, row);
                 if (required(phase.id)) node("span", "Required", row, "planning-badge");
                 if (autoAdded.has(phase.id)) node("span", "Auto-added prerequisite", row, "planning-badge");
                 if (draft.target_mode === "auto") node("p", dataHint(phase.id), row, "muted");
@@ -473,7 +456,7 @@
             if (step === 3 && draft.target_mode === "fixed") field(parent, "Common Target (optional)", commonTarget, value => {setCommon(value); renderBuilder();});
             if (step === 4) profileForm(parent, draft.profile, renderBuilder);
             enabled().forEach(phase => {
-                const panel = node("div", undefined, parent, "panel"); node("h3", `P${phase.id} · ${capabilities.find(c => c.id === phase.id)?.name}`, panel);
+                const panel = node("div", undefined, parent, "panel"); node("h3", `P${phase.id} · ${capabilities.find(c => c.id === phase.id)?.name || "Unavailable — removed from active product"}`, panel);
                 if (step === 3) parameterForm(panel, phase, draft.target_mode, true);
                 else timingForm(panel, phase, draft.profile);
             });
@@ -530,11 +513,11 @@
             node("p", item.description || "Custom incident scenario", row);
             node("span", readiness[item.id] || (item.needs_review ? "Needs review" : "Custom scenario"), row, "planning-badge");
             node("p", `${item.target_mode === "auto" ? "Auto Discovery" : "Fixed Targets"} · ${item.phases.filter(p => p.enabled !== false).map(p => "P" + p.id).join(" → ")} · ${timingSummary(item)} · ${schedules.filter(s => s.execution.type === "custom" && s.execution.id === item.id).length} schedule(s)`, row);
-            button(row, "Run", () => runCustom(item.id));
+            button(row, "Run", () => runCustom(item.id)).disabled = (readiness[item.id] || "").startsWith("Unavailable:");
             button(row, "Edit", () => newDraft(item));
             button(row, "Export", () => exportScenario(item.id));
             button(row, "Duplicate", () => {const value = copy(item); delete value.id; value.name += " (copy)"; newDraft(value);});
-            button(row, "Schedule", () => {showPage("schedules"); scheduleEditor({type: "custom", id: item.id});});
+            button(row, "Schedule", () => {showPage("schedules"); scheduleEditor({type: "custom", id: item.id});}).disabled = (readiness[item.id] || "").startsWith("Unavailable:");
             button(row, "Delete", async () => {if (!confirm(`Delete ${item.name}?`)) return; await api(`/api/custom-scenarios/${item.id}`, "DELETE"); await refresh();});
         });
     }
@@ -605,7 +588,7 @@
             node("h3", `${{phase:"Standalone Attack Technique",campaign:"Built-in scenario",custom:"Custom scenario"}[e.type] || e.type} · ${scenario?.name || capabilities.find(c => c.id === e.id)?.name || e.id}`, row);
             node("p", `${item.enabled ? "Enabled" : "Disabled"} · Next: ${item.enabled ? new Date(item.next_run).toLocaleString() : "—"} · ${executionProfile.mode} ${executionProfile.duration ? durationText(executionProfile.duration) : ""} · ${item.interval ? "Every " + intervalText(item.interval) : "Run Once"}`, row);
             node("p", `Planned start: ${new Date(item.at).toLocaleString()} · Source: ${e.id}`, row, "muted");
-            node("p", `Last dispatch: ${item.last_status} · Temporary credentials: ${item.credentials_ready ? "available" : "not supplied"}`, row, "muted");
+            node("p", `${item.readiness || ""} · Last dispatch: ${item.last_status} · Temporary credentials: ${item.credentials_ready ? "available" : "not supplied"}`, row, "muted");
             button(row, "Run Now", async () => {message((await api(`/api/schedules/${item.id}/run`, "POST", {})).status); await refresh();});
             button(row, "Edit / supply credentials", () => scheduleEditor(e, item));
             button(row, item.enabled ? "Disable" : "Enable", async () => {await api(`/api/schedules/${item.id}/${item.enabled ? "disable" : "enable"}`, "POST", {}); await refresh();});

@@ -64,8 +64,6 @@ def verify():
                 assert item['mitre']['techniques'] == [t['id'] for t in edu['technique_details']]
             indexed = {p['id']: p for p in data['phases']}
             assert indexed['09']['education']['tactics'] == ['Persistence', 'Privilege Escalation']
-            assert indexed['13']['education']['tactics'] == ['Execution', 'Stealth', 'Persistence']
-            assert indexed['18']['mitre']['techniques'] == ['T1071.004']
             assert indexed['10']['education']['platforms'] == ['Windows', 'Linux']
             # Unknown/future metadata is not silently assigned a platform or a mode.
             future = technique_metadata({'ATTACK_ID': '99', 'MITRE_TECHNIQUES': 'javascript:bad,T1234.001'}, {})

@@ -76,6 +76,17 @@ command -v find >/dev/null 2>&1 || die "find is required"
     die "MrNobody installation not found: $INSTALL_DIR"
 
 
+# Share the campaign lock. Updating while a campaign runs is rejected.
+mkdir -p "$INSTALL_DIR/runtime"
+exec 9>>"$INSTALL_DIR/runtime/execution.lock"
+flock -n 9 || die "An execution is running. Stop or finish it before updating."
+
+retire_old_code() {
+    if [[ -f "$INSTALL_DIR/web/retired_files.py" ]]; then
+        python3 "$INSTALL_DIR/web/retired_files.py" || die "Retired-file cleanup failed; rerun mrnobody update. User data was preserved."
+    fi
+}
+
 # ============================================================
 # TEMPORARY WORKSPACE
 # ============================================================
@@ -234,6 +245,7 @@ fi
 if (( NEW == 0 && CHANGED == 0 )); then
 
     log
+    retire_old_code
     log "MrNobody is already up to date."
 
     exit 0
@@ -736,6 +748,9 @@ fi
 # ============================================================
 # COMPLETE
 # ============================================================
+
+# Retire only after activation and health checks: rollback can still use old code.
+retire_old_code
 
 log
 log "========================================"

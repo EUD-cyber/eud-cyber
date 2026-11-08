@@ -55,7 +55,7 @@ def validate(data, staging_path):
                and h.get('file') == data['file'] and h.get('platform') == platform
                and h.get('staged') is True and h.get('data_type') == 'synthetic-training-data']
     if len(matches) != 1:
-        raise ValueError('No unique synthetic P05/P17 artifact matches target, protocol and remote file in this staging incident')
+        raise ValueError('No unique synthetic P05 artifact matches target, protocol and remote file in this staging incident')
     host = matches[0]
     if type(host.get('size')) is not int or host['size'] <= 0 or not re.fullmatch(r'[a-fA-F0-9]{64}', str(host.get('sha256', ''))):
         raise ValueError('Staging artifact requires a positive size and SHA256 evidence; run P05 again')

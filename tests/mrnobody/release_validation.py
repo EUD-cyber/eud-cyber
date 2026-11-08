@@ -20,7 +20,7 @@ from scheduler import timestamp
 class ReleaseContracts(unittest.TestCase):
     def test_exact_supported_registry_and_dependency_order(self):
         caps = catalogue(BASE / 'scripts', read_metadata)
-        self.assertEqual(set(caps), {f'{n:02}' for n in range(1, 19)})
+        self.assertEqual(set(caps), {f'{n:02}' for n in range(1, 12)})
         order = read_metadata(BASE / 'scenarios/full-incident.sh')['SCENARIO_PHASES'].split(',')
         self.assertEqual(len(order), len(set(order)))
         self.assertEqual(set(order), set(caps))
@@ -28,7 +28,6 @@ class ReleaseContracts(unittest.TestCase):
         for pid in order:
             self.assertTrue(set(caps[pid]['dependencies']) <= seen, pid)
             seen.add(pid)
-        self.assertLess(order.index('17'), order.index('05'))
         self.assertLess(order.index('05'), order.index('06'))
         self.assertLess(order.index('06'), order.index('07'))
 
@@ -72,6 +71,11 @@ class UpdaterFixtures(unittest.TestCase):
                 sentinels[relative] = path.read_bytes()
             old = installed / 'config/defaults.conf'
             old.write_bytes(b'old defaults\n')
+            (installed / 'web').mkdir()
+            shutil.copyfile(BASE / 'web/retired_files.py', installed / 'web/retired_files.py')
+            retired = installed / 'scripts/12-credential-access.sh'
+            retired.parent.mkdir()
+            retired.write_bytes(b'#!/bin/sh\nexit 99\n')
             payloads = {'config/defaults.conf': b'new defaults\n', 'scripts/release-fixture.sh': b'#!/bin/sh\nexit 0\n'}
             manifest = []
             for relative, data in payloads.items():
@@ -81,6 +85,11 @@ class UpdaterFixtures(unittest.TestCase):
                 digest = hashlib.sha256(data).hexdigest()
                 manifest.append(digest + '|' + relative)
             (remote / 'update-manifest.txt').write_text('\n'.join(manifest) + '\n')
+            if mode == 'no-change':
+                for relative, data in payloads.items():
+                    path = installed / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_bytes(data)
             if mode == 'bad-hash':
                 (remote / 'scripts/release-fixture.sh').write_bytes(b'tampered\n')
             curl = """#!/usr/bin/env python3
@@ -110,12 +119,15 @@ sys.exit(subprocess.call([os.environ['REAL_INSTALL'], *sys.argv[1:]]))
                 FIXTURE_MODE=mode, REAL_INSTALL=real_install), capture_output=True, text=True, timeout=30)
             for relative, data in sentinels.items():
                 self.assertEqual((installed / relative).read_bytes(), data, relative)
-            if mode == 'success':
+            if mode in {'success', 'no-change'}:
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertFalse(retired.exists(), result.stdout + result.stderr)
                 for relative, data in payloads.items():
                     self.assertEqual((installed / relative).read_bytes(), data)
-                self.assertEqual((installed / 'scripts/release-fixture.sh').stat().st_mode & 0o777, 0o755)
+                if mode == 'success':
+                    self.assertEqual((installed / 'scripts/release-fixture.sh').stat().st_mode & 0o777, 0o755)
             else:
+                self.assertTrue(retired.exists(), 'Retirement must follow successful activation only')
                 self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
                 self.assertEqual(old.read_bytes(), b'old defaults\n')
                 self.assertFalse((installed / 'scripts/release-fixture.sh').exists())
@@ -126,6 +138,9 @@ sys.exit(subprocess.call([os.environ['REAL_INSTALL'], *sys.argv[1:]]))
 
     def test_failed_install_restores_previous_files(self):
         self.run_update('rollback')
+
+    def test_old_updater_second_pass_cleans_even_without_changes(self):
+        self.run_update('no-change')
 
     def test_bad_hash_aborts_before_mutation(self):
         self.run_update('bad-hash')

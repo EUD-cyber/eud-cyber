@@ -123,10 +123,13 @@ class Scheduler:
         self.observe = observe
 
     def run(self, sid, definition, credentials=None):
+        from unavailable import UnavailableError
         self.log(sid, 'start requested')
         token = current_schedule.set(sid)
         try:
             status = self.dispatch(definition['execution'], credentials or self.credentials.get(sid, {}))
+        except UnavailableError as exc:
+            status = str(exc)
         except Exception:
             status = 'failed: execution could not be dispatched'
         finally:
@@ -139,8 +142,6 @@ class Scheduler:
                 try:
                     code = process.wait()
                     outcome = 'complete' if code == 0 else 'failed: runner exited' if code not in {130, 137, 143, -15, -9} else 'interrupted'
-                    if code == 80 and definition['execution'].get('type') == 'phase' and definition['execution'].get('id') == '18':
-                        outcome = 'partial: some DNS check-ins failed'
                     self.store.finish(sid, outcome)
                     self.log(sid, outcome)
                 except Exception:
