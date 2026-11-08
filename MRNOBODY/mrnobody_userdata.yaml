@@ -275,6 +275,10 @@ write_files:
           "$INSTALL_DIR/web/windows_actions.py"
 
       download_file \
+        "web/p09_actions.py" \
+        "$INSTALL_DIR/web/p09_actions.py"
+
+      download_file \
           "web/unavailable.py" \
           "$INSTALL_DIR/web/unavailable.py"
 

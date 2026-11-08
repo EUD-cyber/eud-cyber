@@ -682,10 +682,11 @@ def api_run_phase(phase_id):
         data.setdefault('timeout', 60)
         try:
             from scenario_model import private, text
-            from windows_actions import timeout_value, ad_script
+            from windows_actions import timeout_value
+            from p09_actions import validate_password
             private(data.get('target'))
             text(data.get('username'), 128)
-            ad_script(data.get('password'))
+            validate_password(data.get('password'))
             timeout_value(data['timeout'])
         except (ValueError, TypeError):
             return jsonify(status='error', message='P09 requires a private lab IPv4 target, username, runtime password and timeout of 5–300 seconds.'), 400

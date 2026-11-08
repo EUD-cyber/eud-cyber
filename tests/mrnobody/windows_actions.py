@@ -20,6 +20,7 @@ from execution import phase_environment, record
 # Reuse existing endpoint isolation and launcher doubles.
 sys.path.insert(0, str(Path(__file__).parent))
 from planning import API
+from ad_prerequisite import DC, WORKGROUP
 
 CAPS = catalogue(PLATFORM / 'scripts', read_metadata)
 COMMAND = 'Write-Output "TOKEN_DO_NOT_PERSIST"'
@@ -92,11 +93,11 @@ class Worker(unittest.TestCase):
 
     def test_ad_idempotence_and_partial_failure_evidence(self):
         for account, group, outcome in [('created_enabled', 'added', 'success'), ('already_enabled', 'already_member', 'success'), ('created_enabled', 'not_attempted', 'failed')]:
-            data = {'account': account, 'group': group, 'result': outcome, 'domain': 'lab.example', 'dc': 'dc.lab.example', 'warning': 'none', 'password': 'DO_NOT_KEEP'}
+            data = dict(DC, account=account, group=group, result=outcome, password='DO_NOT_KEEP')
             factory = Mock()
             factory.return_value.run_ps.return_value = Mock(status_code=0, std_out=json.dumps(data).encode(), std_err=b'')
             result = actions.perform('09', self.target, self.env, factory)
-            self.assertEqual((result['account'], result['group'], result['result']), (account, group, outcome))
+            self.assertEqual((result['account'], result['group'], result['result']), (('already_enabled', 'already_member', outcome) if outcome == 'success' else (account, group, outcome)))
             self.assertNotIn('DO_NOT_KEEP', json.dumps(result))
         self.assertIn("DomainSID.Value + '-512'", actions.AD_ACTION)
         self.assertIn('-Enabled $true', actions.AD_ACTION)
@@ -121,14 +122,14 @@ class Worker(unittest.TestCase):
                     source = next((PLATFORM / 'scripts').glob(pid + '-*.sh'))
                     (base / 'scripts' / source.name).write_bytes(source.read_bytes())
                     env = dict(self.env, NORDIC_BASE_DIR=tmp)
-                    success = {'result': 'success', 'exit_code': 0, 'account': 'already_enabled', 'group': 'already_member', 'domain': 'lab.example', 'dc': 'dc.lab.example', 'warning': 'none'}
+                    success = dict(DC)
                     invoke = Mock(side_effect=subprocess.TimeoutExpired('hidden', 60)) if timeout else Mock(return_value=Mock(returncode=0, stdout=json.dumps(success)))
                     code = actions.run(pid, env, invoke)
-                    self.assertEqual(code, int(timeout))
+                    self.assertEqual(code, 80 if pid == '09' and timeout else int(timeout))
                     call = invoke.call_args
                     self.assertNotIn(COMMAND, str(call.args))
-                    self.assertEqual(call.kwargs['timeout'], 60)
-                    state = {'incident_id': env['NORDIC_INCIDENT_ID'], 'phase_id': pid, 'phases': {pid: 'failed' if timeout else 'complete'}}
+                    self.assertEqual(call.kwargs['timeout'], (160 if timeout else 230) if pid == '09' else 60)
+                    state = {'incident_id': env['NORDIC_INCIDENT_ID'], 'phase_id': pid, 'phases': {pid: 'partial' if pid == '09' and timeout else 'failed' if timeout else 'complete'}}
                     report = build_report(base, env['NORDIC_INCIDENT_ID'], code, env, standalone=state)
                     save_report(base, report)
                     loaded = load_report(base / 'reports', env['NORDIC_INCIDENT_ID'])
@@ -248,11 +249,11 @@ class Session:
         class Response:
             status_code = 0
             std_err = b'WIN_SECRET'
-            std_out = json.dumps({'result':'success', 'account':'already_enabled', 'group':'already_member', 'domain':'lab.example', 'dc':'dc.lab.example', 'warning':'none'}).encode() if 'Get-ADDomain' in command else b'TOKEN_DO_NOT_PERSIST'
+            std_out = json.dumps({'result': 'success', 'warning': 'none', 'account': 'already_enabled', 'group': 'already_member', 'domain': 'lab.example', 'dc': 'dc.lab.example', 'exit_code': 0, 'domain_sid': 'S-1-5-21-123-456-789', 'account_sid': 'S-1-5-21-123-456-789-1001', 'group_sid': 'S-1-5-21-123-456-789-512', 'exists': True, 'enabled': True, 'member': True, 'owned': True, 'verified': True, 'stage': 'complete'}).encode() if 'Get-ADDomain' in command else b'TOKEN_DO_NOT_PERSIST'
         if 'Get-ADDomain' in command and mode in {'workgroup', 'mixed'}:
-            Response.std_out = json.dumps({'result':'skipped', 'account':'not_attempted', 'group':'not_attempted', 'domain':'WORKGROUP', 'dc':'unknown', 'warning':'target_must_be_domain_controller'}).encode()
+            Response.std_out = json.dumps({'result': 'skipped', 'warning': 'target_must_be_domain_controller', 'account': 'not_attempted', 'group': 'not_attempted', 'domain': 'WORKGROUP', 'dc': 'unknown', 'exit_code': 0, 'domain_sid': 'unknown', 'account_sid': 'none', 'group_sid': 'unknown', 'exists': False, 'enabled': False, 'member': False, 'owned': False, 'verified': False, 'stage': 'dc'}).encode()
         if 'Get-ADDomain' in command and mode == 'dc-error':
-            Response.std_out = json.dumps({'result':'failed', 'account':'created_enabled', 'group':'not_attempted', 'domain':'lab.example', 'dc':'dc.lab.example', 'warning':'ad_action_failed_check_rights_module_and_dc_logs'}).encode()
+            Response.std_out = json.dumps({'result': 'failed', 'warning': 'ad_action_failed_check_rights_module_and_dc_logs', 'account': 'created_enabled', 'group': 'not_attempted', 'domain': 'lab.example', 'dc': 'dc.lab.example', 'exit_code': 0, 'domain_sid': 'S-1-5-21-123-456-789', 'account_sid': 'S-1-5-21-123-456-789-1001', 'group_sid': 'S-1-5-21-123-456-789-512', 'exists': True, 'enabled': True, 'member': True, 'owned': True, 'verified': True, 'stage': 'complete'}).encode()
         if 'Get-ADDomain' not in command and os.environ.get('FIXTURE_P10') == 'invalid':
             Response.status_code = 1
         return Response()

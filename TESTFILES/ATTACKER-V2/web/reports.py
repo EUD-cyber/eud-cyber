@@ -387,12 +387,12 @@ def add_analysis(report):
             phase['prerequisite_evidence'] = details
             phase['analysis']['what_happened'] = phase['prerequisite_outcome']
             phase['analysis']['findings'] = details or [phase['prerequisite_outcome']]
-        if phase['id'] == '09' and phase.get('status') in {'success', 'failure'}:
+        if phase['id'] == '09' and phase.get('status') in {'success', 'failure', 'partial'}:
             details = [e['timestamp'] + ' · ' + e['message'] for e in events
                        if e['event'].startswith('WINDOWS_ACTION_') and e['event'] != 'WINDOWS_ACTION_START']
             phase['action_result'] = phase['status']
             phase['action_outcome'] = ('Active Directory account and Domain Admins action completed'
-                                       if phase['status'] == 'success' else 'Active Directory action failed')
+                                       if phase['status'] == 'success' else 'Active Directory action partial; postconditions not confirmed' if phase['status'] == 'partial' else 'Active Directory action failed')
             phase['action_evidence'] = details
             phase['analysis']['what_happened'] = phase['action_outcome']
             phase['analysis']['findings'] = details or [phase['action_outcome']]
@@ -525,7 +525,7 @@ def redact_environment(value, environ):
 
 def outcome(event):
     upper = event.upper()
-    if upper in {"DNS_ACTION_PARTIAL", "PHASE_PARTIAL"}:
+    if upper in {"DNS_ACTION_PARTIAL", "WINDOWS_ACTION_PARTIAL", "PHASE_PARTIAL"}:
         return "partial"
     if any(word in upper for word in ("SKIPPED", "EXCLUDED")):
         return "skipped"
@@ -669,8 +669,8 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
         })
     now = datetime.now(timezone.utc).isoformat()
     prerequisite_skip = standalone is not None and standalone['phase_id'] in {'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'} and exit_code == 78
-    status = "complete" if campaign.get("status") == "complete" and (exit_code == 0 or prerequisite_skip) else (
-        "partial" if standalone is not None and standalone["phase_id"] == "18" and exit_code == 80 else "interrupted" if exit_code in {130, 137, 143} else "failed")
+    status = "partial" if standalone is None and campaign.get("phases", {}).get("09") == "partial" and exit_code == 0 else "complete" if campaign.get("status") == "complete" and (exit_code == 0 or prerequisite_skip) else (
+        "partial" if standalone is not None and standalone["phase_id"] in {"09", "18"} and exit_code == 80 else "interrupted" if exit_code in {130, 137, 143} else "failed")
     # A zero process exit does not prove that every selected phase finished.
     # Only explicit plan/state entries count; legacy reports include implicit
     # phase rows that were never selected.
@@ -796,8 +796,8 @@ def run_phase(base, phase_id, script, environ=None):
             skipped = (phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'} and code == 78) or (phase_id in {'10', '13'} and code == 79)
             state = {"incident_id": incident_id, "scenario": "standalone-phase", "phase_id": phase_id,
                      "started": started, "completed": datetime.now(timezone.utc).isoformat(),
-                     "status": "partial" if phase_id == "18" and code == 80 else "complete" if code == 0 or (phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'} and code == 78) else "failed",
-                     "phases": {phase_id: "partial" if phase_id == "18" and code == 80 else "skipped" if skipped else "complete" if code == 0 else "running" if code in {130, 137, 143} else "failed"}}
+                     "status": "partial" if phase_id in {"09", "18"} and code == 80 else "complete" if code == 0 or (phase_id in {'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'} and code == 78) else "failed",
+                     "phases": {phase_id: "partial" if phase_id in {"09", "18"} and code == 80 else "skipped" if skipped else "complete" if code == 0 else "running" if code in {130, 137, 143} else "failed"}}
             try:
                 path = save_report(base, build_report(base, incident_id, code, env, standalone=state))
                 print(f"Report: {path}", flush=True)

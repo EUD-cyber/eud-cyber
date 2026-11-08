@@ -65,6 +65,7 @@ fi
 
 # shellcheck source=/dev/null
 source "$CONFIG_FILE"
+export NORDIC_AD_DC_TARGET
 
 # Built-in phases consume campaign access; never inherit standalone overrides.
 if [[ -z "${MRN_EXECUTION:-}" ]]; then
@@ -713,6 +714,13 @@ run_phase() {
         return 0
     fi
 
+    if [[ "$NUMBER" == "09" && $RESULT -eq 80 ]]; then
+        RUN_PHASE_STATUS="partial"
+        update_phase_state "$NUMBER" "partial"
+        log "[PHASE $NUMBER] PARTIAL - AD postconditions not confirmed; inspect ground truth"
+        return 0
+    fi
+
     if [[ "$NUMBER" == "09" && $RESULT -eq 78 ]]; then
         RUN_PHASE_STATUS="skipped"
         update_phase_state "$NUMBER" "skipped"
@@ -1198,7 +1206,7 @@ windows_access_available() {
 import json, os, sys
 from pathlib import Path
 plan = json.loads(os.environ.get('MRN_EXECUTION', '{}'))
-if plan.get('target_mode') == 'fixed':
+if plan.get('target_mode') == 'fixed' or os.environ.get('NORDIC_AD_DC_TARGET'):
     sys.exit(0)
 path = Path(sys.argv[1])
 if not path.exists():
@@ -1540,7 +1548,7 @@ states = data.get("phases", {})
 planned = [p["id"] for p in data["execution"]["phases"]] if "execution" in data else list(states)
 unfinished = {pid: states.get(pid, "pending") for pid in planned
               if states.get(pid) not in {"complete", "skipped", "disabled", "partial"}}
-data["status"] = "failed" if any(s == "failed" for s in unfinished.values()) else "partial" if unfinished else "complete"
+data["status"] = "failed" if any(s == "failed" for s in unfinished.values()) else "partial" if unfinished or states.get("09") == "partial" else "complete"
 if unfinished:
     data.pop("completed", None)
     print("[ERROR] Incomplete campaign: " + repr(unfinished), file=sys.stderr)

@@ -16,77 +16,8 @@ from reports import INCIDENT_ID, redact_environment, p10_output_preview
 from scenario_model import private
 
 
-# Resolve Domain Admins by RID so localized lab domains work too. Run directly on
-# the DC: this avoids a hidden second-hop authentication or out-of-scope AD write.
-# New/disabled accounts receive the existing runtime Windows credential. Already
-# enabled accounts keep their password. The substituted script is never persisted.
-AD_ACTION = r'''
-$ErrorActionPreference = 'Stop'
-$r = @{domain='unknown'; dc='unknown'; account='not_attempted'; group='not_attempted'; result='failed'; warning='none'}
-try {
-    $system = Get-CimInstance Win32_ComputerSystem
-    $r.domain = $system.Domain
-    if ($system.DomainRole -lt 4) {
-        $r.result = 'skipped'
-        $r.warning = 'target_must_be_domain_controller'
-        throw 'not_dc'
-    }
-    Import-Module ActiveDirectory -ErrorAction Stop
-    $d = Get-ADDomain -Server localhost
-    $r.domain = $d.DNSRoot
-    $r.dc = $env:COMPUTERNAME + '.' + $d.DNSRoot
-    $g = Get-ADGroup -Identity ($d.DomainSID.Value + '-512') -Server localhost
-    $u = Get-ADUser -Filter "SamAccountName -eq 'mrnobody'" -Properties Enabled -Server localhost
-    if ($null -eq $u -or -not $u.Enabled) {
-        $accountPassword = ConvertTo-SecureString -AsPlainText -Force ([Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('__ACCOUNT_PASSWORD__')))
-    }
-    if ($null -eq $u) {
-        New-ADUser -Name 'mrnobody' -SamAccountName 'mrnobody' -AccountPassword $accountPassword -Enabled $true -Description 'MrNobody controlled lab account' -Server localhost
-        $r.account = 'created_enabled'
-    } elseif (-not $u.Enabled) {
-        # Earlier P09 versions created passwordless disabled users. Set a known
-        # runtime password before enabling; never reset an already enabled user.
-        Set-ADAccountPassword -Identity $u -Reset -NewPassword $accountPassword -Server localhost
-        Enable-ADAccount -Identity $u -Server localhost
-        $r.account = 'enabled_existing'
-    } else { $r.account = 'already_enabled' }
-    $u = Get-ADUser -Identity 'mrnobody' -Properties Enabled -Server localhost
-    if ($null -eq $u -or -not $u.Enabled) { throw 'account_verification_failed' }
-    $member = @(Get-ADGroupMember -Identity $g -Server localhost | Where-Object {$_.SID -eq $u.SID})
-    if ($member.Count -gt 0) { $r.group = 'already_member' }
-    else {
-        Add-ADGroupMember -Identity $g -Members $u -Server localhost
-        $r.group = 'added'
-    }
-    $verify = @(Get-ADGroupMember -Identity $g -Server localhost | Where-Object {$_.SID -eq $u.SID})
-    if ($verify.Count -eq 0) { throw 'verification_failed' }
-    $r.result = 'success'
-} catch {
-    if ($r.warning -eq 'none') { $r.warning = 'ad_action_failed_check_rights_module_and_dc_logs' }
-}
-$r | ConvertTo-Json -Compress
-'''
-
-
-AD_ENABLED_STATES = {'created_enabled', 'enabled_existing', 'already_enabled'}
-
-
-def ad_script(password):
-    if not isinstance(password, str) or not password or len(password) > 4096 or '\x00' in password:
-        raise ValueError('P09 requires a valid runtime Windows password')
-    # Quoting only, not encryption. Never put the script or this value in logs,
-    # files, scenario definitions or subprocess arguments.
-    encoded = base64.b64encode(password.encode('utf-16-le')).decode('ascii')
-    return AD_ACTION.replace('__ACCOUNT_PASSWORD__', encoded)
-
-
-def ad_success(result):
-    return (result.get('result') == 'success' and type(result.get('exit_code')) is int
-            and result['exit_code'] == 0 and result.get('account') in AD_ENABLED_STATES
-            and result.get('group') in {'added', 'already_member'}
-            and result.get('warning') == 'none'
-            and all(isinstance(result.get(k), str) and result[k] != 'unknown'
-                    and re.fullmatch(r'[A-Za-z0-9_.-]{1,253}', result[k]) for k in ('domain', 'dc')))
+from p09_actions import AD_ACTION, STATES as AD_ENABLED_STATES, confirmed as ad_success
+from p09_actions import perform as perform_ad
 
 
 def runtime_command(value):
@@ -126,7 +57,13 @@ def timeout_value(value):
     return int(value)
 
 
-def targets(env):
+def targets(env, pid=None):
+    if pid == '09' and env.get('MRNOBODY_RUN_MODE') == 'campaign' and env.get('NORDIC_AD_DC_TARGET'):
+        # Explicit lab DC pin wins over ordinary RDP/SSH inventory endpoints.
+        # Authentication and strict local DC verification still precede writes.
+        return targets(dict(env, MRNOBODY_RUN_MODE='standalone',
+            MRNOBODY_TARGET=env['NORDIC_AD_DC_TARGET'], MRNOBODY_PROTOCOL='winrm-http',
+            MRNOBODY_PORT='5985', MRNOBODY_USERNAME=env.get('NORDIC_RDP_USERNAME') or 'Administrator'))
     protocol = env.get('MRNOBODY_PROTOCOL') or 'winrm-http'
     if protocol not in {'winrm', 'winrm-http', 'winrm-https'}:
         raise ValueError('Windows actions require WinRM')
@@ -160,6 +97,11 @@ def perform(pid, target, env, session_factory=None, evidence_parser=None):
     if session_factory is None:
         import winrm
         session_factory = winrm.Session
+    if pid == '09':
+        private(target['target'])
+        return redact_environment(dict(perform_ad(target, env, session_factory,
+            timeout_value(env.get('MRNOBODY_TIMEOUT') or '60'), env.get('MRN_P09_VERIFY_ONLY') == '1'),
+            command='ad_account_and_domain_admins'), env)
     password = env.get('MRNOBODY_PASSWORD') or env.get('NORDIC_RDP_PASSWORD')
     if not password:
         return {'result': 'failed', 'warning': 'missing_runtime_windows_credentials'}
@@ -170,7 +112,7 @@ def perform(pid, target, env, session_factory=None, evidence_parser=None):
                               auth=(target['username'], password), transport='ntlm',
                               server_cert_validation='ignore', operation_timeout_sec=limit,
                               read_timeout_sec=limit + 10)
-    command = ad_script(password) if pid == '09' else custom_script(env.get('MRN_POWERSHELL_SECRET', ''))
+    command = custom_script(env.get('MRN_POWERSHELL_SECRET', ''))
     response = session.run_ps(command)
     stdout, stderr = response.std_out, response.std_err
     if evidence_parser is not None:
@@ -192,28 +134,6 @@ def perform(pid, target, env, session_factory=None, evidence_parser=None):
             result[stream + '_preview'] = p10_output_preview(data, env)
         if response.status_code != 0:
             result['reason'] = 'Custom PowerShell command failed'
-    if pid == '09':
-        try:
-            data = json.loads(stdout.decode('utf-8-sig')) if len(stdout) <= 8192 else {}
-            if not isinstance(data, dict) or data.get('result') not in {'success', 'failed', 'skipped'}:
-                raise ValueError('invalid response')
-            if data['result'] == 'skipped' and not (
-                    data.get('warning') == 'target_must_be_domain_controller'
-                    and data.get('account') == data.get('group') == 'not_attempted'
-                    and data.get('dc') == 'unknown'):
-                raise ValueError('invalid prerequisite response')
-            result['result'] = data['result'] if response.status_code == 0 else 'failed'
-            for key, allowed in {'account': {'not_attempted'} | AD_ENABLED_STATES,
-                                 'group': {'not_attempted', 'added', 'already_member'},
-                                 'warning': {'none', 'target_must_be_domain_controller', 'ad_action_failed_check_rights_module_and_dc_logs'}}.items():
-                result[key] = data.get(key) if data.get(key) in allowed else 'unknown'
-            for key in ('domain', 'dc'):
-                val = data.get(key, '')
-                result[key] = val if isinstance(val, str) and re.fullmatch(r'[A-Za-z0-9_.-]{1,253}', val) else 'unknown'
-            if result['result'] == 'success' and not ad_success(result):
-                result.update(result='failed', warning='invalid_ad_response')
-        except (ValueError, UnicodeError):
-            result.update(result='failed', warning='invalid_ad_response')
     return redact_environment(result, env)
 
 
@@ -252,7 +172,7 @@ def run(pid, env, invoke=subprocess.run):
         limit = timeout_value(env.get('MRNOBODY_TIMEOUT') or '60')
         if pid == '10':
             runtime_command(env.get('MRN_POWERSHELL_SECRET', ''))
-        selected_targets = targets(env)
+        selected_targets = targets(env, pid)
         if not selected_targets:
             emit(base, env, pid, 'WINDOWS_ACTION_SKIPPED' if pid == '09' else 'WINDOWS_ACTION_FAILED', warning='no_windows_rdp_access_targets', method='winrm_ntlm')
             outcomes.append('skipped' if pid == '09' else 'failed')
@@ -264,14 +184,27 @@ def run(pid, env, invoke=subprocess.run):
             child_env = dict(env, MRN_WINDOWS_TARGET=json.dumps(target))
             try:
                 child = invoke([sys.executable, str(Path(__file__).resolve()), pid, '--worker'],
-                               env=child_env, capture_output=True, timeout=limit, check=False)
+                               env=child_env, capture_output=True, timeout=(3 * (limit + 10) + 20 if pid == '09' else limit), check=False)
                 result = json.loads(child.stdout) if child.returncode == 0 else {'result': 'failed', 'warning': 'worker_execution_failed'}
-                if not isinstance(result, dict) or result.get('result') not in {'success', 'failed', 'skipped', 'action_error'}:
+                if not isinstance(result, dict) or result.get('result') not in {'success', 'failed', 'skipped', 'action_error', 'partial'}:
                     raise ValueError('Invalid worker response')
                 if pid == '09' and result['result'] == 'success' and not ad_success(result):
                     raise ValueError('Invalid AD success response')
             except subprocess.TimeoutExpired:
-                result = {'result': 'failed', 'warning': 'timeout_remote_action_may_still_be_running'}
+                if pid == '09':
+                    # A killed worker does not cancel an AD command. Never replay
+                    # the write; recover using a bounded read-only worker.
+                    try:
+                        recovery = invoke([sys.executable, str(Path(__file__).resolve()), pid, '--worker'],
+                            env=dict(child_env, MRN_P09_VERIFY_ONLY='1'), capture_output=True,
+                            timeout=2 * (limit + 10) + 20, check=False)
+                        result = json.loads(recovery.stdout) if recovery.returncode == 0 else {}
+                        if not isinstance(result, dict) or result.get('result') != 'success' or not ad_success(result):
+                            result = dict(result='partial', warning='timeout_postconditions_not_confirmed', verified=False)
+                    except (subprocess.TimeoutExpired, OSError, ValueError):
+                        result = dict(result='partial', warning='timeout_postcheck_unavailable_state_unknown', verified=False)
+                else:
+                    result = {'result': 'failed', 'warning': 'timeout_remote_action_may_still_be_running'}
             except OSError:
                 result = {'result': 'failed', 'warning': 'worker_execution_failed'}
             except ValueError:
@@ -288,14 +221,14 @@ def run(pid, env, invoke=subprocess.run):
             outcomes.append('transport' if outcome == 'failed' and result.get('warning') == 'transport_error_details_omitted' else outcome)
             if outcome == 'skipped':
                 result['reason'] = 'Target is not an Active Directory Domain Controller; privileged AD action not attempted'
-            emit(base, env, pid, {'success': 'WINDOWS_ACTION_SUCCESS', 'skipped': 'WINDOWS_ACTION_SKIPPED', 'action_error': 'WINDOWS_ACTION_ERROR'}.get(outcome, 'WINDOWS_ACTION_FAILED'),
+            emit(base, env, pid, {'success': 'WINDOWS_ACTION_SUCCESS', 'skipped': 'WINDOWS_ACTION_SKIPPED', 'action_error': 'WINDOWS_ACTION_ERROR', 'partial': 'WINDOWS_ACTION_PARTIAL'}.get(outcome, 'WINDOWS_ACTION_FAILED'),
                  target=target['target'], protocol=target['protocol'], method='winrm_ntlm', **result)
     except Exception:
         outcomes.append('failed')
         emit(base, env, pid, 'WINDOWS_ACTION_FAILED', warning='invalid_or_missing_runtime_configuration')
     # A reachable non-DC establishes the missing prerequisite even if other
     # candidates had transport failures. Never suppress an action/config error.
-    if pid == '09' and 'skipped' in outcomes and not any(x in outcomes for x in ('success', 'failed')):
+    if pid == '09' and 'skipped' in outcomes and not any(x in outcomes for x in ('success', 'failed', 'partial')):
         emit(base, env, pid, 'PHASE_SKIPPED', phase=pid, reason='No Active Directory Domain Controller discovered',
              account='not_attempted', group='not_attempted')
         return 78  # Internal prerequisite exit; campaign/CLI wrappers handle explicitly.
@@ -311,7 +244,10 @@ def run(pid, env, invoke=subprocess.run):
     else:
         # Candidate transport/auth failures cannot poison a verified DC success.
         # AD action, timeout, worker and configuration errors remain hard failures.
-        success = 'success' in outcomes and 'failed' not in outcomes
+        success = 'success' in outcomes and not any(x in outcomes for x in ('failed', 'partial'))
+        if 'partial' in outcomes and 'failed' not in outcomes:
+            emit(base, env, pid, 'PHASE_PARTIAL', phase=pid, verified=False)
+            return 80
     emit(base, env, pid, 'PHASE_COMPLETE' if success else 'PHASE_FAILED', phase=pid)
     return 0 if success else 1
 

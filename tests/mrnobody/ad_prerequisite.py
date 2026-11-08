@@ -15,9 +15,12 @@ from report_exports import export_html, export_pdf
 from execution import record, snapshot
 
 DC = dict(result='success', warning='none', account='already_enabled',
-          group='already_member', domain='lab.example', dc='dc.lab.example', exit_code=0)
+          group='already_member', domain='lab.example', dc='dc.lab.example', exit_code=0, domain_sid='S-1-5-21-123-456-789',
+          account_sid='S-1-5-21-123-456-789-1001', group_sid='S-1-5-21-123-456-789-512',
+          exists=True, enabled=True, member=True, owned=True, verified=True, stage='complete')
 WORKGROUP = dict(result='skipped', warning='target_must_be_domain_controller',
-                 account='not_attempted', group='not_attempted', domain='WORKGROUP', dc='unknown', exit_code=0)
+                 account='not_attempted', group='not_attempted', domain='WORKGROUP', dc='unknown', exit_code=0, domain_sid='unknown', account_sid='none', group_sid='unknown',
+                 exists=False, enabled=False, member=False, owned=False, verified=False, stage='dc')
 TRANSPORT = dict(result='failed', warning='transport_error_details_omitted')
 
 
