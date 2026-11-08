@@ -113,14 +113,14 @@ class P09Regression(unittest.TestCase):
     def test_manual_standalone_keeps_endpoint_and_credentials(self):
         explicit = dict(self.env, MRNOBODY_TARGET='10.20.30.40',
                         NORDIC_AD_DC_TARGET='192.168.2.200', MRNOBODY_PROTOCOL='winrm-https',
-                        MRNOBODY_PORT='15986', MRNOBODY_USERNAME='LAB\\\\operator')
+                        MRNOBODY_PORT='15986', MRNOBODY_USERNAME='LAB\\operator')
         row = actions.targets(explicit, '09')[0]
         self.assertEqual((row['target'], row['protocol'], row['port']), ('10.20.30.40', 'winrm-https', 15986))
         factory = Mock()
         factory.return_value.run_ps.return_value = response(DC)
         self.assertTrue(actions.ad_success(actions.perform('09', row, explicit, factory)))
         self.assertEqual(factory.call_args.args[0], 'https://10.20.30.40:15986/wsman')
-        self.assertEqual(factory.call_args.kwargs['auth'], ('LAB\\\\operator', 'secret'))
+        self.assertEqual(factory.call_args.kwargs['auth'], ('LAB\\operator', 'secret'))
 
     def test_invalid_schema_diagnostics_are_fixed_codes_without_remote_content(self):
         from p09_actions import parse, SchemaError

@@ -7,7 +7,7 @@ import sys
 import tempfile
 import subprocess
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent))
 from ad_prerequisite import DC
@@ -122,12 +122,19 @@ class Discovery(unittest.TestCase):
         self.assertIn('candidate_probe_timeout', log)
         self.assertLessEqual(invoke.call_args_list[0].kwargs['timeout'], 12)
 
+    @unittest.skipUnless(sys.platform == 'win32', 'Windows PowerShell syntax check')
+    def test_discovery_powershell_parses_without_execution(self):
+        child = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
+            "$ErrorActionPreference='Stop'; [void][ScriptBlock]::Create([Console]::In.ReadToEnd())"],
+            input=actions.DC_VERIFY, text=True, capture_output=True, timeout=20)
+        self.assertEqual(child.returncode, 0, child.stderr)
+
     def test_probe_read_only_auth_and_fixed_diagnostics(self):
         target = actions.targets(self.env, '09')[1]
         factory = Mock()
         factory.return_value.run_ps.return_value = Mock(status_code=0,
             std_out=json.dumps({k:v for k,v in ELIGIBLE.items() if k not in ('probe', 'auth')}).encode())
-        connect = Mock()
+        connect = MagicMock()
         result = actions.probe_dc(target, self.env, factory, connect)
         self.assertEqual(result, ELIGIBLE)
         connect.assert_called_once_with(('192.168.2.200', 5985), timeout=2)
