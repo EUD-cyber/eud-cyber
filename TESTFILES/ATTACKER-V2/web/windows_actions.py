@@ -431,8 +431,12 @@ def emit_p03_evidence(base, env):
             # Only fixed diagnostic codes from P03; never serialize arbitrary inventory text.
             if result.get('access') == 'winrm' and result.get('warning') in WINRM_ACCESS_WARNINGS:
                 emit(base, env, '09', 'P03_WINRM_EVIDENCE', target=private(result['target']),
-                     authenticated=result.get('authenticated') is True, warning=result['warning'])
+                     authenticated=result.get('authenticated') is True, warning=result['warning'],
+                     stage=result.get('stage') if result.get('stage') in {'ntlm_shell', 'powershell_start', 'identity_read', 'cleanup', 'complete', 'worker'} else 'unrecorded')
+        counts = data.get('candidate_counts', {})
+        count = counts.get('winrm') if isinstance(counts, dict) else None
         emit(base, env, '09', 'P03_ACCESS_STATE', complete=data.get('complete') is True,
+             winrm_open_candidates=count if type(count) is int and 0 <= count <= 4096 else 'unrecorded',
              reason='Review_P03_WinRM_attempts_credentials_listener_and_timeouts')
     except (ContractError, ValueError, TypeError, KeyError, AttributeError):
         emit(base, env, '09', 'P03_ACCESS_STATE', warning='p03_inventory_missing_invalid_or_other_incident',

@@ -295,6 +295,10 @@ def run_access(env, invoke=subprocess.run):
             data, _ = inventory(env)
             state['source_inventory_id'] = data['inventory_id']
             candidates = {kind: open_targets(env, kind) for kind in ('ssh', 'rdp', 'winrm')}
+        state['candidate_counts'] = {kind: len(targets) for kind, targets in candidates.items()}
+        for kind, count in state['candidate_counts'].items():
+            actions.emit(base, env, '03', 'P01_PORT_GATE', protocol=kind, open_candidates=count,
+                         source='p01_tcp_inventory' if not direct else 'manual_endpoint')
         merged = {}
         for kind, targets in candidates.items():
             runtime = dict(env)
