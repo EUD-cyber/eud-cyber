@@ -34,7 +34,7 @@ def definition(ids=('09', '10'), mode='fixed'):
 class Model(unittest.TestCase):
     def test_metadata_dependencies_and_full_campaign(self):
         for pid in ('09', '10'):
-            self.assertEqual(CAPS[pid]['dependencies'], ['01'] if pid == '09' else ['03'])
+            self.assertEqual(CAPS[pid]['dependencies'], ['03'])
             self.assertTrue(CAPS[pid]['credentials'])
             self.assertTrue(CAPS[pid]['standalone'])
             self.assertEqual(CAPS[pid]['timing'], ['start_offset'])
@@ -43,8 +43,7 @@ class Model(unittest.TestCase):
         for ids in [('09',), ('10',), ('10', '09')]:
             validate(definition(ids), CAPS)  # Direct targeting needs no discovery.
         validate(definition(('01', '03', '09', '10'), 'auto'), CAPS)
-        validate(definition(('01', '09'), 'auto'), CAPS)
-        for ids in [('09', '01'), ('01', '10'), ('10', '01', '03')]:
+        for ids in [('01', '09'), ('09', '01'), ('01', '10'), ('10', '01', '03')]:
             with self.assertRaises(ValueError):
                 validate(definition(ids, 'auto'), CAPS)
 
@@ -297,7 +296,7 @@ class Session:
             self.assertEqual(p09['status'], 'skipped')
             self.assertTrue(any(e['event'] == 'PHASE_SKIPPED' for e in p09['events']))
             self.assertEqual(next(p for p in full['phases'] if p['id'] == '10')['status'], 'skipped')
-            access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[{"ip":"192.168.1.10","compromised":true,"platform":"windows","access":"rdp","domain_controller":true}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
+            access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[{"ip":"192.168.1.10","compromised":true,"platform":"windows","access":"rdp","domain_controller":true,"access_methods":{"winrm":{"authenticated":true,"port":5985,"protocol":"winrm-http","verification":"read_only_windows_identity"}}}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
             # P01 supplies the independent candidate/scope inventories each run.
             discovery = next((base / 'scripts').glob('01-*.sh'))
             discovery.write_text("""#!/bin/sh
@@ -318,7 +317,7 @@ PY
                 env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             no_p03 = load_report(base / 'reports', 'MRN-p01-no-p03')
-            self.assertEqual(next(p for p in no_p03['phases'] if p['id'] == '09')['status'], 'success')
+            self.assertEqual(next(p for p in no_p03['phases'] if p['id'] == '09')['status'], 'skipped')
             access.write_text(access_fixture)
             env.update(NORDIC_INCIDENT_ID='MRN-full-enabled', MRN_POWERSHELL_ENABLED='1')
             result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)
@@ -350,7 +349,7 @@ PY
                 self.assertEqual(custom_report['phases'][0]['status'], expected)
                 self.assertEqual(custom_report['phases'][1]['status'], 'success' if expected == 'skipped' else 'not_run')
                 env.pop('MRN_EXECUTION')
-                access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[{"ip":"192.168.1.10","compromised":true,"platform":"windows","access":"rdp","domain_controller":true},{"ip":"192.168.1.11","compromised":true,"platform":"windows","access":"rdp","domain_controller":true}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
+                access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[{"ip":"192.168.1.10","compromised":true,"platform":"windows","access":"rdp","domain_controller":true,"access_methods":{"winrm":{"authenticated":true,"port":5985,"protocol":"winrm-http","verification":"read_only_windows_identity"}}},{"ip":"192.168.1.11","compromised":true,"platform":"windows","access":"rdp","domain_controller":true,"access_methods":{"winrm":{"authenticated":true,"port":5985,"protocol":"winrm-http","verification":"read_only_windows_identity"}}}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
                 env.update(NORDIC_INCIDENT_ID='MRN-full-' + mode, MRN_POWERSHELL_ENABLED='0')
                 campaign_expected = 'skipped' if mode == 'unreachable' else expected
                 result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)

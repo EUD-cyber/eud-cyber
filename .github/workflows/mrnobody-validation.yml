@@ -88,6 +88,7 @@ jobs:
           node tests/mrnobody/dual_review.cjs
           python tests/mrnobody/windows_actions.py
           python tests/mrnobody/ad_prerequisite.py
+          python tests/mrnobody/p03_winrm.py -v
           python tests/mrnobody/p09_discovery.py -v
           python tests/mrnobody/p09_regression.py
           python tests/mrnobody/ad_enabled.py

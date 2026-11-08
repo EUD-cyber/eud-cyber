@@ -11,7 +11,7 @@
 # ATTACK_ALIAS="ad-privilege"
 # ATTACK_STANDALONE="true"
 # ATTACK_PARAMETERS="target,port,protocol,username,password,timeout"
-# ATTACK_CAMPAIGN_STATE="discovered-hosts"
+# ATTACK_CAMPAIGN_STATE="compromised-hosts"
 # MITRE_TACTIC="Persistence,Privilege Escalation"
 # MITRE_TECHNIQUES="T1136.002,T1098.007,T1078.002"
 # MITRE_TECHNIQUE_NAMES="Domain Account|Additional Local or Domain Groups|Domain Accounts"

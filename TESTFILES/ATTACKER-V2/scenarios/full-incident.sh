@@ -1200,7 +1200,7 @@ PY
 }
 
 
-# P09 independently discovers and verifies candidates from P01.
+# P09 consumes P03 authenticated WinRM services and independently verifies DC role.
 if [[ -n "${MRN_EXECUTION:-}" ]]; then
     # Capture first: process substitution hides the producer's exit status, and
     # a read loop would share its queued identifiers with child processes.

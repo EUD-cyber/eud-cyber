@@ -42,9 +42,11 @@ class Discovery(unittest.TestCase):
         self.write('networks.json', networks=[dict(network='192.168.1.0/24'), dict(network='192.168.2.0/24')])
         self.write('discovered-hosts.json', hosts=[dict(ip=ip, status='discovered',
             services={}, compromised=False) for ip in addresses])
-        # Misleading P03 Windows/RDP classification must have no effect.
-        self.write('compromised-hosts.json', hosts=[dict(ip='192.168.1.120',
-            compromised=True, platform='windows', access='rdp', domain_controller=True)])
+        # P09 now consumes actual P03 WinRM service evidence, not RDP metadata.
+        self.write('compromised-hosts.json', hosts=[dict(ip=ip, compromised=True,
+            platform='windows', access='winrm', access_methods={'winrm': dict(
+                authenticated=True, port=5985, protocol='winrm-http',
+                verification='read_only_windows_identity')}) for ip in addresses])
 
     def run_campaign(self, rows):
         invoke = Mock(side_effect=[r if isinstance(r, Exception) else
@@ -55,16 +57,20 @@ class Discovery(unittest.TestCase):
         self.assertNotIn('DO_NOT_LOG', log)
         return code, log, invoke
 
-    def test_p01_inventory_kali_filtered_dc_selected_no_p03_dependency(self):
-        code, log, invoke = self.run_campaign([NON_DC, ELIGIBLE, DC])
+    def test_p03_winrm_dc_selected_rdp_only_kali_is_not_a_candidate(self):
+        state = json.loads((self.base / 'state/compromised-hosts.json').read_text())
+        kali = next(h for h in state['hosts'] if h['ip'] == '192.168.1.120')
+        kali.update(access='rdp', domain_controller=True, access_methods={'rdp': dict(authenticated=True)})
+        self.write('compromised-hosts.json', hosts=state['hosts'])
+        code, log, invoke = self.run_campaign([ELIGIBLE, DC])
         self.assertEqual(code, 0)
         calls = invoke.call_args_list
         self.assertEqual([json.loads(c.kwargs['env']['MRN_WINDOWS_TARGET'])['target']
-                          for c in calls], ['192.168.1.120', '192.168.2.200', '192.168.2.200'])
-        self.assertTrue(all(c.kwargs['env']['MRN_P09_DISCOVERY_ONLY'] == '1' for c in calls[:2]))
-        self.assertNotIn('MRN_P09_DISCOVERY_ONLY', calls[2].kwargs['env'])
+                          for c in calls], ['192.168.2.200', '192.168.2.200'])
+        self.assertTrue(all(c.kwargs['env']['MRN_P09_DISCOVERY_ONLY'] == '1' for c in calls[:1]))
+        self.assertNotIn('MRN_P09_DISCOVERY_ONLY', calls[1].kwargs['env'])
         self.assertIn('P09_DC_SELECTED target=192.168.2.200', log)
-        self.assertIn('eligible=False warning=target_must_be_domain_controller', log)
+        self.assertNotIn('target=192.168.1.120', log)
         self.assertIn('PHASE_COMPLETE', log)
 
     def test_no_winrm_non_dc_credentials_denied_and_read_only_dc(self):
@@ -137,7 +143,7 @@ class Discovery(unittest.TestCase):
         connect = MagicMock()
         result = actions.probe_dc(target, self.env, factory, connect)
         self.assertEqual(result, ELIGIBLE)
-        connect.assert_called_once_with(('192.168.2.200', 5985), timeout=2)
+        connect.assert_not_called()  # TCP discovery belongs to P03.
         self.assertEqual(factory.call_args.kwargs['auth'], ('LAB\\operator', 'DO_NOT_LOG'))
         command = factory.return_value.run_ps.call_args.args[0]
         self.assertIn('IsReadOnly', command)
@@ -145,10 +151,6 @@ class Discovery(unittest.TestCase):
         denied = type('InvalidCredentialsError', (Exception,), {})
         factory.return_value.run_ps.side_effect = denied('DO_NOT_LOG')
         self.assertEqual(actions.probe_dc(target, self.env, factory, connect)['warning'], 'credentials_denied')
-        factory.reset_mock()
-        result = actions.probe_dc(target, self.env, factory, Mock(side_effect=OSError('DO_NOT_LOG')))
-        self.assertEqual(result['warning'], 'winrm_port_unreachable')
-        factory.assert_not_called()
 
     def test_invalid_probe_response_and_success_evidence_in_report(self):
         self.inventory(['192.168.2.200'])

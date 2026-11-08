@@ -50,7 +50,7 @@ FIELDS = {
     'artifact': {'type': 'text', 'label': 'Artifact suffix (default: telemetry)'},
     'file': {'type': 'path', 'label': 'Synthetic staged file (@staged = current target staging output)'},
 }
-PROTOCOLS = {'02': ['http', 'https'], '03': ['ssh', 'rdp'],
+PROTOCOLS = {'02': ['http', 'https'], '03': ['ssh', 'rdp', 'winrm-http'],
              '04': ['ssh', 'winrm', 'winrm-http', 'winrm-https'],
              '05': ['ssh', 'winrm', 'winrm-http', 'winrm-https'],
              '06': ['ssh', 'winrm', 'winrm-http', 'winrm-https'],
@@ -61,7 +61,7 @@ TIMING = {'start_offset': 'Start offset (seconds)', 'duration': 'Target duration
           'jitter': 'Jitter fraction (0–1)'}
 PRIVATE = [ipaddress.ip_network(x) for x in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16')]
 DEPENDENCIES = {'02': ['01'], '03': ['01'], '04': ['03'], '05': ['03'],
-                '06': ['03', '05'], '07': ['03'], '08': ['01', '03'], '09': ['01'], '10': ['03'], '11': ['03']}
+                '06': ['03', '05'], '07': ['03'], '08': ['01', '03'], '09': ['03'], '10': ['03'], '11': ['03']}
 
 
 def required_fields(pid):

@@ -12,7 +12,7 @@ set -u
 #   SSH discovery + credential validation
 #
 # Windows:
-#   RDP discovery + credential validation
+#   RDP and WinRM discovery + credential validation
 #
 # IMPORTANT:
 #   A host is stored only once in compromised-hosts.json.
@@ -35,11 +35,11 @@ set -u
 # ============================================================
 
 # ATTACK_ID="03"
-# ATTACK_DESCRIPTION="Attempt SSH or RDP authentication with supplied lab credentials and record verified access."
+# ATTACK_DESCRIPTION="Attempt SSH, RDP or WinRM authentication with supplied lab credentials and record verified access."
 # ATTACK_TEACHING_PURPOSE="Separate discovered assets from hosts with successful authenticated access."
-# ATTACK_DETECTION_FOCUS="Authentication successes and failures|SSH sessions|RDP logons"
+# ATTACK_DETECTION_FOCUS="Authentication successes and failures|SSH sessions|RDP logons|WinRM sessions"
 # ATTACK_PLATFORMS="Linux|Windows"
-# ATTACK_PREREQUISITES="Reachable SSH or RDP service and valid lab credentials; auto mode uses P01 discovery."
+# ATTACK_PREREQUISITES="Reachable SSH, RDP or WinRM service and valid lab credentials; auto mode uses P01 discovery."
 # ATTACK_TARGET_TYPE="Lab hosts"
 # ATTACK_CLEANUP="Authentication evidence is retained. No account rollback action is provided."
 # ATTACK_NAME="Initial Access"
@@ -56,7 +56,7 @@ set -u
 # PATHS / CONFIG
 # ============================================================
 
-BASE_DIR="/opt/nordic-attack"
+BASE_DIR="${NORDIC_BASE_DIR:-/opt/nordic-attack}"
 CONFIG_FILE="$BASE_DIR/config/defaults.conf"
 
 if [[ ! -f "$CONFIG_FILE" ]]; then
@@ -159,6 +159,36 @@ tcp_open() {
 # REQUIRED COMMANDS
 # ============================================================
 
+# WinRM uses the existing isolated Python/NTLM runtime. Passwords remain in the
+# process environment and never become command arguments or persisted records.
+run_winrm_discovery() {
+    local WINRM_PASSWORD="$RDP_PASSWORD"
+    local WINRM_USERNAME="$RDP_USER"
+    if [[ "$RUN_MODE" == "standalone" ]]; then
+        WINRM_PASSWORD="${MANUAL_PASSWORD:-$RDP_PASSWORD}"
+        WINRM_USERNAME="${MANUAL_USERNAME:-$RDP_USER}"
+    fi
+    if [[ ! -x "$BASE_DIR/venv/bin/python" ]]; then
+        log "[ERROR] WinRM Python runtime missing; repair the installation."
+        ground_truth "WINRM_DISCOVERY_FAILED warning=missing_winrm_runtime"
+        return 1
+    fi
+    export NORDIC_GROUND_TRUTH_LOG
+    export NORDIC_NETWORK_STATE NORDIC_DISCOVERED_STATE NORDIC_COMPROMISED_STATE
+    export NORDIC_DISCOVERY_EXCLUDE_NETWORKS NORDIC_DISCOVERY_MIN_PREFIX NORDIC_MAX_DISCOVERED_HOSTS
+    NORDIC_BASE_DIR="$BASE_DIR" NORDIC_INCIDENT_ID="$INCIDENT_ID" \
+    NORDIC_RDP_USERNAME="$RDP_USER" NORDIC_RDP_PASSWORD="$RDP_PASSWORD" \
+    MRNOBODY_PASSWORD="$WINRM_PASSWORD" MRNOBODY_USERNAME="$WINRM_USERNAME" \
+        "$BASE_DIR/venv/bin/python" "$BASE_DIR/web/windows_actions.py" 03
+}
+
+# Direct WinRM is independent of the SSH and FreeRDP clients.
+if [[ "$RUN_MODE" == "standalone" && "${MANUAL_PROTOCOL,,}" == "winrm-http" ]]; then
+    run_winrm_discovery
+    exit $?
+fi
+
+
 for CMD in python3 timeout sshpass ssh; do
 
     if ! command -v "$CMD" >/dev/null 2>&1; then
@@ -242,7 +272,7 @@ if [[ "$RUN_MODE" == "standalone" ]]; then
             ;;
 
         "")
-            echo "[ERROR] Standalone mode requires --protocol ssh or rdp"
+            echo "[ERROR] Standalone mode requires --protocol ssh, rdp or winrm-http"
             exit 1
             ;;
 
@@ -936,6 +966,11 @@ fi
 # ============================================================
 # FINAL COMPROMISED INVENTORY
 # ============================================================
+
+# Independent of RDP availability/results; includes WinRM-only Windows hosts.
+if [[ "$RUN_MODE" == "campaign" ]]; then
+    run_winrm_discovery || exit 1
+fi
 
 mapfile -t FINAL_HOSTS < <(
 
