@@ -386,7 +386,7 @@ def add_analysis(report):
             phase['action_outcome'] = (f'Access validation recorded: {successes} verified protocol successes, {len(checks) - successes} unsuccessful checks, {skipped} skipped checks. Port reachability alone is not authenticated access.'
                                        if events else 'Access validation not attempted; no authenticated protocol evidence recorded.')
             # Preserve historical auth-skip and service evidence as well as v2 attempts.
-            phase['action_evidence'] = [e['message'] for e in events if e['event'] not in {'PHASE_START', 'PHASE_COMPLETE', 'PHASE_FAILED'}]
+            phase['action_evidence'] = [str(e.get('message') or e.get('evidence') or e['event']) for e in events if e['event'] not in {'PHASE_START', 'PHASE_COMPLETE', 'PHASE_FAILED'}]
             phase['analysis']['what_happened'] = phase['action_outcome']
             phase['analysis']['findings'] = phase['action_evidence'] or ['No authenticated protocol success recorded; inspect P01 inventory and P03 configuration.']
         if phase['id'] == '09' and phase.get('status') == 'skipped':
