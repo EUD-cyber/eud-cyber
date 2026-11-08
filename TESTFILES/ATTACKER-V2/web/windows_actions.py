@@ -153,46 +153,19 @@ def discovered_winrm_targets(env, honor_override=True):
 
 
 def campaign_dc_candidates(env):
-    """P03's authenticated WinRM services, intersected with current P01 scope."""
-    scoped = discovered_winrm_targets(env)
-    path = Path(env.get('NORDIC_COMPROMISED_STATE') or
-                Path(env.get('NORDIC_BASE_DIR', '/opt/nordic-attack')) / 'state/compromised-hosts.json')
-    if not path.exists():
-        raise DiscoveryError('p03_winrm_inventory_missing')
-    if path.stat().st_size > 1048576:
-        raise DiscoveryError('p03_winrm_inventory_oversized')
-    try:
-        data = json.loads(path.read_text(encoding='utf-8'))
-        if not isinstance(data, dict) or data.get('incident_id') != env.get('NORDIC_INCIDENT_ID'):
-            raise DiscoveryError('p03_winrm_inventory_incident_mismatch')
-        hosts = data.get('hosts')
-        if not isinstance(hosts, list) or len(hosts) > 4096:
-            raise ValueError()
-        eligible = set()
-        scoped_addresses = {target['target'] for target in scoped}
-        for host in hosts:
-            if not isinstance(host, dict):
-                raise ValueError()
-            methods = host.get('access_methods', {})
-            method = methods.get('winrm', {}) if isinstance(methods, dict) else {}
-            if isinstance(method, dict) and method.get('authenticated') is True and (
-                    type(method.get('port')) is int and method['port'] == 5985
-                    and method.get('protocol') == 'winrm-http'
-                    and method.get('verification') == 'read_only_windows_identity'):
-                if host.get('ip') in scoped_addresses:
-                    eligible.add(host['ip'])
-    except DiscoveryError:
-        raise
-    except (ValueError, TypeError, UnicodeError):
-        raise DiscoveryError('p03_winrm_inventory_invalid') from None
-    return [target for target in scoped if target['target'] in eligible]
+    """P09 uses P01 scope directly; P03 outcomes never gate DC discovery."""
+    return discovered_winrm_targets(env)
 
 
 DC_VERIFY = r"""
 $ErrorActionPreference='Stop'
-$r=@{result='rejected'; warning='target_must_be_domain_controller'; domain='unknown'; dc='unknown'}
+$r=@{result='rejected'; warning='windows_identity_unverified'; domain='unknown'; dc='unknown'}
 try {
+    if ([Environment]::OSVersion.Platform -ne [PlatformID]::Win32NT) { throw 'not_windows' }
     $system=Get-CimInstance Win32_ComputerSystem
+    if (-not $system.Name -or $system.Name -ine $env:COMPUTERNAME -or
+        $system.DomainRole -notin @(0,1,2,3,4,5)) { throw 'identity_unverified' }
+    $r.warning='target_must_be_domain_controller'
     if ($system.DomainRole -in @(4,5)) {
         $r.warning='dc_verification_failed'
         Import-Module ActiveDirectory -ErrorAction Stop
@@ -204,14 +177,22 @@ try {
             $r.domain=[string]$d.DNSRoot; $r.dc=[string]$c.HostName
         } else { $r.warning='dc_identity_mismatch_or_read_only' }
     }
-} catch { $r.warning='dc_verification_failed' }
+} catch { if ($r.warning -ne 'windows_identity_unverified') { $r.warning='dc_verification_failed' } }
 $r | ConvertTo-Json -Compress
 """
 
 
 def probe_dc(target, env, session_factory=None, connect=None):
-    """Reauthenticate a P03 WinRM endpoint and verify its local writable DC role."""
-    private(target['target'])
+    """P09 independently probes P01 candidates and verifies Windows/writable DC."""
+    address = private(target['target'])
+    if target['protocol'] != 'winrm-http' or type(target['port']) is not int or target['port'] != 5985:
+        raise ValueError('Invalid P09 discovery endpoint')
+    try:
+        with (connect or socket.create_connection)((address, 5985), timeout=2):
+            pass
+    except OSError:
+        return dict(result='rejected', warning='winrm_port_unreachable',
+                    probe='unreachable', auth='not_attempted')
     password = env.get('MRNOBODY_PASSWORD') or env.get('NORDIC_RDP_PASSWORD')
     if not password:
         return dict(result='rejected', warning='missing_runtime_windows_credentials', probe='reachable', auth='not_attempted')
@@ -227,7 +208,7 @@ def probe_dc(target, env, session_factory=None, connect=None):
             raise ValueError()
         data = json.loads(response.std_out.decode('utf-8-sig'))
         if not isinstance(data, dict) or data.get('result') not in {'eligible', 'rejected'} or data.get('warning') not in {
-                'none', 'target_must_be_domain_controller', 'dc_verification_failed', 'dc_identity_mismatch_or_read_only'}:
+                'none', 'windows_identity_unverified', 'target_must_be_domain_controller', 'dc_verification_failed', 'dc_identity_mismatch_or_read_only'}:
             raise ValueError()
         for key in ('domain', 'dc'):
             if not isinstance(data.get(key), str) or not re.fullmatch(r'[A-Za-z0-9_][A-Za-z0-9_.-]{0,252}', data[key]):
@@ -247,6 +228,7 @@ def probe_dc(target, env, session_factory=None, connect=None):
 def select_campaign_dc(candidates, env, base, invoke):
     deadline = time.monotonic() + 120
     reasons = []
+    attempted = 0
     emit(base, env, '09', 'P09_DISCOVERY_START', candidates=len(candidates),
          port=5985, budget_seconds=120, selection='lowest_numeric_verified_writable_dc')
     for target in candidates:
@@ -254,21 +236,22 @@ def select_campaign_dc(candidates, env, base, invoke):
         if remaining < 1:
             reasons.append('discovery_budget_exhausted')
             break
-        emit(base, env, '09', 'P09_CANDIDATE', target=target['target'], source='p03_authenticated_winrm', port=5985)
+        emit(base, env, '09', 'P09_CANDIDATE', target=target['target'], source='p01_discovered_hosts', port=5985)
+        attempted += 1
         try:
             child = invoke([sys.executable, str(Path(__file__).resolve()), '09', '--worker'],
                 env=dict(env, MRN_WINDOWS_TARGET=json.dumps(target), MRN_P09_DISCOVERY_ONLY='1'),
                 capture_output=True, timeout=min(12, remaining), check=False)
             result = json.loads(child.stdout) if child.returncode == 0 else {}
             allowed = {'none', 'winrm_port_unreachable', 'missing_runtime_windows_credentials',
-                'target_must_be_domain_controller', 'dc_verification_failed', 'dc_identity_mismatch_or_read_only',
+                'windows_identity_unverified', 'target_must_be_domain_controller', 'dc_verification_failed', 'dc_identity_mismatch_or_read_only',
                 'credentials_denied', 'invalid_dc_response', 'winrm_transport_or_auth_failed'}
             if not isinstance(result, dict) or result.get('warning') not in allowed or result.get('result') not in {'eligible', 'rejected'}:
                 raise ValueError()
             # Never copy arbitrary worker fields into Ground Truth.
             details = {k: result[k] for k in ('probe', 'auth') if result.get(k) in
                        {'reachable', 'unreachable', 'not_attempted', 'authenticated', 'denied', 'unconfirmed'}}
-            eligible = result['result'] == 'eligible' and result['warning'] == 'none' and details.get('auth') == 'authenticated'
+            eligible = result['result'] == 'eligible' and result['warning'] == 'none' and details.get('auth') == 'authenticated' and details.get('probe') == 'reachable'
             for key in ('domain', 'dc'):
                 if eligible:
                     value = result.get(key)
@@ -287,10 +270,10 @@ def select_campaign_dc(candidates, env, base, invoke):
                  selection='lowest_numeric_verified_writable_dc', **details)
             return [target], None
         reasons.append(reason)
-    reason = ('no_p03_authenticated_winrm_targets' if not candidates else
+    reason = ('no_p01_in_scope_candidates' if not candidates else
               reasons[0] if reasons and len(set(reasons)) == 1 else
               'discovery_budget_exhausted' if 'discovery_budget_exhausted' in reasons else 'no_verified_writable_dc')
-    emit(base, env, '09', 'P09_DISCOVERY_EXHAUSTED', warning=reason, attempted=len(reasons))
+    emit(base, env, '09', 'P09_DISCOVERY_EXHAUSTED', warning=reason, attempted=attempted)
     return [], reason
 
 

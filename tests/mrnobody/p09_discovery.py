@@ -42,7 +42,7 @@ class Discovery(unittest.TestCase):
         self.write('networks.json', networks=[dict(network='192.168.1.0/24'), dict(network='192.168.2.0/24')])
         self.write('discovered-hosts.json', hosts=[dict(ip=ip, status='discovered',
             services={}, compromised=False) for ip in addresses])
-        # P09 now consumes actual P03 WinRM service evidence, not RDP metadata.
+        # Deliberately present P03 metadata; P09 must ignore it.
         self.write('compromised-hosts.json', hosts=[dict(ip=ip, compromised=True,
             platform='windows', access='winrm', access_methods={'winrm': dict(
                 authenticated=True, port=5985, protocol='winrm-http',
@@ -57,21 +57,55 @@ class Discovery(unittest.TestCase):
         self.assertNotIn('DO_NOT_LOG', log)
         return code, log, invoke
 
-    def test_p03_winrm_dc_selected_rdp_only_kali_is_not_a_candidate(self):
-        state = json.loads((self.base / 'state/compromised-hosts.json').read_text())
-        kali = next(h for h in state['hosts'] if h['ip'] == '192.168.1.120')
-        kali.update(access='rdp', domain_controller=True, access_methods={'rdp': dict(authenticated=True)})
-        self.write('compromised-hosts.json', hosts=state['hosts'])
-        code, log, invoke = self.run_campaign([ELIGIBLE, DC])
+    def test_p01_dc_with_p03_timeout_and_kali_false_positive(self):
+        addresses = ['192.168.1.1', '192.168.1.20', '192.168.1.100',
+                     '192.168.1.120', '192.168.1.150', '192.168.2.1',
+                     '192.168.2.20', '192.168.2.21', '192.168.2.25', '192.168.2.200']
+        self.inventory(addresses)
+        discovered = json.loads((self.base / 'state/discovered-hosts.json').read_text())
+        for host in discovered['hosts']:
+            host.update(network='192.168.2.0/24' if host['ip'].startswith('192.168.2.') else
+                        '192.168.1.0/24', interface='eth2' if host['ip'].startswith('192.168.2.') else 'eth0')
+            if host['ip'] == '192.168.2.200':
+                host['services']['winrm'] = dict(authenticated=False, reachable=False,
+                    warning='candidate_probe_timeout', port=5985)
+        self.write('discovered-hosts.json', hosts=discovered['hosts'])
+        self.write('compromised-hosts.json', hosts=[
+            dict(ip='192.168.2.200', platform='windows', access='rdp', compromised=True,
+                 access_methods={'rdp': dict(authenticated=True), 'winrm': dict(
+                     authenticated=False, warning='candidate_probe_timeout')}),
+            dict(ip='192.168.1.120', platform='windows', access='rdp', compromised=True,
+                 domain_controller=True, access_methods={'rdp': dict(authenticated=True)})])
+        closed = dict(result='rejected', warning='winrm_port_unreachable',
+                      probe='unreachable', auth='not_attempted')
+        rows = [dict(NON_DC, warning='windows_identity_unverified') if ip == '192.168.1.120'
+                else closed for ip in addresses[:-1]]
+        code, log, invoke = self.run_campaign(rows + [ELIGIBLE, DC])
         self.assertEqual(code, 0)
         calls = invoke.call_args_list
         self.assertEqual([json.loads(c.kwargs['env']['MRN_WINDOWS_TARGET'])['target']
-                          for c in calls], ['192.168.2.200', '192.168.2.200'])
-        self.assertTrue(all(c.kwargs['env']['MRN_P09_DISCOVERY_ONLY'] == '1' for c in calls[:1]))
-        self.assertNotIn('MRN_P09_DISCOVERY_ONLY', calls[1].kwargs['env'])
+                          for c in calls], addresses + ['192.168.2.200'])
+        self.assertTrue(all(c.kwargs['env']['MRN_P09_DISCOVERY_ONLY'] == '1' for c in calls[:-1]))
+        self.assertNotIn('MRN_P09_DISCOVERY_ONLY', calls[-1].kwargs['env'])
         self.assertIn('P09_DC_SELECTED target=192.168.2.200', log)
-        self.assertNotIn('target=192.168.1.120', log)
+        self.assertNotIn('P09_DC_SELECTED target=192.168.1.120', log)
+        self.assertIn('source=p01_discovered_hosts', log)
+        self.assertIn('warning=windows_identity_unverified', log)
         self.assertIn('PHASE_COMPLETE', log)
+
+    def test_p03_missing_invalid_or_stale_never_gates_p01_candidates(self):
+        path = self.base / 'state/compromised-hosts.json'
+        for content in (None, 'not json', '{"incident_id":"MRN-old","hosts":[]}'):
+            with self.subTest(content=content):
+                if path.exists():
+                    path.unlink()
+                if content is not None:
+                    path.write_text(content)
+                self.assertEqual([t['target'] for t in actions.targets(self.env, '09')],
+                                 ['192.168.1.120', '192.168.2.200'])
+                code, log, invoke = self.run_campaign([NON_DC, ELIGIBLE, DC])
+                self.assertEqual(code, 0)
+                self.assertEqual(invoke.call_count, 3)
 
     def test_no_winrm_non_dc_credentials_denied_and_read_only_dc(self):
         for row in (dict(result='rejected', warning='winrm_port_unreachable', probe='unreachable', auth='not_attempted'),
@@ -122,6 +156,7 @@ class Discovery(unittest.TestCase):
             code, log, invoke = self.run_campaign([])
         self.assertEqual(code, 78)
         self.assertIn('discovery_budget_exhausted', log)
+        self.assertIn('attempted=0', log)
         invoke.assert_not_called()
         code, log, invoke = self.run_campaign([subprocess.TimeoutExpired('worker', 12), ELIGIBLE, DC])
         self.assertEqual(code, 0)
@@ -143,14 +178,43 @@ class Discovery(unittest.TestCase):
         connect = MagicMock()
         result = actions.probe_dc(target, self.env, factory, connect)
         self.assertEqual(result, ELIGIBLE)
-        connect.assert_not_called()  # TCP discovery belongs to P03.
+        connect.assert_called_once_with((target['target'], 5985), timeout=2)
         self.assertEqual(factory.call_args.kwargs['auth'], ('LAB\\operator', 'DO_NOT_LOG'))
         command = factory.return_value.run_ps.call_args.args[0]
         self.assertIn('IsReadOnly', command)
+        self.assertIn('[PlatformID]::Win32NT', command)
+        self.assertIn('$system.Name -ine $env:COMPUTERNAME', command)
+        self.assertIn('$system.DomainRole -in @(4,5)', command)
         self.assertFalse(any(verb in command for verb in ('New-AD', 'Set-AD', 'Add-AD', 'Enable-AD')))
         denied = type('InvalidCredentialsError', (Exception,), {})
         factory.return_value.run_ps.side_effect = denied('DO_NOT_LOG')
         self.assertEqual(actions.probe_dc(target, self.env, factory, connect)['warning'], 'credentials_denied')
+
+    def test_independent_tcp_probe_failure_never_authenticates(self):
+        target = actions.targets(self.env, '09')[0]
+        factory = Mock()
+        connect = Mock(side_effect=TimeoutError('DO_NOT_LOG'))
+        result = actions.probe_dc(target, self.env, factory, connect)
+        self.assertEqual(result, dict(result='rejected', warning='winrm_port_unreachable',
+                                     probe='unreachable', auth='not_attempted'))
+        factory.assert_not_called()
+        connect.assert_called_once_with((target['target'], 5985), timeout=2)
+
+    def test_non_windows_read_only_response_never_eligible(self):
+        factory = Mock()
+        factory.return_value.run_ps.return_value = Mock(status_code=0,
+            std_out=json.dumps(dict(NON_DC, warning='windows_identity_unverified')).encode())
+        target = actions.targets(self.env, '09')[0]
+        result = actions.probe_dc(target, self.env, factory, MagicMock())
+        self.assertEqual(result['result'], 'rejected')
+        self.assertEqual(result['warning'], 'windows_identity_unverified')
+
+    def test_empty_p01_has_precise_reason_and_zero_workers(self):
+        self.inventory([])
+        code, log, invoke = self.run_campaign([])
+        self.assertEqual(code, 78)
+        self.assertIn('warning=no_p01_in_scope_candidates attempted=0', log)
+        invoke.assert_not_called()
 
     def test_invalid_probe_response_and_success_evidence_in_report(self):
         self.inventory(['192.168.2.200'])

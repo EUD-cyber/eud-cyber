@@ -67,7 +67,7 @@ class WinRMAccess(unittest.TestCase):
         self.assertEqual(dc['access'], 'winrm')
         self.assertEqual(dc['access_methods']['winrm']['protocol'], 'winrm-http')
         self.assertEqual(dc['access_methods']['winrm']['verification'], 'read_only_windows_identity')
-        self.assertEqual([t['target'] for t in actions.targets(self.env, '09')], ['192.168.2.200'])
+        self.assertEqual([t['target'] for t in actions.targets(self.env, '09')], ['192.168.1.120', '192.168.2.200'])
         self.assertIn('ACCESS_SUCCESS target=192.168.2.200', log)
         for call in invoke.call_args_list:
             self.assertEqual(call.kwargs['env']['MRNOBODY_PASSWORD'], 'WIN_SECRET')
@@ -89,7 +89,7 @@ class WinRMAccess(unittest.TestCase):
         code, log, invoke = self.run_access([DENIED, dict(DENIED, auth='unconfirmed',
             warning='windows_identity_unverified')])
         self.assertEqual(code, 0)  # P03 records failed methods and continues.
-        self.assertEqual(actions.targets(self.env, '09'), [])
+        self.assertEqual([t['target'] for t in actions.targets(self.env, '09')], ['192.168.1.120', '192.168.2.200'])
         self.assertNotIn('ACCESS_SUCCESS', log)
         self.assertTrue(all(h['services']['winrm']['reachable'] for h in self.read('discovered-hosts.json')['hosts']))
 
@@ -102,7 +102,7 @@ class WinRMAccess(unittest.TestCase):
         hosts = self.read('compromised-hosts.json')['hosts']
         self.assertEqual(len(hosts), 1)  # WinRM-only stale success is removed.
         self.assertEqual(set(hosts[0]['access_methods']), {'rdp'})
-        self.assertEqual(actions.targets(self.env, '09'), [])
+        self.assertEqual([t['target'] for t in actions.targets(self.env, '09')], ['192.168.1.120', '192.168.2.200'])
         self.assertFalse(self.read('discovered-hosts.json')['hosts'][1]['compromised'])
 
     def test_scope_stale_inventory_and_optional_dc_pin_do_not_expand_probe_scope(self):
@@ -122,7 +122,7 @@ class WinRMAccess(unittest.TestCase):
         self.assertIn('candidate_probe_timeout', log)
         self.assertIn('candidate_probe_worker_failed', log)
         self.assertNotIn('FORGED', log)
-        self.assertEqual(actions.targets(self.env, '09'), [])
+        self.assertEqual([t['target'] for t in actions.targets(self.env, '09')], ['192.168.1.120', '192.168.2.200'])
         with patch.object(actions.time, 'monotonic', side_effect=[0, 121, 122]):
             code, log, invoke = self.run_access([])
         invoke.assert_not_called()
@@ -207,7 +207,7 @@ class Session:
         self.assertEqual(child.returncode, 0, child.stdout + child.stderr)
         state = self.read('compromised-hosts.json')
         self.assertEqual([h['ip'] for h in state['hosts']], ['192.168.2.200'])
-        self.assertEqual([t['target'] for t in actions.targets(self.env, '09')], ['192.168.2.200'])
+        self.assertEqual([t['target'] for t in actions.targets(self.env, '09')], ['192.168.1.120', '192.168.2.200'])
         env.update(MRNOBODY_RUN_MODE='standalone', MRNOBODY_TARGET='192.168.2.200',
                    MRNOBODY_PROTOCOL='winrm-http', MRNOBODY_USERNAME='manual',
                    MRNOBODY_PASSWORD='MANUAL_SECRET')
