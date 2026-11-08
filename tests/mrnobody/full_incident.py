@@ -110,11 +110,11 @@ else:
                 self.assertNotIn("completed", state)
                 self.assertNotIn("CAMPAIGN_COMPLETE", truth)
 
-    def test_windows_access_skip_is_preserved(self):
+    def test_p09_dispatch_does_not_require_p03_windows_access(self):
         result, dispatched, state, _ = self.run_campaign(target_mode="auto")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(dispatched, [pid for pid in IDS if pid != "09"])
-        self.assertEqual(state["phases"]["09"], "disabled")
+        self.assertEqual(dispatched, IDS)
+        self.assertEqual(state["phases"]["09"], "complete")
 
     def test_child_failure_stops_and_records_failure(self):
         result, dispatched, state, truth = self.run_campaign(child_code=23)

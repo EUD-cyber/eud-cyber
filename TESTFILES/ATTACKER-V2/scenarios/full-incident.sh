@@ -1200,28 +1200,7 @@ PY
 }
 
 
-# P09 requires existing Windows/RDP access. Fixed targets supply access directly.
-windows_access_available() {
-    python3 - "$NORDIC_COMPROMISED_STATE" <<'PY'
-import json, os, sys
-from pathlib import Path
-plan = json.loads(os.environ.get('MRN_EXECUTION', '{}'))
-if plan.get('target_mode') == 'fixed' or os.environ.get('NORDIC_AD_DC_TARGET'):
-    sys.exit(0)
-path = Path(sys.argv[1])
-if not path.exists():
-    sys.exit(1)
-try:
-    data = json.loads(path.read_text())
-    if data.get('incident_id') != os.environ.get('NORDIC_INCIDENT_ID'):
-        sys.exit(0)  # Let the adapter report stale/invalid inventory accurately.
-    found = any(h.get('compromised') and (h.get('platform') == 'windows' or h.get('access') in {'rdp', 'winrm'}) for h in data.get('hosts', []))
-except (ValueError, TypeError, AttributeError):
-    sys.exit(0)
-sys.exit(0 if found else 1)
-PY
-}
-
+# P09 consumes P03 authenticated WinRM services and independently verifies DC role.
 if [[ -n "${MRN_EXECUTION:-}" ]]; then
     # Capture first: process substitution hides the producer's exit status, and
     # a read loop would share its queued identifiers with child processes.
@@ -1256,11 +1235,6 @@ PY
         exit 1
     fi
     for PHASE in "${phases[@]}"; do
-        if [[ "$PHASE" == "09" ]] && ! windows_access_available; then
-            update_phase_state "09" "disabled"
-            ground_truth "PHASE_SKIPPED phase=09 reason=no_windows_rdp_access"
-            continue
-        fi
         SCRIPT="$(find "$SCRIPT_DIR" -maxdepth 1 -name "$PHASE-*.sh" -print -quit)"
         update_phase_state "$PHASE" "running"
         if ! run_phase "$PHASE" "$PHASE" "$SCRIPT"; then
@@ -1391,11 +1365,6 @@ phase_delay
 # PHASE 09 / 10: Windows actions after established access, before staging.
 # ============================================================
 for NUMBER in 09 10 11; do
-    if [[ "$NUMBER" == "09" ]] && ! windows_access_available; then
-        update_phase_state "09" "disabled"
-        ground_truth "PHASE_SKIPPED phase=09 reason=no_windows_rdp_access"
-        continue
-    fi
     if [[ "$NUMBER" == "10" && "${MRN_POWERSHELL_ENABLED:-0}" != "1" ]]; then
         update_phase_state "10" "disabled"
         continue

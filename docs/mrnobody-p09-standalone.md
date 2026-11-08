@@ -23,15 +23,13 @@ For this CyberLab installation, select the Windows Server 2025 DC at
 `192.168.2.200` with WinRM HTTP port `5985`. Do not select an ordinary RDP/SSH
 endpoint such as `192.168.1.120`.
 
-For Full Campaign, set `NORDIC_AD_DC_TARGET=192.168.2.200` in the runtime
-environment to pin P09 to that DC, or use a fixed-target scenario with P09's DC
-target. This address is a lab-specific example, never a global default. The
-standalone/fixed scenario target takes precedence over a campaign DC pin.
-With no pin, inventory candidates must explicitly identify a DC using boolean
-`domain_controller=true` or integer `domain_role=4/5`; ordinary RDP/Windows
-classification is insufficient. Each candidate must then pass the authenticated
-DC precheck. No candidates produces SKIPPED with
-`no_dc_candidates_configure_dc_target`. Credentials remain runtime-only.
+Full Campaign now runs P03 WinRM discovery on in-scope P01 hosts. P09 consumes
+authenticated WinRM services from P03, independently verifies a writable DC, and
+chooses the lowest numeric eligible address. RDP metadata alone is insufficient.
+No manual DC pin or persisted DC-role metadata is required. An optional
+NORDIC_AD_DC_TARGET must satisfy the current P01 scope and P03 WinRM evidence.
+Standalone/fixed targeting keeps its explicit endpoint and credentials.
+See [P03 WinRM discovery and P09 verification](mrnobody-p09-discovery.md).
 
 The precheck reads the exact `mrnobody` account and Domain Admins resolved by the
 current domain SID plus RID 512. Existing accounts must have the exact name and
@@ -76,10 +74,10 @@ its final report remains partial. No automatic rollback is performed.
 The update manifest and fresh-install cloud-init include `web/p09_actions.py`.
 This repository change does not deploy or run P09 against the lab VM.
 
-After this fix is merged into `main`, run `sudo mrnobody update`. For this lab,
-set `NORDIC_AD_DC_TARGET="192.168.2.200"` in
-`/opt/nordic-attack/config/defaults.conf` for Full Campaign, or select that target
-in standalone P09. Do not configure Kali `192.168.1.120` as the DC.
+After this fix is merged into `main`, run `sudo mrnobody update`. Full Campaign
+should discover the lab DC through P01 and P03 WinRM without a manual pin.
+Standalone P09 can still target `192.168.2.200` explicitly. Do not configure Kali
+`192.168.1.120` as the DC.
 Run standalone P09 twice using the GUI with runtime administrator credentials.
 The second run must show `WINDOWS_ACTION_SUCCESS`, `verified=True`,
 `account=already_enabled`, `group=already_member`,

@@ -50,7 +50,7 @@ FIELDS = {
     'artifact': {'type': 'text', 'label': 'Artifact suffix (default: telemetry)'},
     'file': {'type': 'path', 'label': 'Synthetic staged file (@staged = current target staging output)'},
 }
-PROTOCOLS = {'02': ['http', 'https'], '03': ['ssh', 'rdp'],
+PROTOCOLS = {'02': ['http', 'https'], '03': ['ssh', 'rdp', 'winrm-http'],
              '04': ['ssh', 'winrm', 'winrm-http', 'winrm-https'],
              '05': ['ssh', 'winrm', 'winrm-http', 'winrm-https'],
              '06': ['ssh', 'winrm', 'winrm-http', 'winrm-https'],

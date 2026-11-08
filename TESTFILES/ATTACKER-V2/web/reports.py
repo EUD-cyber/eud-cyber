@@ -383,13 +383,13 @@ def add_analysis(report):
             phase['prerequisite_outcome'] = next((e['fields'].get('reason') for e in reversed(events)
                 if e['event'] == 'PHASE_SKIPPED' and e['fields'].get('reason')),
                 'Active Directory prerequisite unavailable; privileged AD action not attempted')
-            details = [e['message'] for e in events if e['event'] == 'WINDOWS_ACTION_SKIPPED']
+            details = [e['message'] for e in events if e['event'] == 'WINDOWS_ACTION_SKIPPED' or e['event'].startswith('P09_')]
             phase['prerequisite_evidence'] = details
             phase['analysis']['what_happened'] = phase['prerequisite_outcome']
             phase['analysis']['findings'] = details or [phase['prerequisite_outcome']]
         if phase['id'] == '09' and phase.get('status') in {'success', 'failure', 'partial'}:
             details = [e['timestamp'] + ' · ' + e['message'] for e in events
-                       if e['event'].startswith('WINDOWS_ACTION_') and e['event'] != 'WINDOWS_ACTION_START']
+                       if e['event'].startswith(('WINDOWS_ACTION_', 'P09_')) and e['event'] != 'WINDOWS_ACTION_START']
             phase['action_result'] = phase['status']
             phase['action_outcome'] = ('Active Directory account and Domain Admins action completed'
                                        if phase['status'] == 'success' else 'Active Directory action partial; postconditions not confirmed' if phase['status'] == 'partial' else 'Active Directory action failed')
