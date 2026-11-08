@@ -97,64 +97,38 @@ class DiscoveryError(ValueError):
 
 
 def discovered_winrm_targets(env, honor_override=True):
-    """Bounded incident-matched P01 scope shared by P03 and its consumers."""
-    base = Path(env.get('NORDIC_BASE_DIR', '/opt/nordic-attack'))
-    def inventory(key, filename, field):
-        path = Path(env.get(key) or base / 'state' / filename)
-        if not path.exists():
-            raise DiscoveryError('p01_inventory_missing')
-        if path.stat().st_size > 1048576:
-            raise DiscoveryError('p01_inventory_oversized')
-        try:
-            data = json.loads(path.read_text(encoding='utf-8'))
-        except (ValueError, UnicodeError):
-            raise DiscoveryError('p01_inventory_invalid') from None
-        if not isinstance(data, dict) or data.get('incident_id') != env.get('NORDIC_INCIDENT_ID'):
-            raise DiscoveryError('p01_inventory_incident_mismatch')
-        rows = data.get(field)
-        if not isinstance(rows, list) or len(rows) > 4096:
-            raise DiscoveryError('p01_inventory_invalid')
-        return rows
-    networks = inventory('NORDIC_NETWORK_STATE', 'networks.json', 'networks')
-    hosts = inventory('NORDIC_DISCOVERED_STATE', 'discovered-hosts.json', 'hosts')
-    try:
-        scope = [ipaddress.IPv4Network(n['network']) for n in networks]
-        excluded = [ipaddress.IPv4Network(n.strip()) for n in
-                    env.get('NORDIC_DISCOVERY_EXCLUDE_NETWORKS', '172.20.0.0/24').split(',') if n.strip()]
-        minimum = max(16, int(env.get('NORDIC_DISCOVERY_MIN_PREFIX', '16')))
-        if not scope or any(n.prefixlen < minimum or private(str(n.network_address)) is None for n in scope):
-            raise ValueError()
-        addresses = set()
-        for host in hosts:
-            if not isinstance(host, dict):
-                raise ValueError()
-            try:
-                address = ipaddress.IPv4Address(private(host.get('ip')))
-            except ValueError:
-                continue
-            if any(address in n and address not in (n.network_address, n.broadcast_address) for n in scope) and not any(address in n for n in excluded):
-                addresses.add(address)
-        override = env.get('NORDIC_AD_DC_TARGET') if honor_override else None
-        if override:
-            pinned = ipaddress.IPv4Address(private(override))
-            if pinned not in addresses:
-                raise DiscoveryError('explicit_dc_outside_p01_scope')
-            addresses = {pinned}
-        maximum = max(1, min(254, int(env.get('NORDIC_MAX_DISCOVERED_HOSTS', '254'))))
-    except DiscoveryError:
-        raise
-    except (ValueError, TypeError, KeyError):
-        raise DiscoveryError('p01_scope_invalid') from None
-    if len(addresses) > maximum:
-        raise DiscoveryError('p01_candidate_limit_exceeded')
-    return [dict(target=str(address), protocol='winrm-http', port=5985,
-                 username=env.get('MRNOBODY_USERNAME') or env.get('NORDIC_RDP_USERNAME') or 'Administrator')
-            for address in sorted(addresses)]
+    from access_pipeline import open_targets
+    return open_targets(env, 'winrm')
 
 
 def campaign_dc_candidates(env):
-    """P09 uses P01 scope directly; P03 outcomes never gate DC discovery."""
-    return discovered_winrm_targets(env)
+    """Consume ONLY completed same-incident P03 authenticated WinRM evidence."""
+    from access_pipeline import read, path, ContractError
+    try:
+        data = read(path(env, 'NORDIC_COMPROMISED_STATE', 'compromised-hosts.json'), env.get('NORDIC_INCIDENT_ID'))
+        if (data.get('producer') != 'P03' or data.get('schema_version') != 2 or data.get('complete') is not True
+                or data.get('run_mode') != 'campaign' or not re.fullmatch(r'[a-f0-9]{32}', data.get('source_inventory_id', ''))):
+            raise ContractError('p03_access_inventory_incomplete_or_legacy')
+        candidates = []
+        for host in data['hosts']:
+            method = host.get('access_methods', {}).get('winrm', {})
+            if method.get('authenticated') is not True:
+                continue
+            if (method.get('protocol') != 'winrm-http' or type(method.get('port')) is not int
+                    or not 1 <= method['port'] <= 65535 or method.get('verification') != 'read_only_windows_identity'):
+                continue
+            candidates.append(dict(target=private(host['ip']), protocol=method['protocol'], port=method['port'],
+                username=env.get('NORDIC_RDP_USERNAME') or 'Administrator'))
+        candidates = sorted({t['target']: t for t in candidates}.values(), key=lambda t: ipaddress.IPv4Address(t['target']))
+        maximum = max(1, min(4096, int(env.get('NORDIC_MAX_DISCOVERED_HOSTS', '254'))))
+        if len(candidates) > maximum:
+            raise ContractError('p03_access_inventory_limit_exceeded')
+        override = env.get('NORDIC_AD_DC_TARGET')
+        if override:
+            candidates = [t for t in candidates if t['target'] == private(override)]
+        return candidates
+    except (ContractError, ValueError, TypeError, KeyError, AttributeError):
+        raise DiscoveryError('no_authenticated_winrm_targets') from None
 
 
 DC_VERIFY = r"""
@@ -183,16 +157,10 @@ $r | ConvertTo-Json -Compress
 
 
 def probe_dc(target, env, session_factory=None, connect=None):
-    """P09 independently probes P01 candidates and verifies Windows/writable DC."""
+    """Read-only role validation on a P03-authenticated endpoint; no port scan."""
     address = private(target['target'])
-    if target['protocol'] != 'winrm-http' or type(target['port']) is not int or target['port'] != 5985:
-        raise ValueError('Invalid P09 discovery endpoint')
-    try:
-        with (connect or socket.create_connection)((address, 5985), timeout=2):
-            pass
-    except OSError:
-        return dict(result='rejected', warning='winrm_port_unreachable',
-                    probe='unreachable', auth='not_attempted')
+    if target['protocol'] != 'winrm-http' or type(target['port']) is not int or not 1 <= target['port'] <= 65535:
+        raise ValueError('Invalid P03 WinRM endpoint')
     password = env.get('MRNOBODY_PASSWORD') or env.get('NORDIC_RDP_PASSWORD')
     if not password:
         return dict(result='rejected', warning='missing_runtime_windows_credentials', probe='reachable', auth='not_attempted')
@@ -200,9 +168,9 @@ def probe_dc(target, env, session_factory=None, connect=None):
         if session_factory is None:
             import winrm
             session_factory = winrm.Session
-        session = session_factory(f"http://{target['target']}:5985/wsman",
+        session = session_factory(f"http://{target['target']}:{target['port']}/wsman",
             auth=(target['username'], password), transport='ntlm', server_cert_validation='ignore',
-            operation_timeout_sec=5, read_timeout_sec=8)
+            operation_timeout_sec=20, read_timeout_sec=30)
         response = session.run_ps(DC_VERIFY)
         if response.status_code != 0 or not isinstance(response.std_out, bytes) or len(response.std_out) > 2048:
             raise ValueError()
@@ -230,18 +198,18 @@ def select_campaign_dc(candidates, env, base, invoke):
     reasons = []
     attempted = 0
     emit(base, env, '09', 'P09_DISCOVERY_START', candidates=len(candidates),
-         port=5985, budget_seconds=120, selection='lowest_numeric_verified_writable_dc')
+         source='p03_authenticated_winrm', budget_seconds=120, selection='lowest_numeric_verified_writable_dc')
     for target in candidates:
         remaining = deadline - time.monotonic()
         if remaining < 1:
             reasons.append('discovery_budget_exhausted')
             break
-        emit(base, env, '09', 'P09_CANDIDATE', target=target['target'], source='p01_discovered_hosts', port=5985)
+        emit(base, env, '09', 'P09_CANDIDATE', target=target['target'], source='p03_authenticated_winrm', port=target['port'])
         attempted += 1
         try:
             child = invoke([sys.executable, str(Path(__file__).resolve()), '09', '--worker'],
                 env=dict(env, MRN_WINDOWS_TARGET=json.dumps(target), MRN_P09_DISCOVERY_ONLY='1'),
-                capture_output=True, timeout=min(12, remaining), check=False)
+                capture_output=True, timeout=min(90, remaining), check=False)
             result = json.loads(child.stdout) if child.returncode == 0 else {}
             allowed = {'none', 'winrm_port_unreachable', 'missing_runtime_windows_credentials',
                 'windows_identity_unverified', 'target_must_be_domain_controller', 'dc_verification_failed', 'dc_identity_mismatch_or_read_only',
@@ -263,16 +231,14 @@ def select_campaign_dc(candidates, env, base, invoke):
             eligible, reason, details = False, 'candidate_probe_timeout', {}
         except (ValueError, TypeError, OSError):
             eligible, reason, details = False, 'candidate_probe_worker_failed', {}
-        emit(base, env, '09', 'P09_DC_VERIFICATION', target=target['target'], port=5985,
+        emit(base, env, '09', 'P09_DC_VERIFICATION', target=target['target'], port=target['port'],
              eligible=eligible, warning=reason, **details)
         if eligible:
             emit(base, env, '09', 'P09_DC_SELECTED', target=target['target'],
                  selection='lowest_numeric_verified_writable_dc', **details)
             return [target], None
         reasons.append(reason)
-    reason = ('no_p01_in_scope_candidates' if not candidates else
-              reasons[0] if reasons and len(set(reasons)) == 1 else
-              'discovery_budget_exhausted' if 'discovery_budget_exhausted' in reasons else 'no_verified_writable_dc')
+    reason = 'no_authenticated_winrm_targets' if not candidates else 'no_writable_dc_verified'
     emit(base, env, '09', 'P09_DISCOVERY_EXHAUSTED', warning=reason, attempted=attempted)
     return [], reason
 
@@ -281,13 +247,9 @@ WINRM_ACCESS_CHECK = r"""
 $ErrorActionPreference='Stop'
 $r=@{result='rejected'; warning='windows_identity_unverified'; hostname='unknown'; domain='unknown'}
 try {
-    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT) {
-        $system=Get-CimInstance Win32_ComputerSystem
-        if ($system.Name -and $system.DomainRole -in @(0,1,2,3,4,5)) {
-            $r.result='authenticated'; $r.warning='none'
-            $r.hostname=[string]$system.Name
-            if ($system.Domain) { $r.domain=[string]$system.Domain }
-        }
+    if ([Environment]::OSVersion.Platform -eq [PlatformID]::Win32NT -and $env:COMPUTERNAME) {
+        $r.result='authenticated'; $r.warning='none'; $r.hostname=[string]$env:COMPUTERNAME
+        if ($env:USERDNSDOMAIN) { $r.domain=[string]$env:USERDNSDOMAIN }
     }
 } catch {}
 $r | ConvertTo-Json -Compress
@@ -296,7 +258,7 @@ $r | ConvertTo-Json -Compress
 WINRM_ACCESS_WARNINGS = {'none', 'winrm_port_unreachable', 'missing_runtime_windows_credentials',
     'credentials_denied', 'windows_identity_unverified', 'invalid_winrm_response',
     'winrm_transport_or_auth_failed', 'missing_pywinrm_or_ntlm_dependencies',
-    'candidate_probe_timeout', 'candidate_probe_worker_failed', 'discovery_budget_exhausted'}
+    'candidate_probe_timeout', 'candidate_probe_worker_failed', 'discovery_budget_exhausted', 'winrm_operation_timeout'}
 
 
 def access_evidence(data):
@@ -308,6 +270,8 @@ def access_evidence(data):
     if data.get('auth') not in {'not_attempted', 'authenticated', 'denied', 'unconfirmed'}:
         raise ValueError('Invalid WinRM access evidence')
     safe = {key: data[key] for key in ('reachable', 'authenticated', 'auth', 'warning')}
+    if data.get('stage') in {'ntlm_shell', 'powershell_start', 'identity_read', 'cleanup', 'complete'}:
+        safe['stage'] = data['stage']
     if safe['authenticated']:
         if not safe['reachable'] or safe['auth'] != 'authenticated' or safe['warning'] != 'none':
             raise ValueError('Inconsistent WinRM access evidence')
@@ -330,13 +294,14 @@ def probe_winrm_access(target, env, session_factory=None, connect=None):
     port = target['port']
     if target['protocol'] != 'winrm-http' or type(port) is not int or not 1 <= port <= 65535:
         raise ValueError('Invalid WinRM endpoint')
-    rejected = dict(reachable=False, authenticated=False, auth='not_attempted', warning='winrm_port_unreachable')
-    try:
-        with (connect or socket.create_connection)((address, port), timeout=2):
-            pass
-    except OSError:
-        return rejected
-    rejected['reachable'] = True
+    # P01 already proved the port open; TCP/HTTP GET is not authentication.
+    rejected = dict(reachable=True, authenticated=False, auth='not_attempted', warning='winrm_port_unreachable')
+    stage = 'ntlm_shell'
+    def progress(value):
+        nonlocal stage
+        stage = value
+        if env.get('MRN_WINRM_PROGRESS'):
+            Path(env['MRN_WINRM_PROGRESS']).write_text(value, encoding='ascii')
     password = (env.get('NORDIC_RDP_PASSWORD') if env.get('MRNOBODY_RUN_MODE') == 'campaign' else
                 env.get('MRNOBODY_PASSWORD') or env.get('NORDIC_RDP_PASSWORD'))
     if not password:
@@ -345,10 +310,27 @@ def probe_winrm_access(target, env, session_factory=None, connect=None):
         if session_factory is None:
             import winrm
             session_factory = winrm.Session
+        from access_pipeline import bounded
+        operation = bounded(env, 'NORDIC_WINRM_OPERATION_TIMEOUT', 20, 1, 120)
+        read_limit = bounded(env, 'NORDIC_WINRM_READ_TIMEOUT', 30, 2, 180)
+        if read_limit <= operation:
+            raise ValueError('Invalid WinRM timeouts')
         session = session_factory(f"http://{address}:{port}/wsman",
             auth=(target['username'], password), transport='ntlm', server_cert_validation='ignore',
-            operation_timeout_sec=5, read_timeout_sec=8)
-        response = session.run_ps(WINRM_ACCESS_CHECK)
+            operation_timeout_sec=operation, read_timeout_sec=read_limit)
+        progress('ntlm_shell')
+        shell = session.protocol.open_shell(noprofile=True)
+        progress('powershell_start')
+        encoded = base64.b64encode(WINRM_ACCESS_CHECK.encode('utf-16-le')).decode('ascii')
+        command = session.protocol.run_command(shell, 'powershell.exe',
+            ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded])
+        progress('identity_read')
+        stdout, stderr, code = session.protocol.get_command_output(shell, command)
+        response = type('IdentityResponse', (), dict(status_code=code, std_out=stdout))()
+        progress('cleanup')
+        session.protocol.cleanup_command(shell, command)
+        session.protocol.close_shell(shell)
+        progress('complete')
         if response.status_code != 0 or not isinstance(response.std_out, bytes) or len(response.std_out) > 2048:
             raise ValueError()
         data = json.loads(response.std_out.decode('utf-8-sig'))
@@ -358,134 +340,20 @@ def probe_winrm_access(target, env, session_factory=None, connect=None):
             return dict(rejected, auth='unconfirmed', warning='windows_identity_unverified')
         if data.get('result') != 'authenticated' or data.get('warning') != 'none':
             raise ValueError()
-        return access_evidence(dict(data, reachable=True, authenticated=True, auth='authenticated'))
+        return access_evidence(dict(data, reachable=True, authenticated=True, auth='authenticated', stage='complete'))
     except Exception as error:
         denied = type(error).__name__ in {'InvalidCredentialsError', 'AuthenticationError'}
         denied = denied or getattr(getattr(error, 'response', None), 'status_code', None) in (401, 403)
-        warning = ('missing_pywinrm_or_ntlm_dependencies' if isinstance(error, ImportError) else
+        timed_out = isinstance(error, TimeoutError) or type(error).__name__ in {'ReadTimeout', 'ConnectTimeout', 'Timeout', 'WinRMOperationTimeoutError'}
+        warning = ('winrm_operation_timeout' if timed_out else 'missing_pywinrm_or_ntlm_dependencies' if isinstance(error, ImportError) else
                    'credentials_denied' if denied else 'invalid_winrm_response'
                    if isinstance(error, (ValueError, TypeError, UnicodeError)) else 'winrm_transport_or_auth_failed')
-        return dict(rejected, auth='denied' if denied else 'unconfirmed', warning=warning)
-
-
-def save_winrm_access(base, env, results):
-    """Merge service-level evidence without discarding existing SSH/RDP access."""
-    iid = env['NORDIC_INCIDENT_ID']
-    discovered = Path(env.get('NORDIC_DISCOVERED_STATE') or base / 'state/discovered-hosts.json')
-    access = Path(env.get('NORDIC_COMPROMISED_STATE') or base / 'state/compromised-hosts.json')
-    def read(path):
-        if not path.exists():
-            return dict(incident_id=iid, hosts=[])
-        if path.stat().st_size > 1048576:
-            raise DiscoveryError('access_inventory_oversized')
-        data = json.loads(path.read_text(encoding='utf-8'))
-        if not isinstance(data, dict) or data.get('incident_id') != iid or not isinstance(data.get('hosts'), list):
-            raise DiscoveryError('access_inventory_incident_mismatch_or_invalid')
-        if any(not isinstance(host, dict) for host in data['hosts']):
-            raise DiscoveryError('access_inventory_invalid')
-        return data
-    direct = env.get('MRNOBODY_RUN_MODE') == 'standalone'
-    inventory = dict(incident_id=iid, hosts=[]) if direct else read(discovered)
-    state = dict(incident_id=iid, hosts=[]) if direct else read(access)
-    hosts = {host['ip']: host for host in state['hosts']}
-    discovery_hosts = {host['ip']: host for host in inventory['hosts']}
-    username = env.get('MRNOBODY_USERNAME') or env.get('NORDIC_RDP_USERNAME') or 'Administrator'
-    if not re.fullmatch(r'[A-Za-z0-9_.@\\\\-]{1,128}', username):
-        raise ValueError('Invalid Windows username')
-    for target, evidence in results:
-        evidence = access_evidence(evidence)
-        scrubbed = redact_environment(evidence, env)
-        for field in ('hostname', 'domain'):
-            if field in evidence and scrubbed.get(field) != evidence[field]:
-                evidence[field] = 'redacted'
-        ip = target['target']
-        service = dict(evidence, protocol=target['protocol'], port=target['port'])
-        known = discovery_hosts.get(ip)
-        if known is not None:
-            known.setdefault('services', {})['winrm'] = service
-            known['winrm_candidate'] = service['reachable']
-            known.setdefault('access_methods', {}).pop('winrm', None)
-        host = hosts.get(ip)
-        if host is not None:
-            host.setdefault('access_methods', {}).pop('winrm', None)
-            if not evidence['authenticated'] and not host['access_methods'] and host.get('access') == 'winrm':
-                hosts.pop(ip)
-        if not evidence['authenticated']:
-            if known is not None and ip not in hosts:
-                known.update(compromised=False, status='discovered')
-            continue
-        method = dict(authenticated=True, port=target['port'], protocol=target['protocol'],
-                      user=username, verification='read_only_windows_identity')
-        host = hosts.setdefault(ip, dict(ip=ip, access='winrm', primary_access='winrm', access_methods={}))
-        host.update(authenticated=True, compromised=True, platform='windows',
-                    hostname=evidence['hostname'])
-        host['access_methods']['winrm'] = method
-        host.update(winrm_port=target['port'], winrm_username=username)
-        if known is not None:
-            known.update(compromised=True, status='compromised', platform='windows')
-            known['access_methods']['winrm'] = method
-            known.setdefault('access', host['access'])
-    state.update(count=len(hosts), hosts=sorted(hosts.values(), key=lambda h: ipaddress.IPv4Address(h['ip'])),
-                 generated=datetime.now(timezone.utc).isoformat())
-    # Same local execution lock as P03; atomic per-file replacement.
-    for path, data in ((access, state), (discovered, inventory)):
-        if path == discovered and (direct or not path.exists()):
-            continue
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = path.with_name(path.name + '.winrm.tmp')
-        temporary.write_text(json.dumps(data, indent=2), encoding='utf-8')
-        temporary.replace(path)
+        return dict(rejected, auth='denied' if denied else 'unconfirmed', warning=warning, stage=stage)
 
 
 def run_winrm_access(env, invoke=subprocess.run):
-    base = Path(env.get('NORDIC_BASE_DIR', '/opt/nordic-attack'))
-    if not INCIDENT_ID.fullmatch(env.get('NORDIC_INCIDENT_ID', '')):
-        raise ValueError('Invalid incident')
-    try:
-        direct = env.get('MRNOBODY_RUN_MODE') == 'standalone'
-        if direct:
-            emit(base, env, '03', 'PHASE_START', phase='03', method='winrm_ntlm')
-        if not direct:
-            env = dict(env, MRNOBODY_PASSWORD=env.get('NORDIC_RDP_PASSWORD', ''),
-                       MRNOBODY_USERNAME=env.get('NORDIC_RDP_USERNAME') or 'Administrator')
-        candidates = targets(env) if direct else discovered_winrm_targets(env, honor_override=False)
-        deadline = time.monotonic() + 120
-        emit(base, env, '03', 'WINRM_DISCOVERY_START', port=5985, candidates=len(candidates), budget_seconds=120)
-        results = []
-        for target in candidates:
-            remaining = deadline - time.monotonic()
-            evidence = dict(reachable=False, authenticated=False, auth='not_attempted', warning='discovery_budget_exhausted')
-            if remaining >= 1:
-                try:
-                    child = invoke([sys.executable, str(Path(__file__).resolve()), '03', '--worker'],
-                        env=dict(env, MRN_WINDOWS_TARGET=json.dumps(target)), capture_output=True,
-                        timeout=min(12, remaining), check=False)
-                    evidence = access_evidence(json.loads(child.stdout)) if child.returncode == 0 else {}
-                    if not evidence:
-                        raise ValueError()
-                except subprocess.TimeoutExpired:
-                    evidence = dict(evidence, warning='candidate_probe_timeout', auth='unconfirmed')
-                except (OSError, ValueError, TypeError):
-                    evidence = dict(reachable=False, authenticated=False, auth='unconfirmed', warning='candidate_probe_worker_failed')
-            results.append((target, evidence))
-            emit(base, env, '03', 'WINRM_SERVICE_CHECK', target=target['target'], ip=target['target'],
-                 port=target['port'], protocol=target['protocol'], **evidence)
-            if evidence['authenticated']:
-                emit(base, env, '03', 'ACCESS_SUCCESS', target=target['target'], ip=target['target'],
-                     access='winrm', platform='windows', port=target['port'],
-                     protocol=target['protocol'], verification='read_only_windows_identity')
-            elif evidence['reachable']:
-                emit(base, env, '03', 'ACCESS_FAILED', ip=target['target'], access='winrm', warning=evidence['warning'])
-        save_winrm_access(base, env, results)
-        emit(base, env, '03', 'WINRM_DISCOVERY_COMPLETE', checked=len(results),
-             authenticated=sum(e['authenticated'] for _, e in results))
-        success = not direct or any(e['authenticated'] for _, e in results)
-        if direct:
-            emit(base, env, '03', 'PHASE_COMPLETE' if success else 'PHASE_FAILED', phase='03')
-        return 0 if success else 1
-    except (DiscoveryError, ValueError, TypeError, KeyError, OSError):
-        emit(base, env, '03', 'WINRM_DISCOVERY_FAILED', warning='invalid_or_missing_access_inventory_or_configuration')
-        return 1
+    from access_pipeline import run_access
+    return run_access(env, invoke)
 
 
 def perform(pid, target, env, session_factory=None, evidence_parser=None):
@@ -555,7 +423,25 @@ def emit(base, env, pid, event, **fields):
     print(line.rstrip(), flush=True)
 
 
+def emit_p03_evidence(base, env):
+    from access_pipeline import read, path, ContractError
+    try:
+        data = read(path(env, 'NORDIC_COMPROMISED_STATE', 'compromised-hosts.json'), env.get('NORDIC_INCIDENT_ID'))
+        for result in data.get('results', []):
+            # Only fixed diagnostic codes from P03; never serialize arbitrary inventory text.
+            if result.get('access') == 'winrm' and result.get('warning') in WINRM_ACCESS_WARNINGS:
+                emit(base, env, '09', 'P03_WINRM_EVIDENCE', target=private(result['target']),
+                     authenticated=result.get('authenticated') is True, warning=result['warning'])
+        emit(base, env, '09', 'P03_ACCESS_STATE', complete=data.get('complete') is True,
+             reason='Review_P03_WinRM_attempts_credentials_listener_and_timeouts')
+    except (ContractError, ValueError, TypeError, KeyError, AttributeError):
+        emit(base, env, '09', 'P03_ACCESS_STATE', warning='p03_inventory_missing_invalid_or_other_incident',
+             reason='Rerun_P01_then_P03_with_runtime_Windows_credentials')
+
+
 def run(pid, env, invoke=subprocess.run):
+    if pid == '09' and env.get('MRNOBODY_RUN_MODE') == 'campaign':
+        env = dict(env, MRNOBODY_PASSWORD=env.get('NORDIC_RDP_PASSWORD') or env.get('MRNOBODY_PASSWORD', ''))
     base = Path(env.get('NORDIC_BASE_DIR', '/opt/nordic-attack'))
     if pid not in {'09', '10'} or not INCIDENT_ID.fullmatch(env.get('NORDIC_INCIDENT_ID', '')):
         raise ValueError('Invalid phase/incident')
@@ -566,6 +452,8 @@ def run(pid, env, invoke=subprocess.run):
         limit = timeout_value(env.get('MRNOBODY_TIMEOUT') or '60')
         if pid == '10':
             runtime_command(env.get('MRN_POWERSHELL_SECRET', ''))
+        if pid == '09' and env.get('MRNOBODY_RUN_MODE') == 'campaign':
+            emit_p03_evidence(base, env)
         selected_targets = targets(env, pid)
         discovery_reason = None
         if pid == '09' and env.get('MRNOBODY_RUN_MODE') == 'campaign':
@@ -573,7 +461,7 @@ def run(pid, env, invoke=subprocess.run):
             skip_reason = discovery_reason
         if not selected_targets:
             emit(base, env, pid, 'WINDOWS_ACTION_SKIPPED' if pid == '09' else 'WINDOWS_ACTION_FAILED',
-                 warning=discovery_reason or 'no_verified_writable_dc' if pid == '09' else 'no_windows_rdp_access_targets', method='winrm_ntlm')
+                 warning=discovery_reason or 'no_authenticated_winrm_targets' if pid == '09' else 'no_windows_rdp_access_targets', method='winrm_ntlm')
             outcomes.append('skipped' if pid == '09' else 'failed')
         for target in selected_targets:
             emit(base, env, pid, 'WINDOWS_ACTION_START', target=target['target'], protocol=target['protocol'], method='winrm_ntlm')
@@ -633,7 +521,7 @@ def run(pid, env, invoke=subprocess.run):
     # candidates had transport failures. Never suppress an action/config error.
     if pid == '09' and 'skipped' in outcomes and not any(x in outcomes for x in ('success', 'failed', 'partial')):
         emit(base, env, pid, 'PHASE_SKIPPED', phase=pid, reason='No Active Directory Domain Controller discovered',
-             discovery_reason=skip_reason or 'no_verified_writable_dc',
+             discovery_reason=skip_reason or 'no_writable_dc_verified',
              account='not_attempted', group='not_attempted')
         return 78  # Internal prerequisite exit; campaign/CLI wrappers handle explicitly.
     if pid == '10':

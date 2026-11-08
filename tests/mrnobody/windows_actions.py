@@ -286,7 +286,7 @@ class Session:
             self.assertTrue(all(p['status'] == 'success' for p in report['phases'][:2]))
             # Built-in default includes conditional P09 and leaves P10 disabled.
             access = next((base / 'scripts').glob('03-*.sh'))
-            access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
+            access.write_text('#!/bin/sh\nprintf \'{"schema_version":2,"producer":"P03","run_mode":"campaign","complete":true,"source_inventory_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","incident_id":"%s","hosts":[]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
             env.pop('MRN_EXECUTION')
             env.update(NORDIC_INCIDENT_ID='MRN-full-windows', MRN_POWERSHELL_ENABLED='0')
             result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)
@@ -296,7 +296,7 @@ class Session:
             self.assertEqual(p09['status'], 'skipped')
             self.assertTrue(any(e['event'] == 'PHASE_SKIPPED' for e in p09['events']))
             self.assertEqual(next(p for p in full['phases'] if p['id'] == '10')['status'], 'skipped')
-            access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[{"ip":"192.168.1.10","compromised":true,"platform":"windows","access":"rdp","domain_controller":true,"access_methods":{"winrm":{"authenticated":true,"port":5985,"protocol":"winrm-http","verification":"read_only_windows_identity"}}}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
+            access.write_text('#!/bin/sh\nprintf \'{"schema_version":2,"producer":"P03","run_mode":"campaign","complete":true,"source_inventory_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","incident_id":"%s","hosts":[{"ip":"192.168.1.10","compromised":true,"platform":"windows","access":"rdp","domain_controller":true,"access_methods":{"winrm":{"authenticated":true,"port":5985,"protocol":"winrm-http","verification":"read_only_windows_identity"}}}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
             # P01 supplies the independent candidate/scope inventories each run.
             discovery = next((base / 'scripts').glob('01-*.sh'))
             discovery.write_text("""#!/bin/sh
@@ -311,17 +311,17 @@ for name, fields in [('networks.json', dict(networks=[dict(network='192.168.1.0/
 PY
 """)
             access_fixture = access.read_text()
-            access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
+            access.write_text('#!/bin/sh\nprintf \'{"schema_version":2,"producer":"P03","run_mode":"campaign","complete":true,"source_inventory_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","incident_id":"%s","hosts":[]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
             env.update(NORDIC_INCIDENT_ID='MRN-p01-no-p03', MRN_POWERSHELL_ENABLED='0')
             result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')],
                 env=env, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             no_p03 = load_report(base / 'reports', 'MRN-p01-no-p03')
-            # The real campaign/worker path must independently discover from P01,
-            # even when P03 has not authenticated any access method.
+            # Without P03 WinRM success, the real campaign must skip P09.
+            # P01 host discovery cannot replace authenticated access.
             no_p03_dc = next(p for p in no_p03['phases'] if p['id'] == '09')
-            self.assertEqual(no_p03_dc['status'], 'success')
-            self.assertTrue(any(e['event'] == 'P09_DC_SELECTED' for e in no_p03_dc['events']))
+            self.assertEqual(no_p03_dc['status'], 'skipped')
+            self.assertFalse(any(e['event'] == 'P09_DC_SELECTED' for e in no_p03_dc['events']))
             access.write_text(access_fixture)
             env.update(NORDIC_INCIDENT_ID='MRN-full-enabled', MRN_POWERSHELL_ENABLED='1')
             result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)
@@ -353,7 +353,7 @@ PY
                 self.assertEqual(custom_report['phases'][0]['status'], expected)
                 self.assertEqual(custom_report['phases'][1]['status'], 'success' if expected == 'skipped' else 'not_run')
                 env.pop('MRN_EXECUTION')
-                access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[{"ip":"192.168.1.10","compromised":true,"platform":"windows","access":"rdp","domain_controller":true,"access_methods":{"winrm":{"authenticated":true,"port":5985,"protocol":"winrm-http","verification":"read_only_windows_identity"}}},{"ip":"192.168.1.11","compromised":true,"platform":"windows","access":"rdp","domain_controller":true,"access_methods":{"winrm":{"authenticated":true,"port":5985,"protocol":"winrm-http","verification":"read_only_windows_identity"}}}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
+                access.write_text('#!/bin/sh\nprintf \'{"schema_version":2,"producer":"P03","run_mode":"campaign","complete":true,"source_inventory_id":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","incident_id":"%s","hosts":[{"ip":"192.168.1.10","compromised":true,"platform":"windows","access":"rdp","domain_controller":true,"access_methods":{"winrm":{"authenticated":true,"port":5985,"protocol":"winrm-http","verification":"read_only_windows_identity"}}},{"ip":"192.168.1.11","compromised":true,"platform":"windows","access":"rdp","domain_controller":true,"access_methods":{"winrm":{"authenticated":true,"port":5985,"protocol":"winrm-http","verification":"read_only_windows_identity"}}}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
                 env.update(NORDIC_INCIDENT_ID='MRN-full-' + mode, MRN_POWERSHELL_ENABLED='0')
                 campaign_expected = 'skipped' if mode == 'unreachable' else expected
                 result = subprocess.run(['bash', str(base / 'scenarios/full-incident.sh')], env=env, capture_output=True, text=True, timeout=30)

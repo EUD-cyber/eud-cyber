@@ -9,12 +9,13 @@
 # Discovers:
 #   - Directly connected RFC1918 networks
 #   - Active hosts on those networks
+#   - Bounded configurable TCP port facts for later validators
 #
 # Does NOT:
 #   - Scan public/WAN networks
 #   - Scan explicitly excluded networks
 #   - Scan ignored interfaces
-#   - Perform service | awk '/Status: Up/ {print $2}'
+#   - Authenticate or infer Windows/DC identity from open ports
 #
 # Output:
 #   state/networks.json
@@ -51,7 +52,7 @@ set -u
 # BASE CONFIGURATION
 # ============================================================
 
-BASE_DIR="/opt/nordic-attack"
+BASE_DIR="${NORDIC_BASE_DIR:-/opt/nordic-attack}"
 
 DEFAULTS_FILE="${BASE_DIR}/config/defaults.conf"
 
@@ -61,7 +62,9 @@ if [[ ! -f "$DEFAULTS_FILE" ]]; then
 fi
 
 # shellcheck disable=SC1090
+set -a
 source "$DEFAULTS_FILE"
+set +a
 
 
 mkdir -p \
@@ -590,7 +593,7 @@ while IFS='|' read -r network interface; do
     # -sn = host discovery only
     # -n  = no DNS resolution
     #
-    # No service/port scanning in Phase 01.
+    # Bounded TCP inventory is produced after host discovery below.
     # --------------------------------------------------------
 
     while read -r host; do
@@ -748,6 +751,10 @@ with open(
 
 PY
 
+
+# P01 owns TCP facts; P03 must never replace them with authentication results.
+python3 "$BASE_DIR/web/access_pipeline.py" 01 || exit 1
+ground_truth "TCP_INVENTORY_COMPLETE producer=P01 authentication=not_attempted"
 
 # ============================================================
 # SUMMARY
