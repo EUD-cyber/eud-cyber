@@ -61,9 +61,13 @@ def targets(env, pid=None):
     if pid == '09' and env.get('MRNOBODY_RUN_MODE') == 'campaign' and env.get('NORDIC_AD_DC_TARGET'):
         # Explicit lab DC pin wins over ordinary RDP/SSH inventory endpoints.
         # Authentication and strict local DC verification still precede writes.
+        protocol = env.get('MRNOBODY_PROTOCOL')
+        protocol = protocol if protocol in {'winrm', 'winrm-http', 'winrm-https'} else 'winrm-http'
+        port = env.get('MRNOBODY_PORT') if env.get('MRNOBODY_PROTOCOL') in {'winrm', 'winrm-http', 'winrm-https'} else None
         return targets(dict(env, MRNOBODY_RUN_MODE='standalone',
-            MRNOBODY_TARGET=env['NORDIC_AD_DC_TARGET'], MRNOBODY_PROTOCOL='winrm-http',
-            MRNOBODY_PORT='5985', MRNOBODY_USERNAME=env.get('NORDIC_RDP_USERNAME') or 'Administrator'))
+            MRNOBODY_TARGET=env['NORDIC_AD_DC_TARGET'], MRNOBODY_PROTOCOL=protocol,
+            MRNOBODY_PORT=port or ('5986' if protocol == 'winrm-https' else '5985'),
+            MRNOBODY_USERNAME=env.get('MRNOBODY_USERNAME') or env.get('NORDIC_RDP_USERNAME') or 'Administrator'))
     protocol = env.get('MRNOBODY_PROTOCOL') or 'winrm-http'
     if protocol not in {'winrm', 'winrm-http', 'winrm-https'}:
         raise ValueError('Windows actions require WinRM')
@@ -81,6 +85,13 @@ def targets(env, pid=None):
             raise ValueError('Windows access inventory belongs to another incident')
         hosts = [h for h in data.get('hosts', []) if h.get('compromised') and
                  (h.get('platform') == 'windows' or h.get('access') in {'rdp', 'winrm'})]
+        if pid == '09':
+            # RDP access/classification is not DC discovery (it may be Kali).
+            # Inventory metadata only selects candidates; authenticated local
+            # AD role, writable controller and domain SID checks gate all writes.
+            hosts = [h for h in hosts if h.get('platform') != 'linux' and
+                     (h.get('domain_controller') is True or
+                      type(h.get('domain_role')) is int and h['domain_role'] in {4, 5})]
     result = []
     for host in hosts:
         # Never consume credentials from persisted inventories.
@@ -164,8 +175,6 @@ def run(pid, env, invoke=subprocess.run):
     base = Path(env.get('NORDIC_BASE_DIR', '/opt/nordic-attack'))
     if pid not in {'09', '10'} or not INCIDENT_ID.fullmatch(env.get('NORDIC_INCIDENT_ID', '')):
         raise ValueError('Invalid phase/incident')
-    if pid == '09' and env.get('MRNOBODY_RUN_MODE') == 'standalone':
-        env = dict(env, MRNOBODY_PROTOCOL='winrm-http', MRNOBODY_PORT='5985')
     emit(base, env, pid, 'PHASE_START', phase=pid, method='winrm_ntlm')
     outcomes = []
     try:
@@ -174,13 +183,14 @@ def run(pid, env, invoke=subprocess.run):
             runtime_command(env.get('MRN_POWERSHELL_SECRET', ''))
         selected_targets = targets(env, pid)
         if not selected_targets:
-            emit(base, env, pid, 'WINDOWS_ACTION_SKIPPED' if pid == '09' else 'WINDOWS_ACTION_FAILED', warning='no_windows_rdp_access_targets', method='winrm_ntlm')
+            emit(base, env, pid, 'WINDOWS_ACTION_SKIPPED' if pid == '09' else 'WINDOWS_ACTION_FAILED',
+                 warning='no_dc_candidates_configure_dc_target' if pid == '09' else 'no_windows_rdp_access_targets', method='winrm_ntlm')
             outcomes.append('skipped' if pid == '09' else 'failed')
         for target in selected_targets:
             emit(base, env, pid, 'WINDOWS_ACTION_START', target=target['target'], protocol=target['protocol'], method='winrm_ntlm')
             if pid == '09' and env.get('MRNOBODY_RUN_MODE') == 'standalone':
-                emit(base, env, pid, 'WINDOWS_PORT_CHECK', target=target['target'], port=5985,
-                     reason='Checking WinRM HTTP TCP reachability before authentication')
+                emit(base, env, pid, 'WINDOWS_PORT_CHECK', target=target['target'], port=target['port'],
+                     reason='Checking configured WinRM TCP reachability before authentication')
             child_env = dict(env, MRN_WINDOWS_TARGET=json.dumps(target))
             try:
                 child = invoke([sys.executable, str(Path(__file__).resolve()), pid, '--worker'],
@@ -265,14 +275,13 @@ if __name__ == '__main__':
             target = json.loads(os.environ['MRN_WINDOWS_TARGET'])
             if phase == '09' and os.environ.get('MRNOBODY_RUN_MODE') == 'standalone':
                 try:
-                    with socket.create_connection((private(target['target']), 5985),
+                    with socket.create_connection((private(target['target']), target['port']),
                                                   timeout=min(timeout_value(os.environ.get('MRNOBODY_TIMEOUT') or '60'), 5)):
                         pass
                 except OSError:
                     print(json.dumps(dict(result='failed', warning='winrm_http_port_unreachable',
-                        reason='TCP 5985 unavailable; check target address, WinRM HTTP listener, routing and firewall')))
+                        reason=f"TCP {target['port']} unavailable; check target address, WinRM listener, routing and firewall")))
                     raise SystemExit(0)
-                target = dict(target, protocol='winrm-http', port=5985)
             print(json.dumps(perform(phase, target, os.environ)))
         except (ImportError, ValueError, KeyError, TypeError):
             print(json.dumps({'result': 'failed', 'warning': 'invalid_or_missing_runtime_configuration'}))

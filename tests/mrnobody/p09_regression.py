@@ -37,10 +37,10 @@ class P09Regression(unittest.TestCase):
         return result, factory
 
     def test_first_run_and_partial_existing_only_missing_changes(self):
-        for pre in (dict(DC, exists=False, enabled=False, owned=False, member=False,
+        for pre in (dict(DC, result='ready', exists=False, enabled=False, owned=False, member=False,
                         verified=False, account='missing', group='missing', account_sid='none'),
-                    dict(DC, enabled=False, member=False, verified=False, account='existing_disabled', group='missing'),
-                    dict(DC, member=False, verified=False, group='missing')):
+                    dict(DC, result='ready', enabled=False, member=False, verified=False, account='existing_disabled', group='missing'),
+                    dict(DC, result='ready', member=False, verified=False, group='missing')):
             change = dict(DC, account='created_enabled' if not pre['exists'] else
                           'enabled_existing' if not pre['enabled'] else 'already_enabled', group='added')
             result, factory = self.perform([pre, change, DC])
@@ -60,14 +60,14 @@ class P09Regression(unittest.TestCase):
             for c in factory.return_value.run_ps.call_args_list))
 
     def test_timeout_after_success_independent_postcheck_no_replay(self):
-        pre = dict(DC, member=False, verified=False, group='missing')
+        pre = dict(DC, result='ready', member=False, verified=False, group='missing')
         result, factory = self.perform([pre, TimeoutError('secret'), DC])
         self.assertTrue(actions.ad_success(result))
         self.assertEqual(result['recovery'], 'state_verified_after_uncertain_action')
         self.assertEqual(factory.call_count, 3)
 
     def test_partial_and_postcheck_unavailable(self):
-        pre = dict(DC, member=False, verified=False, group='missing')
+        pre = dict(DC, result='ready', member=False, verified=False, group='missing')
         for post in (pre, TimeoutError('secret')):
             result, _ = self.perform([pre, TimeoutError('secret'), post])
             self.assertEqual(result['result'], 'partial')
@@ -80,7 +80,7 @@ class P09Regression(unittest.TestCase):
             self.assertEqual(factory.call_count, 1)
 
     def test_known_creation_failure_and_confirmed_absence_is_failed(self):
-        absent = dict(DC, exists=False, enabled=False, owned=False, member=False,
+        absent = dict(DC, result='ready', exists=False, enabled=False, owned=False, member=False,
                       verified=False, account='missing', group='missing', account_sid='none')
         failure = dict(absent, result='failed', stage='account_write',
                        warning='ad_action_failed_check_rights_module_and_dc_logs')
@@ -117,6 +117,79 @@ class P09Regression(unittest.TestCase):
         self.assertEqual((row['target'], row['port'], row['protocol']), ('192.168.2.200', 5985, 'winrm-http'))
         with self.assertRaises(ValueError):
             actions.targets(dict(env, NORDIC_AD_DC_TARGET='8.8.8.8'), '09')
+
+    def test_discovered_candidates_exclude_misclassified_kali(self):
+        inventory = Path(self.temp.name) / 'access.json'
+        hosts = [dict(ip='192.168.1.120', compromised=True, platform='windows', access='rdp'),
+                 dict(ip='192.168.2.200', compromised=True, platform='windows',
+                      access='winrm', domain_controller=True)]
+        inventory.write_text(json.dumps(dict(incident_id=self.env['NORDIC_INCIDENT_ID'], hosts=hosts)))
+        env = dict(self.env, MRNOBODY_RUN_MODE='campaign', NORDIC_COMPROMISED_STATE=str(inventory))
+        self.assertEqual([t['target'] for t in actions.targets(env, '09')], ['192.168.2.200'])
+        self.assertEqual(len(actions.targets(env, '10')), 2)
+        hosts[1].pop('domain_controller')
+        inventory.write_text(json.dumps(dict(incident_id=self.env['NORDIC_INCIDENT_ID'], hosts=hosts)))
+        self.assertEqual(actions.targets(env, '09'), [])
+        # No universal lab IP; a standalone scenario keeps its supplied endpoint.
+        explicit = dict(env, MRNOBODY_RUN_MODE='standalone', MRNOBODY_TARGET='10.20.30.40',
+                        NORDIC_AD_DC_TARGET='192.168.2.200', MRNOBODY_PROTOCOL='winrm-https', MRNOBODY_PORT='15986')
+        row = actions.targets(explicit, '09')[0]
+        self.assertEqual((row['target'], row['protocol'], row['port']), ('10.20.30.40', 'winrm-https', 15986))
+        invoke = Mock(return_value=Mock(returncode=0, stdout=json.dumps(DC)))
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(actions.run('09', explicit, invoke), 0)
+        passed = json.loads(invoke.call_args.kwargs['env']['MRN_WINDOWS_TARGET'])
+        self.assertEqual((passed['protocol'], passed['port']), ('winrm-https', 15986))
+        # Verify the authenticated session uses the selected endpoint and NTLM.
+        factory = Mock()
+        factory.return_value.run_ps.return_value = response(DC)
+        self.assertTrue(actions.ad_success(actions.perform('09', row, explicit, factory)))
+        self.assertEqual(factory.call_args.args[0], 'https://10.20.30.40:15986/wsman')
+        self.assertEqual(factory.call_args.kwargs['transport'], 'ntlm')
+
+    def test_invalid_schema_diagnostics_are_fixed_codes_without_remote_content(self):
+        from p09_actions import parse, SchemaError
+        cases = [(dict(DC, domain_sid={'Value': DC['domain_sid'], 'secret': 'secret'}), 'domain_sid', 'object'),
+                 (dict(DC, group_sid=[DC['group_sid']]), 'group_sid', 'array'),
+                 (dict(DC, owned='True secret'), 'owned', 'string'),
+                 (dict(DC, result=['secret']), 'result', 'array'),
+                 (dict(DC, dc=None), 'dc', 'null'),
+                 (dict(DC, group_sid=DC['domain_sid'] + '-513'), 'domain_sid', 'null'),
+                 ([DC], 'json', 'array')]
+        for data, field, kind in cases:
+            with self.subTest(field=field, kind=kind):
+                with self.assertRaises(SchemaError) as caught:
+                    parse(response(data))
+                self.assertEqual(caught.exception.diagnostic['schema_field'], field)
+                self.assertEqual(caught.exception.diagnostic['schema_type'], kind)
+                result, factory = self.perform([data])
+                self.assertEqual(result['warning'], 'invalid_ad_response')
+                self.assertEqual(result['stage'], 'precheck')
+                self.assertEqual(result['schema_field'], field)
+                self.assertEqual(factory.call_count, 1)
+        for row, field in ((Mock(status_code=1, std_out=b'secret', std_err=b'secret'), 'status_code'),
+                           (Mock(status_code=0, std_out=b'secret', std_err=b'secret'), 'json'),
+                           (Mock(status_code=0, std_out=b'x' * 8193, std_err=b''), 'stdout')):
+            with self.assertRaises(SchemaError) as caught:
+                parse(row)
+            self.assertEqual(caught.exception.diagnostic['schema_field'], field)
+            self.assertNotIn('secret', str(caught.exception))
+
+    def test_unconfirmed_success_is_invalid_and_cannot_trigger_write(self):
+        for changes in ({'verified': False}, {'member': False, 'verified': False, 'group': 'missing'},
+                        {'exists': False, 'owned': False, 'enabled': False, 'member': False,
+                         'verified': False, 'account_sid': 'none', 'account': 'missing', 'group': 'missing'}):
+            result, factory = self.perform([dict(DC, **changes)])
+            self.assertEqual(result['warning'], 'invalid_ad_response')
+            self.assertEqual(factory.call_count, 1)
+
+    def test_invalid_action_response_recovers_only_with_independent_confirmed_state(self):
+        pre = dict(DC, result='ready', verified=False, member=False, group='missing')
+        for after, outcome in ((DC, 'success'), (pre, 'partial')):
+            result, factory = self.perform([pre, dict(DC, member='secret'), after])
+            self.assertEqual(result['result'], outcome)
+            self.assertEqual(result['schema_field'], 'member')
+            self.assertEqual(factory.call_count, 3)
 
     def test_unverified_worker_success_rejected_and_partial_reported(self):
         for data, code in ((dict(DC, verified=False), 1),

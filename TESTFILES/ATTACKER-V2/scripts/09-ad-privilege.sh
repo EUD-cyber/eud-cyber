@@ -25,7 +25,8 @@ set -a
 source "$BASE_DIR/config/defaults.conf"
 set +a
 if [[ "${MRNOBODY_RUN_MODE:-}" == "standalone" ]]; then
-    export MRNOBODY_PROTOCOL=winrm-http MRNOBODY_PORT=5985
+    export MRNOBODY_PROTOCOL="${MRNOBODY_PROTOCOL:-winrm-http}"
+    export MRNOBODY_PORT="${MRNOBODY_PORT:-$([[ "$MRNOBODY_PROTOCOL" == winrm-https ]] && echo 5986 || echo 5985)}"
 fi
 if [[ ! -x "$BASE_DIR/venv/bin/python" ]]; then
     printf '%s\n' 'P09 failed: WinRM Python runtime missing; repair the installation.' >&2
