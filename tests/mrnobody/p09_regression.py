@@ -79,6 +79,15 @@ class P09Regression(unittest.TestCase):
             self.assertEqual(result['result'], outcome)
             self.assertEqual(factory.call_count, 1)
 
+    def test_known_creation_failure_and_confirmed_absence_is_failed(self):
+        absent = dict(DC, exists=False, enabled=False, owned=False, member=False,
+                      verified=False, account='missing', group='missing', account_sid='none')
+        failure = dict(absent, result='failed', stage='account_write',
+                       warning='ad_action_failed_check_rights_module_and_dc_logs')
+        result, _ = self.perform([absent, failure, absent])
+        self.assertEqual(result['result'], 'failed')
+        self.assertEqual(result['action_stage'], 'account_write')
+
     def test_ownership_conflict_and_identity_changes_fail_closed(self):
         conflict = dict(DC, result='failed', owned=False, verified=False, warning='account_ownership_conflict')
         result, factory = self.perform([conflict])

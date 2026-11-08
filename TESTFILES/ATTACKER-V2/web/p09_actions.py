@@ -200,7 +200,8 @@ def perform(target, env, session_factory, limit, verify_only=False):
         else:
             after.update(account='already_enabled', group='already_member')
         return after
-    after.update(result='partial' if attempted or verify_only or after.get('exists') and after.get('owned') else 'failed',
+    uncertain = verify_only or diagnostic != 'none' or attempted and (not same or action is None or action['result'] == 'success')
+    after.update(result='partial' if uncertain or after.get('exists') and after.get('owned') else 'failed',
                  verified=False, warning='postconditions_not_confirmed' if same else 'postcheck_identity_changed',
                  verification='independent_read_only')
     return after
