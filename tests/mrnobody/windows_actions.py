@@ -246,11 +246,18 @@ class Session:
     def __init__(self, endpoint, **kw): self.endpoint = endpoint; self.protocol = self
     def open_shell(self, **kw): return 'shell'
     def run_command(self, shell, command, arguments, **kw):
-        from p09_fixtures import decode_command
-        assert kw == {'skip_cmd_shell': True}
-        self.source = decode_command(arguments)
+        assert kw == {'console_mode_stdin': False, 'skip_cmd_shell': True}
+        self.frame = b''
+        self.ended = False
         return 'command'
+    def send_command_input(self, shell, command, chunk, end=False):
+        from p09_fixtures import decode_input
+        assert not self.ended
+        self.frame += chunk
+        self.ended = end
+        if end: self.source = decode_input(self.frame)
     def get_command_output(self, *args):
+        assert self.ended
         response = self.run_ps(self.source)
         return response.std_out, response.std_err, response.status_code
     def cleanup_command(self, *args): pass
