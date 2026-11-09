@@ -120,6 +120,56 @@ async function checkFullIncident(page, artifacts) {
     }
 }
 
+async function checkStandalonePorts(page, catalogue) {
+    await page.locator('[data-page="phases"]').click();
+    const defaults = {ssh:'22', rdp:'3389', winrm:'5985', 'winrm-http':'5985', 'winrm-https':'5986'};
+    for (const id of ['04','05','06','07','08','10']) {
+        const phase = catalogue.phases.find(p => p.id === id);
+        await page.evaluate(item => renderPhaseDetail(item), phase);
+        const protocol = page.locator(`#phase-${id}-protocol`), port = page.locator(`#phase-${id}-port`);
+        const mode = page.getByLabel('Port mode', {exact:true});
+        assert.equal(await mode.inputValue(), 'auto');
+        assert.equal(await port.inputValue(), defaults[await protocol.inputValue()]);
+        assert.equal(await port.isEditable(), false);
+        for (const value of phase.education.configuration.protocol.options) {
+            await protocol.selectOption(value); assert.equal(await port.inputValue(), defaults[value]);
+        }
+        await mode.selectOption('custom'); await port.fill('15985');
+        for (const value of phase.education.configuration.protocol.options) {
+            await protocol.selectOption(value); assert.equal(await port.inputValue(), '15985');
+        }
+    }
+    await page.evaluate(item => renderPhaseDetail(item), catalogue.phases.find(p => p.id === '10'));
+    assert.equal(await page.locator('#phase-10-protocol').inputValue(), 'winrm-http');
+    assert.equal(await page.locator('#phase-10-port').inputValue(), '5985');
+    await page.locator('#phase-10-target').fill('192.168.2.200');
+    await page.locator('#phase-10-username').fill('Administrator');
+    await page.locator('#phase-10-password').fill('fixture-only');
+    await page.locator('#phase-10-powershell').fill('Write-Output "WINRM_OK"');
+    const sent = [];
+    await page.route('**/api/phase/10/run', route => {
+        sent.push(route.request().postDataJSON());
+        return route.fulfill({json:{message:'Offline fixture accepted'}});
+    });
+    const accept = dialog => dialog.accept(); page.on('dialog', accept);
+    try {
+        await page.getByRole('button', {name:'DRY RUN',exact:true}).click();
+        await page.waitForFunction(() => document.getElementById('phase-10-password').value === 'fixture-only');
+        await page.getByRole('button', {name:'RUN P10',exact:true}).click();
+        await page.waitForFunction(() => document.getElementById('phase-10-password').value === '');
+        assert.equal(sent.length, 2);
+        for (const data of sent) {
+            assert.equal(data.target, '192.168.2.200'); assert.equal(data.protocol, 'winrm-http');
+            assert.equal(data.port_mode, 'auto'); assert.equal(data.port, '5985');
+            assert.equal(data.username, 'Administrator'); assert.equal(data.password, 'fixture-only');
+            assert.equal(data.powershell, 'Write-Output "WINRM_OK"');
+        }
+        assert.equal(sent[0].dry_run, true); assert.equal(sent[1].dry_run, false);
+    } finally {
+        page.off('dialog', accept); await page.unroute('**/api/phase/10/run');
+    }
+}
+
 async function checkP06(page, phase) {
     await page.locator('[data-page="phases"]').click();
     await page.evaluate(item => renderPhaseDetail(item), phase);
@@ -153,6 +203,7 @@ async function checkP06(page, phase) {
             file:'/tmp/.nordic-MRN-p05/nordic-data-MRN-p05.txt',staging_incident:'MRN-p05'};
         for (const [key,value] of Object.entries(values)) await page.locator('#phase-06-'+key).fill(value);
         await page.locator('#phase-06-protocol').selectOption('ssh');
+        await page.locator('#phase-06-port-mode').selectOption('custom');
         await page.locator('#phase-06-port').fill('70000');
         await page.getByRole('button', {name:'RUN P06',exact:true}).click();
         assert.ok((await feedback.textContent()).includes('1–65535'));
@@ -257,6 +308,7 @@ async function main() {
         await page.goto(url);
         await page.waitForFunction(()=>document.getElementById('dashboardPhaseCount').textContent !== '—');
         const catalogue=await (await page.request.get(url+'/api/phases')).json();
+        await checkStandalonePorts(page, catalogue);
         await checkP06(page, catalogue.phases.find(p => p.id === '06'));
         await checkP09(page, catalogue.phases.find(p => p.id === '09'));
         const nav=page.locator('.sidebar-nav .nav-item');

@@ -1225,6 +1225,41 @@ function phaseFieldPlaceholder(parameter) {
 }
 
 
+const standalonePorts = {ssh: 22, rdp: 3389, winrm: 5985, "winrm-http": 5985, "winrm-https": 5986, http: 80, https: 443};
+// P09 has a fixed endpoint contract; P01/P03 and P11 keep their existing forms.
+const usesStandalonePort = phase => ["04", "05", "06", "07", "08", "10"].includes(phase.id)
+    && phase.parameters?.includes("protocol") && phase.parameters?.includes("port");
+
+function mountStandalonePort(phase, form) {
+    const protocol = document.getElementById(`phase-${phase.id}-protocol`);
+    const port = document.getElementById(`phase-${phase.id}-port`);
+    const username = document.getElementById(`phase-${phase.id}-username`);
+    const group = document.createElement("div"); group.className = "form-group";
+    const label = document.createElement("label"); label.textContent = "Port mode";
+    const mode = document.createElement("select"); mode.id = `phase-${phase.id}-port-mode`;
+    label.htmlFor = mode.id;
+    for (const [value, text] of [["auto", "Auto (protocol default)"], ["custom", "Custom"]]) {
+        const option = document.createElement("option"); option.value = value; option.textContent = text; mode.appendChild(option);
+    }
+    mode.value = "auto"; group.appendChild(label); group.appendChild(mode); form.appendChild(group);
+    port.min = "1"; port.max = "65535"; port.step = "1";
+    let customPort = "";
+    const sync = () => {
+        port.readOnly = mode.value === "auto";
+        if (port.readOnly) port.value = standalonePorts[protocol.value] || "";
+        port.placeholder = String(standalonePorts[protocol.value] || "");
+        if (username) username.placeholder = /^(winrm|rdp)/.test(protocol.value) ? "Administrator" : "ubuntu";
+    };
+    protocol.addEventListener("change", sync);
+    document.getElementById(`phase-${phase.id}-platform`)?.addEventListener("change", sync);
+    mode.addEventListener("change", () => {
+        if (mode.value === "auto") customPort = port.value;
+        else port.value = customPort || port.value;
+        sync();
+    });
+    sync();
+}
+
 function renderPhaseDetail(phase) {
 
     if (!phaseDetail) {
@@ -1324,12 +1359,13 @@ function renderPhaseDetail(phase) {
             input.type =
                 "checkbox";
 
-        } else if (phase.id === "06" && parameter === "protocol") {
+        } else if (usesStandalonePort(phase) && parameter === "protocol") {
             input = document.createElement("select");
-            ["", "ssh", "winrm-http", "winrm-https"].forEach(value => {
+            (phase.education?.configuration?.protocol?.options || []).forEach(value => {
                 const option = document.createElement("option"); option.value = value;
-                option.textContent = value || "Choose transport"; input.appendChild(option);
+                option.textContent = value; input.appendChild(option);
             });
+            if (phase.id === "10") input.value = "winrm-http";
         } else if (["10", "11"].includes(phase.id) && ["platform", "method", "action", "protocol"].includes(parameter)) {
             input = document.createElement("select");
             const choices = {platform: ["auto", "windows", "linux"], method: ["auto", "task-service", "cron-systemd", "scheduled-task", "service", "cron", "systemd"], action: ["create", "cleanup"], protocol: ["", "ssh", "winrm-http", "winrm-https"]}[parameter];
@@ -1417,12 +1453,16 @@ function renderPhaseDetail(phase) {
                     option.hidden = !!option.value && option.value !== "auto" && mode !== "auto" && (["ssh", "cron", "systemd", "cron-systemd"].includes(option.value)) !== (mode === "linux");
                     option.disabled = option.hidden;
                 }
-                if (input.selectedOptions[0]?.disabled) input.value = key === "method" ? "auto" : "";
+                if (input.selectedOptions[0]?.disabled) input.value = usesStandalonePort(phase) && key === "protocol"
+                    ? [...input.options].find(option => !option.disabled)?.value || ""
+                    : key === "method" ? "auto" : "";
             }
         };
         platform?.addEventListener("change", adapt); adapt();
     }
 
+
+    if (usesStandalonePort(phase)) mountStandalonePort(phase, form);
 
     const controls =
         document.createElement("div");
@@ -1592,6 +1632,15 @@ async function runStandalonePhase(
     }
 
 
+    if (usesStandalonePort(phase)) {
+        data.port_mode = document.getElementById(`phase-${phase.id}-port-mode`).value;
+        if (!(data.protocol in standalonePorts)) { feedback("Choose a supported protocol.", "error"); return; }
+        if (!/^\d+$/.test(data.port || "") || +data.port < 1 || +data.port > 65535) {
+            feedback("Port must be 1–65535.", "error"); return;
+        }
+        if (data.port_mode === "auto") data.port = String(standalonePorts[data.protocol]);
+    }
+
     const action =
         dryRun
             ? "dry run"
@@ -1660,7 +1709,7 @@ async function runStandalonePhase(
         );
 
 
-        for (const key of ["password", "powershell"]) {
+        for (const key of dryRun && usesStandalonePort(phase) ? [] : ["password", "powershell"]) {
             const input = document.getElementById(`phase-${phase.id}-${key}`); if (input) input.value = "";
         }
         if (phase.id === "09") {
