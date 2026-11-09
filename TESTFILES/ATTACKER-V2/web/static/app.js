@@ -1226,8 +1226,8 @@ function phaseFieldPlaceholder(parameter) {
 
 
 const standalonePorts = {ssh: 22, rdp: 3389, winrm: 5985, "winrm-http": 5985, "winrm-https": 5986, http: 80, https: 443};
-// P09 has a fixed endpoint contract; P01/P03 and P11 keep their existing forms.
-const usesStandalonePort = phase => ["04", "05", "06", "07", "08", "10"].includes(phase.id)
+// P09 has a fixed endpoint contract; P01/P03 keep their existing forms.
+const usesStandalonePort = phase => ["04", "05", "06", "07", "08", "10", "11"].includes(phase.id)
     && phase.parameters?.includes("protocol") && phase.parameters?.includes("port");
 
 function mountStandalonePort(phase, form) {
@@ -1258,6 +1258,77 @@ function mountStandalonePort(phase, form) {
         sync();
     });
     sync();
+}
+
+
+const p11MethodPlatforms = {"scheduled-task": "windows", service: "windows", "task-service": "windows",
+    cron: "linux", systemd: "linux", "cron-systemd": "linux"};
+function mountP11Standalone(form) {
+    const field = key => document.getElementById(`phase-11-${key}`);
+    const help = (key, text) => {
+        const note = document.createElement("small");
+        note.id = `phase-11-${key}-help`; note.textContent = text;
+        field(key).setAttribute("aria-describedby", note.id);
+        field(key).parentElement.appendChild(note);
+        return note;
+    };
+    help("artifact", "Editable suffix: telemetry gives mrnobody-p11-telemetry (Linux service: mrnobody-p11-telemetry.service). Use 1–32 lowercase letters, digits or hyphens; start with a letter or digit.");
+    help("action", "create creates the selected artifacts. cleanup removes them: use the same target, username, method and artifact suffix as create.");
+    const methodHelp = help("method", "");
+    help("persistence_duration", "Paired service activity stops after this lifetime even with DNS disabled. Artifacts remain until cleanup; single manual methods do not use this lifetime.");
+    help("persistence_resolver", "Internal non-forwarding lab DNS resolver; queries originate from the target.");
+    const platform = field("platform"), protocol = field("protocol"), method = field("method");
+    const sync = (platformChanged = false) => {
+        if (platformChanged && platform.value !== "auto" &&
+                (protocol.value === "ssh" ? "linux" : "windows") !== platform.value) {
+            protocol.value = platform.value === "linux" ? "ssh" : "winrm-http";
+        } else if (!platformChanged && platform.value !== "auto") {
+            platform.value = protocol.value === "ssh" ? "linux" : "windows";
+        }
+        const effective = protocol.value === "ssh" ? "linux" : "windows";
+        const paired = effective === "linux" ? "cron-systemd" : "task-service";
+        for (const option of method.options) {
+            option.disabled = option.value !== "auto" && p11MethodPlatforms[option.value] !== effective;
+        }
+        method.options[0].textContent = `Auto (${paired})`;
+        methodHelp.textContent = method.value === "auto"
+            ? `Auto uses ${paired} for ${effective}. Manual methods remain selectable.`
+            : "Manual method selected. It must match the transport platform.";
+        const dns = field("persistence_dns").value === "enabled";
+        for (const key of ["persistence_domain", "persistence_resolver", "persistence_interval"]) {
+            field(key).parentElement.hidden = !dns;
+        }
+    };
+    platform.addEventListener("change", () => sync(true));
+    for (const key of ["protocol", "method", "persistence_dns"]) field(key).addEventListener("change", () => sync());
+    sync();
+}
+
+function prepareP11Standalone(data) {
+    const effective = data.protocol === "ssh" ? "linux" : "windows";
+    if (!["auto", "linux", "windows"].includes(data.platform) ||
+            data.platform !== "auto" && data.platform !== effective) return "P11: platform and protocol must match.";
+    if (data.method !== "auto" && p11MethodPlatforms[data.method] !== effective) return "P11: method and platform must match.";
+    if (!["create", "cleanup"].includes(data.action)) return "P11: choose create or cleanup.";
+    if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(data.artifact || "")) return "P11: enter an artifact suffix of 1–32 lowercase letters, digits or hyphens.";
+    if (!["enabled", "disabled"].includes(data.persistence_dns)) return "P11: choose enabled or disabled DNS activity.";
+    const integer = (value, low, high) => /^[0-9]+$/.test(value || "") && +value >= low && +value <= high;
+    if (data.timeout && !integer(data.timeout, 5, 300)) return "P11: timeout must be 5–300 seconds.";
+    if (!integer(data.persistence_duration, 60, 14400)) return "P11: activity lifetime must be 60–14400 seconds.";
+    if (data.persistence_dns === "disabled" || data.action === "cleanup") {
+        // Hidden DNS values stay in the form; inactive settings must not block submission.
+        for (const key of ["persistence_domain", "persistence_resolver", "persistence_interval"]) delete data[key];
+        return "";
+    }
+    if (!["auto", "task-service", "cron-systemd"].includes(data.method)) return "P11: DNS requires an Auto or paired method.";
+    if (!integer(data.persistence_interval, 10, 3600) || +data.persistence_interval > +data.persistence_duration) return "P11: DNS interval must be 10–3600 seconds and fit the lifetime.";
+    if (!data.persistence_domain || data.persistence_domain.length > 120 ||
+            !/^(?:[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?\.)+test$/.test(data.persistence_domain)) return "P11: use a lowercase reserved .test domain.";
+    const parts = (data.persistence_resolver || "").split(".");
+    const [a, b, , d] = parts.map(Number);
+    if (parts.length !== 4 || parts.some(p => !/^(0|[1-9][0-9]{0,2})$/.test(p) || +p > 255) ||
+            !(a === 10 || a === 172 && b >= 16 && b <= 31 || a === 192 && b === 168) || d === 0 || d === 255) return "P11: enter an internal unicast private lab DNS resolver.";
+    return "";
 }
 
 function renderPhaseDetail(phase) {
@@ -1365,7 +1436,7 @@ function renderPhaseDetail(phase) {
                 const option = document.createElement("option"); option.value = value;
                 option.textContent = value; input.appendChild(option);
             });
-            if (phase.id === "10") input.value = "winrm-http";
+            if (["10", "11"].includes(phase.id)) input.value = "winrm-http";
         } else if (["10", "11"].includes(phase.id) && ["platform", "method", "action", "protocol"].includes(parameter)) {
             input = document.createElement("select");
             const choices = {platform: ["auto", "windows", "linux"], method: ["auto", "task-service", "cron-systemd", "scheduled-task", "service", "cron", "systemd"], action: ["create", "cleanup"], protocol: ["", "ssh", "winrm-http", "winrm-https"]}[parameter];
@@ -1398,6 +1469,7 @@ function renderPhaseDetail(phase) {
 
 
         if (phase.id === "11") {
+            if (parameter === "artifact") { input.value = "telemetry"; input.maxLength = 32; label.textContent = "Artifact suffix"; }
             if (parameter === "persistence_domain") input.value = "evilcorp.test";
             if (["persistence_interval", "persistence_duration"].includes(parameter)) {
                 input.type = "number"; input.step = "1";
@@ -1442,7 +1514,7 @@ function renderPhaseDetail(phase) {
         feedback.setAttribute("aria-live", "polite"); phaseDetail.appendChild(feedback);
         showP06Feedback(p06Feedback.message, p06Feedback.type);
     }
-    if (["10", "11"].includes(phase.id)) {
+    if (phase.id === "10") {
         const platform = document.getElementById(`phase-${phase.id}-platform`);
         const adapt = () => {
             const mode = platform?.value || "auto";
@@ -1462,6 +1534,7 @@ function renderPhaseDetail(phase) {
     }
 
 
+    if (phase.id === "11") mountP11Standalone(form);
     if (usesStandalonePort(phase)) mountStandalonePort(phase, form);
 
     const controls =
@@ -1639,6 +1712,11 @@ async function runStandalonePhase(
             feedback("Port must be 1–65535.", "error"); return;
         }
         if (data.port_mode === "auto") data.port = String(standalonePorts[data.protocol]);
+    }
+
+    if (phase.id === "11") {
+        const error = prepareP11Standalone(data);
+        if (error) { feedback(error, "error"); return; }
     }
 
     const action =

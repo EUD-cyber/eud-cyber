@@ -107,9 +107,11 @@ const reportFor = (id, phase = '04', status = 'complete') => ({incident: {id, st
         phaseFieldLabel: value => value, followP06Job() {}, refreshLog: async () => {}, console: {log() {}, error() {}}});
     submitted.context.window.confirm = () => true;
     const portPolicy = source.slice(source.indexOf('const standalonePorts ='), source.indexOf('function mountStandalonePort('));
-    vm.runInContext(portPolicy + handler, submitted.context);
+    const p11Policy = source.slice(source.indexOf("const p11MethodPlatforms ="), source.indexOf("function renderPhaseDetail("));
+    vm.runInContext(portPolicy + p11Policy + handler, submitted.context);
     for (let number = 1; number <= 18; number++) {
         const phase = String(number).padStart(2, '0');
+        if (phase === '11') Object.assign(fields, {platform: 'auto', method: 'auto', action: 'create', artifact: 'telemetry', persistence_dns: 'disabled', persistence_duration: '3600'});
         submitted.mount(phase);
         submitted.report(async id => reportFor(id, phase));
         submitted.context.apiPost = async (url, data) => {
@@ -121,6 +123,7 @@ const reportFor = (id, phase = '04', status = 'complete') => ({incident: {id, st
         await settle();
         assert.equal(submitted.button().disabled, false);
         assert.match(text(submitted.root), new RegExp(`MRN-handler-${phase}`));
+        if (phase === "11") for (const key of ["platform", "method", "action", "artifact", "persistence_dns", "persistence_duration"]) delete fields[key];
     }
     console.log('Standalone report tests passed: exact run, pending, concurrent jobs, failure with report, missing/failed generation, reload, stale responses, navigation and phase hooks.');
 })().catch(error => {console.error(error); process.exitCode = 1;});
