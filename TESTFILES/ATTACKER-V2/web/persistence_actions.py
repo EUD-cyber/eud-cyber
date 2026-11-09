@@ -85,7 +85,7 @@ def perform_windows(target, env, session_factory=None):
         timed_out = isinstance(error, TimeoutError) or type(error).__name__ in {'ReadTimeout', 'ConnectTimeout', 'WinRMOperationTimeoutError'}
         return dict(failure, stage=stage, warning='powershell_payload_too_large' if isinstance(error, PayloadError)
                     else 'timeout_remote_action_may_still_be_running' if timed_out
-                    else 'winrm_execution_failed_details_omitted')
+                    else 'transport_error_details_omitted')
     counts = dict(exit_code=response.status_code, stdout_bytes=len(response.std_out), stderr_bytes=len(response.std_err))
     if len(response.std_out) > 8192:
         return dict(failure, **counts, stage='verify', warning='oversized_persistence_evidence')

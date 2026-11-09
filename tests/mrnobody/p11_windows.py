@@ -113,6 +113,8 @@ class WindowsTransport(unittest.TestCase):
                 result = remote.perform('11', TARGET, ENV, session_factory=f)
                 self.assertEqual(result['result'], 'failed')
                 self.assertEqual(result['stage'], stage)
+                # Keep the existing runner's candidate fallback classification.
+                self.assertEqual(result['warning'], 'timeout_remote_action_may_still_be_running' if isinstance(error, TimeoutError) else 'transport_error_details_omitted')
                 self.assertEqual(result['cleanup_required'], 'true')
                 self.assertNotIn('RUNTIME_CREDENTIAL', json.dumps(result))
                 self.assertEqual(getattr(proto, name).call_count, 1)
