@@ -3,7 +3,7 @@
 All remote output is an allowlisted protocol. Never log scripts or exceptions.
 """
 import base64
-import gzip
+import hashlib
 import json
 import re
 from types import SimpleNamespace
@@ -142,24 +142,43 @@ def script(mode='read', password='', before=None):
     return value
 
 
-def invocation(command):
-    """Bound the encoded payload below CreateProcess's command-line limit.
+MAX_SCRIPT_BYTES = 256 * 1024
+INPUT_CHUNK_BYTES = 16 * 1024
+# Includes executable, switches, separators and a conservative WinRS allowance.
+# Stay below cmd.exe's 8191 as well as CreateProcess's 32767 UTF-16 units.
+MAX_COMMAND_CHARS = 8000
 
-    P09 bypasses cmd.exe. Compression is framing, not secrecy. The
-    outer parser catches payload syntax errors before any AD cmdlet can run.
+
+def invocation():
+    """Fixed, secret-free loader. Script data travels only over WinRS stdin.
+
+    No AD code runs until bounded framing, EOF and SHA-256 have been checked.
+    No remote file, environment variable or payload-bearing command line exists.
     """
-    payload = base64.b64encode(gzip.compress(command.encode('utf-8'), mtime=0)).decode('ascii')
-    wrapper = r'''
+    return r'''
 $ErrorActionPreference='Stop'
 $ProgressPreference='SilentlyContinue'
 [Console]::OutputEncoding=New-Object System.Text.UTF8Encoding($false)
 $stage='payload_decode'
+$inputReader=$null; $bytes=$null; $sha=$null
 try {
-    $bytes=[Convert]::FromBase64String('__PAYLOAD__')
-    $stream=New-Object IO.MemoryStream(,$bytes)
-    $gzip=New-Object IO.Compression.GZipStream($stream,[IO.Compression.CompressionMode]::Decompress)
-    $reader=New-Object IO.StreamReader($gzip,[Text.Encoding]::UTF8)
-    try { $source=$reader.ReadToEnd() } finally { $reader.Dispose(); $stream.Dispose() }
+    $inputReader=New-Object IO.StreamReader([Console]::OpenStandardInput(),[Text.Encoding]::ASCII)
+    $header=New-Object char[] 73
+    if ($inputReader.ReadBlock($header,0,73) -ne 73) { throw 'header' }
+    $match=[regex]::Match((-join $header),'\A([0-9]{7}):([a-f0-9]{64})\n\z')
+    if (-not $match.Success) { throw 'header' }
+    $length=[int]$match.Groups[1].Value
+    if ($length -lt 4 -or $length -gt 349528 -or $length % 4 -ne 0) { throw 'size' }
+    $chars=New-Object char[] $length
+    if ($inputReader.ReadBlock($chars,0,$length) -ne $length) { throw 'truncated' }
+    if ($inputReader.Read() -ne -1) { throw 'trailing' }
+    $bytes=[Convert]::FromBase64String((-join $chars))
+    if ($bytes.Length -gt 262144) { throw 'size' }
+    $sha=[Security.Cryptography.SHA256]::Create()
+    $digest=[BitConverter]::ToString($sha.ComputeHash($bytes)).Replace('-','').ToLowerInvariant()
+    if ($digest -cne $match.Groups[2].Value) { throw 'integrity' }
+    $utf8=New-Object Text.UTF8Encoding($false,$true)
+    $source=$utf8.GetString($bytes)
     $stage='payload_parse'
     $block=[ScriptBlock]::Create($source)
     $stage='payload_execute'
@@ -168,11 +187,14 @@ try {
 } catch {
     @{protocol='p09_failure'; stage=$stage; result='failed'; warning='powershell_payload_failed'} | ConvertTo-Json -Compress
     exit 0
+} finally {
+    if ($inputReader) { $inputReader.Dispose() }
+    if ($sha) { $sha.Dispose() }
+    if ($bytes) { [Array]::Clear($bytes,0,$bytes.Length) }
+    if ($chars) { [Array]::Clear($chars,0,$chars.Length) }
+    $source=$null; $block=$null
 }
-'''.replace('__PAYLOAD__', payload)
-    if 100 + len(base64.b64encode(wrapper.encode('utf-16-le'))) > 30000:
-        raise PayloadError()
-    return wrapper
+'''
 
 
 class PayloadError(ValueError):
@@ -180,16 +202,30 @@ class PayloadError(ValueError):
 
 
 def run_powershell(session, command):
-    # Session.run_ps uses cmd.exe, whose 8191-character limit truncates P09.
-    # Use the supported WinRS bypass and separate fixed executable/arguments.
-    encoded = base64.b64encode(invocation(command).encode('utf-16-le')).decode('ascii')
+    source = command.encode('utf-8')
+    if not source or len(source) > MAX_SCRIPT_BYTES:
+        raise PayloadError()
+    payload = base64.b64encode(source)
+    frame = f'{len(payload):07d}:{hashlib.sha256(source).hexdigest()}\n'.encode('ascii') + payload
+    encoded = base64.b64encode(invocation().encode('utf-16-le')).decode('ascii')
+    arguments = ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded]
+    if 100 + len('powershell.exe ' + ' '.join(arguments)) > MAX_COMMAND_CHARS:
+        raise PayloadError()
     protocol = session.protocol
-    shell = protocol.open_shell(noprofile=True)
+    # Bound orphaned in-memory staging if the parent worker is killed before
+    # finally can run. Active Send/Receive requests keep the shell in use.
+    # pywinrm forwards IdleTimeOut verbatim as an XML duration, not milliseconds.
+    shell = protocol.open_shell(noprofile=True, idle_timeout='PT60S')
     command_id = None
     try:
-        command_id = protocol.run_command(shell, 'powershell.exe',
-            ['-NoLogo', '-NoProfile', '-NonInteractive', '-EncodedCommand', encoded],
-            skip_cmd_shell=True)
+        command_id = protocol.run_command(shell, 'powershell.exe', arguments,
+            console_mode_stdin=False, skip_cmd_shell=True)
+        # No retries: a lost Send response is ambiguous. Close this process and
+        # let perform() independently verify state; never replay an apply.
+        for offset in range(0, len(frame), INPUT_CHUNK_BYTES):
+            chunk = frame[offset:offset + INPUT_CHUNK_BYTES]
+            protocol.send_command_input(shell, command_id, chunk,
+                end=offset + len(chunk) == len(frame))
         stdout, stderr, code = protocol.get_command_output(shell, command_id)
         return SimpleNamespace(status_code=code, std_out=stdout, std_err=stderr)
     finally:
@@ -325,7 +361,7 @@ def perform(target, env, session_factory, limit, verify_only=False):
     def execute(command):
         # Every read, write and postcheck uses an independent authenticated session.
         session = session_factory(f"{scheme}://{target['target']}:{target['port']}/wsman",
-            auth=(target['username'], password), transport='ntlm', server_cert_validation='ignore',
+            auth=(target['username'], password), transport='ntlm', message_encryption='always', server_cert_validation='ignore',
             operation_timeout_sec=min(limit, 60), read_timeout_sec=limit + 10)
         return parse(run_powershell(session, command))
 
