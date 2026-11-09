@@ -71,7 +71,9 @@ jobs:
           python tests/mrnobody/p09_standalone.py -v
       - name: Verify paired P11 lifecycle, bounded DNS, API and report exports without network
         timeout-minutes: 3
-        run: python -u tests/mrnobody/persistence_dns.py -v
+        run: |
+          python -u tests/mrnobody/persistence_dns.py -v
+          python tests/mrnobody/p11_windows.py -v
       - name: Check routing, live output, incident IDs and historical compatibility with isolated fixtures
         run: |
           python tests/mrnobody/backend.py
@@ -136,6 +138,8 @@ jobs:
           python-version: '3.12'
       - name: Parse P11 scripts and compile service without executing or installing it
         run: python tests/mrnobody/persistence_static.py
+      - name: Verify P11 service WinRS framing and safe diagnostics offline
+        run: python tests/mrnobody/p11_windows.py -v
       - name: Install isolated DNS test dependencies
         run: python -m pip install 'reportlab>=4,<5' 'flask>=3,<4' 'requests>=2,<3'
       - name: Verify P06 synthetic Windows script parsing and transport contracts offline

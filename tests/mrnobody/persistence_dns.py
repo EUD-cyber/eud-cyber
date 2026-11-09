@@ -274,6 +274,7 @@ class TransportAndReports(unittest.TestCase):
                 out = b'MRN_P11_CLEANUP=complete' if action == 'cleanup' else b'MRN_P11=1,1,1900000000,1,1,1800000000000,3'
                 factory = Mock()
                 factory.return_value.run_ps.return_value = SimpleNamespace(status_code=0,std_out=out,std_err=b'')
+                factory.return_value.protocol.get_command_output.return_value = (out, b'', 0)
                 framed = out + b'\nMRN_REMOTE_EXIT=0__MRN_END__\n'
                 result = remote.perform('11', target, env, session_factory=factory,
                                         ssh=Mock(return_value=(0,(framed,len(framed)),(b'',0))))

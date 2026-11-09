@@ -22,6 +22,8 @@ class StaticChecks(unittest.TestCase):
 $ErrorActionPreference = 'Stop'
 $script:task = $null
 $script:service = $null
+$script:compilations = 0
+function Set-Acl { param($LiteralPath,$AclObject) if (-not $AclObject.AreAccessRulesProtected) { throw 'unprotected_acl' } }
 function Get-ScheduledTask { param($TaskName,$TaskPath,$ErrorAction) if($TaskPath -ne '\'){throw 'wrong_task_path'}; $script:task }
 function New-ScheduledTaskAction { param($Execute,$Argument) @{Execute=$Execute;Arguments=$Argument} }
 function New-ScheduledTaskTrigger { param([switch]$Daily,[switch]$Once,$At,$RepetitionInterval,$RepetitionDuration) @{At=$At;RepetitionInterval=$RepetitionInterval} }
@@ -29,7 +31,7 @@ function Stop-ScheduledTask { param($TaskName,$TaskPath,$ErrorAction) }
 function Register-ScheduledTask { param($TaskName,$TaskPath,$Description,$Action,$Trigger,$User,$RunLevel,[switch]$Force) if($TaskPath -ne '\'){throw 'wrong_task_path'}; $script:task = [pscustomobject]@{Description=$Description;Actions=$Action;Triggers=$Trigger} }
 function Unregister-ScheduledTask { param($TaskName,$TaskPath,$Confirm) if($TaskPath -ne '\'){throw 'wrong_task_path'}; $script:task=$null }
 function Get-CimInstance { param($ClassName,$Filter) $script:service }
-function Add-Type { param($TypeDefinition,$ReferencedAssemblies,$OutputAssembly,$OutputType) [IO.File]::WriteAllBytes($OutputAssembly,[byte[]]@(1,2,3)) }
+function Add-Type { param($TypeDefinition,$ReferencedAssemblies,$OutputAssembly,$OutputType) $script:compilations++; [IO.File]::WriteAllBytes($OutputAssembly,[byte[]]@(1,2,3)) }
 function New-Service { param($Name,$BinaryPathName,$DisplayName,$Description,$StartupType) $script:service=[pscustomobject]@{Description=$Description;PathName=$BinaryPathName;State='Stopped';Status='Stopped'} }
 function Start-Service { param($Name) $script:service.State='Running';$script:service.Status='Running'; $dir=Join-Path $env:ProgramData ('MrNobody\P11\'+$Name); if(Test-Path (Join-Path $dir 'config.txt')){[IO.File]::WriteAllText((Join-Path $dir 'status.txt'),'0,0,0,-1')} }
 function Stop-Service { param($Name,$ErrorAction) $script:service.State='Stopped';$script:service.Status='Stopped' }
@@ -41,7 +43,25 @@ function Invoke-CimMethod { param($InputObject,$MethodName) if($MethodName -ne '
             cleanup = script({'MRNOBODY_METHOD': method, 'MRNOBODY_ACTION': 'cleanup'}, 'windows')
             member = 'task' if method == 'scheduled-task' else 'service'
             fixture = providers
+            fixture += "$dir=Join-Path $env:ProgramData 'MrNobody\\P11\\mrnobody-p11-telemetry'; $exe=Join-Path $dir 'mrnobody-p11-telemetry.exe'; $owner=Join-Path $dir 'owner.txt'; $config=Join-Path $dir 'config.txt'\n"
             fixture += '\n& {\n' + create + '\n}\n'
+            if method != 'scheduled-task':
+                fixture += "if ($script:compilations -ne 1) { throw 'rerun_recompiled_live_service' }\n"
+                # Unknown files and altered binary paths must block BOTH create
+                # and cleanup before stopping or overwriting owned artifacts.
+                fixture += "$foreign=Join-Path $dir 'unrelated.txt'; [IO.File]::WriteAllText($foreign,'keep')\n"
+                for source in (create, cleanup):
+                    fixture += "$blocked=$false; try { & {\n" + source + "\n} } catch { $blocked=$_.Exception.Message -eq 'artifact_ownership_conflict' }; if(-not $blocked){throw 'foreign_file_not_protected'}\n"
+                fixture += "if(-not $script:service -or [IO.File]::ReadAllText($foreign) -ne 'keep'){throw 'conflict_mutated_state'}; Remove-Item -LiteralPath $foreign\n"
+                fixture += "$savedPath=$script:service.PathName; $script:service.PathName='unrelated.exe'\n"
+                fixture += "$blocked=$false; try { & {\n" + cleanup + "\n} } catch { $blocked=$_.Exception.Message -eq 'artifact_ownership_conflict' }; if(-not $blocked){throw 'binary_path_not_protected'}\n"
+                fixture += "$script:service.PathName=$savedPath\n"
+            if method == 'task-service':
+                fixture += "$before=[IO.File]::ReadAllText($config)\n"
+                # Expired activity must not receive a fresh deadline on retry.
+                fixture += "[IO.File]::WriteAllLines($config,[string[]]@($before.Split([char]10)[0].TrimEnd([char]13),'0'))\n"
+                fixture += "$blocked=$false; try { & {\n" + create + "\n} } catch { $blocked=$_.Exception.Message -eq 'exercise_expired_cleanup_before_recreate' }; if(-not $blocked){throw 'expired_retry_renewed_activity'}\n"
+                fixture += "[IO.File]::WriteAllText($config,$before)\n"
             fixture += f"if ($null -eq $script:{member}) {{ throw 'missing_artifact' }}\n"
             fixture += '\n& {\n' + create + '\n}\n'
             fixture += f"$script:{member}.Description = 'unrelated artifact'\n"
@@ -49,6 +69,18 @@ function Invoke-CimMethod { param($InputObject,$MethodName) if($MethodName -ne '
             fixture += f"$script:{member}.Description = 'MrNobody controlled lab P11'\n"
             fixture += '\n& {\n' + cleanup + '\n}\n& {\n' + cleanup + '\n}\n'
             fixture += f"if ($null -ne $script:{member}) {{ throw 'artifact_not_removed' }}\n"
+            if method != 'scheduled-task':
+                # Recover an owned orphan from an interrupted compile. There is
+                # no registered service/task; this must rebuild, never run junk.
+                fixture += "New-Item -ItemType Directory -Path $dir -Force|Out-Null; [IO.File]::WriteAllText($owner,'MrNobody controlled lab P11'); [IO.File]::WriteAllText($exe,'incomplete')\n"
+                fixture += '\n& {\n' + create + '\n}\n'
+                fixture += "if($script:compilations -ne 2 -or [IO.File]::ReadAllBytes($exe).Length -ne 3){throw 'stale_binary_not_rebuilt'}\n"
+                if method == 'task-service':
+                    # Missing config is uncertain: create must not renew the
+                    # deadline, but same-method cleanup must still recover it.
+                    fixture += "Remove-Item -LiteralPath $config\n"
+                    fixture += "$blocked=$false; try { & {\n" + create + "\n} } catch { $blocked=$_.Exception.Message -eq 'legacy_service_cleanup_before_paired_create' }; if(-not $blocked){throw 'missing_config_recreated'}\n"
+                fixture += '\n& {\n' + cleanup + '\n}\n'
             with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
                 result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
                                          '& ([scriptblock]::Create([Console]::In.ReadToEnd()))'],
