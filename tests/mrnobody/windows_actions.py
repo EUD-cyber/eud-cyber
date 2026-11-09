@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from p09_fixtures import p09_factory
 from unittest.mock import Mock
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -94,7 +95,7 @@ class Worker(unittest.TestCase):
     def test_ad_idempotence_and_partial_failure_evidence(self):
         for account, group, outcome in [('created_enabled', 'added', 'success'), ('already_enabled', 'already_member', 'success'), ('created_enabled', 'not_attempted', 'failed')]:
             data = dict(DC, account=account, group=group, result=outcome, password='DO_NOT_KEEP')
-            factory = Mock()
+            factory = p09_factory()
             factory.return_value.run_ps.return_value = Mock(status_code=0, std_out=json.dumps(data).encode(), std_err=b'')
             result = actions.perform('09', self.target, self.env, factory)
             self.assertEqual((result['account'], result['group'], result['result']), (('already_enabled', 'already_member', outcome) if outcome == 'success' else (account, group, outcome)))
@@ -233,6 +234,7 @@ class ShellIntegration(unittest.TestCase):
             (base / 'config/defaults.conf').write_text(config)
             (base / 'venv/bin/python').symlink_to(sys.executable)
             # Only this fixture module is imported as winrm; no network exists.
+            shutil.copy(Path(__file__).with_name('p09_fixtures.py'), base / 'fake/p09_fixtures.py')
             (base / 'fake/winrm.py').write_text('''
 import json, os, socket
 from contextlib import nullcontext
@@ -241,7 +243,18 @@ from types import SimpleNamespace
 class WinRMError(Exception): pass
 exceptions = SimpleNamespace(WinRMError=WinRMError)
 class Session:
-    def __init__(self, endpoint, **kw): self.endpoint = endpoint
+    def __init__(self, endpoint, **kw): self.endpoint = endpoint; self.protocol = self
+    def open_shell(self, **kw): return 'shell'
+    def run_command(self, shell, command, arguments, **kw):
+        from p09_fixtures import decode_command
+        assert kw == {'skip_cmd_shell': True}
+        self.source = decode_command(arguments)
+        return 'command'
+    def get_command_output(self, *args):
+        response = self.run_ps(self.source)
+        return response.std_out, response.std_err, response.status_code
+    def cleanup_command(self, *args): pass
+    def close_shell(self, *args): pass
     def run_ps(self, command):
         mode = os.environ.get('FIXTURE_AD', 'dc')
         if mode == 'unreachable' or (mode in {'mixed', 'fallback-dc'} and '192.168.1.10:' in self.endpoint):

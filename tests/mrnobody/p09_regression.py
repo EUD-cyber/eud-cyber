@@ -7,6 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from p09_fixtures import p09_factory
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -29,7 +30,7 @@ class P09Regression(unittest.TestCase):
         self.target = actions.targets(self.env)[0]
 
     def perform(self, rows, env=None):
-        factory = Mock()
+        factory = p09_factory()
         factory.return_value.run_ps.side_effect = [r if isinstance(r, Exception) else response(r) for r in rows]
         result = actions.perform('09', self.target, env or self.env, factory)
         self.assertNotIn('secret', json.dumps(result))
@@ -116,7 +117,7 @@ class P09Regression(unittest.TestCase):
                         MRNOBODY_PORT='15986', MRNOBODY_USERNAME='LAB\\operator')
         row = actions.targets(explicit, '09')[0]
         self.assertEqual((row['target'], row['protocol'], row['port']), ('10.20.30.40', 'winrm-https', 15986))
-        factory = Mock()
+        factory = p09_factory()
         factory.return_value.run_ps.return_value = response(DC)
         self.assertTrue(actions.ad_success(actions.perform('09', row, explicit, factory)))
         self.assertEqual(factory.call_args.args[0], 'https://10.20.30.40:15986/wsman')
@@ -142,8 +143,7 @@ class P09Regression(unittest.TestCase):
                 self.assertEqual(result['stage'], 'precheck')
                 self.assertEqual(result['schema_field'], field)
                 self.assertEqual(factory.call_count, 1)
-        for row, field in ((Mock(status_code=1, std_out=b'secret', std_err=b'secret'), 'status_code'),
-                           (Mock(status_code=0, std_out=b'secret', std_err=b'secret'), 'json'),
+        for row, field in ((Mock(status_code=0, std_out=b'secret', std_err=b'secret'), 'json'),
                            (Mock(status_code=0, std_out=b'x' * 8193, std_err=b''), 'stdout')):
             with self.assertRaises(SchemaError) as caught:
                 parse(row)

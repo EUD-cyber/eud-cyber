@@ -1,5 +1,54 @@
 # P09 standalone submission and output
 
+## P09 remote process fix (November 2026)
+
+The precheck at `a9c4a6ef7157a0ff5ea8893ff5fadc5a45e2b3fb` produced a
+13,455-character `powershell -encodedcommand` command. Replaying that framing
+through local Windows `cmd.exe` reproduced exit 1 with empty stdout: it exceeds
+the command interpreter's 8,191-character limit. This is a reproduced defect,
+not proof of the exact stderr on the user's DC (raw remote output is omitted).
+
+P09 now starts `powershell.exe` through pywinrm's protocol API with
+`skip_cmd_shell=True`, `-NoProfile` and `-NonInteractive`. A bounded compressed
+payload stays below the direct process command-line limit; oversize payloads
+fail closed. Compression is transport framing, not credential protection.
+Sessions and commands are cleaned up on both success and failure.
+
+Nonzero remote process exits remain failures and report
+`warning=remote_powershell_nonzero_exit`, the numeric `exit_code`,
+`remote_stage=process` and output byte counts. They are distinct from malformed
+JSON/schema errors. Fixed structured diagnostics identify payload decode,
+payload parse, payload execution, CIM, module import, domain, controller, group,
+account, account write, group write and postread stages. AD errors expose only
+an allowlisted category. No raw stdout, stderr, scripts, exception messages or
+credentials are returned or logged. A caught payload error may have process
+exit 0 but always has `result=failed`; exit 0 alone never establishes success.
+
+Writable-DC verification, domain/group/account identity checks and independent
+postcheck remain required. The exact historical description
+`MrNobody controlled lab account`, matching name and domain SID remain the
+ownership criteria. Unrelated, ambiguous or unmarked accounts are not adopted.
+An already valid owned account needs only two independent read-only checks.
+An uncertain write is never replayed; only a separate confirmed read can
+establish success, with the original process diagnostic preserved.
+
+`tests/mrnobody/p09_powershell.py` runs the actual payload in Windows PowerShell
+5.1 against simulated AD cmdlets and persistent fixture state, with genuine
+pywinrm response objects and the direct process boundary. It covers missing,
+existing and disabled accounts, already-present membership, ownership conflicts,
+writable-DC checks, stage failures, syntax errors, nonzero exit and timeout.
+The other P09 suites cover standalone GUI/API configuration and recovery.
+Run the new suite on Windows with pywinrm installed; it opens no lab connection.
+
+Live acceptance remains Standalone P09 in the GUI against `192.168.2.200`,
+WinRM HTTP `5985`, using operator-supplied credentials. Run it twice; require
+`WINDOWS_ACTION_SUCCESS`, `verified=True`,
+`verification=independent_read_only` and `PHASE_COMPLETE`. The repeat should
+show `account=already_enabled` and `group=already_member`. Offline tests prove
+the simulated standalone path; only this GUI run can establish live AD success.
+No DC-side CLI is needed. Full Campaign is a separate operator test after
+standalone passes. This fix makes no deployment or orchestration changes.
+
 ## Root cause
 At main 6dabd2d3297815c945d7d657b0f4d5971c4eb0d2, standalone Attack Techniques rendered protocol and port as empty editable inputs with generic ssh/22 placeholders. P09 automatically enters scenario validation, which requires a protocol. Leaving protocol empty (or entering ssh) returns HTTP 400 before opening campaign.log. The shared message box is outside the local phase feedback flow; P09 had neither local submission state nor P06-style job tracking. This reproduces a no-log failure path; the original user's exact browser/runtime failure cannot be proven without their runtime logs.
 
