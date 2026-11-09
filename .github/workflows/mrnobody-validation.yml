@@ -98,6 +98,8 @@ jobs:
           python tests/mrnobody/overview.py
           node tests/mrnobody/overview.cjs
           node tests/mrnobody/standalone_report.cjs
+          node tests/mrnobody/standalone_ports.cjs
+          python tests/mrnobody/standalone_ports.py -v
           python tests/mrnobody/reports.py --bash
           python tests/mrnobody/runtime.py --bash
           node tests/mrnobody/scenarios.cjs

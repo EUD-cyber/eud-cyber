@@ -106,7 +106,8 @@ const reportFor = (id, phase = '04', status = 'complete') => ({incident: {id, st
     Object.assign(submitted.context, {p09Feedback: {pending: false}, showP09Feedback() {}, followP09Job() {}, p06Feedback: {pending: false}, showP06Feedback() {}, showMessage() {},
         phaseFieldLabel: value => value, followP06Job() {}, refreshLog: async () => {}, console: {log() {}, error() {}}});
     submitted.context.window.confirm = () => true;
-    vm.runInContext(handler, submitted.context);
+    const portPolicy = source.slice(source.indexOf('const standalonePorts ='), source.indexOf('function mountStandalonePort('));
+    vm.runInContext(portPolicy + handler, submitted.context);
     for (let number = 1; number <= 18; number++) {
         const phase = String(number).padStart(2, '0');
         submitted.mount(phase);

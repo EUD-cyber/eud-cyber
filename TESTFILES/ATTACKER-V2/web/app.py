@@ -56,6 +56,33 @@ campaign_lock = threading.Lock()
 # HELPERS
 # ============================================================
 
+def standalone_port(phase_id, data):
+    """Resolve only Standalone form ports; legacy explicit ports remain custom."""
+    if phase_id not in {'04', '05', '06', '07', '08', '10'}:
+        return
+    from scenario_model import PROTOCOLS
+    defaults = {'ssh': 22, 'rdp': 3389, 'winrm': 5985, 'winrm-http': 5985,
+                'winrm-https': 5986, 'http': 80, 'https': 443}
+    # Requests unrelated to transport keep their existing defaults/validation.
+    if not any(key in data for key in ('protocol', 'port', 'port_mode')):
+        return
+    protocol = data.get('protocol')
+    if protocol not in PROTOCOLS.get(phase_id, []):
+        raise ValueError('Choose a supported protocol for this phase.')
+    mode = data.pop('port_mode', 'custom' if data.get('port') not in (None, '') else 'auto')
+    if mode not in {'auto', 'custom'}:
+        raise ValueError('Port mode must be auto or custom.')
+    value = data.get('port')
+    if value in (None, '') and mode == 'auto':
+        value = defaults[protocol]
+    if (type(value) not in (str, int) or not str(value).isascii()
+            or not str(value).isdigit() or not 1 <= int(value) <= 65535):
+        raise ValueError('Port must be an integer from 1 to 65535.')
+    if mode == 'auto' and int(value) != defaults[protocol]:
+        raise ValueError('Auto port must match the protocol default; use Custom for another port.')
+    data['port'] = int(value)
+
+
 def read_defaults():
     """
     Read simple KEY=VALUE entries from defaults.conf.
@@ -675,6 +702,10 @@ def api_run_phase(phase_id):
 
     if not isinstance(data, dict):
         return jsonify({'status': 'error', 'message': 'Phase request must be a JSON object.'}), 400
+    try:
+        standalone_port(phase_id, data)
+    except (ValueError, TypeError) as exc:
+        return jsonify(status='error', message=str(exc)), 400
     if phase_id == '09':
         # Standalone endpoint contract; custom/full scenario settings stay intact.
         data['protocol'], data['port'] = 'winrm-http', 5985
