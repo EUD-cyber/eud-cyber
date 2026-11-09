@@ -347,7 +347,7 @@ async function main() {
         assert.equal(await page.locator('#page-phases').isVisible(),true);
         assert.equal(await page.locator('#phaseGrid .phase-selected').count(),1);
         assert.equal(await page.locator('.nav-active').count(),1);
-        // P11 uses real registry fields; changing platform filters paired methods.
+        // P11 uses real registry fields, protocol defaults and retained conditional DNS settings.
         await page.evaluate(item => renderPhaseDetail(item), catalogue.phases.find(p => p.id === '11'));
         assert.equal(await page.locator('#phase-11-persistence_domain').inputValue(), 'evilcorp.test');
         await page.locator('#phase-11-platform').selectOption('linux');
@@ -356,6 +356,32 @@ async function main() {
         await page.locator('#phase-11-platform').selectOption('windows');
         assert.equal(await page.locator('#phase-11-method option[value="task-service"]').isDisabled(), false);
         assert.equal(await page.locator('#phase-11-persistence_dns option[value="enabled"]').count(), 1);
+        assert.equal(await page.locator('#phase-11-port').inputValue(), '5985');
+        assert.equal(await page.locator('#phase-11-artifact').inputValue(), 'telemetry');
+        assert.equal(await page.locator('#phase-11-persistence_resolver').isVisible(), false);
+        assert.equal(await page.locator('#phase-11-persistence_duration').isVisible(), true);
+        await page.locator('#phase-11-protocol').selectOption('ssh');
+        assert.equal(await page.locator('#phase-11-platform').inputValue(), 'linux');
+        assert.equal(await page.locator('#phase-11-port').inputValue(), '22');
+        await page.locator('#phase-11-port-mode').selectOption('custom');
+        await page.locator('#phase-11-port').fill('2222');
+        await page.locator('#phase-11-protocol').selectOption('winrm-https');
+        assert.equal(await page.locator('#phase-11-port').inputValue(), '2222');
+        await page.locator('#phase-11-port-mode').selectOption('auto');
+        assert.equal(await page.locator('#phase-11-port').inputValue(), '5986');
+        await page.locator('#phase-11-port-mode').selectOption('custom');
+        assert.equal(await page.locator('#phase-11-port').inputValue(), '2222');
+        await page.locator('#phase-11-persistence_dns').selectOption('enabled');
+        await page.locator('#phase-11-persistence_resolver').fill('192.168.1.53');
+        await page.locator('#phase-11-persistence_interval').fill('30');
+        await page.locator('#phase-11-persistence_dns').selectOption('disabled');
+        assert.equal(await page.locator('#phase-11-persistence_resolver').isVisible(), false);
+        await page.locator('#phase-11-action').selectOption('cleanup');
+        assert.equal(await page.locator('#phase-11-artifact').inputValue(), 'telemetry');
+        await page.locator('#phase-11-persistence_dns').selectOption('enabled');
+        assert.equal(await page.locator('#phase-11-persistence_resolver').inputValue(), '192.168.1.53');
+        assert.equal(await page.locator('#phase-11-persistence_interval').inputValue(), '30');
+
         await page.locator('[data-page="scenarios"]').click();
         assert.ok(await page.locator('#scenarioGrid .phase-card').count());
         await checkFullIncident(page, process.env.MRN_UI_ARTIFACTS);

@@ -58,7 +58,7 @@ campaign_lock = threading.Lock()
 
 def standalone_port(phase_id, data):
     """Resolve only Standalone form ports; legacy explicit ports remain custom."""
-    if phase_id not in {'04', '05', '06', '07', '08', '10'}:
+    if phase_id not in {'04', '05', '06', '07', '08', '10', '11'}:
         return
     from scenario_model import PROTOCOLS
     defaults = {'ssh': 22, 'rdp': 3389, 'winrm': 5985, 'winrm-http': 5985,

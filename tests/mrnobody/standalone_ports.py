@@ -13,7 +13,7 @@ class StandalonePorts(unittest.TestCase):
 
     def test_all_supported_defaults_and_legacy_custom(self):
         defaults = dict(ssh=22, rdp=3389, winrm=5985, **{'winrm-http': 5985, 'winrm-https': 5986, 'http': 80, 'https': 443})
-        for pid in ('04', '05', '06', '07', '08', '10'):
+        for pid in ('04', '05', '06', '07', '08', '10', '11'):
             for protocol in CAPS[pid]['fields']['protocol']['options']:
                 for mode in ('auto', None):
                     data = {'protocol': protocol}
@@ -68,7 +68,7 @@ class StandalonePorts(unittest.TestCase):
                     self.assertNotIn('port_mode', params)
 
     def test_excluded_phases_unchanged(self):
-        for pid in ('01', '02', '03', '09', '11'):
+        for pid in ('01', '02', '03', '09'):
             data = dict(protocol='unchanged', port=1234)
             web.standalone_port(pid, data)
             self.assertEqual(data, dict(protocol='unchanged', port=1234))
