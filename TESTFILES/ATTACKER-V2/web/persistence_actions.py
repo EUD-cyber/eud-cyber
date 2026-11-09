@@ -542,7 +542,7 @@ if ((Test-Path $dir) -and ((Get-Item $dir).Attributes -band [IO.FileAttributes]:
 if ((Test-Path $dir) -and ((-not (Test-Path $owner)) -or (Get-Content $owner -Raw) -ne $marker)) { throw 'artifact_ownership_conflict' }
 if ($task -and $task.Description -ne $marker) { throw 'artifact_ownership_conflict' }
 if ($old -and ($old.Description -ne $marker -or $old.PathName -ne ('"' + $exe + '"'))) { throw 'artifact_ownership_conflict' }
-if ($task -and (-not (Test-Path $config) -or $task.Actions.Execute -ne $exe -or $task.Actions.Arguments -ne '--maintain')) { throw 'artifact_ownership_conflict' }
+if ($task -and ($task.Actions.Execute -ne $exe -or $task.Actions.Arguments -ne '--maintain')) { throw 'artifact_ownership_conflict' }
 """
     if action == 'cleanup':
         body = r"""
@@ -567,7 +567,7 @@ Write-Output 'MRN_P11_CLEANUP=complete'
     else:
         code = WINDOWS_SERVICE.replace('__NAME__', name).replace('__SETTINGS__', settings).replace('__PACKET__', packet)
         body = r"""
-if ($old -and -not (Test-Path $config)) { throw 'legacy_service_cleanup_before_paired_create' }
+if (($old -or $task) -and -not (Test-Path $config)) { throw 'legacy_service_cleanup_before_paired_create' }
 $p11Stage = 'acl'
 if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
 # Rebuild the directory DACL, including removal of previous explicit grants.

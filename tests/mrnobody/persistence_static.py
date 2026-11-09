@@ -75,6 +75,11 @@ function Invoke-CimMethod { param($InputObject,$MethodName) if($MethodName -ne '
                 fixture += "New-Item -ItemType Directory -Path $dir -Force|Out-Null; [IO.File]::WriteAllText($owner,'MrNobody controlled lab P11'); [IO.File]::WriteAllText($exe,'incomplete')\n"
                 fixture += '\n& {\n' + create + '\n}\n'
                 fixture += "if($script:compilations -ne 2 -or [IO.File]::ReadAllBytes($exe).Length -ne 3){throw 'stale_binary_not_rebuilt'}\n"
+                if method == 'task-service':
+                    # Missing config is uncertain: create must not renew the
+                    # deadline, but same-method cleanup must still recover it.
+                    fixture += "Remove-Item -LiteralPath $config\n"
+                    fixture += "$blocked=$false; try { & {\n" + create + "\n} } catch { $blocked=$_.Exception.Message -eq 'legacy_service_cleanup_before_paired_create' }; if(-not $blocked){throw 'missing_config_recreated'}\n"
                 fixture += '\n& {\n' + cleanup + '\n}\n'
             with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
                 result = subprocess.run(['powershell.exe', '-NoProfile', '-NonInteractive', '-Command',
