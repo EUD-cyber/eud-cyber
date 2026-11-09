@@ -793,4 +793,3 @@ else:
             "test -x /usr/bin/systemctl || exit 78\numask 077\n"
             "systemctl --user show-environment >/dev/null 2>&1 || exit 78\n"
             "python3 - <<'MRN_P11_SETUP'\n" + setup + "\nMRN_P11_SETUP\n")
-

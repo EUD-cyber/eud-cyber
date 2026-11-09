@@ -274,4 +274,3 @@ if __name__ == '__main__':
         print(json.dumps(worker(phase, os.environ)))
     else:
         raise SystemExit(run(phase, os.environ))
-

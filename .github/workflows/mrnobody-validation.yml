@@ -161,4 +161,3 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           python tests/mrnobody/p09_powershell.py -v
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-

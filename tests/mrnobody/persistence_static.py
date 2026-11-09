@@ -122,4 +122,3 @@ function Invoke-CimMethod { param($InputObject,$MethodName) if($MethodName -ne '
 
 if __name__ == '__main__':
     unittest.main()
-
