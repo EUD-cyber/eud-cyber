@@ -68,6 +68,8 @@ def perform(pid, target, env, session_factory=None, ssh=None):
     limit = timeout_value(env.get('MRNOBODY_TIMEOUT') or 60)
     if pid == '10' and platform == 'windows':
         return windows_command('10', target, env, session_factory)
+    if pid == '11' and platform == 'windows' and persistence.configuration(env, platform)[0] in {'service', 'task-service'}:
+        return persistence.perform_windows(target, env, session_factory)
     source = runtime_command(env.get('MRN_POWERSHELL_SECRET', '')) if pid == '10' else persistence.script(env, platform)
     if pid == '11' and persistence.configuration(env, platform)[0] in persistence.PAIRED:
         if platform == 'windows':
@@ -272,3 +274,4 @@ if __name__ == '__main__':
         print(json.dumps(worker(phase, os.environ)))
     else:
         raise SystemExit(run(phase, os.environ))
+

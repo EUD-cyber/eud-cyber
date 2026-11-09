@@ -6,6 +6,110 @@ explicit and idempotent; privileges are never elevated and logging stays enabled
 import re
 import base64
 import struct
+import json
+from types import SimpleNamespace
+
+
+WINDOWS_STAGES = {'ownership', 'acl', 'configuration', 'compile', 'service_create',
+                  'service_start', 'task_create', 'verify', 'cleanup_task',
+                  'cleanup_service', 'cleanup_files'}
+WINDOWS_ERRORS = {'artifact_ownership_conflict', 'artifact_acl_failed',
+                  'service_delete_failed', 'cleanup_verification_failed',
+                  'create_verification_failed', 'legacy_service_cleanup_before_paired_create',
+                  'configuration_changed_cleanup_before_reconfigure',
+                  'exercise_expired_cleanup_before_recreate',
+                  'configuration_missing_cleanup_before_recreate', 'persistence_action_busy'}
+
+
+def windows_diagnostic_script(source):
+    # Only these fixed codes leave PowerShell. Never serialize an ErrorRecord,
+    # exception, source, compiler output, credentials or raw stderr.
+    stages = ','.join("'" + value + "'" for value in sorted(WINDOWS_STAGES))
+    errors = ','.join("'" + value + "'" for value in sorted(WINDOWS_ERRORS))
+    return ("$p11Stage='ownership'\ntry {\n" + source + "\n} catch {\n"
+            "$safeStage='ownership'; $safeError='persistence_action_failed'\n"
+            "if ($p11Stage -cin @(" + stages + ")) { $safeStage=$p11Stage }\n"
+            "if ($_.Exception.Message -cin @(" + errors + ")) { $safeError=$_.Exception.Message }\n"
+            "Write-Output ('MRN_P11_ERROR=' + $safeStage + ',' + $safeError)\nexit 1\n}\n")
+
+
+def perform_windows(target, env, session_factory=None):
+    """P11 service methods only; reuse P09's bounded, hashed WinRS stdin framing.
+
+    No retries of ambiguous Send/Receive calls. The loader creates no staging
+    file and closes its shell even on failure. Manual reruns use owned artifacts.
+    P10 and the independently working scheduled-task path are unchanged.
+    """
+    from p09_actions import run_powershell, PayloadError
+    from scenario_model import private
+    from windows_actions import timeout_value
+    method, action, _ = configuration(env, 'windows')
+    if method not in {'service', 'task-service'}:
+        raise ValueError('P11 service transport requires a service method')
+    failure = dict(result='failed', cleanup_required='true')
+    password = env.get('MRNOBODY_PASSWORD') or env.get('NORDIC_RDP_PASSWORD')
+    if not password:
+        return dict(failure, stage='session', warning='missing_runtime_windows_credentials')
+    limit = timeout_value(env.get('MRNOBODY_TIMEOUT') or 60)
+    stage = 'session'
+
+    class TrackedProtocol:
+        def __init__(self, protocol):
+            self.protocol = protocol
+
+        def __getattr__(self, name):
+            call = getattr(self.protocol, name)
+            stages = {'open_shell': 'winrm_shell', 'run_command': 'process_launch',
+                      'send_command_input': 'payload_send', 'get_command_output': 'process_receive'}
+            if name not in stages:
+                return call
+            def invoke(*args, **kwargs):
+                nonlocal stage
+                stage = stages[name]
+                return call(*args, **kwargs)
+            return invoke
+
+    try:
+        if session_factory is None:
+            import winrm
+            session_factory = winrm.Session
+        scheme = 'https' if target['protocol'] == 'winrm-https' else 'http'
+        session = session_factory(f"{scheme}://{private(target['target'])}:{target['port']}/wsman",
+            auth=(target['username'], password), transport='ntlm', message_encryption='always',
+            server_cert_validation='ignore', operation_timeout_sec=min(limit, 60), read_timeout_sec=limit + 10)
+        stage = 'payload_prepare'
+        response = run_powershell(SimpleNamespace(protocol=TrackedProtocol(session.protocol)),
+                                  windows_diagnostic_script(script(env, 'windows')))
+    except Exception as error:
+        # Type classification only: exception messages can contain secrets.
+        timed_out = isinstance(error, TimeoutError) or type(error).__name__ in {'ReadTimeout', 'ConnectTimeout', 'WinRMOperationTimeoutError'}
+        return dict(failure, stage=stage, warning='powershell_payload_too_large' if isinstance(error, PayloadError)
+                    else 'timeout_remote_action_may_still_be_running' if timed_out
+                    else 'winrm_execution_failed_details_omitted')
+    counts = dict(exit_code=response.status_code, stdout_bytes=len(response.std_out), stderr_bytes=len(response.std_err))
+    if len(response.std_out) > 8192:
+        return dict(failure, **counts, stage='verify', warning='oversized_persistence_evidence')
+    output = response.std_out.decode('utf-8-sig', errors='replace')
+    match = re.fullmatch(r'MRN_P11_ERROR=([a-z_]+),([a-z_]+)\s*', output)
+    if match and match[1] in WINDOWS_STAGES and match[2] in WINDOWS_ERRORS | {'persistence_action_failed'}:
+        return dict(failure, **counts, stage=match[1], warning=match[2])
+    # The shared loader has a fixed failure envelope for decode/parse failures.
+    try:
+        data = json.loads(output)
+    except ValueError:
+        data = None
+    if isinstance(data, dict) and data.get('protocol') == 'p09_failure' and data.get('stage') in {'payload_decode', 'payload_parse', 'payload_execute'}:
+        return dict(failure, **counts, stage=data['stage'], warning='powershell_payload_failed')
+    if response.status_code != 0:
+        return dict(failure, **counts, stage='process', warning='remote_powershell_nonzero_exit')
+    if method == 'task-service':
+        result = evidence(output, env, 'windows')
+    else:
+        verified = output.strip() == 'MrNobody P11 verified'
+        result = dict(result='success' if verified else 'failed',
+                      warning='none' if verified else 'invalid_persistence_evidence',
+                      cleanup_required='false' if verified and action == 'cleanup' else 'true')
+    return dict(result, **counts, stage='complete' if result['result'] == 'success' else 'verify')
 
 
 MARKER = 'MrNobody controlled lab P11'
@@ -75,27 +179,39 @@ if (-not (Get-ScheduledTask -TaskName $name -TaskPath '\' -ErrorAction Stop)) { 
 $dir = Join-Path $env:ProgramData ('MrNobody\P11\' + $name)
 $exe = Join-Path $dir ($name + '.exe')
 $owner = Join-Path $dir 'owner.txt'
+'''
+            body += windows_directory_guard(False)
+            body += r'''
 $old = Get-CimInstance Win32_Service -Filter "Name='$name'"
 if ((Test-Path $dir) -and ((-not (Test-Path $owner)) -or (Get-Content $owner -Raw) -ne $marker)) { throw 'artifact_ownership_conflict' }
 if ($old -and ($old.Description -ne $marker -or $old.PathName -ne ('"' + $exe + '"'))) { throw 'artifact_ownership_conflict' }
 '''
             if action == 'cleanup':
                 body += r'''
+$p11Stage = 'cleanup_service'
 if ($old) {
     if ($old.State -ne 'Stopped') { Stop-Service -Name $name -ErrorAction Stop }
     $deleted = Invoke-CimMethod -InputObject $old -MethodName Delete
     if ($deleted.ReturnValue -ne 0) { throw 'service_delete_failed' }
 }
+for ($i=0; $i -lt 20; $i++) {
+    if (-not (Get-CimInstance Win32_Service -Filter "Name='$name'")) { break }
+    Start-Sleep -Milliseconds 250
+}
 if (Get-CimInstance Win32_Service -Filter "Name='$name'") { throw 'cleanup_verification_failed' }
+$p11Stage = 'cleanup_files'
 if (Test-Path $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
+if (Test-Path $dir) { throw 'cleanup_verification_failed' }
 '''
             else:
+                body += WINDOWS_SERVICE_ACL
                 body += r'''
 if (-not $old) {
-    if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
     [IO.File]::WriteAllText($owner, $marker)
-    if (-not (Test-Path $exe)) {
-        $source = @'
+    # An owned orphan binary may be an interrupted compiler output. Rebuild it.
+    $p11Stage = 'compile'
+    if (Test-Path $exe) { Remove-Item -LiteralPath $exe -Force }
+    $source = @'
 using System;
 using System.ServiceProcess;
 public class MrNobodyLabService : ServiceBase {
@@ -104,14 +220,17 @@ public class MrNobodyLabService : ServiceBase {
     public static void Main() { ServiceBase.Run(new MrNobodyLabService()); }
 }
 '@
-        Add-Type -TypeDefinition $source -ReferencedAssemblies 'System.ServiceProcess.dll' -OutputAssembly $exe -OutputType ConsoleApplication
-    }
+    Add-Type -TypeDefinition $source -ReferencedAssemblies 'System.ServiceProcess.dll' -OutputAssembly $exe -OutputType ConsoleApplication
+    $p11Stage = 'service_create'
     New-Service -Name $name -BinaryPathName ('"' + $exe + '"') -DisplayName $name -Description $marker -StartupType Automatic | Out-Null
 }
+$p11Stage = 'service_start'
 Start-Service -Name $name
+$p11Stage = 'verify'
 if ((Get-Service -Name $name).Status -ne 'Running') { throw 'create_verification_failed' }
 '''.replace('__NAME__', name)
-        return prelude + body + "\nWrite-Output 'MrNobody P11 verified'\n"
+        source = prelude + body + "\nWrite-Output 'MrNobody P11 verified'\n"
+        return windows_lock(source, name) if method == 'service' else source
     if method == 'cron':
         # Hold a per-user lock for the read/modify/write; preserve unrelated jobs.
         prelude = f'''set -eu
@@ -364,48 +483,31 @@ public class MrNobodyLabService : ServiceBase {
 '''
 
 
-def windows_pair(name, action, settings, packet):
-    prelude = r"""
-$ErrorActionPreference = 'Stop'
-$name = '__NAME__'
-$marker = 'MrNobody controlled lab P11'
-$dir = Join-Path $env:ProgramData ('MrNobody\P11\' + $name)
-$exe = Join-Path $dir ($name + '.exe')
-$owner = Join-Path $dir 'owner.txt'
-$config = Join-Path $dir 'config.txt'
-$task = Get-ScheduledTask -TaskName $name -TaskPath '\' -ErrorAction SilentlyContinue
-$old = Get-CimInstance Win32_Service -Filter "Name='$name'"
-if ((Test-Path $dir) -and ((Get-Item $dir).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'artifact_ownership_conflict' }
-if ((Test-Path $dir) -and ((-not (Test-Path $owner)) -or (Get-Content $owner -Raw) -ne $marker)) { throw 'artifact_ownership_conflict' }
-if ($task -and $task.Description -ne $marker) { throw 'artifact_ownership_conflict' }
-if ($old -and ($old.Description -ne $marker -or $old.PathName -ne ('"' + $exe + '"'))) { throw 'artifact_ownership_conflict' }
-if (Test-Path $dir) {
+def windows_directory_guard(paired):
+    allowed = "'owner.txt',($name + '.exe')"
+    if paired:
+        allowed += ",'config.txt','maintain.ps1','status.txt','status.tmp'"
+    return r'''
+$p11Stage = 'ownership'
+# Check ancestors too: a protected leaf under a junction is not an owned path.
+$ancestor = $dir
+while ($ancestor) {
+    if (Test-Path -LiteralPath $ancestor) {
+        $entry = Get-Item -LiteralPath $ancestor -Force
+        if (-not $entry.PSIsContainer -or ($entry.Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'artifact_ownership_conflict' }
+    }
+    $ancestor = Split-Path -Parent $ancestor
+}
+if (Test-Path -LiteralPath $dir) {
     foreach ($item in Get-ChildItem -LiteralPath $dir -Force) {
-        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $item.PSIsContainer -or $item.Name -notin @('owner.txt','config.txt','maintain.ps1','status.txt','status.tmp',($name + '.exe'))) { throw 'artifact_ownership_conflict' }
+        if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -or $item.PSIsContainer -or $item.Name -notin @(__ALLOWED__)) { throw 'artifact_ownership_conflict' }
     }
 }
-"""
-    if action == 'cleanup':
-        body = r"""
-if ($task) { Stop-ScheduledTask -TaskName $name -TaskPath '\' -ErrorAction Stop; Unregister-ScheduledTask -TaskName $name -TaskPath '\' -Confirm:$false }
-if ($old) {
-    if ($old.State -ne 'Stopped') { Stop-Service -Name $name -ErrorAction Stop }
-    $deleted = Invoke-CimMethod -InputObject $old -MethodName Delete
-    if ($deleted.ReturnValue -ne 0) { throw 'service_delete_failed' }
-}
-for ($i=0; $i -lt 20; $i++) {
-    if (-not (Get-CimInstance Win32_Service -Filter "Name='$name'")) { break }
-    Start-Sleep -Milliseconds 250
-}
-if ((Get-CimInstance Win32_Service -Filter "Name='$name'") -or (Get-ScheduledTask -TaskName $name -TaskPath '\' -ErrorAction SilentlyContinue)) { throw 'cleanup_verification_failed' }
-if (Test-Path $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
-if (Test-Path $dir) { throw 'cleanup_verification_failed' }
-Write-Output 'MRN_P11_CLEANUP=complete'
-"""
-    else:
-        code = WINDOWS_SERVICE.replace('__NAME__', name).replace('__SETTINGS__', settings).replace('__PACKET__', packet)
-        body = r"""
-if ($old -and -not (Test-Path $config)) { throw 'legacy_service_cleanup_before_paired_create' }
+'''.replace('__ALLOWED__', allowed)
+
+
+WINDOWS_SERVICE_ACL = r'''
+$p11Stage = 'acl'
 if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
 # Rebuild the directory DACL, including removal of previous explicit grants.
 $acl = New-Object Security.AccessControl.DirectorySecurity
@@ -416,7 +518,68 @@ foreach ($sid in @('S-1-5-18','S-1-5-32-544')) {
     $acl.AddAccessRule($rule)
 }
 $acl.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')))
-[IO.Directory]::SetAccessControl($dir, $acl)
+Set-Acl -LiteralPath $dir -AclObject $acl
+foreach ($child in Get-ChildItem -LiteralPath $dir -Force) {
+    & "$env:SystemRoot\System32\icacls.exe" $child.FullName /reset | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'artifact_acl_failed' }
+}
+'''
+
+
+def windows_pair(name, action, settings, packet):
+    prelude = r"""
+$ErrorActionPreference = 'Stop'
+$name = '__NAME__'
+$marker = 'MrNobody controlled lab P11'
+$dir = Join-Path $env:ProgramData ('MrNobody\P11\' + $name)
+$exe = Join-Path $dir ($name + '.exe')
+$owner = Join-Path $dir 'owner.txt'
+$config = Join-Path $dir 'config.txt'
+""" + windows_directory_guard(True) + r"""
+$task = Get-ScheduledTask -TaskName $name -TaskPath '\' -ErrorAction SilentlyContinue
+$old = Get-CimInstance Win32_Service -Filter "Name='$name'"
+if ((Test-Path $dir) -and ((Get-Item $dir).Attributes -band [IO.FileAttributes]::ReparsePoint)) { throw 'artifact_ownership_conflict' }
+if ((Test-Path $dir) -and ((-not (Test-Path $owner)) -or (Get-Content $owner -Raw) -ne $marker)) { throw 'artifact_ownership_conflict' }
+if ($task -and $task.Description -ne $marker) { throw 'artifact_ownership_conflict' }
+if ($old -and ($old.Description -ne $marker -or $old.PathName -ne ('"' + $exe + '"'))) { throw 'artifact_ownership_conflict' }
+if ($task -and (-not (Test-Path $config) -or $task.Actions.Execute -ne $exe -or $task.Actions.Arguments -ne '--maintain')) { throw 'artifact_ownership_conflict' }
+"""
+    if action == 'cleanup':
+        body = r"""
+$p11Stage = 'cleanup_task'
+if ($task) { Stop-ScheduledTask -TaskName $name -TaskPath '\' -ErrorAction Stop; Unregister-ScheduledTask -TaskName $name -TaskPath '\' -Confirm:$false }
+$p11Stage = 'cleanup_service'
+if ($old) {
+    if ($old.State -ne 'Stopped') { Stop-Service -Name $name -ErrorAction Stop }
+    $deleted = Invoke-CimMethod -InputObject $old -MethodName Delete
+    if ($deleted.ReturnValue -ne 0) { throw 'service_delete_failed' }
+}
+for ($i=0; $i -lt 20; $i++) {
+    if (-not (Get-CimInstance Win32_Service -Filter "Name='$name'")) { break }
+    Start-Sleep -Milliseconds 250
+}
+if ((Get-CimInstance Win32_Service -Filter "Name='$name'") -or (Get-ScheduledTask -TaskName $name -TaskPath '\' -ErrorAction SilentlyContinue)) { throw 'cleanup_verification_failed' }
+$p11Stage = 'cleanup_files'
+if (Test-Path $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
+if (Test-Path $dir) { throw 'cleanup_verification_failed' }
+Write-Output 'MRN_P11_CLEANUP=complete'
+"""
+    else:
+        code = WINDOWS_SERVICE.replace('__NAME__', name).replace('__SETTINGS__', settings).replace('__PACKET__', packet)
+        body = r"""
+if ($old -and -not (Test-Path $config)) { throw 'legacy_service_cleanup_before_paired_create' }
+$p11Stage = 'acl'
+if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+# Rebuild the directory DACL, including removal of previous explicit grants.
+$acl = New-Object Security.AccessControl.DirectorySecurity
+$acl.SetAccessRuleProtection($true, $false)
+foreach ($sid in @('S-1-5-18','S-1-5-32-544')) {
+    $identity = New-Object Security.Principal.SecurityIdentifier($sid)
+    $rule = New-Object Security.AccessControl.FileSystemAccessRule($identity, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')
+    $acl.AddAccessRule($rule)
+}
+$acl.SetOwner((New-Object Security.Principal.SecurityIdentifier('S-1-5-32-544')))
+Set-Acl -LiteralPath $dir -AclObject $acl
 # Existing files must inherit only this protected parent DACL.
 foreach ($child in Get-ChildItem -LiteralPath $dir -Force) {
     & "$env:SystemRoot\System32\icacls.exe" $child.FullName /reset | Out-Null
@@ -424,6 +587,7 @@ foreach ($child in Get-ChildItem -LiteralPath $dir -Force) {
 }
 [IO.File]::WriteAllText($owner, $marker)
 $settings = '__SETTINGS__'
+$p11Stage = 'configuration'
 if (Test-Path $config) {
     $lines = @(Get-Content $config)
     if ($lines.Count -ne 2 -or $lines[0] -ne $settings) { throw 'configuration_changed_cleanup_before_reconfigure' }
@@ -434,21 +598,29 @@ if (Test-Path $config) {
 }
 if ($deadline -le [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()) { throw 'exercise_expired_cleanup_before_recreate' }
 if ($old -and -not (Test-Path $config)) { throw 'configuration_missing_cleanup_before_recreate' }
-if (-not (Test-Path $exe)) {
+$p11Stage = 'compile'
+if ($old -and -not (Test-Path $exe)) { throw 'configuration_missing_cleanup_before_recreate' }
+if (-not $old) {
+    # Recover an owned binary left behind by a failed compilation/registration.
+    if (Test-Path $exe) { Remove-Item -LiteralPath $exe -Force }
     $source = @'
 __SOURCE__
 '@
     Add-Type -TypeDefinition $source -ReferencedAssemblies 'System.ServiceProcess.dll' -OutputAssembly $exe -OutputType ConsoleApplication
 }
 if (-not $old) {
+    $p11Stage = 'service_create'
     New-Service -Name $name -BinaryPathName ('"' + $exe + '"') -DisplayName ($name + ' visible DNS simulation') -Description $marker -StartupType Manual | Out-Null
 }
 # Same native executable supports a fixed deadline-checked maintenance mode.
 # This avoids dependence on PowerShell script execution policy for the task.
+$p11Stage = 'task_create'
 $a = New-ScheduledTaskAction -Execute $exe -Argument '--maintain'
 $t = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Seconds ([Math]::Max(60, $deadline - [DateTimeOffset]::UtcNow.ToUnixTimeSeconds())))
 Register-ScheduledTask -TaskName $name -TaskPath '\' -Description $marker -Action $a -Trigger $t -User 'SYSTEM' -RunLevel Highest -Force | Out-Null
+$p11Stage = 'service_start'
 Start-Service -Name $name
+$p11Stage = 'verify'
 for ($i=0; $i -lt 20 -and -not (Test-Path (Join-Path $dir 'status.txt')); $i++) { Start-Sleep -Milliseconds 250 }
 $verified = Get-ScheduledTask -TaskName $name -TaskPath '\' -ErrorAction Stop
 if ((Get-Service -Name $name).Status -ne 'Running' -or -not $verified.Triggers -or $verified.Actions.Execute -ne $exe -or $verified.Actions.Arguments -ne '--maintain') { throw 'create_verification_failed' }
@@ -460,6 +632,10 @@ Write-Output ('MRN_P11_PATH=artifact_path,' + [Convert]::ToBase64String([Text.En
 Write-Output ('MRN_P11_PATH=service_path,' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($exe)))
 """
     source = (prelude + body + paths).replace('__NAME__', name)
+    return windows_lock(source, name)
+
+
+def windows_lock(source, name):
     return ("$mutex = New-Object Threading.Mutex($false, 'Global\\" + name + "')\n"
             "if (-not $mutex.WaitOne(30000)) { $mutex.Dispose(); throw 'persistence_action_busy' }\n"
             "try {\n" + source + "\n} finally { $mutex.ReleaseMutex(); $mutex.Dispose() }\n")
@@ -617,3 +793,4 @@ else:
             "test -x /usr/bin/systemctl || exit 78\numask 077\n"
             "systemctl --user show-environment >/dev/null 2>&1 || exit 78\n"
             "python3 - <<'MRN_P11_SETUP'\n" + setup + "\nMRN_P11_SETUP\n")
+

@@ -143,6 +143,7 @@ class Actions(unittest.TestCase):
                 for action in ('create','create','cleanup','cleanup'):
                     if method in persistence.PAIRED:
                         factory.return_value.run_ps.return_value.std_out = b'MRN_P11_CLEANUP=complete' if action == 'cleanup' else b'MRN_P11=1,1,1900000000,0,0,0,-1'
+                    factory.return_value.protocol.get_command_output.return_value = (factory.return_value.run_ps.return_value.std_out if method in persistence.PAIRED else b'MrNobody P11 verified\n', b'', 0)
                     result=remote.perform('11',target,dict(env,MRNOBODY_ACTION=action),session_factory=factory)
                     self.assertEqual(result['result'],'success')
                 self.assertIn('artifact_ownership_conflict',create)
@@ -357,3 +358,4 @@ esac
 
 
 if __name__=='__main__':unittest.main()
+
