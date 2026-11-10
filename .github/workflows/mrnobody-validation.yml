@@ -73,6 +73,7 @@ jobs:
         timeout-minutes: 3
         run: |
           python -u tests/mrnobody/persistence_dns.py -v
+          python -u tests/mrnobody/p11_linux.py -v
           python tests/mrnobody/p11_windows.py -v
       - name: Check routing, live output, incident IDs and historical compatibility with isolated fixtures
         run: |

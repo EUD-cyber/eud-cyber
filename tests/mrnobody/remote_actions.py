@@ -73,7 +73,7 @@ class Contracts(unittest.TestCase):
     def test_generated_script_syntax(self):
         for method, (platform, _, _) in persistence.METHODS.items():
             for action in ('create', 'cleanup'):
-                source = persistence.script({'MRNOBODY_METHOD':method,'MRNOBODY_ACTION':action},platform)
+                source = persistence.script({'MRNOBODY_METHOD':method,'MRNOBODY_ACTION':action, 'MRNOBODY_PERSISTENCE_RESOLVER':'192.168.1.53'},platform)
                 if platform == 'linux':
                     if os.name == 'nt': continue
                     argv = ['bash','-n']
@@ -125,7 +125,7 @@ class Actions(unittest.TestCase):
 
     def test_each_persistence_method_cleanup_and_stable_identity(self):
         for method, (platform, technique, _) in persistence.METHODS.items():
-            env = dict(self.env, MRNOBODY_METHOD=method,MRNOBODY_ARTIFACT='lesson')
+            env = dict(self.env, MRNOBODY_METHOD=method,MRNOBODY_ARTIFACT='lesson',MRNOBODY_PERSISTENCE_RESOLVER='192.168.1.53')
             create = persistence.script(env,platform)
             again = persistence.script(dict(env,NORDIC_INCIDENT_ID='MRN-next-run'),platform)
             cleanup = persistence.script(dict(env,MRNOBODY_ACTION='cleanup'),platform)
@@ -148,8 +148,8 @@ class Actions(unittest.TestCase):
                     self.assertEqual(result['result'],'success')
                 self.assertIn('artifact_ownership_conflict',create)
                 self.assertIn('cleanup_verification_failed',cleanup)
-            else:
-                self.assertEqual(remote.perform('11',TARGET,env,ssh=Mock(return_value=framed(output=b'MRN_P11=1,1,1900000000,0,0,0,-1') if method in persistence.PAIRED else framed()))['result'],'success')
+            elif method not in {'process', 'process-dns'}:
+                self.assertEqual(remote.perform('11',TARGET,env,ssh=Mock(return_value=framed(output=b'MRN_P11=1,1,1900000000,0,0,0,-1') if method in persistence.PAIRED | {'systemd'} else framed()))['result'],'success')
         self.assertNotIn('sudo ',persistence.script(dict(self.env,MRNOBODY_METHOD='systemd'),'linux'))
         unsupported = remote.perform('11',TARGET,self.env,ssh=Mock(return_value=framed(78)))
         self.assertEqual(unsupported['result'],'skipped')
@@ -290,7 +290,7 @@ esac
                 self.assertEqual(result['exit_code'],expected)
                 self.assertLessEqual(len(result.get('stdout_preview','')),512)
             (home/'table').write_text('0 1 * * * echo preserve\n')
-            for method in ('cron','systemd'):
+            for method in ('cron',):
                 for action in ('create','create','cleanup','cleanup'):
                     result=remote.perform('11',TARGET,dict(env,MRNOBODY_METHOD=method,MRNOBODY_ACTION=action))
                     self.assertEqual(result['result'],'success',result)
@@ -299,13 +299,7 @@ esac
                         self.assertIn('echo preserve',table)
                         self.assertEqual(table.count('# MrNobody controlled lab P11'),1 if action=='create' else 0)
                     else:self.assertEqual((home/'.config/systemd/user/mrnobody-p11-telemetry.service').exists(),action=='create')
-            unit = home/'.config/systemd/user/mrnobody-p11-telemetry.service'
-            unit.write_text('unrelated unit\n')
-            for action in ('create', 'cleanup'):
-                result = remote.perform('11', TARGET, dict(env, MRNOBODY_METHOD='systemd', MRNOBODY_ACTION=action))
-                self.assertEqual(result['result'], 'failed')
-                self.assertEqual(unit.read_text(), 'unrelated unit\n')
-            unit.unlink()
+            # User-manager lifecycle and ownership are covered by p11_linux.py.
             # Real standalone runner/report wrapper; only the fake SSH is reachable.
             shutil.copytree(PLATFORM/'web',base/'web')
             shutil.copytree(PLATFORM/'scripts',base/'scripts')

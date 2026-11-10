@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ATTACK_ID="11"
-# ATTACK_DESCRIPTION="Create or clean up paired task/service or cron/systemd persistence with optional bounded benign DNS activity; legacy single methods remain available."
-# ATTACK_TEACHING_PURPOSE="Identify persistence creation and verify its corresponding cleanup evidence."
+# ATTACK_DESCRIPTION="Create, inspect or clean up Linux user services and bounded visible processes, plus paired persistence with optional lab DNS."
+# ATTACK_TEACHING_PURPOSE="Distinguish bounded process execution from persistence; verify target ownership, activity and cleanup."
 # ATTACK_DETECTION_FOCUS="Scheduled Task changes|Service creation|Cron or systemd changes|Internal lab DNS queries when enabled"
 # ATTACK_PLATFORMS="Windows|Linux"
 # ATTACK_PREREQUISITES="Authenticated access with rights for the selected persistence method; auto mode uses P03 access."
@@ -10,7 +10,7 @@
 # ATTACK_NAME="Persistence"
 # ATTACK_ALIAS="persistence"
 # ATTACK_STANDALONE="true"
-# ATTACK_PARAMETERS="target,port,protocol,username,password,timeout,platform,method,action,artifact,persistence_dns,persistence_domain,persistence_resolver,persistence_interval,persistence_duration"
+# ATTACK_PARAMETERS="target,port,protocol,username,password,timeout,platform,method,action,artifact,persistence_dns,persistence_domain,persistence_resolver,persistence_interval,persistence_duration,persistence_cpu"
 # ATTACK_CAMPAIGN_STATE="compromised-hosts"
 # MITRE_TACTIC="Persistence"
 # MITRE_TECHNIQUES="T1053.005,T1543.003,T1053.003,T1543.002"
