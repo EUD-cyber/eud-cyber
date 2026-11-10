@@ -1194,6 +1194,7 @@ function phaseFieldLabel(parameter) {
         password: "Password",
         powershell: "P10 remote command (PowerShell / Bash) (runtime only, never saved)",
         timeout: "Action timeout (seconds, 5–300)",
+        persistence_cpu: "P11 process CPU activity (idle / low / medium)",
         persistence_dns: "P11 periodic DNS activity",
         persistence_domain: "P11 reserved test domain (.test)",
         persistence_resolver: "P11 internal non-forwarding lab DNS resolver",
