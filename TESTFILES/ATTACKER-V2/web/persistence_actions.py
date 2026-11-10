@@ -393,7 +393,16 @@ def paired_metadata(env, platform, method, action, name):
 def evidence(output, env, platform):
     """Only fixed counters/status escape the remote action; never raw output."""
     method, action, _ = configuration(env, platform)
-    diagnostic = re.findall(r'(?m)^MRN_P11_ERROR=([a-z_]+),([a-z_]+)\r?
+    diagnostic = re.findall(r'(?m)^MRN_P11_ERROR=([a-z_]+),([a-z_]+)\r?$', output)
+    if diagnostic:
+        stage, warning = diagnostic[-1]
+        if stage in {'manager', 'ownership', 'configuration', 'create', 'verify', 'cleanup', 'inspect'} and warning in LINUX_ERRORS:
+            return dict(result='failed', stage=stage, warning=warning, cleanup_required='true')
+    if method in {'process', 'process-dns'}:
+        from linux_process import evidence as process_evidence
+        return process_evidence(output, action)
+    if method not in PAIRED | {'systemd'}:
+        return dict(result='success')
     paths = {}
     for key, encoded in re.findall(r'(?m)^MRN_P11_PATH=(artifact_path|service_path),([A-Za-z0-9+/=]{1,1024})\r?$', output):
         try:
@@ -734,18 +743,20 @@ for path in (root, directory, unitdir, unit, *root.parents, *unitdir.parents):
         raise SystemExit('artifact_ownership_conflict')
 root.mkdir(parents=True, exist_ok=True, mode=0o700)
 lockpath = root / 'p11-cron.lock'
-if lockpath.is_symlink():
+if lockpath.is_symlink() or (lockpath.exists() and lockpath.stat().st_uid != os.getuid()):
     raise SystemExit('artifact_ownership_conflict')
 lock = lockpath.open('a')
 fcntl.flock(lock, fcntl.LOCK_EX)
 owner = directory / 'owner.txt'
 if directory.exists() and (not owner.is_file() or owner.read_text() != marker):
     raise SystemExit('artifact_ownership_conflict')
-if unit.exists() and ('# ' + marker) not in unit.read_text().splitlines():
+if (unitdir / (name + '.service.d')).exists() or (unitdir / (name + '.service.d')).is_symlink():
+    raise SystemExit('artifact_ownership_conflict')
+if unit.exists() and (unit.stat().st_uid != os.getuid() or ('# ' + marker) not in unit.read_text().splitlines()):
     raise SystemExit('artifact_ownership_conflict')
 if directory.exists():
     for path in directory.iterdir():
-        if path.is_symlink() or not path.is_file() or path.name not in {'owner.txt', 'config.txt', 'worker.py', 'status.txt', 'status.tmp'}:
+        if path.is_symlink() or not path.is_file() or path.stat().st_uid != os.getuid() or path.name not in {'owner.txt', 'config.txt', 'worker.py', 'status.txt', 'status.tmp'}:
             raise SystemExit('artifact_ownership_conflict')
 def run(args):
     result = subprocess.run(args, capture_output=True, text=True)

@@ -13,8 +13,8 @@
 # ATTACK_PARAMETERS="target,port,protocol,username,password,timeout,platform,method,action,artifact,persistence_dns,persistence_domain,persistence_resolver,persistence_interval,persistence_duration,persistence_cpu"
 # ATTACK_CAMPAIGN_STATE="compromised-hosts"
 # MITRE_TACTIC="Persistence"
-# MITRE_TECHNIQUES="T1053.005,T1543.003,T1053.003,T1543.002"
-# MITRE_TECHNIQUE_NAMES="Scheduled Task|Windows Service|Cron|Systemd Service"
+# MITRE_TECHNIQUES="T1053.005,T1543.003,T1053.003,T1543.002,T1059.006"
+# MITRE_TECHNIQUE_NAMES="Scheduled Task|Windows Service|Cron|Systemd Service|Python"
 set -eu
 INCIDENT_ID="${NORDIC_INCIDENT_ID:-MRN-$(date +%Y%m%d-%H%M%S)}"
 export NORDIC_INCIDENT_ID="$INCIDENT_ID"
