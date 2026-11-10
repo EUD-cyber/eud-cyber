@@ -287,46 +287,6 @@ remaining=$(crontab -l)
 if printf '%s\n' "$remaining" | grep -F -- "$marker" >/dev/null; then exit 1; fi
 '''
         return prelude + body + "\nprintf 'MrNobody P11 verified\\n'\n"
-    prelude = f'''set -eu
-command -v systemctl >/dev/null || exit 78
-test -x /usr/bin/true || exit 78
-systemctl --user show-environment >/dev/null 2>&1 || exit 78
-name='{name}'
-dir="$HOME/.config/systemd/user"
-unit="$dir/$name.service"
-if [ -L "$unit" ]; then exit 1; fi
-if [ -e "$unit" ] && ! grep -Fx '# {MARKER}' "$unit" >/dev/null; then exit 1; fi
-'''
-    if action == 'cleanup':
-        body = '''if [ -e "$unit" ]; then
-    systemctl --user disable --now "$name.service"
-    rm -- "$unit"
-    systemctl --user daemon-reload
-fi
-test ! -e "$unit"
-'''
-    else:
-        body = f'''mkdir -p "$dir"
-umask 077
-cat > "$unit" <<'MRN_UNIT'
-# {MARKER}
-[Unit]
-Description={MARKER}
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/true
-RemainAfterExit=yes
-[Install]
-WantedBy=default.target
-MRN_UNIT
-systemctl --user daemon-reload
-systemctl --user enable --now "$name.service"
-systemctl --user is-enabled "$name.service" >/dev/null
-systemctl --user is-active "$name.service" >/dev/null
-'''
-    return prelude + body + "printf 'MrNobody P11 verified\\n'\n"
-
-
 # Explicit legacy methods retain their original payloads and cleanup identities.
 PAIRED = {'task-service', 'cron-systemd'}
 
@@ -756,8 +716,13 @@ if unit.exists() and (unit.stat().st_uid != os.getuid() or ('# ' + marker) not i
     raise SystemExit('artifact_ownership_conflict')
 if directory.exists():
     for path in directory.iterdir():
-        if path.is_symlink() or not path.is_file() or path.stat().st_uid != os.getuid() or path.name not in {'owner.txt', 'config.txt', 'worker.py', 'status.txt', 'status.tmp'}:
+        if path.is_symlink() or not path.is_file() or path.stat().st_uid != os.getuid() or path.name not in {'owner.txt', 'config.txt', 'worker.py', 'status.txt', 'status.tmp', 'method.txt'}:
             raise SystemExit('artifact_ownership_conflict')
+methodfile = directory / 'method.txt'
+if methodfile.exists() and methodfile.read_text() != '__METHOD__':
+    raise SystemExit('artifact_ownership_conflict')
+if not paired and directory.exists() and not methodfile.exists() and (directory / 'config.txt').exists():
+    raise SystemExit('artifact_ownership_conflict')
 def run(args):
     result = subprocess.run(args, capture_output=True, text=True)
     if result.returncode:
@@ -771,6 +736,10 @@ try:
 except SystemExit:
     raise SystemExit('user_manager_unavailable')
 stage = 'ownership'
+fragment = systemctl('show', name + '.service', '--property=FragmentPath', '--value').strip()
+dropins = systemctl('show', name + '.service', '--property=DropInPaths', '--value').strip()
+if fragment and fragment != str(unit) or dropins:
+    raise SystemExit('artifact_ownership_conflict')
 cron = subprocess.run(['crontab', '-l'], capture_output=True, text=True, env=dict(os.environ, LC_ALL='C')) if paired else None
 if paired and cron.returncode and 'no crontab for' not in cron.stderr:
     raise SystemExit('crontab_read_failed')
@@ -821,6 +790,7 @@ else:
     directory.mkdir(mode=0o700, exist_ok=True)
     directory.chmod(0o700)
     owner.write_text(marker)
+    methodfile.write_text('__METHOD__')
     config = directory / 'config.txt'
     settings = '__SETTINGS__'
     if config.exists():
@@ -829,6 +799,8 @@ else:
             raise SystemExit('configuration_changed_cleanup_before_reconfigure')
         deadline = int(lines[1])
     else:
+        if unit.exists() or (directory / 'worker.py').exists():
+            raise SystemExit('configuration_missing')
         deadline = int(time.time()) + int(settings.split('|')[4])
         config.write_text(settings + '\n' + str(deadline) + '\n')
     if deadline <= time.time():

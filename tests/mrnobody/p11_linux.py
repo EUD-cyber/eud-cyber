@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -62,6 +63,35 @@ class Configuration(unittest.TestCase):
             self.assertEqual(env['MRNOBODY_PERSISTENCE_CPU'],'low')
             self.assertEqual(p.configuration(env,'linux')[0],method)
 
+    def test_process_ground_truth_html_pdf_mapping_is_execution(self):
+        from reports import build_report
+        from report_exports import export_html, export_pdf
+        from pypdf import PdfReader
+        with tempfile.TemporaryDirectory() as tmp:
+            base=Path(tmp);(base/'scripts').mkdir()
+            shutil.copy(ROOT/'TESTFILES/ATTACKER-V2/scripts/11-persistence.sh',base/'scripts/11-persistence.sh')
+            env=dict(ENV,NORDIC_BASE_DIR=tmp,NORDIC_INCIDENT_ID='MRN-process-report',
+                     MRNOBODY_RUN_MODE='standalone',MRNOBODY_TARGET=TARGET['target'],
+                     MRNOBODY_PROTOCOL='ssh',MRNOBODY_USERNAME='ubuntu')
+            reply=dict(result='success',pid=1234,owner='ubuntu',start_ticks='99',
+                       command='/usr/bin/python3 worker.py',persistence=False,
+                       process_running='true',cpu_seconds=.2)
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(remote.run('11',env,Mock(return_value=Response(returncode=0,stdout=json.dumps(reply).encode()))),0)
+            report=build_report(base,env['NORDIC_INCIDENT_ID'],environ=env,standalone=dict(
+                incident_id=env['NORDIC_INCIDENT_ID'],scenario='standalone-phase',phase_id='11',
+                status='complete',phases={'11':'complete'}))
+            phase=report['phases'][0]
+            self.assertEqual(phase['mitre']['tactic'],'Execution')
+            self.assertEqual([item['id'] for item in phase['mitre']['techniques']],['T1059.006'])
+            self.assertIn('no reboot persistence',phase['action_outcome'])
+            for view in ('ground-truth','investigation'):
+                html=export_html(report,view)
+                pdf=''.join(page.extract_text() for page in PdfReader(io.BytesIO(export_pdf(report,view))).pages)
+                for content in (html,pdf):
+                    self.assertIn('1234',content)
+                    self.assertIn('ubuntu',content)
+
 
 @unittest.skipIf(os.name == 'nt', 'Linux procfs/pidfd lifecycle')
 class Lifecycle(unittest.TestCase):
@@ -91,6 +121,9 @@ class Lifecycle(unittest.TestCase):
                 inspected=self.invoke(home,'inspect')
                 self.assertEqual(first['pid'],inspected['pid'])
                 original=(base/'pid.json').read_text()
+                (base/'pid.json').unlink()  # interrupted spawn receipt can be recovered
+                recovered=self.invoke(home,'inspect')
+                self.assertEqual(first['pid'],recovered['pid'])
                 bad=json.loads(original);bad['start_ticks']='0'
                 (base/'pid.json').write_text(json.dumps(bad))
                 result=subprocess.run(['bash'],input=p.script(dict(ENV,MRNOBODY_ACTION='cleanup'),'linux'),
@@ -167,6 +200,8 @@ class Services(unittest.TestCase):
                     op=argv[2]
                     if state['fail'] and op=='show-environment':
                         return Response(returncode=1,stdout='',stderr='PRIVATE_ERROR')
+                    if op=='show':
+                        return Response(returncode=0,stdout='',stderr='')
                     if op=='enable':
                         state['active']=True
                         (base/'status.txt').write_text('0,0,0,-1')
@@ -181,7 +216,11 @@ class Services(unittest.TestCase):
                     ns={}
                     with patch.dict(os.environ,{},clear=False), patch('pathlib.Path.home',return_value=home), patch('subprocess.run',side_effect=provider), contextlib.redirect_stdout(io.StringIO()) as out:
                         try:
-                            exec(compile(setup,'<service>','exec'),ns)
+                            try:
+                                exec(compile(setup,'<service>','exec'),ns)
+                            except SystemExit as error:
+                                if error.code != 0:
+                                    raise
                         finally:
                             if 'lock' in ns:ns['lock'].close()
                     return out.getvalue()
@@ -195,6 +234,12 @@ class Services(unittest.TestCase):
                 self.assertEqual(p.evidence(first,env,'linux')['result'],'success')
                 self.assertEqual(sum('MrNobody' in row for row in cron),int(method=='cron-systemd'))
                 if method=='systemd':self.assertFalse(any(c[0]=='crontab' for c in calls))
+                unit=home/'.config/systemd/user/mrnobody-p11-telemetry.service'
+                original_unit=unit.read_text()
+                unit.write_text('unrelated service')
+                with self.assertRaises(SystemExit):execute('cleanup')
+                self.assertTrue(state['active'])
+                unit.write_text(original_unit)
                 (base/'owner.txt').write_text('foreign')
                 with self.assertRaises(SystemExit):execute('cleanup')
                 self.assertTrue(state['active'])
@@ -221,7 +266,7 @@ class Worker(unittest.TestCase):
                 with self.subTest(level=level,mode=mode), tempfile.TemporaryDirectory() as tmp:
                     base=Path(tmp)
                     now=[1800000000.];cpu=[0.]
-                    config=dict(token='token',duration=25,deadline=now[0]+25,cpu=level,dns=True,
+                    config=dict(token='token',duration=300,deadline=now[0]+25,cpu=level,dns=True,
                                 resolver='192.168.1.53',interval=10)
                     (base/'config.txt').write_text(json.dumps(config))
                     packets=[]

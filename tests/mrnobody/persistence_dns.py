@@ -96,6 +96,8 @@ class LinuxPair(unittest.TestCase):
                     cron[:] = kw['input'].splitlines()
                     return SimpleNamespace(returncode=0)
                 self.assertEqual(argv[:2], ['/usr/bin/systemctl', '--user'])
+                if argv[2] == 'show':
+                    return SimpleNamespace(returncode=0, stdout='', stderr='')
                 if argv[2] == 'enable':
                     state['active'] = True
                     (directory/'status.txt').write_text('1,1,1800000000000,3')

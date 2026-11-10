@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import shlex
 import socket
 import struct
 import subprocess
@@ -36,7 +37,7 @@ def identity(pid):
             return None
         return dict(pid=pid, uid=root.stat().st_uid, start_ticks=fields[19],
                     command=(root / 'cmdline').read_bytes().split(b'\0')[:-1])
-    except FileNotFoundError:
+    except (FileNotFoundError, ProcessLookupError):
         return None
 
 
@@ -56,6 +57,16 @@ def worker_main(token):
     config = json.loads((base / 'config.txt').read_text())
     if config['token'] != token:
         raise SystemExit(1)
+    import ipaddress
+    if (config['cpu'] not in CPU or config['duration'] not in {300, 900, 1800, 3600}
+            or type(config['dns']) is not bool or not 10 <= config['interval'] <= 3600):
+        raise SystemExit(1)
+    if config['dns']:
+        address = ipaddress.ip_address(config['resolver'])
+        if (address.version != 4 or not any(address in ipaddress.ip_network(net) for net in
+                ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'))
+                or str(address).split('.')[-1] in {'0', '255'}):
+            raise SystemExit(1)
     # Visible in top/htop; ps args retains the full artifact path and token.
     import ctypes
     ctypes.CDLL(None).prctl(15, b'mrn-p11-worker', 0, 0, 0)
@@ -76,7 +87,7 @@ def worker_main(token):
     publish()
     while not stop[0] and time.monotonic() < end and time.time() < config['deadline']:
         frame = time.monotonic()
-        if config['dns'] and frame >= next_query:
+        if config['dns'] and frame >= next_query and state['dns_attempts'] < 360:
             state['dns_attempts'] += 1
             state['last_query_utc_epoch_ms'] = int(time.time()*1000)
             state['last_dns_rcode'] = -1
@@ -140,6 +151,25 @@ def manager(name, action, options, source):
             worker = base / 'worker.py'
             config = json.loads(configpath.read_text()) if configpath.exists() else None
             record = json.loads(pidpath.read_text()) if pidpath.exists() else None
+            if config and not record:
+                # Recover the small spawn/receipt window after an interrupted create.
+                matches = []
+                expected = [b'/usr/bin/python3', str(worker).encode(), b'--worker', config['token'].encode()]
+                for entry in Path('/proc').iterdir():
+                    try:
+                        eligible = entry.name.isdigit() and entry.stat().st_uid == os.getuid()
+                    except FileNotFoundError:
+                        continue
+                    if not eligible:
+                        continue
+                    candidate = identity(int(entry.name))
+                    if candidate and candidate['command'] == expected:
+                        matches.append({k: candidate[k] for k in ('pid', 'uid', 'start_ticks')})
+                if len(matches) > 1:
+                    raise SystemExit('process_identity_conflict')
+                if matches:
+                    record = matches[0]
+                    pidpath.write_text(json.dumps(record))
             current = owned_process(record, worker, config['token']) if record and config else None
             if record and not config:
                 raise SystemExit('process_identity_conflict')
@@ -213,9 +243,12 @@ def manager(name, action, options, source):
             if action == 'create' and not current:
                 raise SystemExit('process_start_failed')
             status.update(record, running=bool(current), deadline=config['deadline'],
-                          command='/usr/bin/python3 ' + str(worker) + ' --worker [run-token]',
+                          command=shlex.join(['/usr/bin/python3', str(worker), '--worker', config['token']]),
                           owner=__import__('pwd').getpwuid(os.getuid()).pw_name,
-                          artifact_path=str(base), cpu_level=config['cpu'], persistence=False)
+                          artifact_path=str(base), cpu_level=config['cpu'], persistence=False,
+                          dns_domain='evilcorp.test' if config['dns'] else 'none',
+                          dns_resolver=config['resolver'] if config['dns'] else 'none',
+                          query_interval=config['interval'], activity_duration=config['duration'])
             print('MRN_P11_PROCESS=' + base64.b64encode(json.dumps(status).encode()).decode())
     except SystemExit as error:
         from_error = str(error.code)
@@ -247,7 +280,8 @@ def evidence(output, action):
         data = json.loads(base64.b64decode(rows[0], validate=True))
         required = {'pid', 'uid', 'start_ticks', 'owner', 'command', 'started_utc_epoch',
                     'deadline', 'running', 'dns_attempts', 'dns_responses', 'last_query_utc_epoch_ms',
-                    'last_dns_rcode', 'cpu_level', 'cpu_seconds', 'state', 'persistence', 'artifact_path'}
+                    'last_dns_rcode', 'cpu_level', 'cpu_seconds', 'state', 'persistence', 'artifact_path',
+                    'dns_domain', 'dns_resolver', 'query_interval', 'activity_duration'}
         if set(data) != required or data['persistence'] is not False:
             return failure
         if (type(data['pid']) is not int or data['pid'] < 1 or type(data['running']) is not bool

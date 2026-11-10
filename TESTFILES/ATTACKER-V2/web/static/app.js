@@ -1277,6 +1277,14 @@ function mountP11Standalone(form) {
     const methodHelp = help("method", "");
     help("persistence_duration", "Service/process activity stops at the fixed deadline. Process lifetime: 300, 900, 1800 or 3600 seconds (5/15/30/60 minutes). Artifacts remain until cleanup.");
     help("persistence_resolver", "Internal non-forwarding lab DNS resolver; queries originate from the target.");
+    const lifetimes = document.createElement("datalist");
+    lifetimes.id = "p11-process-lifetimes";
+    for (const minutes of [5,15,30,60]) {
+        const option = document.createElement("option");
+        option.value = String(minutes * 60); option.label = minutes + " minutes";
+        lifetimes.appendChild(option);
+    }
+    form.appendChild(lifetimes);
     const platform = field("platform"), protocol = field("protocol"), method = field("method");
     const sync = (platformChanged = false) => {
         if (platformChanged && platform.value !== "auto" &&
@@ -1296,6 +1304,7 @@ function mountP11Standalone(form) {
             : "Manual method selected. It must match the transport platform.";
         const process = ["process", "process-dns"].includes(method.value);
         if (field("persistence_cpu")) field("persistence_cpu").parentElement.hidden = !process;
+        field("persistence_duration").setAttribute("list", process ? "p11-process-lifetimes" : "");
         if (method.value === "process-dns") {
             field("persistence_dns").value = "enabled";
             field("persistence_domain").value = "evilcorp.test";
@@ -1331,6 +1340,10 @@ function prepareP11Standalone(data) {
     if (!["enabled", "disabled"].includes(data.persistence_dns)) return "P11: choose enabled or disabled DNS activity.";
     const integer = (value, low, high) => /^[0-9]+$/.test(value || "") && +value >= low && +value <= high;
     if (data.timeout && !integer(data.timeout, 5, 300)) return "P11: timeout must be 5–300 seconds.";
+    if (data.action !== "create") {
+        for (const key of ["persistence_domain", "persistence_resolver", "persistence_interval", "persistence_duration", "persistence_cpu"]) delete data[key];
+        return "";
+    }
     if (!integer(data.persistence_duration, 60, 14400)) return "P11: activity lifetime must be 60–14400 seconds.";
     if (data.persistence_dns === "disabled" || data.action === "cleanup") {
         // Hidden DNS values stay in the form; inactive settings must not block submission.
