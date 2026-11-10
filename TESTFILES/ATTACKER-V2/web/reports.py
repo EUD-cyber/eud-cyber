@@ -104,7 +104,7 @@ PHASE_GUIDANCE = {
         "Restrict Domain Admin membership and WinRM, separate administrative accounts, alert on privileged group changes and review delegated AD rights. After the exercise remove only lab membership/account changes verified in ground truth; never delete a pre-existing account blindly."),
     "11": (
         "Correlate Security 4698/4702/4699, TaskScheduler Operational 106/140/141/200/201, System 7045/7036 and Security 4697 where audited. Use Sysmon process/DNS events where configured; raw UDP queries may need network telemetry rather than Sysmon DNS API events. On Linux inspect cron/syslog, journalctl --user -u the recorded service, ~/.config/systemd/user and ~/.config/mrnobody; correlate Wazuh FIM/service/process events. Compare DNS/firewall logs and Suricata eve.json only when the resolver path is visible. OVS mirrors and Docker-internal DNS require deliberate capture visibility. These are investigation sources, not detected events.",
-        "Which host, account and transport created the paired artifacts? Verify service active and scheduled trigger configured against target evidence, and compare UTC deadline, fixed domain/resolver, query interval and counters with resolver/packet logs. A matching NOERROR or NXDOMAIN reply confirms DNS exchange, not successful A-record resolution or sensor detection. Benign DNS-beacon-like questions do not establish DNS C2 (T1071.004 is not mapped for P11). Activity outlives phase/campaign completion until the fixed deadline; stop/cancel does not clean up the remote artifacts. Re-run P11 Cleanup on the same target, user, method and suffix; verify task/cron, service, unit/executable and config removal. Failures/timeouts can leave partial artifacts.",
+        "For process/process-dns, inspect PID, owner, command, kernel start ticks, CPU seconds, deadline and DNS counters. These are bounded executions (T1059.006), with no reboot/login restart or persistence mechanism. For user systemd, connect as the recorded SSH user and use systemctl --user (not the system manager); lack of a user manager is an explicit failure. Which host, account and transport created the artifacts? Verify service active and scheduled trigger configured against target evidence, and compare UTC deadline, fixed domain/resolver, query interval and counters with resolver/packet logs. A matching NOERROR or NXDOMAIN reply confirms DNS exchange, not successful A-record resolution or sensor detection. Benign DNS-beacon-like questions do not establish DNS C2 (T1071.004 is not mapped for P11). Activity outlives phase/campaign completion until the fixed deadline; stop/cancel does not clean up the remote artifacts. Re-run P11 Cleanup on the same target, user, method and suffix; verify task/cron, service, unit/executable and config removal. Failures/timeouts can leave partial artifacts.",
         "Restrict task/service creation and cron/systemd write permissions, monitor configuration changes, use least privilege and remove only verified MrNobody artifacts after the exercise."),
     "10": (
         "For Windows correlate WinRM Operational and PowerShell Operational 4103/4104 with Security 4688 and 4624 where enabled. For Linux correlate SSH auth/journal, shell/auditd exec records and process telemetry. In Wazuh compare win.system.eventID, host, subject and timestamp. Script block logs on the target may contain sensitive command content.",
@@ -296,6 +296,11 @@ def add_analysis(report):
             "Correlate collected host and network logs with recorded event times.",
             "Validate each recorded outcome against target evidence.",
             "Apply least privilege, segmentation and monitoring appropriate to the recorded activity."))
+        if phase['id'] == '11' and any(e.get('fields', {}).get('method') in {'process', 'process-dns'} for e in events):
+            guidance = (
+                "Inspect top/htop/ps and /proc for the recorded PID, owner, command and kernel start ticks. Correlate available SSH/audit/process logs. For process-dns compare target packet capture, internal resolver logs and Suricata/Wazuh only where configured and visible; these are sources to investigate, not observed detections.",
+                "Distinguish this bounded background execution from reboot persistence: no service, cron or automatic restart is installed. Compare start time, UTC deadline, CPU level/seconds, running state and fixed evilcorp.test A-query counters. A matching NOERROR/NXDOMAIN response proves DNS exchange, not A-record resolution, exfiltration or C2. Use Inspect to refresh counters and Cleanup to stop only the owned PID; verify expiry and file removal separately.",
+                "Use least privilege, monitor unexpected processes and lab DNS activity, and remove only the recorded owned exercise process and artifacts.")
         for technique in phase.get("mitre", {}).get("techniques", []):
             technique["url"] = mitre_url(technique.get("id"))
             if phase.get("status") in {"skipped", "not_run"}:
@@ -449,7 +454,8 @@ def add_analysis(report):
                        if e['event'].startswith('PERSISTENCE_ACTION_' if phase['id'] == '11' else 'NATIVE_ACTION_')]
             phase['actions'] = [dict(timestamp=e['timestamp'], outcome=e['outcome'], **e['fields']) for e in events if e['event'].startswith('PERSISTENCE_ACTION_' if phase['id'] == '11' else 'NATIVE_ACTION_')]
             phase['action_evidence'] = details
-            phase['action_outcome'] = ('Persistence: ' if phase['id'] == '11' else 'Windows Native Tools / LOLBins: ') + str(phase.get('status', 'not_run')) + '; verify artifact and cleanup metadata'
+            process_execution = phase['id'] == '11' and any(e['fields'].get('method') in {'process', 'process-dns'} for e in events)
+            phase['action_outcome'] = ('Bounded process execution (no reboot persistence): ' if process_execution else 'Persistence: ' if phase['id'] == '11' else 'Windows Native Tools / LOLBins: ') + str(phase.get('status', 'not_run')) + '; verify artifact and cleanup metadata'
             phase['analysis']['what_happened'] = phase['action_outcome']
             phase['analysis']['findings'] = details or ['No persistence artifact evidence recorded']
     if any(p.get('id') == '05' and (p.get('events') or p.get('artifacts')) for p in report.get('phases', [])):
@@ -645,6 +651,8 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
             technique_ids = list(dict.fromkeys(t for e in phase_events for t in e['fields'].get('mitre', '').split(',') if mitre_url(t))) or technique_ids
             technique_names = {'T1071.004': 'DNS', 'T1132.001': 'Standard Encoding', 'T1190': 'Exploit Public-Facing Application', 'T1005': 'Data from Local System', 'T1685': 'Disable or Modify Tools', 'T1070': 'Indicator Removal', 'T1560.001': 'Archive via Utility', 'T1560.002': 'Archive via Library'}
             names = [technique_names.get(t, '') for t in technique_ids]
+        if phase_id == '11' and phase_events and any(e['fields'].get('method') in {'process', 'process-dns'} for e in phase_events):
+            metadata['MITRE_TACTIC'] = 'Execution'
         recorded = {t for e in phase_events for t in e['fields'].get('mitre', '').split(',')} & set(technique_ids)
         if phase_id == '13' or phase_id in {'10', '11'} and recorded:
             named = dict(zip(technique_ids, names))

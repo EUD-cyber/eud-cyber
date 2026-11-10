@@ -40,7 +40,8 @@ FIELDS = {
     'username': {'type': 'text', 'label': 'Username'},
     'timeout': {'type': 'timeout', 'label': 'Action timeout (seconds, 5–300)'},
     'platform': {'type': 'choice', 'label': 'Execution platform', 'options': ['auto', 'windows', 'linux']},
-    'method': {'type': 'choice', 'label': 'Persistence method', 'options': ['auto', 'task-service', 'cron-systemd', 'scheduled-task', 'service', 'cron', 'systemd']},
+    'method': {'type': 'choice', 'label': 'Persistence method', 'options': ['auto', 'task-service', 'cron-systemd', 'scheduled-task', 'service', 'cron', 'systemd', 'process', 'process-dns']},
+    'persistence_cpu': {'type': 'choice', 'label': 'P11 process CPU level (0%, 2%, 10% of one core)', 'options': ['idle', 'low', 'medium'], 'default': 'idle'},
     'persistence_dns': {'type': 'choice', 'label': 'P11 periodic DNS activity', 'options': ['disabled', 'enabled'], 'default': 'disabled'},
     'persistence_domain': {'type': 'text', 'label': 'P11 reserved test domain (.test)', 'default': 'evilcorp.test'},
     'persistence_resolver': {'type': 'ipv4', 'label': 'P11 internal non-forwarding lab DNS resolver'},
@@ -105,6 +106,8 @@ def catalogue(script_dir, read_metadata):
             continue
         supported = meta.get('ATTACK_PARAMETERS', '').split(',')
         fields = {key: copy.deepcopy(FIELDS[key]) for key in supported if key in FIELDS}
+        if pid == '11':
+            fields['action']['options'] = ['create', 'inspect', 'cleanup']
         if pid == '08':
             fields.pop('file', None)  # Wordlist is an execution-time secret input.
         if 'protocol' in fields:

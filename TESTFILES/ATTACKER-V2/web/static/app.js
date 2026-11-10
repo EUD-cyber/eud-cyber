@@ -1194,6 +1194,7 @@ function phaseFieldLabel(parameter) {
         password: "Password",
         powershell: "P10 remote command (PowerShell / Bash) (runtime only, never saved)",
         timeout: "Action timeout (seconds, 5–300)",
+        persistence_cpu: "P11 process CPU activity (idle / low / medium)",
         persistence_dns: "P11 periodic DNS activity",
         persistence_domain: "P11 reserved test domain (.test)",
         persistence_resolver: "P11 internal non-forwarding lab DNS resolver",
@@ -1262,7 +1263,7 @@ function mountStandalonePort(phase, form) {
 
 
 const p11MethodPlatforms = {"scheduled-task": "windows", service: "windows", "task-service": "windows",
-    cron: "linux", systemd: "linux", "cron-systemd": "linux"};
+    cron: "linux", systemd: "linux", "cron-systemd": "linux", process: "linux", "process-dns": "linux"};
 function mountP11Standalone(form) {
     const field = key => document.getElementById(`phase-11-${key}`);
     const help = (key, text) => {
@@ -1273,10 +1274,18 @@ function mountP11Standalone(form) {
         return note;
     };
     help("artifact", "Editable suffix: telemetry gives mrnobody-p11-telemetry (Linux service: mrnobody-p11-telemetry.service). Use 1–32 lowercase letters, digits or hyphens; start with a letter or digit.");
-    help("action", "create creates the selected artifacts. cleanup removes them: use the same target, username, method and artifact suffix as create.");
+    help("action", "create creates the selected artifacts. inspect refreshes Linux service/process evidence. cleanup removes them: use the same target, username, method and artifact suffix as create.");
     const methodHelp = help("method", "");
-    help("persistence_duration", "Paired service activity stops after this lifetime even with DNS disabled. Artifacts remain until cleanup; single manual methods do not use this lifetime.");
+    help("persistence_duration", "Service/process activity stops at the fixed deadline. Process lifetime: 300, 900, 1800 or 3600 seconds (5/15/30/60 minutes). Artifacts remain until cleanup.");
     help("persistence_resolver", "Internal non-forwarding lab DNS resolver; queries originate from the target.");
+    const lifetimes = document.createElement("datalist");
+    lifetimes.id = "p11-process-lifetimes";
+    for (const minutes of [5,15,30,60]) {
+        const option = document.createElement("option");
+        option.value = String(minutes * 60); option.label = minutes + " minutes";
+        lifetimes.appendChild(option);
+    }
+    form.appendChild(lifetimes);
     const platform = field("platform"), protocol = field("protocol"), method = field("method");
     const sync = (platformChanged = false) => {
         if (platformChanged && platform.value !== "auto" &&
@@ -1294,6 +1303,18 @@ function mountP11Standalone(form) {
         methodHelp.textContent = method.value === "auto"
             ? `Auto uses ${paired} for ${effective}. Manual methods remain selectable.`
             : "Manual method selected. It must match the transport platform.";
+        const process = ["process", "process-dns"].includes(method.value);
+        if (field("persistence_cpu")) field("persistence_cpu").parentElement.hidden = !process;
+        field("persistence_duration").setAttribute("list", process ? "p11-process-lifetimes" : "");
+        if (method.value === "process-dns") {
+            field("persistence_dns").value = "enabled";
+            field("persistence_domain").value = "evilcorp.test";
+        }
+        field("persistence_dns").disabled = process;
+        if (method.value === "process") field("persistence_dns").value = "disabled";
+        field("persistence_domain").readOnly = method.value === "process-dns";
+        if (process && ![300,900,1800,3600].includes(+field("persistence_duration").value)) field("persistence_duration").value = 3600;
+        if (process) methodHelp.textContent = "Visible bounded process; no service, cron, reboot persistence or automatic restart. CPU: idle 0%, low ~2%, medium ~10% of one core. Inspect refreshes PID and DNS counters.";
         const dns = field("persistence_dns").value === "enabled";
         for (const key of ["persistence_domain", "persistence_resolver", "persistence_interval"]) {
             field(key).parentElement.hidden = !dns;
@@ -1309,18 +1330,28 @@ function prepareP11Standalone(data) {
     if (!["auto", "linux", "windows"].includes(data.platform) ||
             data.platform !== "auto" && data.platform !== effective) return "P11: platform and protocol must match.";
     if (data.method !== "auto" && p11MethodPlatforms[data.method] !== effective) return "P11: method and platform must match.";
-    if (!["create", "cleanup"].includes(data.action)) return "P11: choose create or cleanup.";
+    if (!["create", "inspect", "cleanup"].includes(data.action)) return "P11: choose create, inspect or cleanup.";
+    if (data.action === "inspect" && !["systemd", "cron-systemd", "process", "process-dns"].includes(data.method)) return "P11: inspect is available for Linux services and processes.";
+    if (["process", "process-dns"].includes(data.method)) {
+        data.persistence_dns = data.method === "process-dns" ? "enabled" : "disabled";
+        if (data.action === "create" && ![300,900,1800,3600].includes(+data.persistence_duration)) return "P11: process lifetime must be 300, 900, 1800 or 3600 seconds.";
+        if (data.method === "process-dns") data.persistence_domain = "evilcorp.test";
+    } else { delete data.persistence_cpu; }
     if (!/^[a-z0-9][a-z0-9-]{0,31}$/.test(data.artifact || "")) return "P11: enter an artifact suffix of 1–32 lowercase letters, digits or hyphens.";
     if (!["enabled", "disabled"].includes(data.persistence_dns)) return "P11: choose enabled or disabled DNS activity.";
     const integer = (value, low, high) => /^[0-9]+$/.test(value || "") && +value >= low && +value <= high;
     if (data.timeout && !integer(data.timeout, 5, 300)) return "P11: timeout must be 5–300 seconds.";
+    if (data.action !== "create") {
+        for (const key of ["persistence_domain", "persistence_resolver", "persistence_interval", "persistence_duration", "persistence_cpu"]) delete data[key];
+        return "";
+    }
     if (!integer(data.persistence_duration, 60, 14400)) return "P11: activity lifetime must be 60–14400 seconds.";
     if (data.persistence_dns === "disabled" || data.action === "cleanup") {
         // Hidden DNS values stay in the form; inactive settings must not block submission.
         for (const key of ["persistence_domain", "persistence_resolver", "persistence_interval"]) delete data[key];
         return "";
     }
-    if (!["auto", "task-service", "cron-systemd"].includes(data.method)) return "P11: DNS requires an Auto or paired method.";
+    if (!["auto", "task-service", "cron-systemd", "systemd", "process-dns"].includes(data.method)) return "P11: DNS requires an Auto, service or process-dns method.";
     if (!integer(data.persistence_interval, 10, 3600) || +data.persistence_interval > +data.persistence_duration) return "P11: DNS interval must be 10–3600 seconds and fit the lifetime.";
     if (!data.persistence_domain || data.persistence_domain.length > 120 ||
             !/^(?:[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?\.)+test$/.test(data.persistence_domain)) return "P11: use a lowercase reserved .test domain.";
@@ -1439,8 +1470,11 @@ function renderPhaseDetail(phase) {
             if (["10", "11"].includes(phase.id)) input.value = "winrm-http";
         } else if (["10", "11"].includes(phase.id) && ["platform", "method", "action", "protocol"].includes(parameter)) {
             input = document.createElement("select");
-            const choices = {platform: ["auto", "windows", "linux"], method: ["auto", "task-service", "cron-systemd", "scheduled-task", "service", "cron", "systemd"], action: ["create", "cleanup"], protocol: ["", "ssh", "winrm-http", "winrm-https"]}[parameter];
+            const choices = {platform: ["auto", "windows", "linux"], method: ["auto", "task-service", "cron-systemd", "scheduled-task", "service", "cron", "systemd", "process", "process-dns"], action: ["create", "inspect", "cleanup"], protocol: ["", "ssh", "winrm-http", "winrm-https"]}[parameter];
             choices.forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value || "Choose transport"; input.appendChild(option);});
+        } else if (phase.id === "11" && parameter === "persistence_cpu") {
+            input = document.createElement("select");
+            ["idle", "low", "medium"].forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value; input.appendChild(option);});
         } else if (phase.id === "11" && parameter === "persistence_dns") {
             input = document.createElement("select");
             ["disabled", "enabled"].forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value; input.appendChild(option);});
@@ -1522,7 +1556,7 @@ function renderPhaseDetail(phase) {
                 const input = document.getElementById(`phase-${phase.id}-${key}`);
                 if (!input) continue;
                 for (const option of input.options) {
-                    option.hidden = !!option.value && option.value !== "auto" && mode !== "auto" && (["ssh", "cron", "systemd", "cron-systemd"].includes(option.value)) !== (mode === "linux");
+                    option.hidden = !!option.value && option.value !== "auto" && mode !== "auto" && (["ssh", "cron", "systemd", "cron-systemd", "process", "process-dns"].includes(option.value)) !== (mode === "linux");
                     option.disabled = option.hidden;
                 }
                 if (input.selectedOptions[0]?.disabled) input.value = usesStandalonePort(phase) && key === "protocol"

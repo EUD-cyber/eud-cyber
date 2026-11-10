@@ -91,7 +91,7 @@ function Invoke-CimMethod { param($InputObject,$MethodName) if($MethodName -ne '
     def test_generated_scripts_parse(self):
         for method, (platform, _, _) in METHODS.items():
             for action in ('create', 'cleanup'):
-                source = script({'MRNOBODY_METHOD': method, 'MRNOBODY_ACTION': action}, platform)
+                source = script({'MRNOBODY_METHOD': method, 'MRNOBODY_ACTION': action, 'MRNOBODY_PERSISTENCE_RESOLVER':'192.168.1.53'}, platform)
                 if platform == 'linux':
                     if os.name == 'nt': continue
                     argv = ['bash', '-n']

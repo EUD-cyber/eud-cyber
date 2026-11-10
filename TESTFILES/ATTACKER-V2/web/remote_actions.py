@@ -71,7 +71,7 @@ def perform(pid, target, env, session_factory=None, ssh=None):
     if pid == '11' and platform == 'windows' and persistence.configuration(env, platform)[0] in {'service', 'task-service'}:
         return persistence.perform_windows(target, env, session_factory)
     source = runtime_command(env.get('MRN_POWERSHELL_SECRET', '')) if pid == '10' else persistence.script(env, platform)
-    if pid == '11' and persistence.configuration(env, platform)[0] in persistence.PAIRED:
+    if pid == '11' and persistence.configuration(env, platform)[0] in persistence.PAIRED | {'systemd', 'process', 'process-dns'}:
         if platform == 'windows':
             return windows_command('10', target, dict(env, MRN_POWERSHELL_SECRET=source), session_factory,
                                    evidence_parser=lambda output: persistence.evidence(output, env, platform))
@@ -86,6 +86,8 @@ def perform(pid, target, env, session_factory=None, ssh=None):
             action_code = int(trailer.split(b'__MRN_END__')[0])
         except ValueError:
             return dict(result='failed', warning='invalid_worker_response', cleanup_required='true')
+        if action_code and b'MRN_P11_ERROR=' in raw:
+            return dict(persistence.evidence(raw.decode('ascii', errors='replace'), env, platform), exit_code=action_code)
         if action_code:
             return dict(result='skipped' if action_code == 78 else 'failed', exit_code=action_code,
                         warning='target_method_unsupported' if action_code == 78 else 'persistence_action_failed_check_target_logs',

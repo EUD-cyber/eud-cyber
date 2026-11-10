@@ -112,9 +112,18 @@ def perform_windows(target, env, session_factory=None):
     return dict(result, **counts, stage='complete' if result['result'] == 'success' else 'verify')
 
 
+LINUX_ERRORS = {'user_manager_unavailable', 'artifact_ownership_conflict', 'crontab_read_failed',
+                'systemctl_failed', 'cleanup_service_verification_failed', 'cleanup_verification_failed',
+                'configuration_changed_cleanup_before_reconfigure', 'exercise_expired_cleanup_before_recreate',
+                'trigger_verification_failed', 'unsupported_home_path', 'worker_status_missing',
+                'process_identity_conflict', 'process_start_failed', 'process_stop_failed',
+                'configuration_missing', 'invalid_configuration', 'action_busy', 'action_failed'}
+
 MARKER = 'MrNobody controlled lab P11'
 METHODS = {'scheduled-task': ('windows', 'T1053.005', 'Scheduled Task'),
            'service': ('windows', 'T1543.003', 'Windows Service'),
+           'process': ('linux', 'T1059.006', 'Bounded Python Process'),
+           'process-dns': ('linux', 'T1059.006', 'Bounded Python Process with lab DNS'),
            'cron': ('linux', 'T1053.003', 'Cron'),
            'systemd': ('linux', 'T1543.002', 'Systemd Service'),
            'task-service': ('windows', 'T1053.005,T1543.003', 'Scheduled Task + Windows Service'),
@@ -129,7 +138,7 @@ def configuration(env, platform):
         raise ValueError('Persistence method is incompatible with platform')
     action = env.get('MRNOBODY_ACTION') or 'create'
     artifact = env.get('MRNOBODY_ARTIFACT') or 'telemetry'
-    if action not in {'create', 'cleanup'} or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,31}', artifact):
+    if action not in ({'create', 'inspect', 'cleanup'} if method in {'systemd', 'cron-systemd', 'process', 'process-dns'} else {'create', 'cleanup'}) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,31}', artifact):
         raise ValueError('Invalid persistence action/artifact')
     activity_configuration(env, method, action)
     return method, action, 'mrnobody-p11-' + artifact
@@ -137,7 +146,16 @@ def configuration(env, platform):
 
 def metadata(env, platform):
     method, action, name = configuration(env, platform)
-    if method in PAIRED:
+    if method in {'process', 'process-dns'}:
+        c = activity_configuration(env, method, action)
+        return dict(c, platform=platform, method=method, action=action, artifact=name,
+                    artifact_path='~/.config/mrnobody/' + name, persistence='false',
+                    execution_scope='bounded_background_process_no_reboot_or_login_restart',
+                    cpu_level=env.get('MRNOBODY_PERSISTENCE_CPU') or 'idle',
+                    cleanup_artifact=name.removeprefix('mrnobody-p11-'),
+                    cleanup_action='P11_action_cleanup_same_target_user_method_artifact',
+                    mitre=METHODS[method][1], cleanup_required='false' if action == 'cleanup' else 'true')
+    if method in PAIRED | {'systemd'}:
         return paired_metadata(env, platform, method, action, name)
     location = {'scheduled-task': 'TaskScheduler/' + name,
                 'service': 'ProgramData/MrNobody/P11/' + name + '/' + name + '.exe',
@@ -146,12 +164,17 @@ def metadata(env, platform):
     return dict(platform=platform, method=method, action=action, artifact=name,
                 artifact_path=location, cleanup_action='P11_action_cleanup_same_target_method_artifact',
                 cleanup_artifact=name.removeprefix('mrnobody-p11-'),
-                cleanup_required='true' if action == 'create' else 'false',
+                cleanup_required='false' if action == 'cleanup' else 'true',
                 mitre=METHODS[method][1])
 
 
 def script(env, platform):
     method, action, name = configuration(env, platform)
+    if method in {'process', 'process-dns'}:
+        from linux_process import render
+        return render(name, action, activity_configuration(env, method, action), env.get('MRNOBODY_PERSISTENCE_CPU') or 'idle')
+    if method == 'systemd':
+        return paired_script(env, platform, method, action, name)
     if method in PAIRED:
         return paired_script(env, platform, method, action, name)
     if platform == 'windows':
@@ -264,52 +287,17 @@ remaining=$(crontab -l)
 if printf '%s\n' "$remaining" | grep -F -- "$marker" >/dev/null; then exit 1; fi
 '''
         return prelude + body + "\nprintf 'MrNobody P11 verified\\n'\n"
-    prelude = f'''set -eu
-command -v systemctl >/dev/null || exit 78
-test -x /usr/bin/true || exit 78
-systemctl --user show-environment >/dev/null 2>&1 || exit 78
-name='{name}'
-dir="$HOME/.config/systemd/user"
-unit="$dir/$name.service"
-if [ -L "$unit" ]; then exit 1; fi
-if [ -e "$unit" ] && ! grep -Fx '# {MARKER}' "$unit" >/dev/null; then exit 1; fi
-'''
-    if action == 'cleanup':
-        body = '''if [ -e "$unit" ]; then
-    systemctl --user disable --now "$name.service"
-    rm -- "$unit"
-    systemctl --user daemon-reload
-fi
-test ! -e "$unit"
-'''
-    else:
-        body = f'''mkdir -p "$dir"
-umask 077
-cat > "$unit" <<'MRN_UNIT'
-# {MARKER}
-[Unit]
-Description={MARKER}
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/true
-RemainAfterExit=yes
-[Install]
-WantedBy=default.target
-MRN_UNIT
-systemctl --user daemon-reload
-systemctl --user enable --now "$name.service"
-systemctl --user is-enabled "$name.service" >/dev/null
-systemctl --user is-active "$name.service" >/dev/null
-'''
-    return prelude + body + "printf 'MrNobody P11 verified\\n'\n"
-
-
 # Explicit legacy methods retain their original payloads and cleanup identities.
 PAIRED = {'task-service', 'cron-systemd'}
 
 
 def activity_configuration(env, method, action='create'):
-    enabled = env.get('MRNOBODY_PERSISTENCE_DNS') or 'disabled'
+    enabled = 'enabled' if method == 'process-dns' else env.get('MRNOBODY_PERSISTENCE_DNS') or 'disabled'
+    if method == 'process' and enabled != 'disabled':
+        raise ValueError('Choose process-dns for process DNS activity')
+    if method in {'process', 'process-dns'}:
+        if (env.get('MRNOBODY_PERSISTENCE_CPU') or 'idle') not in {'idle', 'low', 'medium'}:
+            raise ValueError('Process CPU level must be idle, low or medium')
     if enabled not in {'enabled', 'disabled'}:
         raise ValueError('DNS activity must be enabled or disabled')
     domain = env.get('MRNOBODY_PERSISTENCE_DOMAIN') or 'evilcorp.test'
@@ -323,6 +311,10 @@ def activity_configuration(env, method, action='create'):
         return int(value)
     interval = integer('PERSISTENCE_INTERVAL', 60, 10, 3600)
     duration = integer('PERSISTENCE_DURATION', 3600, 60, 14400)
+    if method in {'process', 'process-dns'} and action == 'create' and duration not in {300, 900, 1800, 3600}:
+        raise ValueError('Process lifetime must be 300, 900, 1800 or 3600 seconds')
+    if method == 'process-dns' and domain != 'evilcorp.test':
+        raise ValueError('Process DNS uses only evilcorp.test')
     if interval > duration:
         raise ValueError('P11 interval must fit the duration')
     resolver = env.get('MRNOBODY_PERSISTENCE_RESOLVER') or ''
@@ -331,8 +323,8 @@ def activity_configuration(env, method, action='create'):
         resolver = private(resolver)
         if resolver.split('.')[-1] in {'0', '255'}:
             raise ValueError('Use a unicast private lab resolver')
-    if action == 'create' and enabled == 'enabled' and (method not in PAIRED or not resolver):
-        raise ValueError('DNS requires a paired method and an explicit internal lab resolver')
+    if action == 'create' and enabled == 'enabled' and (method not in PAIRED | {'process-dns', 'systemd'} or not resolver):
+        raise ValueError('DNS requires a supported service/process-dns method and an explicit internal lab resolver')
     return dict(persistence_dns=enabled, dns_domain=domain, dns_resolver=resolver or 'none',
                 query_interval=interval, activity_duration=duration,
                 cleanup_policy='manual_artifacts_automatic_activity_stop')
@@ -347,8 +339,8 @@ def paired_metadata(env, platform, method, action, name):
     return dict(c, platform=platform, method=method, action=action, artifact=name,
                 artifact_path=directory, service_name=name if platform == 'windows' else name + '.service',
                 service_path=directory + '/' + name + '.exe' if platform == 'windows' else '~/.config/systemd/user/' + name + '.service',
-                scheduled_trigger='TaskScheduler/' + name if platform == 'windows' else 'user-crontab/# ' + MARKER + ' ' + name,
-                trigger_schedule='every_minute_until_deadline',
+                scheduled_trigger='none' if method == 'systemd' else 'TaskScheduler/' + name if platform == 'windows' else 'user-crontab/# ' + MARKER + ' ' + name,
+                trigger_schedule='none' if method == 'systemd' else 'every_minute_until_deadline',
                 service_scope='LocalSystem' if platform == 'windows' else 'existing_user_manager_no_linger',
                 activity_lifetime='independent_of_phase_completion_fixed_UTC_deadline_no_extension_on_rerun',
                 cleanup_action='P11_action_cleanup_same_target_user_method_artifact',
@@ -361,7 +353,19 @@ def paired_metadata(env, platform, method, action, name):
 def evidence(output, env, platform):
     """Only fixed counters/status escape the remote action; never raw output."""
     method, action, _ = configuration(env, platform)
-    if method not in PAIRED:
+    diagnostic = re.findall(r'(?m)^MRN_P11_ERROR=([a-z_]+),([a-z_]+)\r?$', output)
+    if diagnostic:
+        stage, warning = diagnostic[-1]
+        if stage in {'manager', 'ownership', 'configuration', 'create', 'verify', 'cleanup', 'inspect'} and warning in LINUX_ERRORS:
+            command = re.findall(r'(?m)^MRN_P11_SYSTEMCTL=([a-z-]+),(-?[0-9]{1,3})\r?$', output)
+            detail = {}
+            if command and command[-1][0] in {'show-environment', 'show', 'daemon-reload', 'enable', 'disable', 'stop', 'is-active', 'is-enabled'}:
+                detail = dict(systemctl_operation=command[-1][0], systemctl_exit_code=int(command[-1][1]))
+            return dict(detail, result='failed', stage=stage, warning=warning, cleanup_required='true')
+    if method in {'process', 'process-dns'}:
+        from linux_process import evidence as process_evidence
+        return process_evidence(output, action)
+    if method not in PAIRED | {'systemd'}:
         return dict(result='success')
     paths = {}
     for key, encoded in re.findall(r'(?m)^MRN_P11_PATH=(artifact_path|service_path),([A-Za-z0-9+/=]{1,1024})\r?$', output):
@@ -384,7 +388,7 @@ def evidence(output, env, platform):
     if responses > attempts or attempts > 1440 or rcode not in {-1, 0, 3}:
         return dict(result='failed', warning='invalid_persistence_evidence', cleanup_required='true')
     enabled = activity_configuration(env, method)['persistence_dns'] == 'enabled'
-    return dict(paths, result='success', service_active='true', trigger_configured='true',
+    return dict(paths, result='success', service_active='true', trigger_configured='false' if method == 'systemd' else 'true',
                 activity_deadline_utc_epoch=deadline, dns_attempts=attempts, dns_responses=responses,
                 last_query_utc_epoch_ms=last, last_dns_rcode=rcode,
                 dns_verification='matching_NOERROR_or_NXDOMAIN_response' if responses else 'not_observed',
@@ -406,7 +410,7 @@ def paired_script(env, platform, method, action, name):
     packet = base64.b64encode(question(c['dns_domain'])).decode('ascii')
     if platform == 'windows':
         return windows_pair(name, action, settings, packet)
-    return linux_pair(name, action, settings, packet)
+    return linux_pair(name, action, settings, packet, method)
 
 
 # Native ServiceBase compiled using the existing Windows .NET Framework compiler.
@@ -651,6 +655,7 @@ deadline = int(lines[1])
 if len(sys.argv) == 2 and sys.argv[1] == '--maintain':
     if time.time() < deadline:
         os.environ['XDG_RUNTIME_DIR'] = '/run/user/' + str(os.getuid())
+        os.environ['DBUS_SESSION_BUS_ADDRESS'] = 'unix:path=' + os.environ['XDG_RUNTIME_DIR'] + '/bus'
         subprocess.run(['/usr/bin/systemctl', '--user', 'start', '__NAME__.service'], check=True)
     raise SystemExit(0)
 attempts = responses = last = 0
@@ -682,49 +687,90 @@ while time.time() < deadline and time.monotonic()-start < int(fields[4]) and att
 """
 
 
-def linux_pair(name, action, settings, packet):
+def linux_pair(name, action, settings, packet, method='cron-systemd'):
     # Serialize cron RMW; quote user paths with the appropriate cron/systemd
     # rules. No sudo, implicit package installation, linger or stored secrets.
     worker = LINUX_WORKER.replace('__NAME__', name).replace('__SETTINGS__', settings).replace('__PACKET__', packet)
     setup = r"""import fcntl, os, pathlib, shlex, subprocess, time
 name = '__NAME__'
+paired = '__METHOD__' == 'cron-systemd'
+stage = 'ownership'
+os.environ['XDG_RUNTIME_DIR'] = '/run/user/' + str(os.getuid())
+os.environ['DBUS_SESSION_BUS_ADDRESS'] = 'unix:path=' + os.environ['XDG_RUNTIME_DIR'] + '/bus'
 marker = 'MrNobody controlled lab P11'
 root = pathlib.Path.home() / '.config/mrnobody'
 directory = root / name
 unitdir = pathlib.Path.home() / '.config/systemd/user'
 unit = unitdir / (name + '.service')
-for path in (root, directory, unitdir, unit):
-    if path.is_symlink():
+for path in (root, directory, unitdir, unit, *root.parents, *unitdir.parents):
+    if path.is_symlink() or (path.exists() and path.stat().st_uid not in {0, os.getuid()}):
         raise SystemExit('artifact_ownership_conflict')
 root.mkdir(parents=True, exist_ok=True, mode=0o700)
 lockpath = root / 'p11-cron.lock'
-if lockpath.is_symlink():
+if lockpath.is_symlink() or (lockpath.exists() and lockpath.stat().st_uid != os.getuid()):
     raise SystemExit('artifact_ownership_conflict')
 lock = lockpath.open('a')
 fcntl.flock(lock, fcntl.LOCK_EX)
 owner = directory / 'owner.txt'
 if directory.exists() and (not owner.is_file() or owner.read_text() != marker):
     raise SystemExit('artifact_ownership_conflict')
-if unit.exists() and ('# ' + marker) not in unit.read_text().splitlines():
+if (unitdir / (name + '.service.d')).exists() or (unitdir / (name + '.service.d')).is_symlink():
+    raise SystemExit('artifact_ownership_conflict')
+if unit.exists() and (unit.stat().st_uid != os.getuid() or ('# ' + marker) not in unit.read_text().splitlines()):
     raise SystemExit('artifact_ownership_conflict')
 if directory.exists():
     for path in directory.iterdir():
-        if path.is_symlink() or not path.is_file() or path.name not in {'owner.txt', 'config.txt', 'worker.py', 'status.txt', 'status.tmp'}:
+        if path.is_symlink() or not path.is_file() or path.stat().st_uid != os.getuid() or path.name not in {'owner.txt', 'config.txt', 'worker.py', 'status.txt', 'status.tmp', 'method.txt'}:
             raise SystemExit('artifact_ownership_conflict')
+methodfile = directory / 'method.txt'
+if methodfile.exists() and methodfile.read_text() != '__METHOD__':
+    raise SystemExit('artifact_ownership_conflict')
+if not paired and directory.exists() and not methodfile.exists() and (directory / 'config.txt').exists():
+    raise SystemExit('artifact_ownership_conflict')
 def run(args):
-    return subprocess.run(args, check=True, capture_output=True, text=True).stdout
+    result = subprocess.run(args, capture_output=True, text=True)
+    if result.returncode:
+        if args[0] == '/usr/bin/systemctl':
+            print('MRN_P11_SYSTEMCTL=%s,%s' % (args[2], result.returncode))
+        raise SystemExit('systemctl_failed' if args[0] == '/usr/bin/systemctl' else 'crontab_read_failed')
+    return result.stdout
 def systemctl(*args):
     return run(['/usr/bin/systemctl', '--user', *args])
-cron = subprocess.run(['crontab', '-l'], capture_output=True, text=True, env=dict(os.environ, LC_ALL='C'))
-if cron.returncode and 'no crontab for' not in cron.stderr:
+stage = 'manager'
+try:
+    systemctl('show-environment')
+except SystemExit:
+    raise SystemExit('user_manager_unavailable')
+stage = 'ownership'
+fragment = systemctl('show', name + '.service', '--property=FragmentPath', '--value').strip()
+dropins = systemctl('show', name + '.service', '--property=DropInPaths', '--value').strip()
+if fragment and fragment != str(unit) or dropins:
+    raise SystemExit('artifact_ownership_conflict')
+cron = subprocess.run(['crontab', '-l'], capture_output=True, text=True, env=dict(os.environ, LC_ALL='C')) if paired else None
+if paired and cron.returncode and 'no crontab for' not in cron.stderr:
     raise SystemExit('crontab_read_failed')
 tag = '# ' + marker + ' ' + name
-old = cron.stdout.splitlines()
+old = cron.stdout.splitlines() if paired else []
 filtered = [line for line in old if not line.endswith(tag)]
 def setcron(lines):
     subprocess.run(['crontab', '-'], input='\n'.join(lines) + '\n', text=True, check=True)
+if '__ACTION__' == 'inspect':
+    stage = 'inspect'
+    config = directory / 'config.txt'
+    status = directory / 'status.txt'
+    if not config.exists() or not status.exists():
+        raise SystemExit('configuration_missing')
+    lines = config.read_text().splitlines()
+    systemctl('is-active', name + '.service')
+    systemctl('is-enabled', name + '.service')
+    if paired and not any(line.endswith(tag) for line in old):
+        raise SystemExit('trigger_verification_failed')
+    print('MRN_P11=1,1,%s,%s' % (int(lines[1]), status.read_text()))
+    raise SystemExit(0)
 if '__ACTION__' == 'cleanup':
-    setcron(filtered)
+    stage = 'cleanup'
+    if paired:
+        setcron(filtered)
     if unit.exists():
         systemctl('disable', '--now', name + '.service')
         unit.unlink()
@@ -738,7 +784,7 @@ if '__ACTION__' == 'cleanup':
     active = subprocess.run(['/usr/bin/systemctl', '--user', 'is-active', name + '.service'], capture_output=True, text=True)
     if active.returncode == 0 or active.returncode not in (3, 4):
         raise SystemExit('cleanup_service_verification_failed')
-    if unit.exists() or any(line.endswith(tag) for line in run(['crontab', '-l']).splitlines()):
+    if unit.exists() or (paired and any(line.endswith(tag) for line in run(['crontab', '-l']).splitlines())):
         raise SystemExit('cleanup_verification_failed')
     if directory.exists():
         for child in directory.iterdir():
@@ -746,10 +792,11 @@ if '__ACTION__' == 'cleanup':
         directory.rmdir()
     print('MRN_P11_CLEANUP=complete')
 else:
-    systemctl('show-environment')
+    stage = 'configuration'
     directory.mkdir(mode=0o700, exist_ok=True)
     directory.chmod(0o700)
     owner.write_text(marker)
+    methodfile.write_text('__METHOD__')
     config = directory / 'config.txt'
     settings = '__SETTINGS__'
     if config.exists():
@@ -758,11 +805,14 @@ else:
             raise SystemExit('configuration_changed_cleanup_before_reconfigure')
         deadline = int(lines[1])
     else:
+        if unit.exists() or (directory / 'worker.py').exists():
+            raise SystemExit('configuration_missing')
         deadline = int(time.time()) + int(settings.split('|')[4])
         config.write_text(settings + '\n' + str(deadline) + '\n')
     if deadline <= time.time():
         raise SystemExit('exercise_expired_cleanup_before_recreate')
     worker = directory / 'worker.py'
+    stage = 'create'
     worker.write_text(__WORKER__)
     unitdir.mkdir(parents=True, exist_ok=True)
     def unitquote(value):
@@ -775,21 +825,32 @@ else:
     systemctl('daemon-reload')
     systemctl('enable', '--now', name + '.service')
     entry = '* * * * * /usr/bin/python3 ' + shlex.quote(str(worker)) + ' --maintain ' + tag
-    setcron(filtered + [entry])
+    if paired:
+        setcron(filtered + [entry])
+    stage = 'verify'
     systemctl('is-active', name + '.service')
     systemctl('is-enabled', name + '.service')
-    if run(['crontab', '-l']).splitlines().count(entry) != 1:
+    if paired and run(['crontab', '-l']).splitlines().count(entry) != 1:
         raise SystemExit('trigger_verification_failed')
     status = directory / 'status.txt'
     for _ in range(20):
         if status.exists():
             break
         time.sleep(.25)
+    if not status.exists():
+        raise SystemExit('worker_status_missing')
     print('MRN_P11=1,1,%s,%s' % (deadline, status.read_text()))
 """
     setup += "\nimport base64\nfor key, path in [('artifact_path', directory), ('service_path', unit)]:\n    print('MRN_P11_PATH=%s,%s' % (key, base64.b64encode(str(path).encode()).decode()))\n"
-    setup = setup.replace('__NAME__', name).replace('__ACTION__', action).replace('__SETTINGS__', settings).replace('__WORKER__', repr(worker))
-    return ("set -eu\ncommand -v python3 >/dev/null || exit 78\ncommand -v crontab >/dev/null || exit 78\n"
-            "test -x /usr/bin/systemctl || exit 78\numask 077\n"
-            "systemctl --user show-environment >/dev/null 2>&1 || exit 78\n"
+    setup = setup.replace('__METHOD__', method).replace('__NAME__', name).replace('__ACTION__', action).replace('__SETTINGS__', settings).replace('__WORKER__', repr(worker))
+    # Fixed diagnostics only; raw subprocess errors can contain target secrets.
+    allowed = repr(LINUX_ERRORS)
+    setup = ("try:\n" + '\n'.join('    ' + line for line in setup.splitlines()) +
+             "\nexcept SystemExit as error:\n    if error.code not in (None, 0):\n"
+             "        warning = str(error.code) if str(error.code) in " + allowed + " else 'action_failed'\n"
+             "        print('MRN_P11_ERROR=%s,%s' % (globals().get('stage', 'ownership'), warning))\n"
+             "    raise\nexcept Exception:\n"
+             "    print('MRN_P11_ERROR=%s,action_failed' % globals().get('stage', 'ownership'))\n"
+             "    raise SystemExit(1)\n")
+    return ("set -eu\ncommand -v python3 >/dev/null || exit 78\numask 077\n"
             "python3 - <<'MRN_P11_SETUP'\n" + setup + "\nMRN_P11_SETUP\n")

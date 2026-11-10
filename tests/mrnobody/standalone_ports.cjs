@@ -88,7 +88,7 @@ const mount = p => {current = p; context.renderPhaseDetail(p);};
     // P11 uses the shared renderer and real submit callbacks, with no remote execution.
     const p11 = {...phase('11', ['ssh', 'winrm-http', 'winrm-https']),
         parameters: ['target', 'port', 'protocol', 'username', 'password', 'platform', 'method', 'action', 'artifact',
-            'timeout', 'persistence_dns', 'persistence_domain', 'persistence_resolver', 'persistence_interval', 'persistence_duration']};
+            'timeout', 'persistence_cpu', 'persistence_dns', 'persistence_domain', 'persistence_resolver', 'persistence_interval', 'persistence_duration']};
     mount(p11);
     assert.equal(input('protocol').value, 'winrm-http');
     assert.equal(input('port').value, '5985');
@@ -174,6 +174,31 @@ const mount = p => {current = p; context.renderPhaseDetail(p);};
     await change('platform', 'windows'); await change('method', 'task-service');
     await context.runStandalonePhase(current, true);
     assert.equal(requests.at(-1).data.port, '5985'); assert.equal(requests.at(-1).data.method, 'task-service');
+    await change('platform', 'linux');
+    await change('method', 'process');
+    assert.equal(input('persistence_cpu').parentElement.hidden, false);
+    assert.equal(input('persistence_dns').value, 'disabled');
+    input('persistence_duration').value = '300';
+    await change('persistence_cpu', 'medium');
+    await context.runStandalonePhase(current, true);
+    assert.equal(requests.at(-1).data.method, 'process');
+    assert.equal(requests.at(-1).data.persistence_cpu, 'medium');
+    input('persistence_duration').value = '600';
+    count = requests.length; await context.runStandalonePhase(current, true);
+    assert.equal(requests.length, count);
+    await change('method', 'process-dns');
+    input('persistence_duration').value = '300';
+    assert.equal(input('persistence_dns').value, 'enabled');
+    assert.equal(input('persistence_domain').value, 'evilcorp.test');
+    dnsKeys.forEach(k => assert.equal(input(k).parentElement.hidden, false));
+    await context.runStandalonePhase(current, true);
+    assert.equal(requests.at(-1).data.method, 'process-dns');
+    assert.equal(requests.at(-1).data.persistence_resolver, '192.168.2.53');
+    await change('action', 'inspect');
+    input('persistence_resolver').value = '';
+    await context.runStandalonePhase(current, true);
+    assert.equal(requests.at(-1).data.action, 'inspect');
+    assert.equal('persistence_resolver' in requests.at(-1).data, false);
     console.log('P11 Auto/Custom, platform/manual methods, retained DNS fields, validation and create/cleanup payloads passed.');
 
     console.log('Standalone defaults, protocol/platform changes, custom ports and Dry Run → Run submissions passed.');
