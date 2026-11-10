@@ -296,6 +296,11 @@ def add_analysis(report):
             "Correlate collected host and network logs with recorded event times.",
             "Validate each recorded outcome against target evidence.",
             "Apply least privilege, segmentation and monitoring appropriate to the recorded activity."))
+        if phase['id'] == '11' and any(e.get('fields', {}).get('method') in {'process', 'process-dns'} for e in events):
+            guidance = (
+                "Inspect top/htop/ps and /proc for the recorded PID, owner, command and kernel start ticks. Correlate available SSH/audit/process logs. For process-dns compare target packet capture, internal resolver logs and Suricata/Wazuh only where configured and visible; these are sources to investigate, not observed detections.",
+                "Distinguish this bounded background execution from reboot persistence: no service, cron or automatic restart is installed. Compare start time, UTC deadline, CPU level/seconds, running state and fixed evilcorp.test A-query counters. A matching NOERROR/NXDOMAIN response proves DNS exchange, not A-record resolution, exfiltration or C2. Use Inspect to refresh counters and Cleanup to stop only the owned PID; verify expiry and file removal separately.",
+                "Use least privilege, monitor unexpected processes and lab DNS activity, and remove only the recorded owned exercise process and artifacts.")
         for technique in phase.get("mitre", {}).get("techniques", []):
             technique["url"] = mitre_url(technique.get("id"))
             if phase.get("status") in {"skipped", "not_run"}:

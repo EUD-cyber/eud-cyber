@@ -164,7 +164,7 @@ def metadata(env, platform):
     return dict(platform=platform, method=method, action=action, artifact=name,
                 artifact_path=location, cleanup_action='P11_action_cleanup_same_target_method_artifact',
                 cleanup_artifact=name.removeprefix('mrnobody-p11-'),
-                cleanup_required='true' if action == 'create' else 'false',
+                cleanup_required='false' if action == 'cleanup' else 'true',
                 mitre=METHODS[method][1])
 
 
@@ -357,7 +357,11 @@ def evidence(output, env, platform):
     if diagnostic:
         stage, warning = diagnostic[-1]
         if stage in {'manager', 'ownership', 'configuration', 'create', 'verify', 'cleanup', 'inspect'} and warning in LINUX_ERRORS:
-            return dict(result='failed', stage=stage, warning=warning, cleanup_required='true')
+            command = re.findall(r'(?m)^MRN_P11_SYSTEMCTL=([a-z-]+),(-?[0-9]{1,3})\r?$', output)
+            detail = {}
+            if command and command[-1][0] in {'show-environment', 'show', 'daemon-reload', 'enable', 'disable', 'stop', 'is-active', 'is-enabled'}:
+                detail = dict(systemctl_operation=command[-1][0], systemctl_exit_code=int(command[-1][1]))
+            return dict(detail, result='failed', stage=stage, warning=warning, cleanup_required='true')
     if method in {'process', 'process-dns'}:
         from linux_process import evidence as process_evidence
         return process_evidence(output, action)
@@ -726,6 +730,8 @@ if not paired and directory.exists() and not methodfile.exists() and (directory 
 def run(args):
     result = subprocess.run(args, capture_output=True, text=True)
     if result.returncode:
+        if args[0] == '/usr/bin/systemctl':
+            print('MRN_P11_SYSTEMCTL=%s,%s' % (args[2], result.returncode))
         raise SystemExit('systemctl_failed' if args[0] == '/usr/bin/systemctl' else 'crontab_read_failed')
     return result.stdout
 def systemctl(*args):

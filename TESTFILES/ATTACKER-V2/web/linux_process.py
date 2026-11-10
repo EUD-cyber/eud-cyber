@@ -73,8 +73,6 @@ def worker_main(token):
     stop = [False]
     signal.signal(signal.SIGTERM, lambda *_: stop.__setitem__(0, True))
     signal.signal(signal.SIGINT, lambda *_: stop.__setitem__(0, True))
-    current = identity(os.getpid())
-    (base / 'pid.json').write_text(json.dumps({k: current[k] for k in ('pid', 'uid', 'start_ticks')}))
     start = time.monotonic()
     end = start + max(0, min(config['duration'], config['deadline'] - time.time()))
     next_query = start
@@ -289,7 +287,7 @@ def evidence(output, action):
                 or data['cpu_level'] not in CPU or data['last_dns_rcode'] not in {-1, 0, 3}
                 or any(ord(c) < 32 for k in ('command', 'owner', 'artifact_path') for c in data[k])):
             return failure
-        return dict(data, result='success', process_running=str(data.pop('running')).lower(),
+        return dict(data, process_pid=data.pop('pid'), result='success', process_running=str(data.pop('running')).lower(),
                     cleanup_required='true', verification_scope='target_process_and_counters_not_sensor_detection',
                     dns_verification='matching_NOERROR_or_NXDOMAIN_response' if data['dns_responses'] else 'not_observed')
     except (ValueError, TypeError, KeyError):

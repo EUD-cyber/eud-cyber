@@ -1273,7 +1273,7 @@ function mountP11Standalone(form) {
         return note;
     };
     help("artifact", "Editable suffix: telemetry gives mrnobody-p11-telemetry (Linux service: mrnobody-p11-telemetry.service). Use 1–32 lowercase letters, digits or hyphens; start with a letter or digit.");
-    help("action", "create creates the selected artifacts. cleanup removes them: use the same target, username, method and artifact suffix as create.");
+    help("action", "create creates the selected artifacts. inspect refreshes Linux service/process evidence. cleanup removes them: use the same target, username, method and artifact suffix as create.");
     const methodHelp = help("method", "");
     help("persistence_duration", "Service/process activity stops at the fixed deadline. Process lifetime: 300, 900, 1800 or 3600 seconds (5/15/30/60 minutes). Artifacts remain until cleanup.");
     help("persistence_resolver", "Internal non-forwarding lab DNS resolver; queries originate from the target.");

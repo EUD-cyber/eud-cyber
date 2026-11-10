@@ -73,7 +73,7 @@ class Configuration(unittest.TestCase):
             env=dict(ENV,NORDIC_BASE_DIR=tmp,NORDIC_INCIDENT_ID='MRN-process-report',
                      MRNOBODY_RUN_MODE='standalone',MRNOBODY_TARGET=TARGET['target'],
                      MRNOBODY_PROTOCOL='ssh',MRNOBODY_USERNAME='ubuntu')
-            reply=dict(result='success',pid=1234,owner='ubuntu',start_ticks='99',
+            reply=dict(result='success',process_pid=1234,owner='ubuntu',start_ticks='99',
                        command='/usr/bin/python3 worker.py',persistence=False,
                        process_running='true',cpu_seconds=.2)
             with contextlib.redirect_stdout(io.StringIO()):
@@ -111,26 +111,26 @@ class Lifecycle(unittest.TestCase):
             try:
                 first=self.invoke(home)
                 again=self.invoke(home)
-                self.assertEqual(first['pid'],again['pid'])
+                self.assertEqual(first['process_pid'],again['process_pid'])
                 self.assertEqual(first['deadline'],again['deadline'])
-                ps=subprocess.check_output(['ps','-p',str(first['pid']),'-o','user=,comm=,args='],text=True)
+                ps=subprocess.check_output(['ps','-p',str(first['process_pid']),'-o','user=,comm=,args='],text=True)
                 self.assertIn('mrn-p11-worker',ps)
                 self.assertIn('mrnobody-p11-telemetry/worker.py',ps)
                 self.assertFalse(first['persistence'])
                 self.assertFalse((home/'.config/systemd').exists())
                 inspected=self.invoke(home,'inspect')
-                self.assertEqual(first['pid'],inspected['pid'])
+                self.assertEqual(first['process_pid'],inspected['process_pid'])
                 original=(base/'pid.json').read_text()
                 (base/'pid.json').unlink()  # interrupted spawn receipt can be recovered
                 recovered=self.invoke(home,'inspect')
-                self.assertEqual(first['pid'],recovered['pid'])
+                self.assertEqual(first['process_pid'],recovered['process_pid'])
                 bad=json.loads(original);bad['start_ticks']='0'
                 (base/'pid.json').write_text(json.dumps(bad))
                 result=subprocess.run(['bash'],input=p.script(dict(ENV,MRNOBODY_ACTION='cleanup'),'linux'),
                     text=True,env=dict(os.environ,HOME=tmp),capture_output=True,timeout=10)
                 self.assertNotEqual(result.returncode,0)
                 self.assertIn('process_identity_conflict',result.stdout)
-                self.assertTrue(process.identity(first['pid']))
+                self.assertTrue(process.identity(first['process_pid']))
                 (base/'pid.json').write_text(original)
                 (base/'foreign.txt').write_text('keep')
                 result=subprocess.run(['bash'],input=p.script(dict(ENV,MRNOBODY_ACTION='cleanup'),'linux'),
@@ -140,7 +140,7 @@ class Lifecycle(unittest.TestCase):
                 (base/'foreign.txt').unlink()
                 self.invoke(home,'cleanup')
                 self.invoke(home,'cleanup')
-                self.assertIsNone(process.identity(first['pid']))
+                self.assertIsNone(process.identity(first['process_pid']))
                 self.assertFalse(base.exists())
             finally:
                 if base.exists():
