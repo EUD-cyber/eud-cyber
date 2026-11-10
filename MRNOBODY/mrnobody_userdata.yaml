@@ -303,6 +303,15 @@ write_files:
           "$INSTALL_DIR/web/persistence_actions.py"
 
       download_file \
+          "web/linux_process.py" \
+          "$INSTALL_DIR/web/linux_process.py"
+
+      mkdir -p "$INSTALL_DIR/docs"
+      download_file \
+          "docs/p11-linux-standalone.md" \
+          "$INSTALL_DIR/docs/p11-linux-standalone.md"
+
+      download_file \
           "web/scenario_model.py" \
           "$INSTALL_DIR/web/scenario_model.py"
 
