@@ -173,6 +173,8 @@ def snapshot(base, capabilities, process=None, now=None):
                 continue
             if 'PHASE=11 ' in line and 'PERSISTENCE_ACTION_SUCCESS ' in line:
                 logs.append('P11 · Artifact verification recorded; activity deadline is independent of campaign completion. Use P11 Cleanup.')
+            if 'PHASE=11 ' in line and 'P11_ARTIFACT_EXISTS ' in line:
+                logs.append('P11 · Artifact already exists; skipped without changes or assuming ownership.')
             if 'PHASE=10 ' in line:
                 if 'REMOTE_ACTION_PARTIAL ' in line:
                     action_result = 'success_with_warning'

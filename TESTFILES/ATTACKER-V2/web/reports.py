@@ -458,6 +458,16 @@ def add_analysis(report):
             phase['action_outcome'] = ('Bounded process execution (no reboot persistence): ' if process_execution else 'Persistence: ' if phase['id'] == '11' else 'Windows Native Tools / LOLBins: ') + str(phase.get('status', 'not_run')) + '; verify artifact and cleanup metadata'
             phase['analysis']['what_happened'] = phase['action_outcome']
             phase['analysis']['findings'] = details or ['No persistence artifact evidence recorded']
+            collisions = [e for e in events if e['event'] == 'P11_ARTIFACT_EXISTS'] if phase['id'] == '11' else []
+            if collisions:
+                phase['artifact_collisions'] = [dict(timestamp=e['timestamp'], **e['fields']) for e in collisions]
+                phase['action_evidence'] += [e['timestamp'] + ' · ' + e['message'] for e in collisions]
+                phase['action_outcome'] = ('P11 skipped: requested artifact already exists; no action attempted, '
+                    'ownership not assumed, existing evidence preserved. No detection assumed.'
+                    if phase.get('status') == 'skipped' else
+                    'P11 recorded an artifact collision and other errors; inspect all action evidence.')
+                phase['analysis']['what_happened'] = phase['action_outcome']
+                phase['analysis']['findings'] = phase['action_evidence']
     if any(p.get('id') == '05' and (p.get('events') or p.get('artifacts')) for p in report.get('phases', [])):
         involved = {a['host'] for p in report['phases'] for a in p.get('artifacts', [])}
         involved |= {e.get(k) for p in report['phases'] for e in p.get('events', []) for k in ('source', 'target') if address(e.get(k))}

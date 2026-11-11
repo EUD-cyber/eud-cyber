@@ -86,6 +86,9 @@ def perform(pid, target, env, session_factory=None, ssh=None):
             action_code = int(trailer.split(b'__MRN_END__')[0])
         except ValueError:
             return dict(result='failed', warning='invalid_worker_response', cleanup_required='true')
+        collision = persistence.collision_evidence(raw.decode('ascii', errors='replace'), env, platform, action_code)
+        if collision:
+            return dict(collision, exit_code=action_code)
         if action_code and b'MRN_P11_ERROR=' in raw:
             return dict(persistence.evidence(raw.decode('ascii', errors='replace'), env, platform), exit_code=action_code)
         if action_code:
@@ -96,7 +99,11 @@ def perform(pid, target, env, session_factory=None, ssh=None):
     if platform == 'windows':
         # Reuse pywinrm session setup and controlled script/error handling. Fixed
         # P11 payloads contain no operator command or persisted credentials.
-        result = windows_command('10', target, dict(env, MRN_POWERSHELL_SECRET=source), session_factory)
+        result = windows_command('10', target, dict(env, MRN_POWERSHELL_SECRET=source), session_factory,
+            evidence_parser=lambda output: persistence.collision_evidence(output, env, platform)
+                or dict(result='success' if output.strip() == 'MrNobody P11 verified' else 'failed',
+                        warning='none' if output.strip() == 'MrNobody P11 verified' else 'invalid_persistence_evidence',
+                        cleanup_required='false' if env.get('MRNOBODY_ACTION') == 'cleanup' else 'true'))
         result.pop('command', None)
         result.pop('stdout_preview', None)
         result.pop('stderr_preview', None)
@@ -116,6 +123,10 @@ def perform(pid, target, env, session_factory=None, ssh=None):
         return dict(result='failed', warning='invalid_worker_response')
     if code != 0:
         return dict(result='failed', warning='transport_error_details_omitted')
+    if pid == '11':
+        collision = persistence.collision_evidence(raw.decode('ascii', errors='replace'), env, platform, action_code)
+        if collision:
+            return dict(collision, exit_code=action_code)
     result = dict(result='success' if action_code == 0 else 'skipped' if pid in {'11'} and action_code == 78 else 'action_error' if pid == '10' else 'failed',
                   exit_code=action_code, stdout_bytes=stdout[1], stderr_bytes=stderr[1],
                   execution_status='command_error' if action_code else 'success_with_warning' if stderr[1] else 'success',
@@ -173,6 +184,7 @@ def run(pid, env, invoke=subprocess.run):
     base = Path(env.get('NORDIC_BASE_DIR', '/opt/nordic-attack'))
     emit(base, env, pid, 'PHASE_START', phase=pid)
     outcomes = []
+    artifact_exists = False
     candidates, completed, dual = [], set(), False
     try:
         limit = timeout_value(env.get('MRNOBODY_TIMEOUT') or 60)
@@ -218,10 +230,20 @@ def run(pid, env, invoke=subprocess.run):
                 outcome = 'failed'
             if outcome == 'skipped' and pid not in {'11'}:
                 outcome = 'failed'
+            controlled_collision = (pid == '11' and outcome == 'skipped'
+                and result.get('verification_scope') == 'prewrite_collision_only'
+                and result.get('action') == 'not_attempted'
+                and result.get('reason') in {'artifact_already_exists', 'artifact_ownership_conflict'})
+            if controlled_collision:
+                artifact_exists = True
+                emit(base, env, pid, 'P11_ARTIFACT_EXISTS', **{**fields, **result})
             if pid in {'11'} and outcome != 'success':
                 fields['cleanup_required'] = 'true'
             emit(base, env, pid, prefix + '_' + {'partial': 'PARTIAL', 'success': 'SUCCESS', 'action_error': 'ERROR', 'skipped': 'SKIPPED', 'failed': 'FAILED'}[outcome], **{**fields, **result})
             outcomes.append('transport' if result.get('warning') == 'transport_error_details_omitted' else outcome)
+            if controlled_collision:
+                completed.add(target['platform'])
+                break
             if outcome in {'success', 'partial', 'action_error'} or outcome == 'failed' and outcomes[-1] != 'transport':
                 completed.add(target['platform'])
                 if pid != '10' or not dual:
@@ -251,7 +273,8 @@ def run(pid, env, invoke=subprocess.run):
         emit(base, env, pid, 'PHASE_SKIPPED', phase=pid, execution_status='command_error', reason='Custom_remote_command_failed')
         return 79
     if outcomes and set(outcomes) == {'skipped'}:
-        emit(base, env, pid, 'PHASE_SKIPPED', phase=pid, reason='No_compatible_target_or_supported_method')
+        emit(base, env, pid, 'PHASE_SKIPPED', phase=pid,
+             reason='artifact_already_exists' if artifact_exists else 'No_compatible_target_or_supported_method')
         return 78
     emit(base, env, pid, 'PHASE_FAILED', phase=pid)
     return 1
