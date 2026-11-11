@@ -350,7 +350,11 @@ esac
             result=subprocess.run(['bash',str(base/'scenarios/full-incident.sh')],env=env,capture_output=True,text=True,timeout=30)
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
             report=load_report(base/'reports','MRN-full-remote')
-            for pid in ('10','11'):self.assertEqual(next(p for p in report['phases'] if p['id']==pid)['status'],'success')
+            self.assertEqual(next(p for p in report['phases'] if p['id']=='10')['status'],'success')
+            p11=next(p for p in report['phases'] if p['id']=='11')
+            self.assertEqual(p11['status'],'skipped')
+            self.assertEqual(p11['artifact_collisions'][0]['action'],'not_attempted')
+            self.assertEqual(next(p for p in report['phases'] if p['id']=='04')['status'],'success')
 
 
 if __name__=='__main__':unittest.main()
