@@ -99,8 +99,10 @@ def perform(pid, target, env, session_factory=None, ssh=None):
     if platform == 'windows':
         # Reuse pywinrm session setup and controlled script/error handling. Fixed
         # P11 payloads contain no operator command or persisted credentials.
+        from p11_campaign import bounded, legacy_evidence
         result = windows_command('10', target, dict(env, MRN_POWERSHELL_SECRET=source), session_factory,
             evidence_parser=lambda output: persistence.collision_evidence(output, env, platform)
+                or (legacy_evidence(output, env, platform) if bounded(env) else None)
                 or dict(result='success' if output.strip() == 'MrNobody P11 verified' else 'failed',
                         warning='none' if output.strip() == 'MrNobody P11 verified' else 'invalid_persistence_evidence',
                         cleanup_required='false' if env.get('MRNOBODY_ACTION') == 'cleanup' else 'true'))
@@ -127,6 +129,9 @@ def perform(pid, target, env, session_factory=None, ssh=None):
         collision = persistence.collision_evidence(raw.decode('ascii', errors='replace'), env, platform, action_code)
         if collision:
             return dict(collision, exit_code=action_code)
+        from p11_campaign import bounded, legacy_evidence
+        if bounded(env) and persistence.configuration(env, platform)[0] == 'cron' and action_code == 0:
+            return legacy_evidence(raw.decode('ascii', errors='replace'), env, platform)
     result = dict(result='success' if action_code == 0 else 'skipped' if pid in {'11'} and action_code == 78 else 'action_error' if pid == '10' else 'failed',
                   exit_code=action_code, stdout_bytes=stdout[1], stderr_bytes=stderr[1],
                   execution_status='command_error' if action_code else 'success_with_warning' if stderr[1] else 'success',
@@ -183,6 +188,9 @@ def run(pid, env, invoke=subprocess.run):
         raise ValueError('Invalid phase/incident')
     base = Path(env.get('NORDIC_BASE_DIR', '/opt/nordic-attack'))
     emit(base, env, pid, 'PHASE_START', phase=pid)
+    if pid == '11' and env.get('MRNOBODY_RUN_MODE') == 'campaign':
+        from p11_campaign import run as campaign_run
+        return campaign_run(env, invoke)
     outcomes = []
     artifact_exists = False
     candidates, completed, dual = [], set(), False

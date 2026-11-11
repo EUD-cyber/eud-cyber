@@ -69,12 +69,14 @@ class FreshInstall(unittest.TestCase):
             smoke = '''
 import app
 import remote_actions
+import p11_campaign
 import reportlab
 from pathlib import Path
 import os
 base = Path(os.environ['NORDIC_BASE_DIR'])
 assert Path(app.__file__).parent == base / 'web'
 assert Path(remote_actions.__file__).parent == base / 'web'
+assert Path(p11_campaign.__file__).parent == base / 'web'
 client = app.app.test_client()
 for url in ('/', '/api/health', '/api/phases', '/api/planning/capabilities',
             '/api/custom-scenarios', '/api/schedules', '/api/reports',

@@ -222,6 +222,10 @@ def phase_environment(pid, environ=None, sleep=time.sleep, clock=time.time):
     for key in ('STAGING_INCIDENT', 'REQUIRE_STAGING', 'SOURCE', 'TARGET', 'SUBNET', 'PORT', 'PROTOCOL', 'USERNAME', 'FILE', 'AUTO', 'TIMEOUT', 'PLATFORM', 'METHOD', 'ACTION', 'ARTIFACT', 'BEHAVIOR', 'TRANSPORT', 'BEACON_INTERVAL', 'BEACON_JITTER', 'BEACON_COUNT', 'URI_PROFILE', 'WEB_PROFILE', 'WEB_PATH', 'DATASET', 'ARCHIVE_NAME', 'DNS_BEHAVIOR', 'DNS_ENDPOINT', 'DNS_DOMAIN', 'DNS_PATTERN', 'DNS_INTERVAL', 'DNS_JITTER', 'DNS_COUNT', 'DNS_DURATION', 'PERSISTENCE_DNS', 'PERSISTENCE_DOMAIN', 'PERSISTENCE_RESOLVER', 'PERSISTENCE_INTERVAL', 'PERSISTENCE_DURATION', 'PERSISTENCE_CPU'):
         env.pop('MRNOBODY_' + key, None)
     env['MRNOBODY_RUN_MODE'] = 'campaign' if config['target_mode'] == 'auto' else 'standalone'
+    if pid == '11' and any(p['id'] == '03' and p.get('enabled', True) for p in config['phases']):
+        # Full fixed-target plans also consume P03 evidence, never direct P11
+        # credentials. A standalone P11 plan retains its existing behavior.
+        env['MRNOBODY_RUN_MODE'] = 'campaign'
     for key, value in phase.get('parameters', {}).items():
         env['MRNOBODY_' + key.upper()] = str(value)
     needs_p05 = pid == '06' and any(p['id'] == '05' for p in config['phases'])

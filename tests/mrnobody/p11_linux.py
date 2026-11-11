@@ -186,7 +186,7 @@ class Lifecycle(unittest.TestCase):
 @unittest.skipIf(os.name == 'nt', 'Linux service setup uses flock')
 class Services(unittest.TestCase):
     def test_user_manager_lifecycle_rerun_inspect_cleanup_and_errors(self):
-        for method in ('systemd','cron-systemd'):
+        for method in ('systemd','cron-systemd','cron-systemd-process'):
             with self.subTest(method=method), tempfile.TemporaryDirectory() as tmp:
                 home=Path(tmp);base=home/'.config/mrnobody/mrnobody-p11-telemetry'
                 cron=['0 1 * * * echo keep'];state={'active':False,'fail':False};calls=[]
@@ -204,6 +204,8 @@ class Services(unittest.TestCase):
                     if state['fail'] and op=='show-environment':
                         return Response(returncode=1,stdout='',stderr='PRIVATE_ERROR')
                     if op=='show':
+                        if '--property=MainPID' in argv:
+                            return Response(returncode=0,stdout=str(os.getpid()),stderr='')
                         return Response(returncode=0,stdout='',stderr='')
                     if op=='enable':
                         state['active']=True
@@ -235,7 +237,7 @@ class Services(unittest.TestCase):
                 execute('create');self.assertEqual((base/'config.txt').read_text(),deadline)
                 before=list(cron);execute('inspect');self.assertEqual(cron,before)
                 self.assertEqual(p.evidence(first,env,'linux')['result'],'success')
-                self.assertEqual(sum('MrNobody' in row for row in cron),int(method=='cron-systemd'))
+                self.assertEqual(sum('MrNobody' in row for row in cron),int(method in {'cron-systemd','cron-systemd-process'}))
                 if method=='systemd':self.assertFalse(any(c[0]=='crontab' for c in calls))
                 unit=home/'.config/systemd/user/mrnobody-p11-telemetry.service'
                 original_unit=unit.read_text()
