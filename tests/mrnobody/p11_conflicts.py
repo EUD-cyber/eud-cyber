@@ -164,6 +164,19 @@ class LinuxPreflight(unittest.TestCase):
             self.assertIn('MRN_P11_ERROR=ownership,action_failed',out)
             self.assertNotIn('private',out)
 
+    def test_orphan_process_without_artifact_directory_is_a_collision(self):
+        with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+            home=Path(tmp); proc=home/'fake-proc'; entry=proc/'1234';entry.mkdir(parents=True)
+            worker=home/'.config/mrnobody/mrnobody-p11-telemetry/worker.py'
+            (entry/'cmdline').write_bytes(b'/usr/bin/python3\0'+str(worker).encode()+b'\0--worker\0unknown-token\0')
+            ns={};exec(p.LINUX_PREFLIGHT,ns)
+            real_path=Path
+            constructor=Mock(side_effect=lambda value:proc if value=='/proc' else real_path(value))
+            constructor.home.return_value=home
+            with patch('pathlib.Path',constructor),patch('shutil.which',return_value=None):
+                self.assertTrue(ns['p11_exists']('mrnobody-p11-telemetry'))
+            self.assertFalse(worker.parent.exists())
+
     def test_full_campaign_continues_after_p11_skip(self):
         from full_incident import FullIncidentTests, IDS
         fixture=FullIncidentTests()

@@ -138,7 +138,7 @@ class Actions(unittest.TestCase):
             self.assertEqual(meta['cleanup_artifact'],'lesson')
             if platform == 'windows':
                 factory=Mock()
-                factory.return_value.run_ps.return_value=SimpleNamespace(status_code=0,std_out=b'verified',std_err=b'')
+                factory.return_value.run_ps.return_value=SimpleNamespace(status_code=0,std_out=b'MrNobody P11 verified\n',std_err=b'')
                 target=dict(TARGET,platform=platform,protocol='winrm-http')
                 for action in ('create','create','cleanup','cleanup'):
                     if method in persistence.PAIRED:
@@ -276,6 +276,7 @@ else cat > "$HOME/table"; fi
 shift
 case "$1" in
 show-environment|daemon-reload) exit 0;;
+show) printf 'not-found\n';;
 enable) touch "$HOME/enabled";;
 disable) rm -f "$HOME/enabled";;
 is-enabled|is-active) test -f "$HOME/enabled";;
@@ -291,9 +292,10 @@ esac
                 self.assertLessEqual(len(result.get('stdout_preview','')),512)
             (home/'table').write_text('0 1 * * * echo preserve\n')
             for method in ('cron',):
-                for action in ('create','create','cleanup','cleanup'):
+                for index,action in enumerate(('create','create','cleanup','cleanup')):
                     result=remote.perform('11',TARGET,dict(env,MRNOBODY_METHOD=method,MRNOBODY_ACTION=action))
-                    self.assertEqual(result['result'],'success',result)
+                    self.assertEqual(result['result'],'skipped' if index==1 else 'success',result)
+                    if index==1:self.assertEqual(result['action'],'not_attempted')
                     if method=='cron':
                         table=(home/'table').read_text()
                         self.assertIn('echo preserve',table)
