@@ -60,11 +60,11 @@ still run; final campaign status and exit remain failed.
 ## Stop, cleanup and validation after update
 
 1. Merge the P11 source PR, then run `mrnobody update` on the instructor VM.
-   Update follows the configured branch; an unmerged PR is not in main.
-2. In the isolated lab, run P03 with the intended credentials and inspect its
-   same-incident `compromised-hosts.json` records. Include two Linux SSH hosts,
+   The updater downloads main; an unmerged PR is not installed by this command.
+2. In the isolated lab, start a new Full Campaign with the intended credentials
+   and inspect P03's same-incident `compromised-hosts.json` records. Include two Linux SSH hosts,
    Windows WinRM HTTP/HTTPS where available, an RDP-only host and a failed login.
-3. Start Full Campaign. Expect four terminal P11 records per eligible Linux host
+3. In that campaign, expect four terminal P11 records per eligible Linux host
    and three per Windows host; none for the RDP-only or failed-login hosts.
    Confirm the recorded state and process PID locally. Service-manager failure
    on one Linux host must not prevent other methods/hosts from being attempted.

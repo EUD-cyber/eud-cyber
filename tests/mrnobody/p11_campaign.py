@@ -86,6 +86,12 @@ class Orchestration(unittest.TestCase):
                 return Response(returncode=0,stdout=json.dumps(value).encode())
             with contextlib.redirect_stdout(io.StringIO()):code=remote.run('11',env,invoke)
             truth=(base/'logs/incident-ground-truth.log').read_text()
+            from reports import build_report
+            (base/'state').mkdir(exist_ok=True)
+            (base/'state/campaign.json').write_text(json.dumps(dict(
+                incident_id=ENV['NORDIC_INCIDENT_ID'], status='partial' if code == 80 else 'complete' if code in {0,78} else 'failed',
+                phases={'11':'partial' if code == 80 else 'complete' if code == 0 else 'skipped' if code == 78 else 'failed'})))
+            self.report=build_report(base,ENV['NORDIC_INCIDENT_ID'],exit_code=1 if code == 1 else 0,environ=env)
             return code,calls,truth
 
     def test_all_methods_on_all_hosts_with_distinct_deterministic_names(self):
@@ -118,6 +124,13 @@ class Orchestration(unittest.TestCase):
         self.assertIn('partial=1',truth.replace('"',''))
         self.assertIn('target_verification=p03_ssh_session_marker',truth.replace('"',''))
         self.assertIn('not_assessed_requires_sensor_evidence',truth)
+        phase=next(row for row in self.report['phases'] if row['id']=='11')
+        self.assertEqual(phase['status'],'partial')
+        self.assertEqual(self.report['incident']['status'],'partial')
+        self.assertEqual(len(phase['method_results']),14)
+        self.assertEqual([row['status'] for row in phase['method_results'][:4]],
+                         ['skipped','failure','failure','partial'])
+        self.assertEqual(len({(row['target'],row['method']) for row in phase['method_results']}),14)
         for reply,expected in [(collision,78),(dict(result='failed'),1)]:
             code,calls,truth=self.execute(reply)
             self.assertEqual((code,len(calls)),(expected,14))
