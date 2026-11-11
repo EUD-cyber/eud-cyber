@@ -710,7 +710,11 @@ run_phase() {
     if [[ ( "$NUMBER" == "10" || "$NUMBER" == "11" ) && $RESULT -eq 78 ]]; then
         RUN_PHASE_STATUS="skipped"
         update_phase_state "$NUMBER" "skipped"
-        log "[PHASE $NUMBER] SKIPPED - Not configured or no compatible target/method"
+        if [[ "$NUMBER" == "11" ]]; then
+            log "[PHASE $NUMBER] SKIPPED - Controlled skip; inspect P11 ground truth for artifact collision or unsupported target/method"
+        else
+            log "[PHASE $NUMBER] SKIPPED - Not configured or no compatible target/method"
+        fi
         return 0
     fi
 

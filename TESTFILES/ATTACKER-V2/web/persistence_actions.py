@@ -44,8 +44,6 @@ def perform_windows(target, env, session_factory=None):
     from scenario_model import private
     from windows_actions import timeout_value
     method, action, _ = configuration(env, 'windows')
-    if method not in {'service', 'task-service'}:
-        raise ValueError('P11 service transport requires a service method')
     failure = dict(result='failed', cleanup_required='true')
     password = env.get('MRNOBODY_PASSWORD') or env.get('NORDIC_RDP_PASSWORD')
     if not password:
@@ -90,6 +88,9 @@ def perform_windows(target, env, session_factory=None):
     if len(response.std_out) > 8192:
         return dict(failure, **counts, stage='verify', warning='oversized_persistence_evidence')
     output = response.std_out.decode('utf-8-sig', errors='replace')
+    collision = collision_evidence(output, env, 'windows', response.status_code)
+    if collision:
+        return dict(collision, **counts, stage='preflight')
     match = re.fullmatch(r'MRN_P11_ERROR=([a-z_]+),([a-z_]+)\s*', output)
     if match and match[1] in WINDOWS_STAGES and match[2] in WINDOWS_ERRORS | {'persistence_action_failed'}:
         return dict(failure, **counts, stage=match[1], warning=match[2])
@@ -168,7 +169,134 @@ def metadata(env, platform):
                 mitre=METHODS[method][1])
 
 
+def collision_evidence(output, env, platform, exit_code=0):
+    """Accept only a complete pre-write receipt, never an error substring."""
+    _, action, _ = configuration(env, platform)
+    match = re.fullmatch(r'MRN_P11_EXISTS=(artifact_already_exists|artifact_ownership_conflict)\s*', output)
+    if action == 'create' and exit_code == 0 and match:
+        return dict(result='skipped', reason=match[1], warning=match[1],
+                    action='not_attempted', requested_action='create',
+                    requested_artifact=env.get('MRNOBODY_ARTIFACT') or 'telemetry',
+                    cleanup_required='false', ownership='not_assumed',
+                    persistence_action_performed='false', detection='not_assumed',
+                    execution_status='skipped', verification_scope='prewrite_collision_only')
+    return None
+
+
+# The same read-only namespace check precedes every Linux create method. No
+# ownership marker grants permission to adopt/reconfigure an existing artifact.
+LINUX_PREFLIGHT = r'''import os, pathlib, re, shutil, subprocess, sys
+def p11_exists(name):
+    home = pathlib.Path.home()
+    root = home / '.config/mrnobody'
+    unitdir = home / '.config/systemd/user'
+    for parent in (root, unitdir, *root.parents, *unitdir.parents):
+        if parent.is_symlink() or (parent.exists() and
+                (not parent.is_dir() or parent.stat().st_uid not in {0, os.getuid()})):
+            raise RuntimeError('unsafe_namespace')
+    base = root / name
+    paths = [base, unitdir / (name + '.service'), unitdir / (name + '.service.d'),
+             home / '.local/share/systemd/user' / (name + '.service'),
+             pathlib.Path('/etc/systemd/user') / (name + '.service'),
+             pathlib.Path('/usr/lib/systemd/user') / (name + '.service')]
+    if any(os.path.lexists(path) for path in paths):
+        return True
+    if shutil.which('crontab'):
+        cron = subprocess.run(['crontab', '-l'], capture_output=True, text=True,
+                              env=dict(os.environ, LC_ALL='C'))
+        if cron.returncode and not (cron.returncode == 1 and 'no crontab for' in cron.stderr):
+            raise RuntimeError('crontab_read_failed')
+        pattern = r'(?<![a-zA-Z0-9_-])' + re.escape(name) + r'(?![a-zA-Z0-9_-])'
+        if re.search(pattern, cron.stdout):
+            return True
+    # Also catch an orphan worker whose artifact directory has been removed.
+    proc = pathlib.Path('/proc')
+    if proc.is_dir():
+        for entry in proc.iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                if entry.stat().st_uid == os.getuid() and str(base / 'worker.py').encode() in (entry / 'cmdline').read_bytes().split(b'\0'):
+                    return True
+            except (FileNotFoundError, ProcessLookupError):
+                pass
+    if shutil.which('systemctl'):
+        env = dict(os.environ, XDG_RUNTIME_DIR='/run/user/' + str(os.getuid()),
+                   DBUS_SESSION_BUS_ADDRESS='unix:path=/run/user/' + str(os.getuid()) + '/bus')
+        manager = subprocess.run(['systemctl', '--user', 'show-environment'], capture_output=True, env=env)
+        if manager.returncode == 0:
+            state = subprocess.run(['systemctl', '--user', 'show', name + '.service',
+                                    '--property=LoadState', '--value'], capture_output=True, text=True, env=env)
+            if state.returncode or not state.stdout.strip():
+                raise RuntimeError('systemctl_read_failed')
+            if state.stdout.strip() != 'not-found':
+                return True
+    return False
+'''
+
+
 def script(env, platform):
+    method, action, name = configuration(env, platform)
+    source = _script(env, platform)
+    if action != 'create':
+        return source
+    if platform == 'windows':
+        check = r'''
+$ErrorActionPreference = 'Stop'
+$name = '__NAME__'
+$p11Stage = 'ownership'
+$dir = Join-Path $env:ProgramData ('MrNobody\P11\' + $name)
+# Enumerate with Stop so an access/query failure cannot masquerade as absence.
+$tasks = @(Get-ScheduledTask -TaskPath '\' -ErrorAction Stop | Where-Object { $_.TaskName -eq $name })
+$services = @(Get-CimInstance Win32_Service -Filter "Name='$name'" -ErrorAction Stop)
+if ((Test-Path -LiteralPath $dir) -or $tasks.Count -gt 0 -or $services.Count -gt 0) {
+    Write-Output 'MRN_P11_EXISTS=artifact_already_exists'
+    return
+}
+'''.replace('__NAME__', name)
+        # Service payloads already hold the same named mutex. Put the check
+        # inside it; single-task creates now use that mutex as well.
+        if method in {'service', 'task-service'}:
+            return source.replace('try {\n', 'try {\n' + check, 1)
+        return windows_lock(check + source, name)
+    # Check before even creating the control lock. Recheck under a per-artifact
+    # create lock, separate from the existing cron RMW lock in the payload.
+    wrapper = LINUX_PREFLIGHT + r'''
+import fcntl
+try:
+    name = __NAME__
+    if p11_exists(name):
+        print('MRN_P11_EXISTS=artifact_already_exists')
+        raise SystemExit(0)
+    root = pathlib.Path.home() / '.config/mrnobody'
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path = root / ('.' + name + '.create.lock')
+    flags = os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW
+    fd = os.open(path, flags, 0o600)
+    with os.fdopen(fd, 'r+') as lock:
+        import stat
+        info = os.fstat(lock.fileno())
+        if info.st_uid != os.getuid() or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise RuntimeError('unsafe_lock')
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if p11_exists(name):
+            print('MRN_P11_EXISTS=artifact_already_exists')
+            raise SystemExit(0)
+        # A failure after this boundary is never converted to a collision skip.
+        result = subprocess.run(['bash'], input=sys.stdin.read(), text=True)
+        raise SystemExit(result.returncode)
+except Exception:
+    print('MRN_P11_ERROR=ownership,action_failed')
+    raise SystemExit(1)
+'''
+    wrapper = wrapper.replace('__NAME__', repr(name))
+    encoded = base64.b64encode(wrapper.encode()).decode('ascii')
+    return ("set -eu\ncommand -v python3 >/dev/null || exit 78\n"
+            "python3 -c \"import base64;exec(base64.b64decode('" + encoded + "'))\" <<'MRN_P11_BODY'\n"
+            + source + '\nMRN_P11_BODY\n')
+
+
+def _script(env, platform):
     method, action, name = configuration(env, platform)
     if method in {'process', 'process-dns'}:
         from linux_process import render
@@ -194,7 +322,7 @@ if (Get-ScheduledTask -TaskName $name -TaskPath '\' -ErrorAction SilentlyContinu
 # Harmless fixed action: a process launch once a day; never operator shell input.
 $a = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\cmd.exe" -Argument '/c echo MrNobody controlled lab P11'
 $t = New-ScheduledTaskTrigger -Daily -At '12:00'
-Register-ScheduledTask -TaskName $name -TaskPath '\' -Description $marker -Action $a -Trigger $t -Force | Out-Null
+Register-ScheduledTask -TaskName $name -TaskPath '\' -Description $marker -Action $a -Trigger $t | Out-Null
 if (-not (Get-ScheduledTask -TaskName $name -TaskPath '\' -ErrorAction Stop)) { throw 'create_verification_failed' }
 '''
         else:
@@ -621,7 +749,7 @@ if (-not $old) {
 $p11Stage = 'task_create'
 $a = New-ScheduledTaskAction -Execute $exe -Argument '--maintain'
 $t = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 1) -RepetitionDuration (New-TimeSpan -Seconds ([Math]::Max(60, $deadline - [DateTimeOffset]::UtcNow.ToUnixTimeSeconds())))
-Register-ScheduledTask -TaskName $name -TaskPath '\' -Description $marker -Action $a -Trigger $t -User 'SYSTEM' -RunLevel Highest -Force | Out-Null
+Register-ScheduledTask -TaskName $name -TaskPath '\' -Description $marker -Action $a -Trigger $t -User 'SYSTEM' -RunLevel Highest | Out-Null
 $p11Stage = 'service_start'
 Start-Service -Name $name
 $p11Stage = 'verify'

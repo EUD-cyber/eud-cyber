@@ -110,7 +110,10 @@ class Lifecycle(unittest.TestCase):
             base=home/'.config/mrnobody/mrnobody-p11-telemetry'
             try:
                 first=self.invoke(home)
-                again=self.invoke(home)
+                result=subprocess.run(['bash'],input=p.script(ENV,'linux'),text=True,env=dict(os.environ,HOME=tmp),capture_output=True,timeout=15)
+                self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+                self.assertEqual(p.collision_evidence(result.stdout,ENV,'linux')['result'],'skipped')
+                again=self.invoke(home,'inspect')
                 self.assertEqual(first['process_pid'],again['process_pid'])
                 self.assertEqual(first['deadline'],again['deadline'])
                 ps=subprocess.check_output(['ps','-p',str(first['process_pid']),'-o','user=,comm=,args='],text=True)

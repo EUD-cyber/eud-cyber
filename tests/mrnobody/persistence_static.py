@@ -10,7 +10,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'TESTFILES/ATTACKER-V2/web'))
-from persistence_actions import METHODS, script
+from persistence_actions import METHODS, script, _script
 
 
 class StaticChecks(unittest.TestCase):
@@ -39,7 +39,9 @@ function Get-Service { param($Name) $script:service }
 function Invoke-CimMethod { param($InputObject,$MethodName) if($MethodName -ne 'Delete'){throw 'wrong_method'}; $script:service=$null; [pscustomobject]@{ReturnValue=0} }
 '''
         for method in ('scheduled-task', 'service', 'task-service'):
-            create = script({'MRNOBODY_METHOD': method}, 'windows')
+            # Core payload fixture exercises fresh create and ownership-safe cleanup.
+            # Public create collision behavior is covered in p11_conflicts.py.
+            create = _script({'MRNOBODY_METHOD': method}, 'windows')
             cleanup = script({'MRNOBODY_METHOD': method, 'MRNOBODY_ACTION': 'cleanup'}, 'windows')
             member = 'task' if method == 'scheduled-task' else 'service'
             fixture = providers
