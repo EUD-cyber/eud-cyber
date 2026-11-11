@@ -718,6 +718,13 @@ run_phase() {
         return 0
     fi
 
+    if [[ "$NUMBER" == "11" && $RESULT -eq 80 ]]; then
+        RUN_PHASE_STATUS="partial"
+        update_phase_state "$NUMBER" "partial"
+        log "[PHASE $NUMBER] PARTIAL - Some P11 lab actions did not complete; inspect per-target/method ground truth"
+        return 0
+    fi
+
     if [[ "$NUMBER" == "09" && $RESULT -eq 80 ]]; then
         RUN_PHASE_STATUS="partial"
         update_phase_state "$NUMBER" "partial"
@@ -1521,7 +1528,7 @@ states = data.get("phases", {})
 planned = [p["id"] for p in data["execution"]["phases"]] if "execution" in data else list(states)
 unfinished = {pid: states.get(pid, "pending") for pid in planned
               if states.get(pid) not in {"complete", "skipped", "disabled", "partial"}}
-data["status"] = "failed" if any(s == "failed" for s in unfinished.values()) else "partial" if unfinished or states.get("09") == "partial" else "complete"
+data["status"] = "failed" if any(s == "failed" for s in unfinished.values()) else "partial" if unfinished or states.get("09") == "partial" or states.get("11") == "partial" else "complete"
 if unfinished:
     data.pop("completed", None)
     print("[ERROR] Incomplete campaign: " + repr(unfinished), file=sys.stderr)

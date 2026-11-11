@@ -123,7 +123,7 @@
                 const platform = params.platform || "auto";
                 const effective = params.protocol === "ssh" ? "linux" : params.protocol ? "windows" : platform;
                 if (["10", "11"].includes(p.id) && platform !== "auto" && platform !== effective) return `P${p.id}: platform and protocol must match.`;
-                const methodPlatform = {"scheduled-task":"windows", service:"windows", "task-service":"windows", cron:"linux", systemd:"linux", "cron-systemd":"linux"}[params.method];
+                const methodPlatform = {"scheduled-task":"windows", service:"windows", "task-service":"windows", cron:"linux", systemd:"linux", "cron-systemd":"linux", "cron-systemd-process":"linux"}[params.method];
                 if (p.id === "11" && methodPlatform && effective !== "auto" && effective !== methodPlatform) return "P11: method and platform must match.";
                 if (p.id === "11") {
                     const interval = Number(params.persistence_interval ?? 60), duration = Number(params.persistence_duration ?? 3600);

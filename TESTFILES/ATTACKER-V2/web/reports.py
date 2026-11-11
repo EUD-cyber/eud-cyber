@@ -287,6 +287,11 @@ def p05_artifacts(report, phase):
     return result, metrics
 
 
+def p11_process_only(events):
+    methods = {e.get('fields', {}).get('method') for e in events if e.get('fields', {}).get('method')}
+    return bool(methods) and methods <= {'process', 'process-dns'}
+
+
 def add_analysis(report):
     """Add a versioned student view without changing the underlying phase evidence."""
     summary = {}
@@ -296,7 +301,7 @@ def add_analysis(report):
             "Correlate collected host and network logs with recorded event times.",
             "Validate each recorded outcome against target evidence.",
             "Apply least privilege, segmentation and monitoring appropriate to the recorded activity."))
-        if phase['id'] == '11' and any(e.get('fields', {}).get('method') in {'process', 'process-dns'} for e in events):
+        if phase['id'] == '11' and p11_process_only(events):
             guidance = (
                 "Inspect top/htop/ps and /proc for the recorded PID, owner, command and kernel start ticks. Correlate available SSH/audit/process logs. For process-dns compare target packet capture, internal resolver logs and Suricata/Wazuh only where configured and visible; these are sources to investigate, not observed detections.",
                 "Distinguish this bounded background execution from reboot persistence: no service, cron or automatic restart is installed. Compare start time, UTC deadline, CPU level/seconds, running state and fixed evilcorp.test A-query counters. A matching NOERROR/NXDOMAIN response proves DNS exchange, not A-record resolution, exfiltration or C2. Use Inspect to refresh counters and Cleanup to stop only the owned PID; verify expiry and file removal separately.",
@@ -453,8 +458,12 @@ def add_analysis(report):
             details = [e['timestamp'] + ' · ' + e['message'] for e in events
                        if e['event'].startswith('PERSISTENCE_ACTION_' if phase['id'] == '11' else 'NATIVE_ACTION_')]
             phase['actions'] = [dict(timestamp=e['timestamp'], outcome=e['outcome'], **e['fields']) for e in events if e['event'].startswith('PERSISTENCE_ACTION_' if phase['id'] == '11' else 'NATIVE_ACTION_')]
+            if phase['id'] == '11':
+                phase['method_results'] = [dict(timestamp=e['timestamp'], status=e['outcome'], **e['fields'])
+                    for e in events if e['event'] in {'PERSISTENCE_ACTION_SUCCESS', 'PERSISTENCE_ACTION_SKIPPED',
+                        'PERSISTENCE_ACTION_FAILED', 'PERSISTENCE_ACTION_PARTIAL'}]
             phase['action_evidence'] = details
-            process_execution = phase['id'] == '11' and any(e['fields'].get('method') in {'process', 'process-dns'} for e in events)
+            process_execution = phase['id'] == '11' and p11_process_only(events)
             phase['action_outcome'] = ('Bounded process execution (no reboot persistence): ' if process_execution else 'Persistence: ' if phase['id'] == '11' else 'Windows Native Tools / LOLBins: ') + str(phase.get('status', 'not_run')) + '; verify artifact and cleanup metadata'
             phase['analysis']['what_happened'] = phase['action_outcome']
             phase['analysis']['findings'] = details or ['No persistence artifact evidence recorded']
@@ -465,7 +474,7 @@ def add_analysis(report):
                 phase['action_outcome'] = ('P11 skipped: requested artifact already exists; no action attempted, '
                     'ownership not assumed, existing evidence preserved. No detection assumed.'
                     if phase.get('status') == 'skipped' else
-                    'P11 recorded an artifact collision and other errors; inspect all action evidence.')
+                    'P11 recorded an artifact collision alongside other method outcomes; inspect all action evidence.')
                 phase['analysis']['what_happened'] = phase['action_outcome']
                 phase['analysis']['findings'] = phase['action_evidence']
     if any(p.get('id') == '05' and (p.get('events') or p.get('artifacts')) for p in report.get('phases', [])):
@@ -552,7 +561,7 @@ def redact_environment(value, environ):
 
 def outcome(event):
     upper = event.upper()
-    if upper in {"DNS_ACTION_PARTIAL", "WINDOWS_ACTION_PARTIAL", "PHASE_PARTIAL"}:
+    if upper in {"DNS_ACTION_PARTIAL", "WINDOWS_ACTION_PARTIAL", "PERSISTENCE_ACTION_PARTIAL", "PHASE_PARTIAL"}:
         return "partial"
     if any(word in upper for word in ("SKIPPED", "EXCLUDED")):
         return "skipped"
@@ -661,7 +670,7 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
             technique_ids = list(dict.fromkeys(t for e in phase_events for t in e['fields'].get('mitre', '').split(',') if mitre_url(t))) or technique_ids
             technique_names = {'T1071.004': 'DNS', 'T1132.001': 'Standard Encoding', 'T1190': 'Exploit Public-Facing Application', 'T1005': 'Data from Local System', 'T1685': 'Disable or Modify Tools', 'T1070': 'Indicator Removal', 'T1560.001': 'Archive via Utility', 'T1560.002': 'Archive via Library'}
             names = [technique_names.get(t, '') for t in technique_ids]
-        if phase_id == '11' and phase_events and any(e['fields'].get('method') in {'process', 'process-dns'} for e in phase_events):
+        if phase_id == '11' and phase_events and p11_process_only(phase_events):
             metadata['MITRE_TACTIC'] = 'Execution'
         recorded = {t for e in phase_events for t in e['fields'].get('mitre', '').split(',')} & set(technique_ids)
         if phase_id == '13' or phase_id in {'10', '11'} and recorded:
@@ -698,7 +707,7 @@ def build_report(base, incident_id, exit_code=0, environ=None, standalone=None):
         })
     now = datetime.now(timezone.utc).isoformat()
     prerequisite_skip = standalone is not None and standalone['phase_id'] in {'09', '10', '11', '12', '13', '14', '15', '16', '17', '18'} and exit_code == 78
-    status = "partial" if standalone is None and campaign.get("phases", {}).get("09") == "partial" and exit_code == 0 else "complete" if campaign.get("status") == "complete" and (exit_code == 0 or prerequisite_skip) else (
+    status = "partial" if standalone is None and any(campaign.get("phases", {}).get(pid) == "partial" for pid in ('09', '11')) and exit_code == 0 else "complete" if campaign.get("status") == "complete" and (exit_code == 0 or prerequisite_skip) else (
         "partial" if standalone is not None and standalone["phase_id"] in {"09", "18"} and exit_code == 80 else "interrupted" if exit_code in {130, 137, 143} else "failed")
     # A zero process exit does not prove that every selected phase finished.
     # Only explicit plan/state entries count; legacy reports include implicit

@@ -103,7 +103,10 @@ def perform_windows(target, env, session_factory=None):
         return dict(failure, **counts, stage=data['stage'], warning='powershell_payload_failed')
     if response.status_code != 0:
         return dict(failure, **counts, stage='process', warning='remote_powershell_nonzero_exit')
-    if method == 'task-service':
+    from p11_campaign import bounded, legacy_evidence
+    if method == 'service' and bounded(env):
+        result = legacy_evidence(output, env, 'windows')
+    elif method == 'task-service':
         result = evidence(output, env, 'windows')
     else:
         verified = output.strip() == 'MrNobody P11 verified'
@@ -129,6 +132,7 @@ METHODS = {'scheduled-task': ('windows', 'T1053.005', 'Scheduled Task'),
            'systemd': ('linux', 'T1543.002', 'Systemd Service'),
            'task-service': ('windows', 'T1053.005,T1543.003', 'Scheduled Task + Windows Service'),
            'cron-systemd': ('linux', 'T1053.003,T1543.002', 'Cron + Systemd Service')}
+METHODS['cron-systemd-process'] = ('linux', 'T1053.003,T1543.002,T1059.006', 'Cron + Systemd + Bounded Python Process')
 
 
 def configuration(env, platform):
@@ -139,7 +143,7 @@ def configuration(env, platform):
         raise ValueError('Persistence method is incompatible with platform')
     action = env.get('MRNOBODY_ACTION') or 'create'
     artifact = env.get('MRNOBODY_ARTIFACT') or 'telemetry'
-    if action not in ({'create', 'inspect', 'cleanup'} if method in {'systemd', 'cron-systemd', 'process', 'process-dns'} else {'create', 'cleanup'}) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,31}', artifact):
+    if action not in ({'create', 'inspect', 'cleanup'} if method in {'systemd', 'cron-systemd', 'cron-systemd-process', 'process', 'process-dns'} else {'create', 'cleanup'}) or not re.fullmatch(r'[a-z0-9][a-z0-9-]{0,31}', artifact):
         raise ValueError('Invalid persistence action/artifact')
     activity_configuration(env, method, action)
     return method, action, 'mrnobody-p11-' + artifact
@@ -147,6 +151,12 @@ def configuration(env, platform):
 
 def metadata(env, platform):
     method, action, name = configuration(env, platform)
+    from p11_campaign import bounded
+    if bounded(env) and method in {'cron', 'scheduled-task', 'service'}:
+        if method == 'service':
+            result = paired_metadata(env, platform, method, action, name)
+            result.update(scheduled_trigger='none', trigger_schedule='none')
+            return result
     if method in {'process', 'process-dns'}:
         c = activity_configuration(env, method, action)
         return dict(c, platform=platform, method=method, action=action, artifact=name,
@@ -298,6 +308,9 @@ except Exception:
 
 def _script(env, platform):
     method, action, name = configuration(env, platform)
+    from p11_campaign import bounded, script as campaign_script
+    if bounded(env) and method in {'cron', 'scheduled-task', 'service'}:
+        return campaign_script(env, platform, method, action, name)
     if method in {'process', 'process-dns'}:
         from linux_process import render
         return render(name, action, activity_configuration(env, method, action), env.get('MRNOBODY_PERSISTENCE_CPU') or 'idle')
@@ -416,7 +429,7 @@ if printf '%s\n' "$remaining" | grep -F -- "$marker" >/dev/null; then exit 1; fi
 '''
         return prelude + body + "\nprintf 'MrNobody P11 verified\\n'\n"
 # Explicit legacy methods retain their original payloads and cleanup identities.
-PAIRED = {'task-service', 'cron-systemd'}
+PAIRED = {'task-service', 'cron-systemd', 'cron-systemd-process'}
 
 
 def activity_configuration(env, method, action='create'):
@@ -516,7 +529,21 @@ def evidence(output, env, platform):
     if responses > attempts or attempts > 1440 or rcode not in {-1, 0, 3}:
         return dict(result='failed', warning='invalid_persistence_evidence', cleanup_required='true')
     enabled = activity_configuration(env, method)['persistence_dns'] == 'enabled'
-    return dict(paths, result='success', service_active='true', trigger_configured='false' if method == 'systemd' else 'true',
+    process = {}
+    from p11_campaign import bounded
+    if platform == 'windows' and bounded(env):
+        pid = re.findall(r'(?m)^MRN_P11_SERVICE_PID=([1-9][0-9]{0,9})\r?$', output)
+        if len(pid) != 1:
+            return dict(result='partial', warning='service_pid_unverified', cleanup_required='true')
+        process = dict(service_pid=int(pid[0]))
+    if platform == 'linux' and (method == 'cron-systemd-process' or bounded(env)):
+        pid = re.findall(r'(?m)^MRN_P11_PID=([1-9][0-9]{0,9})\r?$', output)
+        if len(pid) != 1:
+            return dict(result='partial', warning='process_pid_unverified', cleanup_required='true')
+        process = dict(process_pid=int(pid[0]), process_running='true')
+        if method == 'cron-systemd-process':
+            process.update(cpu_level='low', cpu_budget='20ms_per_second')
+    return dict(paths, **process, result='success', service_active='true', trigger_configured='false' if method == 'systemd' else 'true',
                 activity_deadline_utc_epoch=deadline, dns_attempts=attempts, dns_responses=responses,
                 last_query_utc_epoch_ms=last, last_dns_rcode=rcode,
                 dns_verification='matching_NOERROR_or_NXDOMAIN_response' if responses else 'not_observed',
@@ -537,8 +564,10 @@ def paired_script(env, platform, method, action, name):
                          str(c['query_interval']), str(c['activity_duration'])])
     packet = base64.b64encode(question(c['dns_domain'])).decode('ascii')
     if platform == 'windows':
-        return windows_pair(name, action, settings, packet)
-    return linux_pair(name, action, settings, packet, method)
+        from p11_campaign import bounded
+        return windows_pair(name, action, settings, packet, capture_pid=bounded(env))
+    from p11_campaign import bounded
+    return linux_pair(name, action, settings, packet, method, capture_pid=bounded(env))
 
 
 # Native ServiceBase compiled using the existing Windows .NET Framework compiler.
@@ -658,7 +687,7 @@ foreach ($child in Get-ChildItem -LiteralPath $dir -Force) {
 '''
 
 
-def windows_pair(name, action, settings, packet):
+def windows_pair(name, action, settings, packet, service_only=False, capture_pid=False):
     prelude = r"""
 $ErrorActionPreference = 'Stop'
 $name = '__NAME__'
@@ -763,6 +792,15 @@ Write-Output ('MRN_P11=1,1,' + $deadline + ',' + $status)
 Write-Output ('MRN_P11_PATH=artifact_path,' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($dir)))
 Write-Output ('MRN_P11_PATH=service_path,' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($exe)))
 """
+    if service_only and action != 'cleanup':
+        start = body.index("$p11Stage = 'task_create'")
+        end = body.index("$p11Stage = 'service_start'", start)
+        body = body[:start] + body[end:]
+        start = body.index('$verified = Get-ScheduledTask')
+        end = body.index('$status = ', start)
+        body = body[:start] + "if ((Get-Service -Name $name).Status -ne 'Running') { throw 'create_verification_failed' }\n" + body[end:]
+    if capture_pid and action != 'cleanup':
+        paths += "\n$pidEvidence = (Get-CimInstance Win32_Service -Filter \"Name='$name'\").ProcessId\nif ($pidEvidence -le 0) { throw 'create_verification_failed' }\nWrite-Output ('MRN_P11_SERVICE_PID=' + $pidEvidence)\n"
     source = (prelude + body + paths).replace('__NAME__', name)
     return windows_lock(source, name)
 
@@ -815,13 +853,22 @@ while time.time() < deadline and time.monotonic()-start < int(fields[4]) and att
 """
 
 
-def linux_pair(name, action, settings, packet, method='cron-systemd'):
+def linux_pair(name, action, settings, packet, method='cron-systemd', capture_pid=False):
     # Serialize cron RMW; quote user paths with the appropriate cron/systemd
     # rules. No sudo, implicit package installation, linger or stored secrets.
     worker = LINUX_WORKER.replace('__NAME__', name).replace('__SETTINGS__', settings).replace('__PACKET__', packet)
+    if method == 'cron-systemd-process':
+        # Visible native systemd MainPID; a single thread burns at most 20ms CPU
+        # per second. Both monotonic and UTC bounds stop it. No subprocess/C2.
+        worker = worker.replace('import base64, os,', 'import hashlib, base64, os,')
+        worker = worker.replace("    time.sleep(max(0, min(int(fields[3]), deadline-time.time())))", """    frame = time.monotonic()
+    cpu_start = time.process_time()
+    while time.process_time() - cpu_start < .02 and time.time() < deadline and time.monotonic()-start < int(fields[4]):
+        hashlib.sha256(b'MrNobody bounded lab activity').digest()
+    time.sleep(max(0, min(1., deadline-time.time()) - (time.monotonic()-frame)))""")
     setup = r"""import fcntl, os, pathlib, shlex, subprocess, time
 name = '__NAME__'
-paired = '__METHOD__' == 'cron-systemd'
+paired = '__METHOD__' in {'cron-systemd', 'cron-systemd-process'}
 stage = 'ownership'
 os.environ['XDG_RUNTIME_DIR'] = '/run/user/' + str(os.getuid())
 os.environ['DBUS_SESSION_BUS_ADDRESS'] = 'unix:path=' + os.environ['XDG_RUNTIME_DIR'] + '/bus'
@@ -970,6 +1017,8 @@ else:
     print('MRN_P11=1,1,%s,%s' % (deadline, status.read_text()))
 """
     setup += "\nimport base64\nfor key, path in [('artifact_path', directory), ('service_path', unit)]:\n    print('MRN_P11_PATH=%s,%s' % (key, base64.b64encode(str(path).encode()).decode()))\n"
+    if (method == 'cron-systemd-process' or capture_pid) and action != 'cleanup':
+        setup += "\npid = int(systemctl('show', name + '.service', '--property=MainPID', '--value').strip())\nif pid <= 0 or not pathlib.Path('/proc', str(pid)).exists():\n    raise SystemExit('worker_status_missing')\nprint('MRN_P11_PID=%s' % pid)\n"
     setup = setup.replace('__METHOD__', method).replace('__NAME__', name).replace('__ACTION__', action).replace('__SETTINGS__', settings).replace('__WORKER__', repr(worker))
     # Fixed diagnostics only; raw subprocess errors can contain target secrets.
     allowed = repr(LINUX_ERRORS)

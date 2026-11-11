@@ -26,23 +26,24 @@ $script:compilations = 0
 function Set-Acl { param($LiteralPath,$AclObject) if (-not $AclObject.AreAccessRulesProtected) { throw 'unprotected_acl' } }
 function Get-ScheduledTask { param($TaskName,$TaskPath,$ErrorAction) if($TaskPath -ne '\'){throw 'wrong_task_path'}; $script:task }
 function New-ScheduledTaskAction { param($Execute,$Argument) @{Execute=$Execute;Arguments=$Argument} }
-function New-ScheduledTaskTrigger { param([switch]$Daily,[switch]$Once,$At,$RepetitionInterval,$RepetitionDuration) @{At=$At;RepetitionInterval=$RepetitionInterval} }
+function New-ScheduledTaskTrigger { param([switch]$Daily,[switch]$Once,$At,$RepetitionInterval,$RepetitionDuration) [pscustomobject]@{At=$At;RepetitionInterval=$RepetitionInterval;EndBoundary=''} }
+function New-ScheduledTaskSettingsSet { param($ExecutionTimeLimit) @{ExecutionTimeLimit=$ExecutionTimeLimit} }
 function Stop-ScheduledTask { param($TaskName,$TaskPath,$ErrorAction) }
-function Register-ScheduledTask { param($TaskName,$TaskPath,$Description,$Action,$Trigger,$User,$RunLevel,[switch]$Force) if($TaskPath -ne '\'){throw 'wrong_task_path'}; $script:task = [pscustomobject]@{Description=$Description;Actions=$Action;Triggers=$Trigger} }
+function Register-ScheduledTask { param($TaskName,$TaskPath,$Description,$Action,$Trigger,$User,$RunLevel,$Settings,[switch]$Force) if($TaskPath -ne '\'){throw 'wrong_task_path'}; $script:task = [pscustomobject]@{Description=$Description;Actions=$Action;Triggers=$Trigger} }
 function Unregister-ScheduledTask { param($TaskName,$TaskPath,$Confirm) if($TaskPath -ne '\'){throw 'wrong_task_path'}; $script:task=$null }
 function Get-CimInstance { param($ClassName,$Filter) $script:service }
 function Add-Type { param($TypeDefinition,$ReferencedAssemblies,$OutputAssembly,$OutputType) $script:compilations++; [IO.File]::WriteAllBytes($OutputAssembly,[byte[]]@(1,2,3)) }
-function New-Service { param($Name,$BinaryPathName,$DisplayName,$Description,$StartupType) $script:service=[pscustomobject]@{Description=$Description;PathName=$BinaryPathName;State='Stopped';Status='Stopped'} }
+function New-Service { param($Name,$BinaryPathName,$DisplayName,$Description,$StartupType) $script:service=[pscustomobject]@{Description=$Description;PathName=$BinaryPathName;State='Stopped';Status='Stopped';ProcessId=1234} }
 function Start-Service { param($Name) $script:service.State='Running';$script:service.Status='Running'; $dir=Join-Path $env:ProgramData ('MrNobody\P11\'+$Name); if(Test-Path (Join-Path $dir 'config.txt')){[IO.File]::WriteAllText((Join-Path $dir 'status.txt'),'0,0,0,-1')} }
 function Stop-Service { param($Name,$ErrorAction) $script:service.State='Stopped';$script:service.Status='Stopped' }
 function Get-Service { param($Name) $script:service }
 function Invoke-CimMethod { param($InputObject,$MethodName) if($MethodName -ne 'Delete'){throw 'wrong_method'}; $script:service=$null; [pscustomobject]@{ReturnValue=0} }
 '''
-        for method in ('scheduled-task', 'service', 'task-service'):
+        for method, mode in ((m, mode) for mode in ('standalone','campaign') for m in ('scheduled-task','service','task-service')):
             # Core payload fixture exercises fresh create and ownership-safe cleanup.
             # Public create collision behavior is covered in p11_conflicts.py.
-            create = _script({'MRNOBODY_METHOD': method}, 'windows')
-            cleanup = script({'MRNOBODY_METHOD': method, 'MRNOBODY_ACTION': 'cleanup'}, 'windows')
+            create = _script({'MRNOBODY_METHOD': method, 'MRNOBODY_RUN_MODE': mode}, 'windows')
+            cleanup = script({'MRNOBODY_METHOD': method, 'MRNOBODY_ACTION': 'cleanup', 'MRNOBODY_RUN_MODE': mode}, 'windows')
             member = 'task' if method == 'scheduled-task' else 'service'
             fixture = providers
             fixture += "$dir=Join-Path $env:ProgramData 'MrNobody\\P11\\mrnobody-p11-telemetry'; $exe=Join-Path $dir 'mrnobody-p11-telemetry.exe'; $owner=Join-Path $dir 'owner.txt'; $config=Join-Path $dir 'config.txt'\n"
@@ -58,7 +59,7 @@ function Invoke-CimMethod { param($InputObject,$MethodName) if($MethodName -ne '
                 fixture += "$savedPath=$script:service.PathName; $script:service.PathName='unrelated.exe'\n"
                 fixture += "$blocked=$false; try { & {\n" + cleanup + "\n} } catch { $blocked=$_.Exception.Message -eq 'artifact_ownership_conflict' }; if(-not $blocked){throw 'binary_path_not_protected'}\n"
                 fixture += "$script:service.PathName=$savedPath\n"
-            if method == 'task-service':
+            if method == 'task-service' or method == 'service' and mode == 'campaign':
                 fixture += "$before=[IO.File]::ReadAllText($config)\n"
                 # Expired activity must not receive a fresh deadline on retry.
                 fixture += "[IO.File]::WriteAllLines($config,[string[]]@($before.Split([char]10)[0].TrimEnd([char]13),'0'))\n"

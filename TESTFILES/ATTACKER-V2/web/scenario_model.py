@@ -40,7 +40,7 @@ FIELDS = {
     'username': {'type': 'text', 'label': 'Username'},
     'timeout': {'type': 'timeout', 'label': 'Action timeout (seconds, 5–300)'},
     'platform': {'type': 'choice', 'label': 'Execution platform', 'options': ['auto', 'windows', 'linux']},
-    'method': {'type': 'choice', 'label': 'Persistence method', 'options': ['auto', 'task-service', 'cron-systemd', 'scheduled-task', 'service', 'cron', 'systemd', 'process', 'process-dns']},
+    'method': {'type': 'choice', 'label': 'Persistence method', 'options': ['auto', 'task-service', 'cron-systemd', 'cron-systemd-process', 'scheduled-task', 'service', 'cron', 'systemd', 'process', 'process-dns']},
     'persistence_cpu': {'type': 'choice', 'label': 'P11 process CPU level (0%, 2%, 10% of one core)', 'options': ['idle', 'low', 'medium'], 'default': 'idle'},
     'persistence_dns': {'type': 'choice', 'label': 'P11 periodic DNS activity', 'options': ['disabled', 'enabled'], 'default': 'disabled'},
     'persistence_domain': {'type': 'text', 'label': 'P11 reserved test domain (.test)', 'default': 'evilcorp.test'},

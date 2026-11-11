@@ -1263,7 +1263,7 @@ function mountStandalonePort(phase, form) {
 
 
 const p11MethodPlatforms = {"scheduled-task": "windows", service: "windows", "task-service": "windows",
-    cron: "linux", systemd: "linux", "cron-systemd": "linux", process: "linux", "process-dns": "linux"};
+    cron: "linux", systemd: "linux", "cron-systemd": "linux", "cron-systemd-process": "linux", process: "linux", "process-dns": "linux"};
 function mountP11Standalone(form) {
     const field = key => document.getElementById(`phase-11-${key}`);
     const help = (key, text) => {
@@ -1331,7 +1331,7 @@ function prepareP11Standalone(data) {
             data.platform !== "auto" && data.platform !== effective) return "P11: platform and protocol must match.";
     if (data.method !== "auto" && p11MethodPlatforms[data.method] !== effective) return "P11: method and platform must match.";
     if (!["create", "inspect", "cleanup"].includes(data.action)) return "P11: choose create, inspect or cleanup.";
-    if (data.action === "inspect" && !["systemd", "cron-systemd", "process", "process-dns"].includes(data.method)) return "P11: inspect is available for Linux services and processes.";
+    if (data.action === "inspect" && !["systemd", "cron-systemd", "cron-systemd-process", "process", "process-dns"].includes(data.method)) return "P11: inspect is available for Linux services and processes.";
     if (["process", "process-dns"].includes(data.method)) {
         data.persistence_dns = data.method === "process-dns" ? "enabled" : "disabled";
         if (data.action === "create" && ![300,900,1800,3600].includes(+data.persistence_duration)) return "P11: process lifetime must be 300, 900, 1800 or 3600 seconds.";
@@ -1351,7 +1351,7 @@ function prepareP11Standalone(data) {
         for (const key of ["persistence_domain", "persistence_resolver", "persistence_interval"]) delete data[key];
         return "";
     }
-    if (!["auto", "task-service", "cron-systemd", "systemd", "process-dns"].includes(data.method)) return "P11: DNS requires an Auto, service or process-dns method.";
+    if (!["auto", "task-service", "cron-systemd", "cron-systemd-process", "systemd", "process-dns"].includes(data.method)) return "P11: DNS requires an Auto, service or process-dns method.";
     if (!integer(data.persistence_interval, 10, 3600) || +data.persistence_interval > +data.persistence_duration) return "P11: DNS interval must be 10–3600 seconds and fit the lifetime.";
     if (!data.persistence_domain || data.persistence_domain.length > 120 ||
             !/^(?:[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?\.)+test$/.test(data.persistence_domain)) return "P11: use a lowercase reserved .test domain.";
@@ -1470,7 +1470,7 @@ function renderPhaseDetail(phase) {
             if (["10", "11"].includes(phase.id)) input.value = "winrm-http";
         } else if (["10", "11"].includes(phase.id) && ["platform", "method", "action", "protocol"].includes(parameter)) {
             input = document.createElement("select");
-            const choices = {platform: ["auto", "windows", "linux"], method: ["auto", "task-service", "cron-systemd", "scheduled-task", "service", "cron", "systemd", "process", "process-dns"], action: ["create", "inspect", "cleanup"], protocol: ["", "ssh", "winrm-http", "winrm-https"]}[parameter];
+            const choices = {platform: ["auto", "windows", "linux"], method: ["auto", "task-service", "cron-systemd", "cron-systemd-process", "scheduled-task", "service", "cron", "systemd", "process", "process-dns"], action: ["create", "inspect", "cleanup"], protocol: ["", "ssh", "winrm-http", "winrm-https"]}[parameter];
             choices.forEach(value => {const option = document.createElement("option"); option.value = value; option.textContent = value || "Choose transport"; input.appendChild(option);});
         } else if (phase.id === "11" && parameter === "persistence_cpu") {
             input = document.createElement("select");
@@ -1556,7 +1556,7 @@ function renderPhaseDetail(phase) {
                 const input = document.getElementById(`phase-${phase.id}-${key}`);
                 if (!input) continue;
                 for (const option of input.options) {
-                    option.hidden = !!option.value && option.value !== "auto" && mode !== "auto" && (["ssh", "cron", "systemd", "cron-systemd", "process", "process-dns"].includes(option.value)) !== (mode === "linux");
+                    option.hidden = !!option.value && option.value !== "auto" && mode !== "auto" && (["ssh", "cron", "systemd", "cron-systemd", "cron-systemd-process", "process", "process-dns"].includes(option.value)) !== (mode === "linux");
                     option.disabled = option.hidden;
                 }
                 if (input.selectedOptions[0]?.disabled) input.value = usesStandalonePort(phase) && key === "protocol"
