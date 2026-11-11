@@ -170,7 +170,7 @@ class LinuxPreflight(unittest.TestCase):
             worker=home/'.config/mrnobody/mrnobody-p11-telemetry/worker.py'
             (entry/'cmdline').write_bytes(b'/usr/bin/python3\0'+str(worker).encode()+b'\0--worker\0unknown-token\0')
             ns={};exec(p.LINUX_PREFLIGHT,ns)
-            real_path=Path
+            real_path=type(home)
             constructor=Mock(side_effect=lambda value:proc if value=='/proc' else real_path(value))
             constructor.home.return_value=home
             with patch('pathlib.Path',constructor),patch('shutil.which',return_value=None):
