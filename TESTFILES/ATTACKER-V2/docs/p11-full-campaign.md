@@ -54,7 +54,8 @@ All success -> SUCCESS/exit 0. All controlled skips or no eligible targets ->
 SKIPPED/exit 78. Any success mixed with skips/errors, or partial target evidence ->
 PARTIAL/exit 80. Errors without any success/partial result -> FAILED/exit 1.
 Full Campaign handles exit 80 as partial and continues, retaining partial overall
-status. A wholly failed P11 keeps the existing campaign failure behavior.
+status. A wholly failed P11 is recorded as FAILED while independent later phases
+still run; final campaign status and exit remain failed.
 
 ## Stop, cleanup and validation after update
 

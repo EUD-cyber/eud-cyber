@@ -115,6 +115,8 @@ class Orchestration(unittest.TestCase):
         self.assertIn('P11_ARTIFACT_EXISTS',truth)
         self.assertIn('cleanup_required=false',truth.replace('"',''))
         self.assertIn('worker_execution_failed',truth)
+        self.assertIn('partial=1',truth.replace('"',''))
+        self.assertIn('target_verification=p03_ssh_session_marker',truth.replace('"',''))
         self.assertIn('not_assessed_requires_sensor_evidence',truth)
         for reply,expected in [(collision,78),(dict(result='failed'),1)]:
             code,calls,truth=self.execute(reply)
@@ -130,6 +132,17 @@ class Orchestration(unittest.TestCase):
                 remote.run('11',env,invoke);remote.run('11',dict(env,MRNOBODY_ACTION='cleanup'),invoke)
             self.assertEqual([r['MRNOBODY_ARTIFACT'] for r in calls[:4]],[r['MRNOBODY_ARTIFACT'] for r in calls[4:]])
             self.assertTrue(all(r['MRNOBODY_ACTION']=='cleanup' for r in calls[4:]))
+
+    @unittest.skipUnless(shutil.which('bash') and os.name!='nt','Bash campaign fixture on Linux CI')
+    def test_wholly_failed_p11_continues_independent_phases_and_fails_campaign(self):
+        sys.path.insert(0,str(Path(__file__).parent))
+        from full_incident import FullIncidentTests,IDS
+        result,dispatched,state,truth=FullIncidentTests().run_campaign(child_code=1)
+        self.assertNotEqual(result.returncode,0)
+        self.assertEqual(dispatched,IDS)
+        self.assertEqual(state['phases']['11'],'failed')
+        self.assertEqual(state['status'],'failed')
+        self.assertNotIn('CAMPAIGN_COMPLETE',truth)
 
     @unittest.skipUnless(shutil.which('bash') and os.name!='nt','Bash campaign fixture on Linux CI')
     def test_partial_campaign_continues_and_remains_partial(self):

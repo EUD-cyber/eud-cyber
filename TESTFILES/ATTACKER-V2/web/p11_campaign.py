@@ -87,6 +87,7 @@ def run(env, invoke):
                     MRNOBODY_PERSISTENCE_DNS='disabled', MRNOBODY_PERSISTENCE_CPU='low',
                     MRNOBODY_PERSISTENCE_DURATION='300', MRN_REMOTE_TARGET=json.dumps(target))
                 fields = dict(target, method=method, action_attempted=action, activity_duration=300,
+                    target_verification='p03_ssh_session_marker' if target['platform'] == 'linux' else 'p03_read_only_windows_identity',
                     activity_deadline_utc_epoch='unverified_until_target_receipt',
                     cleanup_policy='manual_artifacts_automatic_activity_stop',
                     detection='not_assessed_requires_sensor_evidence')
@@ -125,7 +126,8 @@ def run(env, invoke):
         event, code = 'PHASE_FAILED', 1
     emit(base, env, '11', event, phase='11', attempted=len(outcomes),
          reason='no_p03_verified_targets' if not outcomes else 'per_method_outcomes',
-         success=outcomes.count('success'), skipped=outcomes.count('skipped'), failed=outcomes.count('failed'))
+         success=outcomes.count('success'), skipped=outcomes.count('skipped'), failed=outcomes.count('failed'),
+         partial=outcomes.count('partial'))
     return code
 
 

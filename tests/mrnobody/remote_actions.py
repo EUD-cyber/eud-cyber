@@ -149,14 +149,18 @@ class Actions(unittest.TestCase):
                 self.assertIn('artifact_ownership_conflict',create)
                 self.assertIn('cleanup_verification_failed',cleanup)
             elif method not in {'process', 'process-dns'}:
-                self.assertEqual(remote.perform('11',TARGET,env,ssh=Mock(return_value=framed(output=b'MRN_P11=1,1,1900000000,0,0,0,-1') if method in persistence.PAIRED | {'systemd'} else framed()))['result'],'success')
+                receipt = b'MRN_P11=1,1,1900000000,0,0,0,-1'
+                if method == 'cron-systemd-process':
+                    receipt += b'\nMRN_P11_PID=1234\n'
+                self.assertEqual(remote.perform('11',TARGET,env,ssh=Mock(return_value=framed(output=receipt) if method in persistence.PAIRED | {'systemd'} else framed()))['result'],'success')
         self.assertNotIn('sudo ',persistence.script(dict(self.env,MRNOBODY_METHOD='systemd'),'linux'))
         unsupported = remote.perform('11',TARGET,self.env,ssh=Mock(return_value=framed(78)))
         self.assertEqual(unsupported['result'],'skipped')
 
     def inventory(self, hosts):
         p=self.base/'hosts.json'
-        p.write_text(json.dumps({'incident_id':self.env['NORDIC_INCIDENT_ID'],'hosts':hosts}))
+        p.write_text(json.dumps({'producer':'P03','schema_version':2,'complete':True,
+            'run_mode':'campaign','incident_id':self.env['NORDIC_INCIDENT_ID'],'hosts':hosts}))
         self.env.update(MRNOBODY_RUN_MODE='campaign',NORDIC_COMPROMISED_STATE=str(p))
         self.env.pop('MRNOBODY_TARGET',None)
         self.env.pop('MRNOBODY_PROTOCOL',None)
@@ -180,7 +184,9 @@ class Actions(unittest.TestCase):
         transport=response(dict(result='failed',warning='transport_error_details_omitted'))
         success=response(dict(result='success',exit_code=0,stdout_preview='safe',stderr_preview=''))
         command=response(dict(result='action_error',exit_code=2,execution_status='command_error'))
-        for pid in ('10','11'):
+        # P10 retains first-compatible-target fallback. P11 now attempts every
+        # verified host/method; its failure isolation lives in p11_campaign.py.
+        for pid in ('10',):
             for results, expected in (([transport,success],0),([transport,transport],1)):
                 with context_stdout():self.assertEqual(remote.run(pid,self.env,Mock(side_effect=results)),expected)
         with context_stdout():
@@ -323,7 +329,7 @@ esac
             # Full Incident uses real P10/P11 after an inert access fixture.
             for p in (base/'scripts').glob('0[1-9]-*.sh'):p.write_text('#!/bin/sh\nexit 0\n')
             access=next((base/'scripts').glob('03-*.sh'))
-            access.write_text('#!/bin/sh\nprintf \'{"incident_id":"%s","hosts":[{"ip":"192.168.1.10","platform":"linux","access":"ssh","compromised":true}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
+            access.write_text('#!/bin/sh\nprintf \'{"producer":"P03","schema_version":2,"complete":true,"run_mode":"campaign","incident_id":"%s","hosts":[{"ip":"192.168.1.10","platform":"linux","access":"ssh","compromised":true}]}\' "$NORDIC_INCIDENT_ID" > "$NORDIC_COMPROMISED_STATE"\n')
             for mode in ('normal','slow','custom'):
                 value=definition('10','auto',platform='linux')
                 value['profile']={'mode':mode,'duration':60 if mode=='slow' else 0}
@@ -353,7 +359,8 @@ esac
             self.assertEqual(next(p for p in report['phases'] if p['id']=='10')['status'],'success')
             p11=next(p for p in report['phases'] if p['id']=='11')
             self.assertEqual(p11['status'],'skipped')
-            self.assertEqual(p11['artifact_collisions'][0]['action'],'not_attempted')
+            self.assertEqual(p11.get('method_results'), [])
+            self.assertNotIn('artifact_collisions', p11)
             self.assertEqual(next(p for p in report['phases'] if p['id']=='04')['status'],'success')
 
 

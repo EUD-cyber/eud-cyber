@@ -303,6 +303,10 @@ write_files:
           "$INSTALL_DIR/web/persistence_actions.py"
 
       download_file \
+          "web/p11_campaign.py" \
+          "$INSTALL_DIR/web/p11_campaign.py"
+
+      download_file \
           "web/linux_process.py" \
           "$INSTALL_DIR/web/linux_process.py"
 
@@ -310,6 +314,10 @@ write_files:
       download_file \
           "docs/p11-linux-standalone.md" \
           "$INSTALL_DIR/docs/p11-linux-standalone.md"
+
+      download_file \
+          "docs/p11-full-campaign.md" \
+          "$INSTALL_DIR/docs/p11-full-campaign.md"
 
       download_file \
           "web/scenario_model.py" \

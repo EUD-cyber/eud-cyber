@@ -718,6 +718,13 @@ run_phase() {
         return 0
     fi
 
+    if [[ "$NUMBER" == "11" && $RESULT -eq 1 ]]; then
+        RUN_PHASE_STATUS="failed"
+        update_phase_state "$NUMBER" "failed"
+        log "[PHASE $NUMBER] FAILED - P11 actions failed; continuing independent phases, campaign remains failed"
+        return 0
+    fi
+
     if [[ "$NUMBER" == "11" && $RESULT -eq 80 ]]; then
         RUN_PHASE_STATUS="partial"
         update_phase_state "$NUMBER" "partial"
