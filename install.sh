@@ -461,6 +461,10 @@ configure_vm_resources() {
     export KALI01_MEM="${KALI01_MEM:-4096}"
     export KALI01_HDD="${KALI01_HDD:-32G}"
 
+    export KALI02_CPU="${KALI02_CPU:-2}"
+    export KALI02_MEM="${KALI02_MEM:-4096}"
+    export KALI02_HDD="${KALI02_HDD:-32G}"
+
     export WAZUH_CPU="${WAZUH_CPU:-2}"
     export WAZUH_MEM="${WAZUH_MEM:-4096}"
     export WAZUH_HDD="${WAZUH_HDD:-80G}"
@@ -468,6 +472,10 @@ configure_vm_resources() {
     export APPSRV01_CPU="${APPSRV01_CPU:-2}"
     export APPSRV01_MEM="${APPSRV01_MEM:-2048}"
     export APPSRV01_HDD="${APPSRV01_HDD:-32G}"
+
+    export TPOT01_CPU="${TPOT01_CPU:-2}"
+    export TPOT01_MEM="${TPOT01_MEM:-4096}"
+    export TPOT01_HDD="${TPOT01_HDD:-60G}"
 
     export MRNOBODY_CPU="${MRNOBODY_CPU:-2}"
     export MRNOBODY_MEM="${MRNOBODY_MEM:-2048}"
@@ -813,10 +821,8 @@ esac
 
 select_lab_count
 require_file "$SCRIPT_DIR/deploy.sh"
-if [[ "$SPEC" == "Big" ]]; then
-  if ! select_optional_components; then
-    exit 0
-  fi
+if ! select_optional_components; then
+  exit 0
 fi
 configure_vm_resources
 bash "$SCRIPT_DIR/deploy.sh" "$SPEC" "$LABCOUNT" "${OPTIONAL_COMPONENTS[@]}"

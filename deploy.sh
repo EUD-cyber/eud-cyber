@@ -3,11 +3,11 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 
 # CyberLab deployment phase; the caller owns profile/component selection.
-# Usage: bash deploy.sh Big|Mini [lab-count] [Big component ...]
+# Usage: bash deploy.sh Big|Mini [lab-count] [component ...]
 # Examples:
 #   bash deploy.sh Big 1
 #   bash deploy.sh Big 2 WAZUH MRNOBODY
-#   bash deploy.sh Mini 2
+#   bash deploy.sh Mini 2 WAZUH MRNOBODY
 # Image/storage/network and VM_CPU/VM_MEM/VM_HDD settings come from install.sh.
 # Example override: APPSRV01_CPU=2 APPSRV01_MEM=2048 APPSRV01_HDD=32G
 # Direct Mini calls must supply their hardware overrides; profile defaults live
@@ -22,8 +22,8 @@ log() { printf '[+] %s\n' "$*"; }
 require_command() { command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"; }
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
-    printf 'Usage: bash deploy.sh Big|Mini [1-16] [Big component ...]\n'
-    printf 'Big components: VULNSRV02 KALI02 APPSRV01 CLIENT01 WAZUH TPOT MRNOBODY\n'
+    printf 'Usage: bash deploy.sh Big|Mini [1-16] [component ...]\n'
+    printf 'Optional components: VULNSRV02 KALI02 APPSRV01 CLIENT01 WAZUH TPOT MRNOBODY\n'
     printf 'Example: bash deploy.sh Big 2 WAZUH MRNOBODY\n'
     exit 0
 fi
@@ -39,39 +39,26 @@ export SPEC LABCOUNT
 
 OPNSENSE="OPNSENSE/OPNSENSE_installer.sh"
 GUAC_CONFIG="GUACVM/GUACVM_ip.sh"
-VM_SCRIPTS=()
-
-if [[ "$SPEC" == "Big" ]]; then
-    VM_SCRIPTS=("GUACVM/GUACVM_installer.sh"
-                "KALI01/KALI01_installer.sh"
-                "VULNSRV01/VULNSRV01_installer.sh")
-    declare -A selected=()
-    for component in "${@:3}"; do
-        # Accept individual quoted tags returned by whiptail as well.
-        component="${component//\"/}"
-        [[ -n "$component" ]] || die "Empty optional component."
-        [[ -z "${selected[$component]:-}" ]] || continue
-        case "$component" in
-            VULNSRV02|KALI02|APPSRV01|CLIENT01|WAZUH)
-                VM_SCRIPTS+=("${component}/${component}_installer.sh") ;;
-            TPOT) VM_SCRIPTS+=("TPOT01/TPOT01_installer.sh") ;;
-            MRNOBODY) VM_SCRIPTS+=("MRNOBODY/mrnobody_installer.sh") ;;
-            *) die "Unknown Big component: $component" ;;
-        esac
-        selected[$component]=1
-    done
-else
-    (( $# <= 2 )) || die "Mini uses a fixed VM selection; optional components are only supported for Big."
-    # Both profiles use the same lab-aware VM installers. Only selection and
-    # hardware overrides from install.sh differ.
-    VM_SCRIPTS=("GUACVM/GUACVM_installer.sh"
-                "CLIENT01/CLIENT01_installer.sh"
-                "VULNSRV01/VULNSRV01_installer.sh"
-                "VULNSRV02/VULNSRV02_installer.sh"
-                "KALI01/KALI01_installer.sh"
-                "WAZUH/WAZUH_installer.sh"
-                "APPSRV01/APPSRV01_installer.sh")
-fi
+# Both profiles have the same base VMs and optional components.
+# Profile-specific hardware values are supplied by install.sh.
+VM_SCRIPTS=("GUACVM/GUACVM_installer.sh"
+            "KALI01/KALI01_installer.sh"
+            "VULNSRV01/VULNSRV01_installer.sh")
+declare -A selected=()
+for component in "${@:3}"; do
+    # Accept individual quoted tags returned by whiptail as well.
+    component="${component//\"/}"
+    [[ -n "$component" ]] || die "Empty optional component."
+    [[ -z "${selected[$component]:-}" ]] || continue
+    case "$component" in
+        VULNSRV02|KALI02|APPSRV01|CLIENT01|WAZUH)
+            VM_SCRIPTS+=("${component}/${component}_installer.sh") ;;
+        TPOT) VM_SCRIPTS+=("TPOT01/TPOT01_installer.sh") ;;
+        MRNOBODY) VM_SCRIPTS+=("MRNOBODY/mrnobody_installer.sh") ;;
+        *) die "Unknown optional component: $component" ;;
+    esac
+    selected[$component]=1
+done
 
 # Validate per-VM hardware overrides before any configuration or host setup.
 # HDD retains each VM installer's existing resize semantics (+SIZE).
