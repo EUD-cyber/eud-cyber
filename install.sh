@@ -36,7 +36,7 @@ INTERNET_KALI_IMG="https://kali.download/cloud-images/kali-2025.4/kali-linux-202
 
 DEFAULT_IMAGE_SERVER="http://10.134.71.139"
 
-OPNSENSE_VERSION="26.1.2"
+OPNSENSE_VERSION="26.7"
 INTERNET_OPNSENSE_IMG="https://pkg.opnsense.org/releases/${OPNSENSE_VERSION}/OPNsense-${OPNSENSE_VERSION}-nano-amd64.img.bz2"
 
 ###############################################################################
