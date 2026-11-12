@@ -1,10 +1,117 @@
-# eud-cyber
+# 🛡️ CyberLab
+### Automated Cybersecurity Training & Penetration Testing Platform
 
-Automated CyberLab environment for technical education.
+**CyberLab** is an open-source, Proxmox-based cybersecurity training platform designed for hands-on education in ethical hacking, network security, threat detection, and incident response.
 
-## Install
+Deploy complete, isolated cybersecurity environments where students can **attack, defend, investigate, and learn** using real-world security tools.
 
-Run as root on a Proxmox host:
+Built for 🔴 **Red Team**, 🔵 **Blue Team**, and 🟣 **Purple Team** training.
+
+---
+
+## 🚀 Key Features
+
+- 🖥️ **Automated Deployment** – Deploy complete virtual training environments on Proxmox VE.
+- 🏗️ **Multi-Lab Support** – Create up to 16 independent labs on a single Proxmox host.
+- ⚡ **Flexible Resources** – Big and Mini profiles with configurable CPU, RAM, and disk allocation.
+- 🌐 **CyberLab V2 Portal** – A modern browser-based interface for accessing lab systems and tools.
+- 🐉 **Offensive Security** – Kali Linux and intentionally vulnerable targets.
+- 🛡️ **Defensive Security** – Wazuh SIEM/XDR for monitoring and threat investigation.
+- 🐳 **Docker Management** – Portainer integration for managing containers and Docker Compose stacks.
+- 🗺️ **Interactive Topology** – Visualize, edit, and save custom network diagrams.
+- 📦 **CyberRepo Integration** – Download VM images from a local image server or the internet.
+- 🔧 **Modular Architecture** – Add specialized security systems when needed.
+
+---
+
+## 🏗️ Architecture
+
+CyberLab runs on **Proxmox VE**, using Open vSwitch and OPNsense to create segmented virtual networks.
+
+```mermaid
+flowchart TB
+    USER["👨‍💻 Student / Instructor"]
+    PORTAL["🌐 CyberLab V2 Portal"]
+    PVE["🖥️ Proxmox VE"]
+
+    USER --> PORTAL
+    PVE --> PORTAL
+
+    PVE --> FW["🔥 OPNsense"]
+    PORTAL --> GUAC["Apache Guacamole"]
+    PORTAL --> DOCKER["🐳 Portainer"]
+    PORTAL --> TOPO["🗺️ Network Topology"]
+
+    FW --> RED["🔴 Red Team"]
+    FW --> BLUE["🔵 Blue Team"]
+    FW --> TARGET["🎯 Vulnerable Targets"]
+
+    RED --> KALI["Kali Linux"]
+    BLUE --> WAZUH["Wazuh SIEM"]
+    TARGET --> VULN["Vulnerable Linux"]
+    TARGET --> WEB["OWASP Juice Shop"]
+```
+
+### 🖥️ Core Systems
+
+CyberLab includes four essential systems, with additional virtual machines available during deployment.
+
+| Component | Purpose |
+|---|---|
+| **OPNsense** | Firewall, routing, and network segmentation |
+| **GUACVM** | CyberLab V2 portal, Guacamole, and Portainer |
+| **Kali01** | Penetration testing and ethical hacking |
+| **VulnSrv01** | Vulnerable Linux training target |
+
+### 🧩 Optional Components
+
+| Component | Purpose |
+|---|---|
+| **Wazuh** | SIEM, XDR, threat detection, and log analysis |
+| **Kali02** | Additional penetration testing workstation |
+| **VulnSrv02** | Additional vulnerable Linux target |
+| **AppSrv01** | Docker workloads and application security exercises |
+| **Client01** | Ubuntu desktop for endpoint security training |
+| **T-Pot** | Honeypot and threat intelligence platform |
+| **MrNobody** | Automated attack simulation and security exercise platform |
+
+Additional standalone tools and deployment scripts are available in the repository.
+
+**Windows Server 2025** may be integrated separately for Active Directory and Windows security exercises but is not part of the core CyberLab installer.
+
+---
+
+## 🌐 Network Infrastructure
+
+CyberLab uses **Open vSwitch (OVS)** and OPNsense to provide network isolation, routing, and segmentation.
+
+| Network | Subnet | Purpose |
+|---|---|---|
+| LAN1 | 192.168.1.0/24 | Workstations and attack systems |
+| LAN2 | 192.168.2.0/24 | Server and security infrastructure |
+| OOBM | 172.20.0.0/24 | Out-of-band management |
+
+Each lab receives dedicated virtual network infrastructure and lab-specific VM names.
+
+---
+
+## 🌍 CyberLab V2 Web Portal
+
+The integrated HTTPS portal provides a central interface for accessing and working with the laboratory environment.
+
+- **Connections** – Browser-based SSH, RDP, VNC, and HTTPS access.
+- **Labs** – Portainer-based Docker and container management.
+- **Topology** – Interactive network diagram editor with persistent storage.
+- **Documentation** – Built-in configuration and usage guides.
+- **Settings** – Dedicated area for portal configuration and future enhancements.
+
+All accessible through a standard web browser, without requiring separate remote desktop clients.
+
+---
+
+## ⚡ Automated Deployment
+
+CyberLab provides a menu-driven Bash installer with dynamic hardware calculations and optional VM selection.
 
 ```bash
 git clone https://github.com/EUD-cyber/eud-cyber.git
@@ -12,102 +119,68 @@ cd eud-cyber
 bash install.sh
 ```
 
-Choose image source, storage and WAN bridge, then Big or Mini and 1-16 labs.
-Both profiles include OPNsense, GUACVM, Kali01 and VulnSrv01 and have the same
-optional VMs. Only the hardware allocation differs. The menu reads VM defaults
-from their scripts; editable Mini overrides remain in the root `install.sh`.
-It displays basis requirements and updates the total as optional VMs are selected.
+### Installation Profiles
 
-All OPNsense installers finish in the foreground. Remaining VMs install
-sequentially, lab by lab, in the `deploy-all` tmux session.
+- **Big** – Full-size hardware allocation for laboratory systems.
+- **Mini** – Reduced hardware allocation for smaller servers.
 
-```bash
-tmux attach -t deploy-all
-tail -f INSTALLFILES/deploy.log
-```
+Both profiles use the same core systems and offer the same optional components.
 
-## Repository layout
+The installer supports **1–16 labs** and displays estimated total vCPU, RAM, and disk requirements before deployment.
 
 ```text
-install.sh              Main entry point, choices and Mini hardware overrides
-README.md
-INSTALLFILES/           Deployment, VM scripts, cloud-init, assets, docs and tests
-.github/                GitHub workflows (must stay at the repository root)
+CyberLab Installer
+│
+├── Select image source
+│   ├── Internet
+│   └── CyberRepo
+│
+├── Select storage and network
+│
+├── Select profile
+│   ├── Big
+│   └── Mini
+│
+├── Number of labs (1–16)
+│
+├── Select optional systems
+│
+└── Deploy CyberLab
 ```
 
-Runtime logs and downloaded images are created inside `INSTALLFILES/`.
-Run standalone support scripts and tests from that directory.
+Each VM receives a unique lab-based name, such as `lab1-kali01` or `lab2-opnsense`.
 
-Legacy files have an `_archive` suffix and are not used by the current installer.
-See [the archive inventory](INSTALLFILES/ARCHIVE.md) before deleting them manually.
-No archived file is automatically deleted.
+Deployment starts with OPNsense, followed by the remaining systems. Existing lab-name conflicts are checked before installation to protect previously deployed environments.
 
-Existing compatibility notes: Proxmox 9.1, 9.1.1 and 9.2.
+---
 
-## Existing deployments
+## 🎯 Cybersecurity Training
 
-This repository move does not rewrite files inside VMs that are already installed.
-Existing MrNobody updaters must use the new
-`main/INSTALLFILES/TESTFILES/ATTACKER-V2` source path.
+CyberLab supports hands-on security exercises across multiple disciplines.
 
-Cloud-init snippets cached on a Proxmox host can still contain the old download
-URLs. Before reusing an older snippet for a new lab, refresh it from the matching
-template in `INSTALLFILES/<VM>/`. Existing VMs are not modified automatically.
+- 🔴 **Red Team** – Reconnaissance, vulnerability scanning, exploitation, and web security.
+- 🔵 **Blue Team** – SIEM monitoring, threat detection, alert investigation, and incident response.
+- 🟣 **Purple Team** – Attack simulations, MITRE ATT&CK mapping, and detection validation.
+- 🌐 **Network Security** – Firewalls, segmentation, access control, and network analysis.
+- 🔐 **Application Security** – OWASP Top 10, insecure configurations, and vulnerable applications.
+- 🔎 **SOC Operations** – Log analysis, threat hunting, and security investigations.
 
-## After installation
+The platform enables students to experience both sides of cybersecurity: **how attacks happen and how defenders respond.**
 
-Remember when the vm is created and started, the cloud-init goes to work so it can be some time before all things work, to check this use proxmox and login to the vm and type "cloud-init status" if it "running" grap a cup of coffee and wait for it to be "done"
+---
 
+## 🧰 Technology Stack
 
-When the GUACVM is up and running and the cloud-init is done, just https://ip_address (the ip adresse you gave it on the installation) \
-Then theres a guacamole/nat connection to all vm's on either ssh, gui, vnc or rdp, for there you can start labs on the vm's (docker compose) 
+`Proxmox VE` · `KVM/QEMU` · `Open vSwitch` · `OPNsense` · `Kali Linux` · `Wazuh` · `Docker` · `Portainer` · `Apache Guacamole` · `Ubuntu` · `OWASP Juice Shop` · `MrNobody` · `Python` · `Flask` · `Bash`
 
-passwords: 
+---
 
-opnsense \
-user: root pass: opnsense 
+## ⚠️ Disclaimer
 
-guacamole \
-user: guacadmin pass: guacadmin 
+CyberLab is intended for **authorized cybersecurity education, research, and testing only**.
 
-ubuntu \
-user: ubuntu pass: Password1! 
+The platform contains intentionally vulnerable systems and offensive security tools. All testing must be performed within controlled, isolated environments with appropriate authorization.
 
-wazuh \
-user: ubuntu pass: Password1! \
-webuser: admin webpass: Password1?
+---
 
-Network \
-  guacvm \
-    vmbri0  static/dhcp \
-    oobm  172.20.0.1/24 \
-  opnsense \
-    vmbri0  static/dhcp \
-    lan1  192.168.1.1/24 \
-    lan2  192.168.2.1/24 \
-    oobm  172.20.0.2/24 \
-  vulnsrv01 \
-    lan1  192.168.1.20/24 \
-    oobm  172.20.0.10/24 \
-  vulnsrv02 \
-    lan2 192.168.2.21/24 \
-    oobm 172.20.0.21/24 \
-  kali01 \
-    lan1  192.168.1.100/24 \
-    oobm  172.20.0.11/24  \
-  kali02 \
-    lan1  192.168.1.150/24 \
-    oobm  172.20.0.100/24 \
-  client01 \
-    lan1 192.168.1.120/24 \
-    oobm 172.20.0.15 \
-  wazuh
-    lan2 192.168.2.20/24 \
-    oobm 172.20.0.20 \
-  appsrv01 \
-    lan2 192.168.2.25/24 \
-    oobm 172.20.0.25 \
-  server2025 \
-    lan2 192.168.2.22/24 \
-    oobm 172.20.0.22/24 
-    
+### 🛡️ CyberLab — Learn. Attack. Detect. Defend.
