@@ -468,6 +468,10 @@ configure_vm_resources() {
     export APPSRV01_CPU="${APPSRV01_CPU:-2}"
     export APPSRV01_MEM="${APPSRV01_MEM:-2048}"
     export APPSRV01_HDD="${APPSRV01_HDD:-32G}"
+
+    export MRNOBODY_CPU="${MRNOBODY_CPU:-2}"
+    export MRNOBODY_MEM="${MRNOBODY_MEM:-2048}"
+    export MRNOBODY_HDD="${MRNOBODY_HDD:-32G}"
   fi
 }
 
