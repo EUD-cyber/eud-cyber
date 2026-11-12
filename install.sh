@@ -378,53 +378,8 @@ infer_opnsense_version() {
 # Lab selection and deployment
 ###############################################################################
 
-select_lab_count() {
-  while true; do
-    read -r -p "Hvor mange labs? [1]: " LABCOUNT ||
-      die "Installation cancelled: no lab count received."
-    LABCOUNT="${LABCOUNT:-1}"
-    if [[ "$LABCOUNT" =~ ^([1-9]|1[0-6])$ ]]; then
-      export LABCOUNT
-      return
-    fi
-    echo "Invalid number. Must be between 1 and 16."
-  done
-}
-
-# Keep menu choices here; deploy.sh owns the installation phases.
+# Menu choices are passed to deploy.sh; VM installation stays there.
 OPTIONAL_COMPONENTS=()
-
-select_optional_components() {
-  local options component
-  local -a components=()
-
-  command_exists whiptail || die "whiptail is required for optional VM selection."
-  if ! options=$(whiptail --title "CyberLab - Optional Components" \
-    --checklist "Preparing ${LABCOUNT} lab(s). Basic: OPNsense, Guacamole, Kali01, VulnSrv01." \
-    25 78 12 \
-    VULNSRV02 "Vulnerable Server 02" OFF \
-    KALI02 "Secondary Kali attacker" OFF \
-    APPSRV01 "Security Application Server" OFF \
-    CLIENT01 "Ubuntu Client" OFF \
-    WAZUH "Wazuh SIEM" OFF \
-    TPOT "T-Pot Honeypot" OFF \
-    MRNOBODY "MrNobody Attack VM" OFF \
-    3>&1 1>&2 2>&3); then
-    echo "Installation cancelled."
-    return 1
-  fi
-
-  # Pass each quoted whiptail tag as a separate argument to deploy.sh.
-  IFS=' ' read -r -a components <<< "$options"
-  for component in "${components[@]}"; do
-    component="${component//\"/}"
-    case "$component" in
-      VULNSRV02|KALI02|APPSRV01|CLIENT01|WAZUH|TPOT|MRNOBODY)
-        OPTIONAL_COMPONENTS+=("$component") ;;
-      *) die "Unknown optional component: $component" ;;
-    esac
-  done
-}
 
 ###############################################################################
 # VM hardware overrides
@@ -481,6 +436,47 @@ configure_vm_resources() {
     export MRNOBODY_MEM="${MRNOBODY_MEM:-2048}"
     export MRNOBODY_HDD="${MRNOBODY_HDD:-32G}"
   fi
+}
+
+select_deployment() {
+  local profile selection menu_status
+  local -a menu_selection=()
+  require_file "$SCRIPT_DIR/installer_menu.py"
+  require_file "$SCRIPT_DIR/deploy.sh"
+
+  MENU_PROFILES_FILE="$(mktemp)"
+  MENU_SELECTION_FILE="$(mktemp)"
+  # Retain cleanup of the CyberRepo manifest as well as menu files.
+  trap 'rm -f -- "${MENU_PROFILES_FILE:-}" "${MENU_SELECTION_FILE:-}" "${MANIFEST_FILE:-}"' EXIT
+
+  # Each profile runs in its own subshell, so Mini overrides cannot leak into Big.
+  # Read current VM defaults without sourcing or executing any VM installer.
+  for profile in Big Mini; do
+    (
+      export SPEC="$profile"
+      configure_vm_resources
+      python3 "$SCRIPT_DIR/installer_menu.py" resources "$profile" --root "$SCRIPT_DIR"
+    ) >> "$MENU_PROFILES_FILE"
+  done
+
+  if python3 "$SCRIPT_DIR/installer_menu.py" choose \
+      --profiles "$MENU_PROFILES_FILE" --output "$MENU_SELECTION_FILE"; then
+    :
+  else
+    menu_status=$?
+    if [[ "$menu_status" -eq 130 ]]; then
+      echo "Installation cancelled."
+      exit 0
+    fi
+    die "Cannot open the deployment menu. Use an interactive terminal."
+  fi
+
+  selection="$(python3 "$SCRIPT_DIR/installer_menu.py" selection "$MENU_SELECTION_FILE")" ||
+    die "Cannot read deployment choices."
+  mapfile -t menu_selection <<< "$selection"
+  export SPEC="${menu_selection[0]}"
+  export LABCOUNT="${menu_selection[1]}"
+  OPTIONAL_COMPONENTS=("${menu_selection[@]:2}")
 }
 
 ###############################################################################
@@ -801,28 +797,6 @@ echo "ISO storage:  ${LOCAL}"
 echo "Disk storage: ${LVM}"
 echo "Bridge:       ${BRIDGE}"
 echo
-echo "1) Big"
-echo "2) Mini"
-echo "0) Exit"
-echo
-echo "======================================================"
-
-read -r -p "Select deployment type: " choice
-
-case "$choice" in
-  1) export SPEC="Big" ;;
-  2) export SPEC="Mini" ;;
-  0)
-    echo "Exiting..."
-    exit 0
-    ;;
-  *) die "Invalid deployment option." ;;
-esac
-
-select_lab_count
-require_file "$SCRIPT_DIR/deploy.sh"
-if ! select_optional_components; then
-  exit 0
-fi
+select_deployment
 configure_vm_resources
 bash "$SCRIPT_DIR/deploy.sh" "$SPEC" "$LABCOUNT" "${OPTIONAL_COMPONENTS[@]}"
