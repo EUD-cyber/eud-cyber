@@ -427,10 +427,10 @@ deploy_labs() {
   local -a vm_scripts=()
 
   opnsense="OPNSENSE/OPNSENSE_installer.sh"
-  guac_config="GUACVM02/GUACVM02_ip.sh"
+  guac_config="GUACVM/GUACVM_ip.sh"
 
   if [[ "$SPEC" == "Big" ]]; then
-    vm_scripts=("GUACVM02/GUACVM02_installer.sh"
+    vm_scripts=("GUACVM/GUACVM_installer.sh"
                 "KALI01/KALI01_installer.sh"
                 "VULNSRV01/VULNSRV01_installer.sh")
     command_exists whiptail || die "whiptail is required for optional VM selection."
@@ -463,11 +463,11 @@ deploy_labs() {
     done
   else
     opnsense="OPNSENSE/OPNSENSE_mini_multi_installer.sh"
-    guac_config="GUACVM/GUACVM_ip_multi.sh"
+    guac_config="GUACVM/GUACVM_ip.sh"
     # Retain the existing Mini VM selection and lab-aware installers.
     # Client01/AppSrv01 require the missing lab-aware Mini scripts; the
     # validation below stops safely until those scripts are available.
-    vm_scripts=("GUACVM/GUACVM_multi_installer.sh"
+    vm_scripts=("GUACVM/GUACVM_installer.sh"
                 "CLIENT01/CLIENT01_mini_multi_installer.sh"
                 "VULNSRV01/VULNSRV01_mini_multi_installer.sh"
                 "VULNSRV02/VULNSRV02_mini_multi_installer.sh"

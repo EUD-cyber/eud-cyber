@@ -2,8 +2,8 @@
 set -e
 
 REPO="./repo.sh"
-GUACVM_IP="./GUACVM/GUACVM_ip_multi.sh"
-GUACVM="./GUACVM/GUACVM_multi_installer.sh"
+GUACVM_IP="./GUACVM/GUACVM_ip.sh"
+GUACVM="./GUACVM/GUACVM_installer.sh"
 OPENVSWITCHPRE="./open-vswitch-multi-pre.sh"
 OPENVSWITCH="./open-vswitch-multi.sh"
 OPENVSWITCHLAST="./open-vswitch-multi-last.sh"

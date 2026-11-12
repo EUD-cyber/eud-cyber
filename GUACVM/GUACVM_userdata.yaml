@@ -342,30 +342,30 @@ runcmd:
   - chmod 755 /opt/guacamole/data
 
   # Frontend
-  - wget -O /opt/guacamole/nginx/web/index.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/index.html
-  - wget -O /opt/guacamole/nginx/web/style.css https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/style.css
-  - wget -O /opt/guacamole/nginx/web/app.js https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/app.js
-  - wget -O /opt/guacamole/nginx/web/sessions.js https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/sessions.js
-  - wget -O /opt/guacamole/nginx/web/documentation.js https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/documentation.js
-  - wget -O /opt/guacamole/nginx/nginx.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/nginx.conf
+  - wget -O /opt/guacamole/nginx/web/index.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/index.html
+  - wget -O /opt/guacamole/nginx/web/style.css https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/style.css
+  - wget -O /opt/guacamole/nginx/web/app.js https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/app.js
+  - wget -O /opt/guacamole/nginx/web/sessions.js https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/sessions.js
+  - wget -O /opt/guacamole/nginx/web/documentation.js https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/documentation.js
+  - wget -O /opt/guacamole/nginx/nginx.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/nginx.conf
   # Pages
-  - wget -O /opt/guacamole/nginx/web/pages/labs.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/pages/labs.html
-  - wget -O /opt/guacamole/nginx/web/pages/documentation.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/pages/documentation.html
-  - wget -O /opt/guacamole/nginx/web/pages/topology.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/pages/topology.html
-  - wget -O /opt/guacamole/nginx/web/pages/settings.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nginx/web/pages/settings.html
+  - wget -O /opt/guacamole/nginx/web/pages/labs.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/pages/labs.html
+  - wget -O /opt/guacamole/nginx/web/pages/documentation.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/pages/documentation.html
+  - wget -O /opt/guacamole/nginx/web/pages/topology.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/pages/topology.html
+  - wget -O /opt/guacamole/nginx/web/pages/settings.html https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nginx/web/pages/settings.html
 
   # Scripts
-  - wget -O /opt/guacamole/scripts/backup-guacamole-db.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/scripts/backup-guacamole-db.sh
-  - wget -O /opt/guacamole/scripts/restore-guacamole-db.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/scripts/restore-guacamole-db.sh
-  - wget -O /opt/guacamole/nat.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/nat.sh
+  - wget -O /opt/guacamole/scripts/backup-guacamole-db.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/scripts/backup-guacamole-db.sh
+  - wget -O /opt/guacamole/scripts/restore-guacamole-db.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/scripts/restore-guacamole-db.sh
+  - wget -O /opt/guacamole/nat.sh https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/nat.sh
 
   # API
-  - wget -O /opt/guacamole/topology-api/app.py https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/topology-api/app.py
-  - wget -O /opt/guacamole/topology-api/requirements.txt https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/topology-api/requirements.txt
+  - wget -O /opt/guacamole/topology-api/app.py https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/topology-api/app.py
+  - wget -O /opt/guacamole/topology-api/requirements.txt https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/topology-api/requirements.txt
   
 
   # Optional DB backup
-  - wget -O /opt/guacamole/backups/guacamole-db.sql.gz https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM02/backups/guacamole-db.sql.gz || rm -f /opt/guacamole/backups/guacamole-db.sql.gz
+  - wget -O /opt/guacamole/backups/guacamole-db.sql.gz https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/GUACVM/backups/guacamole-db.sql.gz || rm -f /opt/guacamole/backups/guacamole-db.sql.gz
 
   - chmod +x /opt/guacamole/scripts/*.sh
   - chmod +x /opt/guacamole/nat.sh

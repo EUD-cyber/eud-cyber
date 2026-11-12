@@ -37,8 +37,8 @@ OPENVSWITCHLAST="./open-vswitch-last.sh"
 OPNSENSE="./OPNSENSE/OPNSENSE_installer.sh"
 OPNSENSECONF="./OPNSENSE/generate_config.sh"
 
-GUACVM02="./GUACVM02/GUACVM02_installer.sh"
-GUACVM02_IP="./GUACVM02/GUACVM02_ip.sh"
+GUACVM="./GUACVM/GUACVM_installer.sh"
+GUACVM_IP="./GUACVM/GUACVM_ip.sh"
 
 VULNSRV01="./VULNSRV01/VULNSRV01_installer.sh"
 VULNSRV02="./VULNSRV02/VULNSRV02_installer.sh"
@@ -167,7 +167,7 @@ configure_guacamole() {
     echo "Configure Guacamole before deployment."
     echo
 
-    bash "$GUACVM02_IP" "$LAB"
+    bash "$GUACVM_IP" "$LAB"
 
     echo
     echo "Guacamole configuration completed."
@@ -414,7 +414,7 @@ echo '========================================'
 echo ' Creating Guacamole'
 echo '========================================'
 
-bash '$GUACVM02' '$LAB'
+bash '$GUACVM' '$LAB'
 
 
 # ============================================================
@@ -719,7 +719,7 @@ while true; do
 
             configure_guacamole
 
-            bash "$GUACVM02" "$LAB"
+            bash "$GUACVM" "$LAB"
 
             pause
 
