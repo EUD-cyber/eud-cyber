@@ -22,27 +22,6 @@ packages:
   - docker.io
   - qemu-guest-agent
 
-write_files:
-  - path: /etc/sysctl.d/99-mirror.conf
-    permissions: "0644"
-    content: |
-         net.ipv4.ip_forward=0
-      
-  - path: /etc/systemd/system/mirror-ens20.service
-    permissions: "0644"
-    content: |
-      [Unit]
-      After=network.target
-
-      [Service]
-      Type=oneshot
-      ExecStart=/sbin/ip addr flush dev ens20
-      ExecStart=/sbin/ip link set ens20 up
-      ExecStart=/sbin/ethtool -K ens20 tx off rx off tso off gso off gro off lro off
-
-      [Install]
-      WantedBy=multi-user.target
-      
 runcmd:
   - apt-get update
   - apt-get install -y docker-compose-v2 
@@ -50,7 +29,6 @@ runcmd:
   - systemctl start docker
   - systemctl enable qemu-guest-agent
   - systemctl start qemu-guest-agent
-  - systemctl enable mirror-eth2.service
   - usermod -aG docker ubuntu
   - mkdir -p /opt/suricata
   - wget -O /opt/suricata/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INSTALLFILES/DOCKERFILES/SURICATA/docker-compose.yml

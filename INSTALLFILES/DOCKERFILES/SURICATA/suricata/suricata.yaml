@@ -25,7 +25,7 @@ logging:
   default-log-level: info
 
 af-packet:
-  - interface: ens20
+  - interface: ens18
     cluster-id: 99
     cluster-type: cluster_flow
     defrag: yes

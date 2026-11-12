@@ -34,7 +34,6 @@ CORES="${APPSRV01_CPU:-4}"
 DISK_SIZE="${APPSRV01_HDD:-32G}"    # the number is in GB
 BRIDGE="lab${LAB}_lan2"
 BRIDGE1="lab${LAB}_oobm"
-BRIDGE2="lab${LAB}_lan1"
 IP_ADDR="ip=192.168.2.25/24"
 DNS_SERVER="192.168.2.1"
 IP_GW="gw=192.168.2.1"
@@ -91,7 +90,6 @@ qm create $VMID \
   --cpu host \
   --net0 virtio,bridge=$BRIDGE \
   --net1 virtio,bridge=$BRIDGE1 \
-  --net2 virtio,bridge=$BRIDGE2 \
   --ostype l26
 
 # ===== Add LVM disk =====
