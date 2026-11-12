@@ -23,9 +23,9 @@ echo "===== OPNSENSE installation started at $(date) ====="
 ### ===== VARIABLES =====
 START_VMID=$((LAB * 1000))
 BASE_NAME="lab${LAB}-opnsense"
-RAM=4096
-CORES=4
-DISK_SIZE="30G"
+RAM="${OPNSENSE_MEM:-4096}"
+CORES="${OPNSENSE_CPU:-4}"
+DISK_SIZE="${OPNSENSE_HDD:-30G}"
 
 # Proxmox storage
 DISK_STORAGE="${LVM:-local-lvm}"

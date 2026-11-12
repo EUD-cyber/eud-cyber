@@ -28,9 +28,9 @@ IMG_NAME="noble-server-cloudimg-amd64.img"
 IMG_PATH="$(pwd)/$IMG_NAME"
 ISO_STORAGE="${LOCAL:-local}"
 DISK_STORAGE="${LVM:-local-lvm}"
-MEMORY=16380      # in MB
-CORES=4
-DISK_SIZE="60G"    # the number is in GB
+MEMORY="${TPOT01_MEM:-16380}"      # in MB
+CORES="${TPOT01_CPU:-4}"
+DISK_SIZE="${TPOT01_HDD:-60G}"    # the number is in GB
 BRIDGE="lab${LAB}_lan1"
 BRIDGE1="lab${LAB}_oobm"
 IP_ADDR="ip=192.168.1.210/24"

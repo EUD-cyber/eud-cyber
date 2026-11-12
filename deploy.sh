@@ -8,7 +8,10 @@ IFS=$'\n\t'
 #   bash deploy.sh Big 1
 #   bash deploy.sh Big 2 WAZUH MRNOBODY
 #   bash deploy.sh Mini 2
-# Image/storage/network settings are inherited from exported installer variables.
+# Image/storage/network and VM_CPU/VM_MEM/VM_HDD settings come from install.sh.
+# Example override: APPSRV01_CPU=2 APPSRV01_MEM=2048 APPSRV01_HDD=32G
+# Direct Mini calls must supply their hardware overrides; profile defaults live
+# in install.sh. Unset overrides use the shared VM installers\' original defaults.
 # This file does not replace or modify install.sh or the individual VM scripts.
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -59,18 +62,39 @@ if [[ "$SPEC" == "Big" ]]; then
     done
 else
     (( $# <= 2 )) || die "Mini uses a fixed VM selection; optional components are only supported for Big."
-    OPNSENSE="OPNSENSE/OPNSENSE_mini_multi_installer.sh"
-    # Preserve the existing Mini selection. Do not substitute legacy single-lab
-    # scripts: those use unprefixed names and different bridges.
-    # Client01/AppSrv01 lab-aware Mini scripts must exist before Mini can run.
+    # Both profiles use the same lab-aware VM installers. Only selection and
+    # hardware overrides from install.sh differ.
     VM_SCRIPTS=("GUACVM/GUACVM_installer.sh"
-                "CLIENT01/CLIENT01_mini_multi_installer.sh"
-                "VULNSRV01/VULNSRV01_mini_multi_installer.sh"
-                "VULNSRV02/VULNSRV02_mini_multi_installer.sh"
-                "KALI01/KALI01_mini_multi_installer.sh"
-                "WAZUH/WAZUH_mini_multi_installer.sh"
-                "APPSRV01/APPSRV01_mini_multi_installer.sh")
+                "CLIENT01/CLIENT01_installer.sh"
+                "VULNSRV01/VULNSRV01_installer.sh"
+                "VULNSRV02/VULNSRV02_installer.sh"
+                "KALI01/KALI01_installer.sh"
+                "WAZUH/WAZUH_installer.sh"
+                "APPSRV01/APPSRV01_installer.sh")
 fi
+
+# Validate per-VM hardware overrides before any configuration or host setup.
+# HDD retains each VM installer's existing resize semantics (+SIZE).
+RESOURCE_KEYS=(OPNSENSE GUACVM KALI01 KALI02 VULNSRV01 VULNSRV02
+               APPSRV01 CLIENT01 WAZUH TPOT01 MRNOBODY)
+HARDWARE_SETTINGS=()
+for resource_key in "${RESOURCE_KEYS[@]}"; do
+    for resource_type in CPU MEM HDD; do
+        setting="${resource_key}_${resource_type}"
+        HARDWARE_SETTINGS+=("$setting")
+        if [[ -v "$setting" ]]; then
+            value="${!setting}"
+            if [[ "$resource_type" == "HDD" ]]; then
+                [[ "$value" =~ ^[1-9][0-9]*[GMT]$ ]] ||
+                    die "$setting must be a positive size such as 32G."
+            else
+                [[ "$value" =~ ^[1-9][0-9]*$ ]] ||
+                    die "$setting must be a positive integer (MEM is in MB)."
+            fi
+            export "$setting"
+        fi
+    done
+done
 
 # Validate the complete plan before writing logs/configuration or running setup.
 missing=()
@@ -159,7 +183,7 @@ done
 # An existing tmux server may retain old environment values. Pass the settings
 # selected by install.sh explicitly, clearing stale values when they are unset.
 settings=(SPEC LABCOUNT LINUX_IMG KALI_IMG WAZUH_IMG OPNSENSE_IMG_URL
-          OPNSENSE_VERSION LOCAL LVM BRIDGE)
+          OPNSENSE_VERSION LOCAL LVM BRIDGE "${HARDWARE_SETTINGS[@]}")
 worker_env=(env)
 for setting in "${settings[@]}"; do
     worker_env+=(-u "$setting")

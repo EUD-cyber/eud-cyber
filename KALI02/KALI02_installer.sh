@@ -29,10 +29,12 @@ IMG_PATH="$(pwd)/KALI02/$IMG_NAME"
 DISK="disk.raw"
 ISO_STORAGE="${LOCAL:-local}"
 DISK_STORAGE="${LVM:-local-lvm}"
-MEMORY=16384     # in MB
-CORES=4
+MEMORY="${KALI02_MEM:-16384}"     # in MB
+CORES="${KALI02_CPU:-4}"
+# A CPU override is a total vCPU count; preserve the original topology by default.
 SOCKETS=2
-DISK_SIZE="32G" # the number is in GB
+if [[ -n "${KALI02_CPU:-}" ]]; then SOCKETS=1; fi
+DISK_SIZE="${KALI02_HDD:-32G}" # the number is in GB
 BRIDGE="lab${LAB}_lan1"
 BRIDGE1="lab${LAB}_oobm"
 IP_ADDR="ip=192.168.1.150/24,gw=192.168.1.1"

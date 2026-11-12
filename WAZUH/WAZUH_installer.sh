@@ -28,10 +28,12 @@ IMG_NAME="noble-server-cloudimg-amd64.img"
 IMG_PATH="$(pwd)/$IMG_NAME"
 ISO_STORAGE="${LOCAL:-local}"
 DISK_STORAGE="${LVM:-local-lvm}"
-MEMORY=16384       # in MB
-CORES=4
+MEMORY="${WAZUH_MEM:-16384}"       # in MB
+CORES="${WAZUH_CPU:-4}"
+# A CPU override is a total vCPU count; preserve the original topology by default.
 SOCKETS=2
-DISK_SIZE="60G"    # the number is in GB
+if [[ -n "${WAZUH_CPU:-}" ]]; then SOCKETS=1; fi
+DISK_SIZE="${WAZUH_HDD:-60G}"    # the number is in GB
 BRIDGE="lab${LAB}_lan2"
 BRIDGE1="lab${LAB}_oobm"
 IP_ADDR="ip=192.168.2.20/24"

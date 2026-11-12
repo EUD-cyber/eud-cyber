@@ -427,6 +427,51 @@ select_optional_components() {
 }
 
 ###############################################################################
+# VM hardware overrides
+###############################################################################
+
+configure_vm_resources() {
+  # Big uses the defaults inside each shared VM installer.
+  # Mini values below are editable examples. An exported override takes priority.
+  # CPU = total vCPUs, MEM = MB. HDD follows the existing disk expansion (+...G),
+  # so it is added to the imported image rather than setting a final disk size.
+  # Example for a future custom setup: APPSRV01_MEM=3072 bash install.sh
+  if [[ "$SPEC" == "Mini" ]]; then
+    export OPNSENSE_CPU="${OPNSENSE_CPU:-2}"
+    export OPNSENSE_MEM="${OPNSENSE_MEM:-2048}"
+    export OPNSENSE_HDD="${OPNSENSE_HDD:-30G}"
+
+    export GUACVM_CPU="${GUACVM_CPU:-4}"
+    export GUACVM_MEM="${GUACVM_MEM:-4096}"
+    export GUACVM_HDD="${GUACVM_HDD:-32G}"
+
+    export CLIENT01_CPU="${CLIENT01_CPU:-2}"
+    export CLIENT01_MEM="${CLIENT01_MEM:-4096}"
+    export CLIENT01_HDD="${CLIENT01_HDD:-32G}"
+
+    export VULNSRV01_CPU="${VULNSRV01_CPU:-2}"
+    export VULNSRV01_MEM="${VULNSRV01_MEM:-2048}"
+    export VULNSRV01_HDD="${VULNSRV01_HDD:-32G}"
+
+    export VULNSRV02_CPU="${VULNSRV02_CPU:-2}"
+    export VULNSRV02_MEM="${VULNSRV02_MEM:-2048}"
+    export VULNSRV02_HDD="${VULNSRV02_HDD:-32G}"
+
+    export KALI01_CPU="${KALI01_CPU:-2}"
+    export KALI01_MEM="${KALI01_MEM:-4096}"
+    export KALI01_HDD="${KALI01_HDD:-32G}"
+
+    export WAZUH_CPU="${WAZUH_CPU:-2}"
+    export WAZUH_MEM="${WAZUH_MEM:-4096}"
+    export WAZUH_HDD="${WAZUH_HDD:-80G}"
+
+    export APPSRV01_CPU="${APPSRV01_CPU:-2}"
+    export APPSRV01_MEM="${APPSRV01_MEM:-2048}"
+    export APPSRV01_HDD="${APPSRV01_HDD:-32G}"
+  fi
+}
+
+###############################################################################
 # Validate host
 ###############################################################################
 
@@ -769,4 +814,5 @@ if [[ "$SPEC" == "Big" ]]; then
     exit 0
   fi
 fi
+configure_vm_resources
 bash "$SCRIPT_DIR/deploy.sh" "$SPEC" "$LABCOUNT" "${OPTIONAL_COMPONENTS[@]}"
