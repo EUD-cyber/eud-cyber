@@ -24,6 +24,8 @@ SCRIPT_DIR="$(
   pwd
 )"
 
+INSTALL_DIR="$SCRIPT_DIR/INSTALLFILES"
+
 cd "$SCRIPT_DIR"
 
 ###############################################################################
@@ -441,8 +443,8 @@ configure_vm_resources() {
 select_deployment() {
   local profile selection menu_status
   local -a menu_selection=()
-  require_file "$SCRIPT_DIR/installer_menu.py"
-  require_file "$SCRIPT_DIR/deploy.sh"
+  require_file "$INSTALL_DIR/installer_menu.py"
+  require_file "$INSTALL_DIR/deploy.sh"
 
   MENU_PROFILES_FILE="$(mktemp)"
   MENU_SELECTION_FILE="$(mktemp)"
@@ -455,11 +457,11 @@ select_deployment() {
     (
       export SPEC="$profile"
       configure_vm_resources
-      python3 "$SCRIPT_DIR/installer_menu.py" resources "$profile" --root "$SCRIPT_DIR"
+      python3 "$INSTALL_DIR/installer_menu.py" resources "$profile" --root "$INSTALL_DIR"
     ) >> "$MENU_PROFILES_FILE"
   done
 
-  if python3 "$SCRIPT_DIR/installer_menu.py" choose \
+  if python3 "$INSTALL_DIR/installer_menu.py" choose \
       --profiles "$MENU_PROFILES_FILE" --output "$MENU_SELECTION_FILE"; then
     :
   else
@@ -471,7 +473,7 @@ select_deployment() {
     die "Cannot open the deployment menu. Use an interactive terminal."
   fi
 
-  selection="$(python3 "$SCRIPT_DIR/installer_menu.py" selection "$MENU_SELECTION_FILE")" ||
+  selection="$(python3 "$INSTALL_DIR/installer_menu.py" selection "$MENU_SELECTION_FILE")" ||
     die "Cannot read deployment choices."
   mapfile -t menu_selection <<< "$selection"
   export SPEC="${menu_selection[0]}"
@@ -799,4 +801,4 @@ echo "Bridge:       ${BRIDGE}"
 echo
 select_deployment
 configure_vm_resources
-bash "$SCRIPT_DIR/deploy.sh" "$SPEC" "$LABCOUNT" "${OPTIONAL_COMPONENTS[@]}"
+bash "$INSTALL_DIR/deploy.sh" "$SPEC" "$LABCOUNT" "${OPTIONAL_COMPONENTS[@]}"

@@ -1,24 +1,60 @@
 # eud-cyber
-This github if created for the cyber education on danish technical colleges to create a safe and automated lab environment for the students to pratice in, but its free for all to download and play with
 
-This script is testet with proxmox 9.1, 9.1.1 and 9.2
+Automated CyberLab environment for technical education.
 
-just git clone this site and run  run install.sh \
+## Install
 
-When installing you have the install options.
+Run as root on a Proxmox host:
 
-Big install 
-Big install multilab 
-Mini install (not done yet)
-Mini install multillab (not done yet)
+```bash
+git clone https://github.com/EUD-cyber/eud-cyber.git
+cd eud-cyber
+bash install.sh
+```
 
-big = hardware need x cores, 100 gb memory, 200 gb hdd
-mini = hardware need x cores, x gb memory, x gb hdd
-multilab = ask for x labs and the install the number, vm and network is called labx-
+Choose image source, storage and WAN bridge, then Big or Mini and 1-16 labs.
+Both profiles include OPNsense, GUACVM, Kali01 and VulnSrv01 and have the same
+optional VMs. Only the hardware allocation differs. The menu reads VM defaults
+from their scripts; editable Mini overrides remain in the root `install.sh`.
+It displays basis requirements and updates the total as optional VMs are selected.
 
-When choosen 90 i the install theres an option to install other vm in the lab, default is guacvm, opnsense, kali01, vulnsrv01, all the vm is on a single lan named lan1 the option vm og on either lan1 or lan2 see it in the option in the install
+All OPNsense installers finish in the foreground. Remaining VMs install
+sequentially, lab by lab, in the `deploy-all` tmux session.
 
-In the multi lab install it ask how many labs you want to install then it runs the input script x times for input on the guacvm and opnsense ip adresse, and create a labx_lanx network for each lab, then it runs all installation in a tmux session that waits for the other to complete.
+```bash
+tmux attach -t deploy-all
+tail -f INSTALLFILES/deploy.log
+```
+
+## Repository layout
+
+```text
+install.sh              Main entry point, choices and Mini hardware overrides
+README.md
+INSTALLFILES/           Deployment, VM scripts, cloud-init, assets, docs and tests
+.github/                GitHub workflows (must stay at the repository root)
+```
+
+Runtime logs and downloaded images are created inside `INSTALLFILES/`.
+Run standalone support scripts and tests from that directory.
+
+Legacy files have an `_archive` suffix and are not used by the current installer.
+See [the archive inventory](INSTALLFILES/ARCHIVE.md) before deleting them manually.
+No archived file is automatically deleted.
+
+Existing compatibility notes: Proxmox 9.1, 9.1.1 and 9.2.
+
+## Existing deployments
+
+This repository move does not rewrite files inside VMs that are already installed.
+Existing MrNobody updaters must use the new
+`main/INSTALLFILES/TESTFILES/ATTACKER-V2` source path.
+
+Cloud-init snippets cached on a Proxmox host can still contain the old download
+URLs. Before reusing an older snippet for a new lab, refresh it from the matching
+template in `INSTALLFILES/<VM>/`. Existing VMs are not modified automatically.
+
+## After installation
 
 Remember when the vm is created and started, the cloud-init goes to work so it can be some time before all things work, to check this use proxmox and login to the vm and type "cloud-init status" if it "running" grap a cup of coffee and wait for it to be "done"
 

@@ -5,12 +5,15 @@ on:
     branches:
       - main
     paths:
-      - "TESTFILES/ATTACKER-V2/**"
+      - "INSTALLFILES/TESTFILES/ATTACKER-V2/**"
       - ".github/workflows/mrnobody-manifest.yml"
 
 permissions:
   contents: write
 
+defaults:
+  run:
+    working-directory: INSTALLFILES
 jobs:
   build-manifest:
     runs-on: ubuntu-latest

@@ -1,0 +1,47 @@
+#cloud-config
+
+hostname: vulnsrv02
+manage_etc_hosts: true
+
+users:
+  - name: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
+
+ssh_pwauth: true
+chpasswd:
+  expire: false
+
+packages:
+  - ca-certificates
+  - curl
+  - docker.io
+  - qemu-guest-agent
+
+runcmd:
+  - apt-get update
+  - apt-get install -y docker-compose-v2 
+  - systemctl enable docker
+  - systemctl start docker
+  - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent
+  - usermod -aG docker ubuntu
+  - mkdir -p /opt/juiceshop
+  - mkdir -p /opt/dvwa
+  - mkdir -p /opt/juiceshop-waf
+  - wget -O /opt/juiceshop-waf/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INSTALLFILES/DOCKERFILES/JUICESHOP-WAF/docker-compose.yml
+  - wget -O /opt/juiceshop-waf/default.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INSTALLFILES/DOCKERFILES/JUICESHOP-WAF/default.conf
+  - wget -O /opt/juiceshop/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INSTALLFILES/DOCKERFILES/JUICESHOP/docker-compose.yml
+  - wget -O /opt/juiceshop/default.conf https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INSTALLFILES/DOCKERFILES/JUICESHOP/default.conf
+  - wget -O /opt/dvwa/docker-compose.yml https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INSTALLFILES/DOCKERFILES/DVWA/docker-compose.yml
+  - chown -R ubuntu:ubuntu /opt
+  - docker compose -f /opt/juiceshop/docker-compose.yml pull
+  - docker compose -f /opt/dvwa/docker-compose.yml pull
+
+power_state:
+  mode: poweroff
+  message: "Cloud-init finished - powering off"
+  timeout: 30
+  condition: True
