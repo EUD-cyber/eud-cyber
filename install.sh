@@ -40,15 +40,6 @@ OPNSENSE_VERSION="26.1.2"
 INTERNET_OPNSENSE_IMG="https://pkg.opnsense.org/releases/${OPNSENSE_VERSION}/OPNsense-${OPNSENSE_VERSION}-nano-amd64.img.bz2"
 
 ###############################################################################
-# Deployment scripts
-###############################################################################
-
-BIG_INSTALL="${SCRIPT_DIR}/big_install.sh"
-MINI_INSTALL="${SCRIPT_DIR}/mini_install.sh"
-MULTI_INSTALL="${SCRIPT_DIR}/multi_big_install.sh"
-MULTI_INSTALL_MINI="${SCRIPT_DIR}/multi_mini_install.sh"
-
-###############################################################################
 # Helper functions
 ###############################################################################
 
@@ -383,6 +374,151 @@ infer_opnsense_version() {
     warning "Keeping configured version: ${OPNSENSE_VERSION}"
   fi
 }
+###############################################################################
+# Lab selection and deployment
+###############################################################################
+
+select_lab_count() {
+  while true; do
+    read -r -p "Hvor mange labs? [1]: " LABCOUNT ||
+      die "Installation cancelled: no lab count received."
+    LABCOUNT="${LABCOUNT:-1}"
+    if [[ "$LABCOUNT" =~ ^([1-9]|1[0-6])$ ]]; then
+      export LABCOUNT
+      return
+    fi
+    echo "Invalid number. Must be between 1 and 16."
+  done
+}
+
+check_existing_labs() {
+  local inventory
+  inventory="$(pvesh get /cluster/resources --type vm --output-format json)" ||
+    die "Cannot check existing VMs; installation stopped."
+
+  # Check the entire cluster, including stopped VMs and containers.
+  python3 - "$LABCOUNT" "$inventory" <<'PY'
+import json
+import re
+import sys
+
+count = int(sys.argv[1])
+resources = json.loads(sys.argv[2])
+if not isinstance(resources, list):
+    raise SystemExit("Invalid VM inventory; installation stopped.")
+conflicts = []
+for vm in resources:
+    name = str(vm.get("name", ""))
+    match = re.match(r"^lab(\d+)[-_]", name, re.IGNORECASE)
+    if match and 1 <= int(match.group(1)) <= count:
+        conflicts.append(f"{vm.get('vmid', '?')}: {name}")
+if conflicts:
+    raise SystemExit(
+        "Existing VMs/containers found in the selected labs:\n"
+        + "\n".join(conflicts)
+        + "\nInstallation stopped. No existing VMs will be replaced."
+    )
+PY
+}
+
+deploy_labs() {
+  local lab script component options session command
+  local opnsense guac_config
+  local -a vm_scripts=()
+
+  opnsense="OPNSENSE/OPNSENSE_installer.sh"
+  guac_config="GUACVM02/GUACVM02_ip.sh"
+
+  if [[ "$SPEC" == "Big" ]]; then
+    vm_scripts=("GUACVM02/GUACVM02_installer.sh"
+                "KALI01/KALI01_installer.sh"
+                "VULNSRV01/VULNSRV01_installer.sh")
+    command_exists whiptail || die "whiptail is required for optional VM selection."
+    if ! options=$(whiptail --title "CyberLab - Optional Components" \
+      --checklist "Preparing ${LABCOUNT} lab(s). Basic: OPNsense, Guacamole, Kali01, VulnSrv01." \
+      25 78 12 \
+      VULNSRV02 "Vulnerable Server 02" OFF \
+      KALI02 "Secondary Kali attacker" OFF \
+      APPSRV01 "Security Application Server" OFF \
+      CLIENT01 "Ubuntu Client" OFF \
+      WAZUH "Wazuh SIEM" OFF \
+      TPOT "T-Pot Honeypot" OFF \
+      MRNOBODY "MrNobody Attack VM" OFF \
+      3>&1 1>&2 2>&3); then
+      echo "Installation cancelled."
+      return
+    fi
+    # whiptail returns quoted tags separated by spaces.
+    local -a components=()
+    IFS=' ' read -r -a components <<< "$options"
+    for component in "${components[@]}"; do
+      component="${component//\"/}"
+      case "$component" in
+        VULNSRV02|KALI02|APPSRV01|CLIENT01|WAZUH)
+          vm_scripts+=("${component}/${component}_installer.sh") ;;
+        TPOT) vm_scripts+=("TPOT01/TPOT01_installer.sh") ;;
+        MRNOBODY) vm_scripts+=("MRNOBODY/mrnobody_installer.sh") ;;
+        *) die "Unknown optional component: $component" ;;
+      esac
+    done
+  else
+    opnsense="OPNSENSE/OPNSENSE_mini_multi_installer.sh"
+    guac_config="GUACVM/GUACVM_ip_multi.sh"
+    # Retain the existing Mini VM selection and lab-aware installers.
+    # Client01/AppSrv01 require the missing lab-aware Mini scripts; the
+    # validation below stops safely until those scripts are available.
+    vm_scripts=("GUACVM/GUACVM_multi_installer.sh"
+                "CLIENT01/CLIENT01_mini_multi_installer.sh"
+                "VULNSRV01/VULNSRV01_mini_multi_installer.sh"
+                "VULNSRV02/VULNSRV02_mini_multi_installer.sh"
+                "KALI01/KALI01_mini_multi_installer.sh"
+                "WAZUH/WAZUH_mini_multi_installer.sh"
+                "APPSRV01/APPSRV01_mini_multi_installer.sh")
+  fi
+
+  # Validate everything before changing configuration or creating VMs.
+  for script in repo.sh pre_req.sh open-vswitch-pre.sh open-vswitch.sh \
+    open-vswitch-last.sh OPNSENSE/generate_config.sh "$guac_config" \
+    "$opnsense" "${vm_scripts[@]}"; do
+    require_file "${SCRIPT_DIR}/${script}"
+  done
+  command_exists tmux || die "tmux is required."
+  session="deploy-all"
+  if tmux has-session -t "$session" 2>/dev/null; then
+    die "tmux session '$session' already exists. Attach with: tmux attach -t $session"
+  fi
+  check_existing_labs
+
+  for ((lab = 1; lab <= LABCOUNT; lab++)); do
+    bash "${SCRIPT_DIR}/OPNSENSE/generate_config.sh" "$lab"
+    bash "${SCRIPT_DIR}/${guac_config}" "$lab"
+  done
+
+  bash "${SCRIPT_DIR}/repo.sh"
+  bash "${SCRIPT_DIR}/pre_req.sh"
+  bash "${SCRIPT_DIR}/open-vswitch-pre.sh"
+  for ((lab = 1; lab <= LABCOUNT; lab++)); do
+    bash "${SCRIPT_DIR}/open-vswitch.sh" "$lab"
+  done
+  bash "${SCRIPT_DIR}/open-vswitch-last.sh"
+
+  # All OPNsense installs finish in the foreground before any other VM starts.
+  for ((lab = 1; lab <= LABCOUNT; lab++)); do
+    bash "${SCRIPT_DIR}/${opnsense}" "$lab"
+  done
+
+  # Quote every path and argument for the shell launched by tmux.
+  printf -v command 'set -e\ncd -- %q\nexec > >(tee -a deploy.log) 2>&1\n' "$SCRIPT_DIR"
+  for ((lab = 1; lab <= LABCOUNT; lab++)); do
+    for script in "${vm_scripts[@]}"; do
+      printf -v command '%sbash %q %q\n' "$command" "${SCRIPT_DIR}/${script}" "$lab"
+    done
+  done
+  tmux new-session -d -s "$session" bash -c "$command"
+  echo "Deployment running: ${SPEC}, ${LABCOUNT} lab(s)."
+  echo "Attach with: tmux attach -t ${session}"
+  echo "Follow deployment log: tail -f deploy.log"
+}
 
 ###############################################################################
 # Validate host
@@ -702,10 +838,8 @@ echo "ISO storage:  ${LOCAL}"
 echo "Disk storage: ${LVM}"
 echo "Bridge:       ${BRIDGE}"
 echo
-echo "1) Standalone Proxmox (Big Lab)"
-echo "2) Standalone Proxmox (Mini Lab low spec)"
-echo "3) Multilabs Big spec on same Proxmox"
-echo "4) Multilabs mini spec on same Proxmox"
+echo "1) Big"
+echo "2) Mini"
 echo "0) Exit"
 echo
 echo "======================================================"
@@ -713,36 +847,14 @@ echo "======================================================"
 read -r -p "Select deployment type: " choice
 
 case "$choice" in
-  1)
-    require_file "$BIG_INSTALL"
-    echo "▶ Standalone Proxmox (Big Lab)"
-    bash "$BIG_INSTALL"
-    ;;
-
-  2)
-    require_file "$MINI_INSTALL"
-    echo "▶ Standalone Proxmox (Mini Lab low spec)"
-    bash "$MINI_INSTALL"
-    ;;
-
-  3)
-    require_file "$MULTI_INSTALL"
-    echo "▶ Multilabs Big spec on same Proxmox"
-    bash "$MULTI_INSTALL"
-    ;;
-
-  4)
-    require_file "$MULTI_INSTALL_MINI"
-    echo "▶ Multilabs mini spec on same Proxmox"
-    bash "$MULTI_INSTALL_MINI"
-    ;;
-
+  1) export SPEC="Big" ;;
+  2) export SPEC="Mini" ;;
   0)
     echo "Exiting..."
     exit 0
     ;;
-
-  *)
-    die "Invalid deployment option."
-    ;;
+  *) die "Invalid deployment option." ;;
 esac
+
+select_lab_count
+deploy_labs
