@@ -43,9 +43,7 @@ CORES="${GUACVM_CPU:-4}"
 DISK_SIZE="${GUACVM_HDD:-32G}"    # the number is in GB
 BRIDGE="${BRIDGE:-vmbr0}"
 BRIDGE1="lab${LAB}_oobm"
-BRIDGE2="prox_oobm"
 OOBM_IP="ip=172.20.0.1/24"
-PROX_OOBM_IP="ip=172.30.0.${LAB}/24"
 SNIPPET_DIR="/var/lib/vz/snippets"
 SRC_USERDATA="$(pwd)/GUACVM/GUACVM_userdata.yaml"    
 DST_USERDATA="GUACVM_userdata_lab${LAB}.yaml"        
@@ -98,7 +96,6 @@ qm create $VMID \
   --cpu host \
   --net0 virtio,bridge=$BRIDGE \
   --net1 virtio,bridge=$BRIDGE1 \
-  --net2 virtio,bridge=$BRIDGE2 \
   --ostype l26
 
 # ===== Add LVM disk =====
@@ -125,7 +122,6 @@ qm set $VMID --onboot 1
 # ===== Cloud-init =====
 qm set $VMID --ipconfig0 "$GUAC_IP_ADDR" \
   --ipconfig1 $OOBM_IP \
-  --ipconfig2 $PROX_OOBM_IP \
   --searchdomain cloud.local \
   --ciupgrade 1 \
   --cicustom "user=$ISO_STORAGE:snippets/${DST_USERDATA}"
