@@ -391,133 +391,39 @@ select_lab_count() {
   done
 }
 
-check_existing_labs() {
-  local inventory
-  inventory="$(pvesh get /cluster/resources --type vm --output-format json)" ||
-    die "Cannot check existing VMs; installation stopped."
+# Keep menu choices here; deploy.sh owns the installation phases.
+OPTIONAL_COMPONENTS=()
 
-  # Check the entire cluster, including stopped VMs and containers.
-  python3 - "$LABCOUNT" "$inventory" <<'PY'
-import json
-import re
-import sys
+select_optional_components() {
+  local options component
+  local -a components=()
 
-count = int(sys.argv[1])
-resources = json.loads(sys.argv[2])
-if not isinstance(resources, list):
-    raise SystemExit("Invalid VM inventory; installation stopped.")
-conflicts = []
-for vm in resources:
-    name = str(vm.get("name", ""))
-    match = re.match(r"^lab(\d+)[-_]", name, re.IGNORECASE)
-    if match and 1 <= int(match.group(1)) <= count:
-        conflicts.append(f"{vm.get('vmid', '?')}: {name}")
-if conflicts:
-    raise SystemExit(
-        "Existing VMs/containers found in the selected labs:\n"
-        + "\n".join(conflicts)
-        + "\nInstallation stopped. No existing VMs will be replaced."
-    )
-PY
-}
-
-deploy_labs() {
-  local lab script component options session command
-  local opnsense guac_config
-  local -a vm_scripts=()
-
-  opnsense="OPNSENSE/OPNSENSE_installer.sh"
-  guac_config="GUACVM/GUACVM_ip.sh"
-
-  if [[ "$SPEC" == "Big" ]]; then
-    vm_scripts=("GUACVM/GUACVM_installer.sh"
-                "KALI01/KALI01_installer.sh"
-                "VULNSRV01/VULNSRV01_installer.sh")
-    command_exists whiptail || die "whiptail is required for optional VM selection."
-    if ! options=$(whiptail --title "CyberLab - Optional Components" \
-      --checklist "Preparing ${LABCOUNT} lab(s). Basic: OPNsense, Guacamole, Kali01, VulnSrv01." \
-      25 78 12 \
-      VULNSRV02 "Vulnerable Server 02" OFF \
-      KALI02 "Secondary Kali attacker" OFF \
-      APPSRV01 "Security Application Server" OFF \
-      CLIENT01 "Ubuntu Client" OFF \
-      WAZUH "Wazuh SIEM" OFF \
-      TPOT "T-Pot Honeypot" OFF \
-      MRNOBODY "MrNobody Attack VM" OFF \
-      3>&1 1>&2 2>&3); then
-      echo "Installation cancelled."
-      return
-    fi
-    # whiptail returns quoted tags separated by spaces.
-    local -a components=()
-    IFS=' ' read -r -a components <<< "$options"
-    for component in "${components[@]}"; do
-      component="${component//\"/}"
-      case "$component" in
-        VULNSRV02|KALI02|APPSRV01|CLIENT01|WAZUH)
-          vm_scripts+=("${component}/${component}_installer.sh") ;;
-        TPOT) vm_scripts+=("TPOT01/TPOT01_installer.sh") ;;
-        MRNOBODY) vm_scripts+=("MRNOBODY/mrnobody_installer.sh") ;;
-        *) die "Unknown optional component: $component" ;;
-      esac
-    done
-  else
-    opnsense="OPNSENSE/OPNSENSE_mini_multi_installer.sh"
-    guac_config="GUACVM/GUACVM_ip.sh"
-    # Retain the existing Mini VM selection and lab-aware installers.
-    # Client01/AppSrv01 require the missing lab-aware Mini scripts; the
-    # validation below stops safely until those scripts are available.
-    vm_scripts=("GUACVM/GUACVM_installer.sh"
-                "CLIENT01/CLIENT01_mini_multi_installer.sh"
-                "VULNSRV01/VULNSRV01_mini_multi_installer.sh"
-                "VULNSRV02/VULNSRV02_mini_multi_installer.sh"
-                "KALI01/KALI01_mini_multi_installer.sh"
-                "WAZUH/WAZUH_mini_multi_installer.sh"
-                "APPSRV01/APPSRV01_mini_multi_installer.sh")
+  command_exists whiptail || die "whiptail is required for optional VM selection."
+  if ! options=$(whiptail --title "CyberLab - Optional Components" \
+    --checklist "Preparing ${LABCOUNT} lab(s). Basic: OPNsense, Guacamole, Kali01, VulnSrv01." \
+    25 78 12 \
+    VULNSRV02 "Vulnerable Server 02" OFF \
+    KALI02 "Secondary Kali attacker" OFF \
+    APPSRV01 "Security Application Server" OFF \
+    CLIENT01 "Ubuntu Client" OFF \
+    WAZUH "Wazuh SIEM" OFF \
+    TPOT "T-Pot Honeypot" OFF \
+    MRNOBODY "MrNobody Attack VM" OFF \
+    3>&1 1>&2 2>&3); then
+    echo "Installation cancelled."
+    return 1
   fi
 
-  # Validate everything before changing configuration or creating VMs.
-  for script in repo.sh pre_req.sh open-vswitch-pre.sh open-vswitch.sh \
-    open-vswitch-last.sh OPNSENSE/generate_config.sh "$guac_config" \
-    "$opnsense" "${vm_scripts[@]}"; do
-    require_file "${SCRIPT_DIR}/${script}"
+  # Pass each quoted whiptail tag as a separate argument to deploy.sh.
+  IFS=' ' read -r -a components <<< "$options"
+  for component in "${components[@]}"; do
+    component="${component//\"/}"
+    case "$component" in
+      VULNSRV02|KALI02|APPSRV01|CLIENT01|WAZUH|TPOT|MRNOBODY)
+        OPTIONAL_COMPONENTS+=("$component") ;;
+      *) die "Unknown optional component: $component" ;;
+    esac
   done
-  command_exists tmux || die "tmux is required."
-  session="deploy-all"
-  if tmux has-session -t "$session" 2>/dev/null; then
-    die "tmux session '$session' already exists. Attach with: tmux attach -t $session"
-  fi
-  check_existing_labs
-
-  for ((lab = 1; lab <= LABCOUNT; lab++)); do
-    bash "${SCRIPT_DIR}/OPNSENSE/generate_config.sh" "$lab"
-    bash "${SCRIPT_DIR}/${guac_config}" "$lab"
-  done
-
-  bash "${SCRIPT_DIR}/repo.sh"
-  bash "${SCRIPT_DIR}/pre_req.sh"
-  bash "${SCRIPT_DIR}/open-vswitch-pre.sh"
-  for ((lab = 1; lab <= LABCOUNT; lab++)); do
-    bash "${SCRIPT_DIR}/open-vswitch.sh" "$lab"
-  done
-  bash "${SCRIPT_DIR}/open-vswitch-last.sh"
-
-  # All OPNsense installs finish in the foreground before any other VM starts.
-  for ((lab = 1; lab <= LABCOUNT; lab++)); do
-    bash "${SCRIPT_DIR}/${opnsense}" "$lab"
-  done
-
-  # Quote every path and argument for the shell launched by tmux.
-  printf -v command 'set -e\ncd -- %q\nexec > >(tee -a deploy.log) 2>&1\n' "$SCRIPT_DIR"
-  for ((lab = 1; lab <= LABCOUNT; lab++)); do
-    for script in "${vm_scripts[@]}"; do
-      printf -v command '%sbash %q %q\n' "$command" "${SCRIPT_DIR}/${script}" "$lab"
-    done
-  done
-  tmux new-session -d -s "$session" bash -c "$command"
-  echo "Deployment running: ${SPEC}, ${LABCOUNT} lab(s)."
-  echo "Attach with: tmux attach -t ${session}"
-  echo "Follow deployment log: tail -f deploy.log"
 }
 
 ###############################################################################
@@ -857,4 +763,10 @@ case "$choice" in
 esac
 
 select_lab_count
-deploy_labs
+require_file "$SCRIPT_DIR/deploy.sh"
+if [[ "$SPEC" == "Big" ]]; then
+  if ! select_optional_components; then
+    exit 0
+  fi
+fi
+bash "$SCRIPT_DIR/deploy.sh" "$SPEC" "$LABCOUNT" "${OPTIONAL_COMPONENTS[@]}"
