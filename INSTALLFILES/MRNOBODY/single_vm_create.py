@@ -35,6 +35,13 @@ def render_userdata(template, plan, *, source_ref=None, instance_id=None):
         if template.count(anchor) != 1:
             raise ValueError(f"Cloud-init mangler et entydigt felt: {key}.")
         template = template.replace(anchor, f"      {key}={shlex.quote(value)}{newline}")
+    if plan.get("lab_http", False):
+        if plan["role"] != "agent" or "MRNOBODY_LAB_HTTP=" in template:
+            raise ValueError("Lab HTTP kan ikke indsættes entydigt for agenten.")
+        anchor = f"      MRNOBODY_MASTER_URL={shlex.quote(plan['master_url'])}{newline}"
+        if template.count(anchor) != 1:
+            raise ValueError("Cloud-init mangler Master-URL til lab HTTP.")
+        template = template.replace(anchor, anchor + '      MRNOBODY_LAB_HTTP="1"' + newline)
     if instance_id is not None:
         if not re.fullmatch(r"[0-9a-f]{16}", instance_id):
             raise ValueError("Ugyldigt Single VM-instance-ID.")
