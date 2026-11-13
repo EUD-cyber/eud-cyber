@@ -119,7 +119,6 @@ def interactive_preview(default_bridge="", read=input, write=print, *, offline=F
             for label, key in (("Bridges", "bridges"), ("Disk-storage (images)", "disk_storages"),
                                ("Snippet-storage", "snippet_storages")):
                 write(label + ": " + ", ".join(inventory[key]))
-            default_bridge = default_bridge if default_bridge in inventory["bridges"] else ""
             def preferred(setting, key):
                 choices = inventory[key]
                 value = os.environ.get(setting, "")
@@ -128,10 +127,23 @@ def interactive_preview(default_bridge="", read=input, write=print, *, offline=F
         while True:
             try:
                 role = ask("Rolle: standalone/agent/master", "master")
+                if role in {"standalone", "agent"}:
+                    write("Single VM-opsætning for standalone/agent er endnu ikke åbnet. Ingen indstillinger ændret.")
+                    return None
+                if role != "master":
+                    raise ValueError("Vælg master; standalone/agent er reserveret til senere.")
+                if default_bridge:
+                    if not BRIDGE.fullmatch(default_bridge) or (inventory is not None and default_bridge not in inventory["bridges"]):
+                        write("Den oprindeligt valgte bridge findes ikke eller er ugyldig. Vælg bridge igen i hovedinstalleren.")
+                        return None
+                    bridge = default_bridge
+                    write("Master bruger den oprindeligt valgte bridge: " + bridge)
+                else:
+                    bridge = ask("Bridge")
                 raw = dict(
                     role=role, vmid=int(ask("VMID (reserveres ikke)")),
                     name=ask("VM-navn", f"mrnobody-{role}" if role in {"standalone", "agent", "master"} else ""),
-                    bridge=ask("Bridge", default_bridge), ipv4=ask("IPv4/CIDR"),
+                    bridge=bridge, ipv4=ask("Master IPv4/CIDR (fx 192.0.2.10/24)"),
                     gateway=ask("Gateway (tom er tilladt)"), dns=ask("DNS (IPv4)"),
                     cpu=int(ask("vCPU", defaults["cpu"])),
                     memory_mib=int(ask("RAM (MiB)", defaults["memory_mib"])),
