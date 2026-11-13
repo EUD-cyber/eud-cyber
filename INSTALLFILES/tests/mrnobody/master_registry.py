@@ -209,8 +209,45 @@ class API(unittest.TestCase):
         result,status=self.call("heartbeat")
         self.assertEqual(status,200)
         self.assertTrue(result["accepted"])
-        self.assertEqual(len(self.routes),2)
-        self.assertTrue(all(value==["POST"] for value in self.methods.values()))
+        self.assertEqual(len(self.routes),3)
+        self.assertEqual(self.methods["/api/master/agents/register"],["POST"])
+        self.assertEqual(self.methods["/api/master/agents/heartbeat"],["POST"])
+        self.assertEqual(self.methods["/api/master/agents"],["GET"])
+
+    def test_overview_is_read_only_master_only_https_and_contains_no_credentials(self):
+        self.call()
+        request=types.SimpleNamespace(is_secure=True,remote_addr="198.51.100.8",headers={})
+        with patch.object(api,"request",request):
+            result,status=self.routes["/api/master/agents"]()
+            self.assertEqual(status,200)
+            self.assertEqual(set(result["agents"][0]),{"agent_id","name","status","last_seen_at","registered_at"})
+            self.assertNotIn(self.token,json.dumps(result))
+            self.assertNotIn("token_hash",json.dumps(result))
+            self.assertEqual(result["agents"][0]["status"],"online")
+            request.is_secure=False
+            self.config.lab_http=True
+            self.assertEqual(self.routes["/api/master/agents"]()[1],403)
+            request.headers={"X-Forwarded-Proto":"https"}
+            self.assertEqual(self.routes["/api/master/agents"]()[1],403)
+            request.remote_addr="127.0.0.1"
+            self.assertEqual(self.routes["/api/master/agents"]()[1],200)
+            self.config.role="agent"
+            self.assertEqual(self.routes["/api/master/agents"]()[1],404)
+
+    def test_empty_overview_does_not_create_database(self):
+        missing=self.path.parent/"empty.sqlite3"
+        class App:
+            def route(inner,url,**options):
+                def register(fn):
+                    self.routes[url]=fn
+                    return fn
+                return register
+        api.install_master_api(App(),lambda:self.config,missing)
+        request=types.SimpleNamespace(is_secure=True,remote_addr="198.51.100.8",headers={})
+        with patch.object(api,"request",request):
+            result,status=self.routes["/api/master/agents"]()
+        self.assertEqual((result,status),({"agents":[],"initialized":False},200))
+        self.assertFalse(missing.exists())
 
     def test_role_gating_keeps_standalone_agent_and_invalid_config_inactive(self):
         for role,status in (("standalone","loaded"),("agent","loaded"),("master","invalid"),("master","default")):
