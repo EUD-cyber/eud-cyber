@@ -47,9 +47,8 @@ def render_userdata(template, plan, *, source_ref=None, instance_id=None):
         if template.count("write_files:") != 1:
             raise ValueError("Cloud-init mangler et entydigt write_files-felt.")
         template = template.replace("write_files:", entry)
-        template, count = re.subn(r"(?m)^  condition: true(?=\r?$)", "  condition: false", template)
-        if count != 1 or template.count("power_state:") != 1:
-            raise ValueError("Cloud-init poweroff kunne ikke deaktiveres entydigt.")
+        if len(re.findall(r"(?m)^  condition: true(?=\r?$)", template)) != 1 or template.count("power_state:") != 1:
+            raise ValueError("Cloud-init mangler automatisk poweroff.")
     return template
 
 
