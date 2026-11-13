@@ -76,7 +76,13 @@ Servicen leveres i /opt, men installeren aktiverer den ikke automatisk:
     systemctl enable --now /opt/nordic-attack/systemd/mrnobody-agent.service
 
 Den bruger samme Python/backendkode som den eksisterende installation.
-Efter en opdatering genstartes mrnobody-agent for at indlæse ændret Python-kode.
+Updateren genstarter nu mrnobody-agent, når den allerede kører på en gyldig
+agentinstallation, og agentkode eller den leverede unit ændres. Master,
+standalone og inaktive agentservices aktiveres ikke af en opdatering.
+Rollback genindlæser også den tidligere agentkode, hvis servicen kørte før
+opdateringen. Deployment-konfiguration og agentnøgle ændres ikke.
+Når en ældre updater først henter denne ændring, kræves stadig en manuel
+systemctl restart mrnobody-agent den gang; den nye logik gælder næste kørsel.
 Stop den igen med systemctl disable --now mrnobody-agent.
 
 ## Drift og afgrænsning
