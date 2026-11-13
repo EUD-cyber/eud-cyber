@@ -1,5 +1,6 @@
 """Verify fresh-install contents without running cloud-init or the installer."""
 import ast
+import json
 import os
 from pathlib import Path
 import re
@@ -27,6 +28,33 @@ def installer():
 
 
 class FreshInstall(unittest.TestCase):
+    def test_single_vm_userdata_keeps_lab_template_and_installer_unchanged(self):
+        sys.path.insert(0, str(ROOT))
+        from MRNOBODY.single_vm_create import render_userdata
+        original = (ROOT / "MRNOBODY/mrnobody_userdata.yaml").read_text(encoding="utf-8")
+        before = yaml.safe_load(original)
+        rendered = render_userdata(original, dict(vmid=9000, role="master", master_url=""),
+                                   instance_id="a" * 16)
+        after = yaml.safe_load(rendered)
+        self.assertIs(before["power_state"]["condition"], True)
+        self.assertIs(after["power_state"]["condition"], False)
+        identity, = [entry for entry in after["write_files"] if entry["path"] == "/etc/mrnobody/single-vm.json"]
+        self.assertEqual(json.loads(identity["content"]),
+                         dict(vmid=9000, role="master", instance_id="a" * 16))
+        self.assertEqual(identity["permissions"], "0600")
+        for key in ("users", "packages", "runcmd"):
+            self.assertEqual(before[key], after[key])
+        installed = lambda config: next(entry["content"] for entry in config["write_files"]
+                                        if entry["path"] == "/usr/local/sbin/install-mrnobody")
+        self.assertEqual(installed(before), installed(after))
+
+    def test_single_vm_first_boot(self):
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "tests/mrnobody/single_vm_boot.py"), "-v"],
+            capture_output=True, text=True, timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_single_vm_creation(self):
         result = subprocess.run(
             [sys.executable, str(ROOT / "tests/mrnobody/single_vm_create.py"), "-v"],
