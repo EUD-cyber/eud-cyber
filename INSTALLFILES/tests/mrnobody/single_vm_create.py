@@ -33,10 +33,10 @@ class CreateSingleVM(unittest.TestCase):
         self.inventory = dict(vmids=[100],bridges=["vmbr7"],disk_storages=["local-lvm"],
                               snippet_storages=["local"],checked_at_utc="fixture")
         self.inspect = Mock(return_value=self.inventory)
-        self.template = 'config:\n      MRNOBODY_ROLE="standalone"\n      MRNOBODY_MASTER_URL=""\nremaining: unchanged\n'
+        self.template = 'write_files:\n\n      MRNOBODY_ROLE="standalone"\n      MRNOBODY_MASTER_URL=""\nremaining: unchanged\npower_state:\n  mode: poweroff\n  condition: true\n'
         self.calls = []
         self.info = dict(format="qcow2", **{"virtual-size":2147483648})
-        self.fail = None
+        self.fail_action = None
 
     def run_command(self, argv, **options):
         self.calls.append(argv)
@@ -49,7 +49,7 @@ class CreateSingleVM(unittest.TestCase):
             return types.SimpleNamespace(stdout=str(self.snippets / argv[2].split("/")[-1])+"\n")
         self.assertEqual(argv[0], "qm")
         self.assertIn(argv[1], {"create","disk"})
-        if self.fail == argv[1]:
+        if self.fail_action == argv[1]:
             raise subprocess.CalledProcessError(1, argv)
         return types.SimpleNamespace(stdout="")
 
@@ -74,7 +74,12 @@ class CreateSingleVM(unittest.TestCase):
         self.assertIn("local-lvm:0,import-from="+str(self.image.resolve()),command)
         self.assertEqual(self.calls[-1],["qm","disk","resize","9000","scsi0","+32G"])
         self.assertFalse(any("start" in argv or "destroy" in argv for argv in self.calls))
-        self.assertIn("MRNOBODY_ROLE=master",Path(result["snippet"]).read_text())
+        rendered = Path(result["snippet"]).read_text()
+        self.assertIn("MRNOBODY_ROLE=master",rendered)
+        self.assertIn("  condition: false",rendered)
+        self.assertIn(result["instance_id"],rendered)
+        self.assertIn("MRNOBODY_SINGLE_VM:"+result["instance_id"]+":master",command)
+        self.assertIn("  condition: true",self.template)
 
     def test_forged_saved_check_is_ignored_and_existing_vmid_stops_everything(self):
         self.plan["host_check"] = {"status":"checked","vmid_free":True}
@@ -95,7 +100,7 @@ class CreateSingleVM(unittest.TestCase):
         for failure in ("create","disk"):
             with self.subTest(failure=failure):
                 self.calls = []
-                self.fail = failure
+                self.fail_action = failure
                 before = set(self.snippets.iterdir())
                 with self.assertRaises(subprocess.CalledProcessError):
                     self.create()
@@ -103,9 +108,9 @@ class CreateSingleVM(unittest.TestCase):
                 self.assertFalse(any("destroy" in argv or "start" in argv for argv in self.calls))
 
     def test_snippet_collision_never_overwrites_or_deletes_existing_file(self):
-        target = self.snippets / "mrnobody_single_9000_fixed.yaml"
+        target = self.snippets / ("mrnobody_single_9000_" + "a"*16 + ".yaml")
         target.write_text("existing VM data")
-        with patch.object(creator.secrets,"token_hex",return_value="fixed"), self.assertRaises(FileExistsError):
+        with patch.object(creator.secrets,"token_hex",return_value="a"*16), self.assertRaises(FileExistsError):
             self.create()
         self.assertEqual(target.read_text(),"existing VM data")
         self.assertFalse(any(argv[0]=="qm" for argv in self.calls))
