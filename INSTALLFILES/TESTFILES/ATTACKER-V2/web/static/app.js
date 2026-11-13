@@ -579,13 +579,13 @@ const MrnUI = (() => {
         const root = byId('deploymentRuntime');
         if (!root) return;
         root.replaceChildren();
-        if (!deployment || !['standalone', 'agent'].includes(deployment.role)
+        if (!deployment || !['standalone', 'agent', 'master'].includes(deployment.role)
                 || !['default', 'loaded', 'invalid'].includes(deployment.config_status)) {
             node(root, 'p', 'Deployment status is unavailable from this backend.', 'muted');
             return;
         }
         const invalid = deployment.config_status === 'invalid';
-        const role = invalid ? 'Standalone (fallback)' : deployment.role === 'agent' ? 'Agent' : 'Standalone';
+        const role = invalid ? 'Standalone (fallback)' : {standalone:'Standalone', agent:'Agent', master:'Master'}[deployment.role];
         const configuration = deployment.config_status === 'default' ? 'Local defaults'
             : invalid ? 'Invalid — local defaults in use' : 'Loaded';
         const masterUrl = typeof deployment.master_url_configured === 'boolean'
