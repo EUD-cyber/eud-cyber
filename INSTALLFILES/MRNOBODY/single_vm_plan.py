@@ -92,7 +92,7 @@ def hardware_defaults(environ=None, source=None):
     return result
 
 
-def interactive_preview(default_bridge="", read=input, write=print, *, offline=False, return_label="Enter for at vende tilbage til menuen"):
+def interactive_preview(default_bridge="", read=input, write=print, *, offline=False, role=None, return_label="Enter for at vende tilbage til menuen"):
     """Show a plan, optionally check the host, then return without deployment."""
     write("Single VM / MrNobody - kun forhåndsvisning")
     write("Ingen VM oprettes, og intet reserveres. VM-oprettelse udføres kun via Single VM-oprettelsesværktøjet.")
@@ -124,9 +124,10 @@ def interactive_preview(default_bridge="", read=input, write=print, *, offline=F
                 value = os.environ.get(setting, "")
                 return value if value in choices else choices[0] if len(choices) == 1 else ""
             disk_default, snippet_default = preferred("LVM", "disk_storages"), preferred("LOCAL", "snippet_storages")
+        requested_role = role
         while True:
             try:
-                role = ask("Rolle: standalone/agent/master", "master")
+                role = requested_role or ask("Rolle: standalone/agent/master", "master")
                 if role in {"standalone", "agent"}:
                     write("Single VM-opsætning for standalone/agent er endnu ikke åbnet. Ingen indstillinger ændret.")
                     return None
