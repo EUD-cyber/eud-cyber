@@ -591,11 +591,17 @@ const MrnUI = (() => {
         const masterUrl = typeof deployment.master_url_configured === 'boolean'
             ? deployment.master_url_configured ? 'Configured' : 'Not configured' : 'Unavailable';
         // Configuration is not connection telemetry. Never infer "Connected".
-        const connection = deployment.transport_enabled === false ? 'Not enabled' : 'Unavailable';
+        const connection = deployment.transport_enabled === false ? 'Not enabled'
+            : deployment.transport_enabled === null ? 'Not monitored' : 'Unavailable';
+        const mode = invalid ? 'Unavailable' : deployment.role === 'standalone' ? 'Local only'
+            : deployment.role === 'master' ? deployment.lab_http_enabled === true ? 'HTTPS and HTTP (lab)' : 'HTTPS'
+            : deployment.master_scheme === 'https' ? 'HTTPS'
+            : deployment.master_scheme === 'http' && deployment.lab_http_enabled === true ? 'HTTP (lab)'
+            : deployment.master_url_configured === false ? 'Not configured' : 'Unavailable';
         const fields = node(root, 'dl', undefined, 'overview-fields');
         for (const [label, value] of [
             ['Deployment role', role], ['Configuration', configuration],
-            ['Master URL', masterUrl], ['Master connection', connection],
+            ['Master URL', masterUrl], ['Master connection', connection], ['Agent transport', mode],
         ]) {
             node(fields, 'dt', label);
             node(fields, 'dd', value);
