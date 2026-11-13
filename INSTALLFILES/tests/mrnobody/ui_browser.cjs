@@ -292,6 +292,50 @@ async function checkP09(page, phase) {
     }
 }
 
+async function checkDeploymentStatus(page) {
+    let deployment;
+    let unavailable = false;
+    await page.route('**/api/health', route => unavailable
+        ? route.fulfill({status:503,json:{message:'Offline fixture'}})
+        : route.fulfill({json:{status:'ok',service:'MrNobody Incident Platform',version:'2.1',deployment}}));
+    const refresh = async expected => {
+        // A page navigation may already have a dashboard refresh in flight.
+        for (let attempt=0; attempt<20; attempt++) {
+            await page.evaluate(() => MrnUI.refreshDashboard(true));
+            if ((await page.locator('#deploymentRuntime').textContent()).includes(expected)) return;
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        assert.fail('Deployment status did not refresh: ' + expected);
+    };
+    try {
+        for (const [value, expected] of [
+            [{role:'standalone',config_status:'default',master_url_configured:false,transport_enabled:false}, ['Standalone','Local defaults','Not configured','Not enabled']],
+            [{role:'agent',config_status:'loaded',master_url_configured:false,transport_enabled:false}, ['Agent','Loaded','Not configured','Not enabled']],
+            [{role:'agent',config_status:'loaded',master_url_configured:true,transport_enabled:false}, ['Agent','Loaded','Configured','Not enabled']],
+            [{role:'standalone',config_status:'invalid',master_url_configured:false,transport_enabled:false}, ['Standalone (fallback)','Invalid — local defaults in use','Not configured','Not enabled']],
+            [{role:'agent',config_status:'loaded',master_url_configured:true,transport_enabled:true}, ['Agent','Loaded','Configured','Unavailable']],
+        ]) {
+            deployment = value;
+            await refresh(expected[0]);
+            assert.deepEqual(await page.locator('#deploymentRuntime dd').allTextContents(), expected);
+            assert.equal(await page.locator('#deploymentRuntime input, #deploymentRuntime button').count(), 0);
+        }
+        deployment = undefined;
+        await refresh('unavailable from this backend');
+        assert.equal(await page.locator('#deploymentRuntime dd').count(), 0);
+        deployment = {role:'<img src=x onerror=alert(1)>',config_status:'loaded'};
+        await refresh('unavailable from this backend');
+        assert.equal(await page.locator('#deploymentRuntime img, #deploymentRuntime script').count(), 0);
+        unavailable = true;
+        await refresh('Deployment status unavailable');
+        assert.equal(await page.locator('#deploymentRuntime dd').count(), 0);
+        assert.ok((await page.locator('#deploymentAvailability').textContent()).includes('Master is reserved for Single VM'));
+    } finally {
+        await page.unroute('**/api/health');
+        await page.evaluate(() => MrnUI.refreshDashboard(true));
+    }
+}
+
 async function main() {
     const server=spawn(process.env.MRN_TEST_PYTHON || 'python',['-u','tests/mrnobody/ui_server.py'],{stdio:['ignore','pipe','pipe'],env:process.env});
     let browser;
@@ -411,6 +455,7 @@ async function main() {
         await page.locator('[data-page="system"]').click();
         await page.waitForFunction(()=>document.getElementById('settingsRuntime').textContent.includes('Version'));
         assert.equal(await page.locator('#page-system input[type=checkbox]').count(),0);
+        await checkDeploymentStatus(page);
         assert.equal(await page.locator('#updateButton').isVisible(),true);
         // No advertised read-only preview can launch an execution.
         assert.equal((await page.request.post(url+'/api/start',{data:{}})).status(),403);
