@@ -1,6 +1,7 @@
 """Master-only authenticated endpoints; HTTPS by default, explicit lab HTTP."""
 import json
 import sqlite3
+from pathlib import Path
 
 from flask import jsonify, request
 from master_registry import DATABASE, Registry, Unauthorized, Conflict, Unavailable, TOKEN
@@ -64,3 +65,25 @@ def install_master_api(app,deployment,registry_path=DATABASE):
     @app.route("/api/master/agents/heartbeat",methods=["POST"])
     def master_heartbeat():
         return handle(False)
+
+    @app.route("/api/master/agents",methods=["GET"])
+    def master_agents():
+        # Administration follows the existing UI's lab-network access boundary.
+        # Lab HTTP opt-in applies only to registration and heartbeat.
+        config=deployment()
+        if config.role!="master" or config.config_status!="loaded":
+            return jsonify({"message":"Not found."}),404
+        secure=request.is_secure or (request.remote_addr in {"127.0.0.1","::1"}
+                                      and request.headers.get("X-Forwarded-Proto")=="https")
+        if not secure:
+            return jsonify({"message":"HTTPS required."}),403
+        try:
+            path=Path(registry_path)
+            if not path.exists() and not path.is_symlink():
+                return jsonify({"agents":[],"initialized":False}),200
+            rows=Registry(registry_path).list_agents()
+            fields=("agent_id","name","status","last_seen_at","registered_at")
+            return jsonify({"agents":[{key:row[key] for key in fields} for row in rows],
+                            "initialized":True}),200
+        except (Unavailable,OSError,sqlite3.Error,ValueError):
+            return jsonify({"message":"Registry unavailable."}),503
