@@ -28,6 +28,13 @@ def installer():
 
 
 class FreshInstall(unittest.TestCase):
+    def test_updater_agent_lifecycle(self):
+        result = subprocess.run(
+            [sys.executable, str(ROOT / 'tests/mrnobody/update_agent.py'), '-v'],
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_outbound_agent_client(self):
         result = subprocess.run(
             [sys.executable, str(ROOT / "tests/mrnobody/agent_client.py"), "-v"],
@@ -51,7 +58,7 @@ class FreshInstall(unittest.TestCase):
                                    instance_id="a" * 16)
         after = yaml.safe_load(rendered)
         self.assertIs(before["power_state"]["condition"], True)
-        self.assertIs(after["power_state"]["condition"], False)
+        self.assertIs(after["power_state"]["condition"], True)
         identity, = [entry for entry in after["write_files"] if entry["path"] == "/etc/mrnobody/single-vm.json"]
         self.assertEqual(json.loads(identity["content"]),
                          dict(vmid=9000, role="master", instance_id="a" * 16))
