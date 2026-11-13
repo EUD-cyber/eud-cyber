@@ -7,10 +7,11 @@ IP-adresse/subnet, gateway og DNS. Bridge, storage og Ubuntu-image genbruges
 fra hovedinstallerens valg; VMID vælges fra 9000 og op, og hardware får
 MrNobody-standardværdierne. Slave/agent er endnu ikke åbnet.
 
-Menuen henter image, opretter VM, starter første boot og venter på verificeret
-cloud-init og lokal health. Derefter slukkes VM normalt, First_snapshot oprettes,
-og Master startes igen. Der vises kun succes, hvis hele forløbet lykkes.
-Ved fejl eller afbrydelse bevares VM og dens identitet til fejlsøgning.
+Menuen henter image, opretter VM og starter første boot. Den venter på, at VM'en
+selv slukker via cloud-init poweroff. Derefter oprettes First_snapshot, og Master
+startes igen. Ingen QEMU Guest Agent- eller HTTP/HTTPS-kontrol bruges.
+Slukning er afslutningssignalet, ikke en kontrol af cloud-init-fejl eller webservice.
+Ved fejl, timeout eller afbrydelse bevares VM og dens identitet til fejlsøgning.
 Eksisterende VM'er overtages ikke automatisk af en ny menuinstallation.
 
 ## Separate CLI-værktøjer
@@ -53,30 +54,24 @@ Det ændrer kun den nye VM's snippet; den aktive lab-template ændres ikke.
 
 ## Første opstart og baseline
 
-Nye VM'er får et instance-ID i både VM-beskrivelse og Single VM-snippet.
-Oprettelseskommandoens JSON viser dette ID. Den genererede snippet slår kun
-Single VM's automatiske cloud-init-poweroff fra; Big/Mini-template bevares.
+Nye VM'er får et instance-ID i VM-beskrivelse og Single VM-snippet.
+Cloud-init-template beholder automatisk poweroff, også for Single VM.
+Big/Mini-template ændres ikke.
 
-Kør næste trin med det valgte VMID og det returnerede instance-ID:
+Separat første opstart kan køres med oprettelsens VMID og instance-ID:
 
     python3 -m MRNOBODY.single_vm_boot --vmid 9000 --instance-id INSTANCE_ID
 
-Forløbet afviser en allerede kørende VM, forkert identitet og et eksisterende
-First_snapshot. Det starter VM'en, venter højst 1800 sekunder som standard
-og kontrollerer via QEMU Guest Agent:
+Værktøjet kræver en slukket VM med korrekt identitet og uden First_snapshot.
+Det starter VM'en og venter højst 1800 sekunder på status stopped.
+Der vises fremdrift hvert 30. sekund. Derefter kontrolleres VM-identiteten igen,
+og First_snapshot oprettes. CLI-værktøjet efterlader VM'en slukket;
+hovedmenuen starter den efterfølgende igen.
+Der bruges ingen Guest Agent, cloud-init-status, installationsmarkør eller health-request.
+Også manuel slukning eller et nedbrud kan derfor opfylde afslutningssignalet.
 
-- cloud-init afsluttet uden fejl eller degraded-status
-- INSTALL_COMPLETE-markør fra den eksisterende installer
-- Single VM-identitet og korrekt rolle i den lokale HTTPS-health
-
-Kun ved succes udføres almindelig shutdown uden force-stop, efterfulgt af
-First_snapshot. VM'en efterlades slukket. Ved timeout, fejl eller afbrydelse
-bevares VM'en til inspektion; der køres ingen stop, destroy eller rollback.
-En anden timeout kan angives med --timeout (1-7200 sekunder).
-
-Den lokale HTTPS-kontrol bruger som den eksisterende installer et selvsigneret
-certifikat uden tillidsvalidering, udelukkende mod 127.0.0.1. Dette fastlægger
-ikke TLS-politik for fremtidige agentforbindelser.
+Ved timeout/fejl bevares VM'en; ingen stop, shutdown, destroy eller rollback.
+Timeout kan angives med --timeout (1-7200 sekunder).
 
 Automatisk første-opstart understøtter kun VM'er fra denne version af Single
 VM-oprettelsen. Tidligere VM'er uden instance-ID overtages ikke automatisk.
