@@ -9,6 +9,38 @@ if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
+# Reserved deployment settings; not applied to cloud-init or services yet.
+# Keep existing direct calls compatible. Lab deployment will select agent later.
+MRNOBODY_ROLE="${MRNOBODY_ROLE:-standalone}"
+MRNOBODY_MASTER_URL="${MRNOBODY_MASTER_URL:-}"
+
+case "$MRNOBODY_ROLE" in
+  standalone|agent) ;;
+  master)
+    echo "Master is reserved for the future Single VM installer." >&2
+    exit 1
+    ;;
+  *)
+    echo "MRNOBODY_ROLE must be standalone or agent." >&2
+    exit 1
+    ;;
+esac
+
+# An empty URL is valid: existing labs must not require an available Master.
+# Accept an HTTPS DNS/IPv4 authority with an optional port and path.
+if [[ -n "$MRNOBODY_MASTER_URL" ]]; then
+  master_url_pattern='^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:([0-9]{1,5}))?(/[A-Za-z0-9._~%/+-]*)?$'
+  if ! [[ "$MRNOBODY_MASTER_URL" =~ $master_url_pattern ]]; then
+    echo "MRNOBODY_MASTER_URL must be an HTTPS URL without credentials, query or fragment." >&2
+    exit 1
+  fi
+  master_port="${BASH_REMATCH[3]:-443}"
+  if (( 10#$master_port < 1 || 10#$master_port > 65535 )); then
+    echo "MRNOBODY_MASTER_URL port must be between 1 and 65535." >&2
+    exit 1
+  fi
+fi
+
 LOGFILE="$(pwd)/LOGS/mrnobody${LAB}.log"
 
 # Create log file and ensure permissions
