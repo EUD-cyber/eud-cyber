@@ -28,6 +28,13 @@ def installer():
 
 
 class FreshInstall(unittest.TestCase):
+    def test_master_registration_and_heartbeat(self):
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "tests/mrnobody/master_registry.py"), "-v"],
+            capture_output=True, text=True, timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_single_vm_userdata_keeps_lab_template_and_installer_unchanged(self):
         sys.path.insert(0, str(ROOT))
         from MRNOBODY.single_vm_create import render_userdata
