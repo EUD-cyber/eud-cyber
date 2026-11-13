@@ -1,4 +1,4 @@
-"""Master-only, authenticated registration and heartbeat HTTP endpoints."""
+"""Master-only authenticated endpoints; HTTPS by default, explicit lab HTTP."""
 import json
 import sqlite3
 
@@ -24,8 +24,8 @@ def install_master_api(app,deployment,registry_path=DATABASE):
             return jsonify({"message":"Not found."}),404
         secure=request.is_secure or (request.remote_addr in {"127.0.0.1","::1"}
                                       and request.headers.get("X-Forwarded-Proto")=="https")
-        if not secure:
-            return jsonify({"message":"HTTPS required."}),403
+        if not secure and getattr(config,"lab_http",False) is not True:
+            return jsonify({"message":"HTTPS required; lab HTTP is not enabled."}),403
         authorization=request.headers.get("Authorization","")
         if not authorization.startswith("Bearer ") or len(authorization)!=50:
             return jsonify({"message":"Unauthorized."}),401
