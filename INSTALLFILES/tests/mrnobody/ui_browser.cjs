@@ -302,13 +302,16 @@ async function checkDeploymentStatus(page) {
         // A page navigation may already have a dashboard refresh in flight.
         for (let attempt=0; attempt<20; attempt++) {
             await page.evaluate(() => MrnUI.refreshDashboard(true));
-            if ((await page.locator('#deploymentRuntime').textContent()).includes(expected)) return;
+            const values = await page.locator('#deploymentRuntime dd').allTextContents();
+            if (Array.isArray(expected) ? JSON.stringify(values) === JSON.stringify(expected)
+                : (await page.locator('#deploymentRuntime').textContent()).includes(expected)) return;
             await new Promise(resolve => setTimeout(resolve, 50));
         }
         assert.fail('Deployment status did not refresh: ' + expected);
     };
     try {
         for (const [value, expected] of [
+            [{role:'master',config_status:'loaded',master_url_configured:false,transport_enabled:false}, ['Master','Loaded','Not configured','Not enabled']],
             [{role:'standalone',config_status:'default',master_url_configured:false,transport_enabled:false}, ['Standalone','Local defaults','Not configured','Not enabled']],
             [{role:'agent',config_status:'loaded',master_url_configured:false,transport_enabled:false}, ['Agent','Loaded','Not configured','Not enabled']],
             [{role:'agent',config_status:'loaded',master_url_configured:true,transport_enabled:false}, ['Agent','Loaded','Configured','Not enabled']],
@@ -316,7 +319,7 @@ async function checkDeploymentStatus(page) {
             [{role:'agent',config_status:'loaded',master_url_configured:true,transport_enabled:true}, ['Agent','Loaded','Configured','Unavailable']],
         ]) {
             deployment = value;
-            await refresh(expected[0]);
+            await refresh(expected);
             assert.deepEqual(await page.locator('#deploymentRuntime dd').allTextContents(), expected);
             assert.equal(await page.locator('#deploymentRuntime input, #deploymentRuntime button').count(), 0);
         }
