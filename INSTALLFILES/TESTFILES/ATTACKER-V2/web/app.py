@@ -9,6 +9,7 @@ from planning_api import install, launch, BusyError
 from execution import snapshot
 from scheduler import current_schedule
 from deployment_config import load_deployment_config
+from master_api import install_master_api
 from scenario_model import needs_password, technique_metadata, profile as scenario_profile, preset_cards
 import json
 import os
@@ -50,6 +51,7 @@ CAMPAIGN_LOG = LOG_DIR / "campaign.log"
 
 app = Flask(__name__)
 app.url_map.redirect_defaults = False
+install_master_api(app, lambda: DEPLOYMENT_CONFIG)
 campaign_process = None
 campaign_lock = threading.Lock()
 
