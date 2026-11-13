@@ -1,6 +1,10 @@
 # MrNobody Single VM-oprettelse
 
-Denne vej opretter én slukket MrNobody VM med én valgt bridge.
+Denne vej opretter én slukket MrNobody Master-VM med én bridge.
+Master bruger BRIDGE fra hovedinstallerens første valg uden et nyt bridgevalg.
+Ved direkte start uden BRIDGE spørges om bridge. IP-adresse/CIDR, gateway
+og DNS spørges altid for Master. Standalone/agent returnerer indtil videre
+uden yderligere opsætningsspørgsmål.
 Big/Mini bruger fortsat den eksisterende labinstaller og agentrollen.
 
 Kør fra repositoryets INSTALLFILES-mappe på Proxmox:
