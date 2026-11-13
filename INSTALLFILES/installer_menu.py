@@ -148,11 +148,12 @@ class Menu:
         elif self.stage == "single":
             self.text(screen, 3, "Single VM - MrNobody")
             self.text(screen, 5, "Master - opret én VM", self.single_cursor == 0)
-            self.text(screen, 6, "Slave/agent - ikke åbnet endnu", self.single_cursor == 1)
-            self.text(screen, 9, "Master bruger bridgen valgt ved installationens start.")
+            self.text(screen, 6, "Slave/agent - forbind til Master", self.single_cursor == 1)
+            self.text(screen, 7, "Standalone - kør uden Master", self.single_cursor == 2)
+            self.text(screen, 9, "Alle bruger bridgen valgt ved installationens start.")
             self.text(screen, 10, "Du bliver spurgt om IP/CIDR, gateway og DNS.")
-            self.text(screen, 12, "Master installeres, kontrolleres og startes automatisk.")
-            self.text(screen, 14, "Slave/agent har endnu ingen opsætningsspørgsmål.")
+            self.text(screen, 12, "VM installeres, slukker, får snapshot og startes igen.")
+            self.text(screen, 14, "Slave spørger også om Master-adresse og HTTP/HTTPS.")
             self.text(screen, 21, "Op/ned: vælg | Enter: fortsæt | B: tilbage | Q: stop")
         else:
             self.text(screen, 3, f"Profil: {self.profile} | Labs: {self.labs} | 4 basis-VM'er inkluderet")
@@ -193,11 +194,11 @@ class Menu:
                 self.stage = "single" if self.profile == "Single VM" else "options"
         elif self.stage == "single":
             if key in (curses.KEY_UP, curses.KEY_DOWN):
-                self.single_cursor = 1 - self.single_cursor
+                self.single_cursor = (self.single_cursor + (-1 if key == curses.KEY_UP else 1)) % 3
             elif key in (ord("b"), ord("B"), curses.KEY_LEFT):
                 self.stage = "profile"
-            elif key in (10, 13, curses.KEY_ENTER) and self.single_cursor == 0:
-                return "single-install"
+            elif key in (10, 13, curses.KEY_ENTER):
+                return ("single-install", "single-install-agent", "single-install-standalone")[self.single_cursor]
         else:
             if key == curses.KEY_UP:
                 self.cursor = (self.cursor - 1) % len(OPTIONS)
@@ -227,17 +228,19 @@ class Menu:
             action = self.handle(key)
             if action == "cancel":
                 return None
-            if action == "single-install":
-                return "single-install"
+            if action in {"single-install", "single-install-agent", "single-install-standalone"}:
+                return action
             if action == "accept":
                 return validate_selection(dict(profile=self.profile, labs=self.labs,
                                                components=[c for c in OPTIONS if c in self.selected]))
 
 
-def master_menu_plan(read=input, write=print):
+def single_menu_plan(role, read=input, write=print):
     """Only network questions; reuse the initial installer choices."""
     from MRNOBODY.single_vm_host import inspect_host, check_host_plan
     from MRNOBODY.single_vm_plan import validate_plan, hardware_defaults
+    if role not in {"master", "agent", "standalone"}:
+        raise ValueError("Ukendt Single VM-rolle.")
     inventory = inspect_host()
     bridge, disk, snippets = (os.environ.get(key, "") for key in ("BRIDGE", "LVM", "LOCAL"))
     if bridge not in inventory["bridges"] or disk not in inventory["disk_storages"] or snippets not in inventory["snippet_storages"]:
@@ -245,8 +248,8 @@ def master_menu_plan(read=input, write=print):
     used = set(inventory["vmids"])
     vmid = next((value for value in range(9000, 999_999_999 + 1) if value not in used), None)
     if vmid is None:
-        raise ValueError("Intet ledigt Master-VMID.")
-    write("Installer MrNobody Master")
+        raise ValueError("Intet ledigt Single VMID.")
+    write("Installer MrNobody " + {"master":"Master", "agent":"slave/agent", "standalone":"standalone"}[role])
     write(f"Bridge: {bridge} | VMID: {vmid} | Storage: {disk}")
     write("Q annullerer.")
     while True:
@@ -257,16 +260,35 @@ def master_menu_plan(read=input, write=print):
                 if value.lower() == "q":
                     return None
                 answers.append(value)
-            plan = validate_plan(dict(role="master", vmid=vmid, name="mrnobody-master",
+            master_url, lab_http = "", False
+            if role == "agent":
+                host = read("Master IP/værtsnavn (valgfri :port): ").strip()
+                if host.lower() == "q":
+                    return None
+                if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[0-9]{1,5})?", host):
+                    raise ValueError("Angiv kun Master IP/værtsnavn og valgfri port, uden protokol eller sti.")
+                protocol = read("Master-protokol HTTPS/HTTP [HTTPS]: ").strip().lower() or "https"
+                if protocol == "q":
+                    return None
+                if protocol not in {"http", "https"}:
+                    raise ValueError("Vælg HTTP eller HTTPS.")
+                master_url, lab_http = protocol + "://" + host, protocol == "http"
+                if lab_http:
+                    write("HTTP-lab: Master skal også have LAB_HTTP=1. Trafikken viser øvelsesnøglen i klartekst.")
+            plan = validate_plan(dict(role=role, vmid=vmid, name="mrnobody-" + role,
                                       bridge=bridge, ipv4=answers[0], gateway=answers[1], dns=answers[2],
-                                      disk_storage=disk, snippet_storage=snippets, **hardware_defaults()))
+                                      disk_storage=disk, snippet_storage=snippets, master_url=master_url, lab_http=lab_http, **hardware_defaults()))
             plan["host_check"] = check_host_plan(plan, inventory)
             return plan
         except ValueError as exc:
             write(f"Ugyldigt netværk: {exc}")
 
 
-def install_single_master():
+def master_menu_plan(read=input, write=print):
+    return single_menu_plan("master", read=read, write=write)
+
+
+def install_single_master(role="master"):
     """Create, verify, snapshot and start Master with inherited settings."""
     import tempfile
     from urllib.parse import urlsplit
@@ -277,10 +299,10 @@ def install_single_master():
         image_url = os.environ.get("LINUX_IMG", "")
         if urlsplit(image_url).scheme not in {"http", "https"} or not urlsplit(image_url).netloc:
             raise ValueError("Ubuntu-image mangler. Start via hovedinstalleren.")
-        plan = master_menu_plan()
+        plan = master_menu_plan() if role == "master" else single_menu_plan(role)
         if plan is None:
             return
-        with tempfile.TemporaryDirectory(prefix="mrnobody-master-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="mrnobody-single-") as temporary:
             image = Path(temporary) / "ubuntu-cloud.img"
             print("Henter den allerede valgte Ubuntu-image...")
             subprocess.run(["curl", "--fail", "--location", "--proto", "=http,https",
@@ -288,12 +310,14 @@ def install_single_master():
                            check=True, timeout=1200)
             result = create_vm(plan, image)
         verify_boot(result["vmid"], result["instance_id"])
-        print("VM'en har slukket, og First_snapshot er oprettet. Starter Master...")
+        print("VM'en har slukket, og First_snapshot er oprettet. Starter VM...")
         subprocess.run(["qm", "start", str(result["vmid"])], check=True, timeout=120)
-        print(f"Master VM {result['vmid']} er startet efter automatisk slukning og snapshot: https://{plan['ipv4'].split('/')[0]}")
+        print(f"MrNobody {role} VM {result['vmid']} er startet: https://{plan['ipv4'].split('/')[0]}")
+        if role == "agent":
+            print("Master-adresse og transport er gemt. Agentnøgle og eventuel CA-tillid skal sættes op før agentservicen aktiveres.")
 
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
-        print(f"Master-installation stoppet: {exc}. Eventuel VM bevares; ingen automatisk sletning.")
+        print(f"Single VM-installation stoppet: {exc}. Eventuel VM bevares; ingen automatisk sletning.")
     except (EOFError, KeyboardInterrupt):
         print("Afbrudt.")
     if result is not None:
@@ -336,8 +360,11 @@ def main():
             view = Menu(profiles)
             while True:
                 result = curses.wrapper(view.run)
-                if result == "single-install":
-                    install_single_master()
+                if isinstance(result, str) and result in {"single-install", "single-install-agent", "single-install-standalone"}:
+                    if result == "single-install":
+                        install_single_master()
+                    else:
+                        install_single_master(role="agent" if result == "single-install-agent" else "standalone")
                     continue
                 if result != "single-preview":
                     break
