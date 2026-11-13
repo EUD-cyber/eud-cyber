@@ -25,6 +25,17 @@ class DeploymentSettings(unittest.TestCase):
         self.config.write_bytes(text.encode("utf-8"))
         return load_deployment_config(self.config)
 
+    def test_plain_http_is_an_explicit_lab_choice(self):
+        self.assertEqual(self.read("MRNOBODY_ROLE=agent\nMRNOBODY_MASTER_URL=http://master.test\n").config_status,"invalid")
+        loaded=self.read("MRNOBODY_ROLE=agent\nMRNOBODY_MASTER_URL=http://master.test\nMRNOBODY_LAB_HTTP=1\n")
+        self.assertEqual((loaded.role,loaded.master_url,loaded.lab_http),("agent","http://master.test",True))
+        self.assertEqual(loaded.public_status()["master_scheme"],"http")
+        self.assertIsNone(loaded.public_status()["transport_enabled"])
+        master=self.read("MRNOBODY_ROLE=master\nMRNOBODY_LAB_HTTP=1\n")
+        self.assertTrue(master.public_status()["lab_http_enabled"])
+        self.assertEqual(self.read("MRNOBODY_LAB_HTTP=true\n").config_status,"invalid")
+        self.assertEqual(self.read("MRNOBODY_LAB_HTTP=1\nMRNOBODY_LAB_HTTP=0\n").config_status,"invalid")
+
     def test_missing_file_preserves_standalone(self):
         self.assertEqual(load_deployment_config(self.config), DeploymentConfig())
 
