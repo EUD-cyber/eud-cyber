@@ -219,7 +219,8 @@ def main():
     choose = commands.add_parser("choose")
     choose.add_argument("--profiles", type=Path, required=True)
     choose.add_argument("--output", type=Path, required=True)
-    commands.add_parser("single-preview", help="Plan Single VM uden deployment")
+    preview = commands.add_parser("single-preview", help="Plan Single VM uden deployment")
+    preview.add_argument("--offline", action="store_true", help="Valider kun input uden værtskontrol")
     selection = commands.add_parser("selection")
     selection.add_argument("file", type=Path)
     args = parser.parse_args()
@@ -227,7 +228,7 @@ def main():
         print(json.dumps(hardware(args.root, args.profile)))
     elif args.command == "single-preview":
         from MRNOBODY.single_vm_plan import interactive_preview
-        interactive_preview(default_bridge=os.environ.get("BRIDGE", ""))
+        interactive_preview(default_bridge=os.environ.get("BRIDGE", ""), offline=args.offline)
     elif args.command == "selection":
         result = validate_selection(json.loads(args.file.read_text()))
         print("\n".join([result["profile"], str(result["labs"]), *result["components"]]))
