@@ -27,6 +27,13 @@ def installer():
 
 
 class FreshInstall(unittest.TestCase):
+    def test_deployment_configuration_and_health_status(self):
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "tests/mrnobody/deployment_settings.py"), "-v"],
+            capture_output=True, text=True, timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_nginx_removes_beacons_and_preserves_gui_proxy(self):
         config = (PLATFORM / 'nginx/nordic-incident.conf').read_text()
         self.assertNotIn('mrnobody-beacon', config)
