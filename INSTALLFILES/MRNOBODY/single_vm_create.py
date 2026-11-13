@@ -20,7 +20,7 @@ def normalized_plan(value):
                           if key not in {"kind", "deployment_enabled", "host_check"}})
 
 
-def render_userdata(template, plan, *, source_ref=None):
+def render_userdata(template, plan, *, source_ref=None, instance_id=None):
     if source_ref is not None:
         if source_ref != "main" and not re.fullmatch(r"[0-9a-fA-F]{40}", source_ref):
             raise ValueError("Guest-kilden skal være main eller en fuld commit-SHA.")
@@ -35,6 +35,21 @@ def render_userdata(template, plan, *, source_ref=None):
         if template.count(anchor) != 1:
             raise ValueError(f"Cloud-init mangler et entydigt felt: {key}.")
         template = template.replace(anchor, f"      {key}={shlex.quote(value)}{newline}")
+    if instance_id is not None:
+        if not re.fullmatch(r"[0-9a-f]{16}", instance_id):
+            raise ValueError("Ugyldigt Single VM-instance-ID.")
+        identity = json.dumps(dict(vmid=plan["vmid"],role=plan["role"],instance_id=instance_id))
+        entry = newline.join([
+            "write_files:", "",
+            "  - path: /etc/mrnobody/single-vm.json", "    owner: root:root",
+            "    permissions: '0600'", "    content: |", "      " + identity, "",
+        ])
+        if template.count("write_files:") != 1:
+            raise ValueError("Cloud-init mangler et entydigt write_files-felt.")
+        template = template.replace("write_files:", entry)
+        template, count = re.subn(r"(?m)^  condition: true(?=\r?$)", "  condition: false", template)
+        if count != 1 or template.count("power_state:") != 1:
+            raise ValueError("Cloud-init poweroff kunne ikke deaktiveres entydigt.")
     return template
 
 
@@ -52,7 +67,8 @@ def create_vm(value, image, *, run=None, inspect=None, template=None, write=prin
     if not image.is_file() or any(char in str(image) for char in (",", "\n", "\r", "\0")):
         raise ValueError("Angiv en lokal cloud-image-fil uden komma eller kontroltegn.")
     template = Path(__file__).with_name("mrnobody_userdata.yaml").read_bytes().decode("utf-8") if template is None else template
-    userdata = render_userdata(template, plan, source_ref=source_ref)
+    instance_id = secrets.token_hex(8)
+    userdata = render_userdata(template, plan, source_ref=source_ref, instance_id=instance_id)
 
     def command(argv, timeout=10):
         return run(argv, check=True, capture_output=True, text=True, encoding="utf-8",
@@ -62,7 +78,7 @@ def create_vm(value, image, *, run=None, inspect=None, template=None, write=prin
     if (not isinstance(info, dict) or info.get("format") not in {"raw", "qcow2"}
             or info.get("backing-filename") or info.get("full-backing-filename")):
         raise ValueError("Brug en selvstændig raw/qcow2 cloud-image uden backing-fil.")
-    filename = f"mrnobody_single_{plan['vmid']}_{secrets.token_hex(8)}.yaml"
+    filename = f"mrnobody_single_{plan['vmid']}_{instance_id}.yaml"
     volume = f"{plan['snippet_storage']}:snippets/{filename}"
     snippet = Path(command(["pvesm", "path", volume]).strip())
     if not snippet.is_absolute() or snippet.name != filename or not snippet.parent.is_dir():
@@ -80,6 +96,7 @@ def create_vm(value, image, *, run=None, inspect=None, template=None, write=prin
             ipconfig += ",gw=" + plan["gateway"]
         argv = [
             "qm", "create", str(plan["vmid"]), "--name", plan["name"],
+            "--description", f"MRNOBODY_SINGLE_VM:{instance_id}:{plan['role']}",
             "--memory", str(plan["memory_mib"]), "--cores", str(plan["cpu"]),
             "--cpu", "host", "--ostype", "l26", "--net0", "virtio,bridge=" + plan["bridge"],
             "--scsihw", "virtio-scsi-pci",
@@ -98,7 +115,7 @@ def create_vm(value, image, *, run=None, inspect=None, template=None, write=prin
         if attempted:
             write(f"Kontrollér VM {plan['vmid']} og {snippet}. Ingen automatisk sletning er udført.")
         raise
-    return dict(vmid=plan["vmid"], role=plan["role"], created=True, started=False,
+    return dict(vmid=plan["vmid"], role=plan["role"], instance_id=instance_id, created=True, started=False,
                 snippet=str(snippet), guest_installation_completed=False)
 
 
