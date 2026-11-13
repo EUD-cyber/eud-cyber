@@ -29,7 +29,7 @@ class DeploymentSettings(unittest.TestCase):
         self.assertEqual(load_deployment_config(self.config), DeploymentConfig())
 
     def test_installer_quotes_and_line_endings(self):
-        for role in ("standalone", "agent"):
+        for role in ("standalone", "agent", "master"):
             for url in ("", "https://master.example", "https://192.0.2.1:8443/api/v1/"):
                 for newline in ("\n", "\r\n"):
                     with self.subTest(role=role, url=url, newline=repr(newline)):
@@ -49,7 +49,7 @@ class DeploymentSettings(unittest.TestCase):
 
     def test_invalid_settings_never_become_active(self):
         invalid = (
-            "MRNOBODY_ROLE=master", "MRNOBODY_ROLE=slave", "MRNOBODY_ROLE=",
+            "MRNOBODY_ROLE=controller", "MRNOBODY_ROLE=slave", "MRNOBODY_ROLE=",
             "MRNOBODY_ROLE=agent extra", 'MRNOBODY_ROLE="agent',
             "MRNOBODY_ROLE=agent\nMRNOBODY_ROLE=standalone",
             "OTHER_SETTING=agent", "export MRNOBODY_ROLE=agent", "not an assignment",
@@ -94,7 +94,7 @@ class DeploymentSettings(unittest.TestCase):
         health = next(node for node in source.body if isinstance(node, ast.FunctionDef) and node.name == "health")
         health.decorator_list = []
         code = compile(ast.Module(body=[health], type_ignores=[]), str(WEB / "app.py"), "exec")
-        for config in (DeploymentConfig(), DeploymentConfig("agent", "", "loaded"),
+        for config in (DeploymentConfig(), DeploymentConfig("agent", "", "loaded"), DeploymentConfig("master", "", "loaded"),
                        DeploymentConfig("agent", "https://master.example/private", "loaded"),
                        DeploymentConfig(config_status="invalid")):
             namespace = {"jsonify": lambda value: value, "DEPLOYMENT_CONFIG": config}
