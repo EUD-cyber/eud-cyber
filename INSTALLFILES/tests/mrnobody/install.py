@@ -27,6 +27,13 @@ def installer():
 
 
 class FreshInstall(unittest.TestCase):
+    def test_single_vm_preview(self):
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "tests/mrnobody/single_vm_preview.py"), "-v"],
+            capture_output=True, text=True, timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_installer_role_menu(self):
         result = subprocess.run(
             [sys.executable, str(ROOT / "tests/mrnobody/installer_roles.py"), "-v"],
