@@ -140,19 +140,57 @@ class SingleVMPreview(unittest.TestCase):
             self.assertIsNone(view.handle(10))
             self.assertEqual(view.stage, "single")
 
-    def test_menu_master_creation_keeps_bridge_and_never_calls_lab_deploy(self):
+    def test_master_menu_only_asks_network_and_uses_initial_settings(self):
+        from MRNOBODY import single_vm_host as host
+        inventory = dict(vmids=[9000], bridges=["vmbr7"], disk_storages=["local-lvm"],
+                         snippet_storages=["local"], checked_at_utc="test")
+        prompts = []
+        answers = iter(["192.0.2.10/24", "192.0.2.1", "192.0.2.53"])
+        def read(prompt):
+            prompts.append(prompt)
+            return next(answers)
+        with patch.object(host, "inspect_host", return_value=inventory), \
+             patch.dict(os.environ, {"BRIDGE":"vmbr7", "LVM":"local-lvm", "LOCAL":"local"}):
+            plan = menu.master_menu_plan(read=read, write=lambda value: None)
+        self.assertEqual(len(prompts), 3)
+        self.assertEqual(plan["vmid"], 9001)
+        self.assertEqual(plan["bridge"], "vmbr7")
+        self.assertEqual(plan["role"], "master")
+        self.assertEqual(plan["ipv4"], "192.0.2.10/24")
+
+    def test_menu_master_downloads_selected_image_without_configuration_questions(self):
         from MRNOBODY import single_vm_create as creator
         result = dict(vmid=9000, instance_id="a"*16)
-        with patch.object(planner, "interactive_preview", return_value=planner.validate_plan(self.raw())) as preview, \
+        with patch.object(menu, "master_menu_plan", return_value=planner.validate_plan(self.raw())), \
              patch.object(creator, "create_vm", return_value=result) as create, \
-             patch.dict(os.environ, {"BRIDGE": "vmbr7"}), \
-             patch("builtins.input", side_effect=["/cloud.img", "OPRET 9000", ""]), \
-             patch("builtins.print"):
+             patch.dict(os.environ, {"LINUX_IMG":"https://images.example/ubuntu.img"}), \
+             patch.object(menu.subprocess, "run") as download, \
+             patch("builtins.input", return_value="") as read, patch("builtins.print"):
             menu.install_single_master()
-        preview.assert_called_once_with(default_bridge="vmbr7", role="master",
-                                        return_label="Enter for at fortsætte")
+        self.assertEqual(read.call_count, 1)
         self.assertEqual(create.call_args.args[0]["role"], "master")
-        self.assertEqual(create.call_args.args[1], Path("/cloud.img"))
+        self.assertEqual(download.call_args.args[0][-1], "https://images.example/ubuntu.img")
+        self.assertTrue(download.call_args.kwargs["check"])
+
+    def test_master_cancel_stops_before_image_download_or_creation(self):
+        from MRNOBODY import single_vm_create as creator
+        with patch.object(menu, "master_menu_plan", return_value=None), \
+             patch.dict(os.environ, {"LINUX_IMG":"https://images.example/ubuntu.img"}), \
+             patch.object(menu.subprocess, "run") as download, \
+             patch.object(creator, "create_vm") as create:
+            menu.install_single_master()
+        download.assert_not_called()
+        create.assert_not_called()
+
+    def test_failed_download_does_not_create_master(self):
+        from MRNOBODY import single_vm_create as creator
+        with patch.object(menu, "master_menu_plan", return_value=planner.validate_plan(self.raw())), \
+             patch.dict(os.environ, {"LINUX_IMG":"https://images.example/ubuntu.img"}), \
+             patch.object(menu.subprocess, "run", side_effect=subprocess.CalledProcessError(22, ["curl"])), \
+             patch.object(creator, "create_vm") as create, \
+             patch("builtins.input", return_value=""), patch("builtins.print"):
+            menu.install_single_master()
+        create.assert_not_called()
 
     def test_menu_preview_never_reaches_lab_selection_output(self):
         with tempfile.TemporaryDirectory(dir=ROOT) as temporary:
