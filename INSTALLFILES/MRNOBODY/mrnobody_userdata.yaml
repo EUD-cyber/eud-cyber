@@ -60,7 +60,7 @@ packages:
 
 write_files:
 
-  # Reserved deployment settings; not consumed by services yet.
+  # Deployment settings are read by the backend for status only.
   # Keep local configuration outside /opt/nordic-attack, which is rebuilt.
   - path: /etc/mrnobody/deployment.conf
     owner: root:root
@@ -345,6 +345,10 @@ write_files:
       download_file \
           "web/static/planning.js" \
           "$INSTALL_DIR/web/static/planning.js"
+
+      download_file \
+          "web/deployment_config.py" \
+          "$INSTALL_DIR/web/deployment_config.py"
 
       download_file \
           "web/app.py" \
