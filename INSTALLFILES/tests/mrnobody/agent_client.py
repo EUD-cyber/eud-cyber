@@ -80,6 +80,20 @@ class Configuration(unittest.TestCase):
         self.path.write_text(json.dumps(data),encoding="utf-8")
         self.path.chmod(0o600)
 
+    def test_duplicate_credential_fields_are_refused_without_exposing_values(self):
+        for key,first,last in (("agent_id","agent-2","agent-1"),
+                               ("token","y"*43,"x"*43),
+                               ("name","First","Last")):
+            with self.subTest(field=key):
+                self.save()
+                raw=self.path.read_text(encoding="utf-8")
+                self.path.write_text("{"+json.dumps(key)+":"+json.dumps(first)+","+
+                                     raw[1:-1]+","+json.dumps(key)+":"+json.dumps(last)+"}",
+                                     encoding="utf-8")
+                with self.assertRaises(agent.FatalAgentError) as raised:
+                    agent.load_agent_config(self.path,self.deployment)
+                self.assertEqual(str(raised.exception),"Duplicate credential fields are not allowed.")
+
     def test_long_issued_id_keeps_identity_and_uses_bounded_default_display_name(self):
         self.save(agent_id="a"*64)
         loaded=agent.load_agent_config(self.path,self.deployment)
