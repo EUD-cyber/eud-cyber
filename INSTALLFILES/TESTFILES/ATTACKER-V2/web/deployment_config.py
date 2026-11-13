@@ -47,8 +47,8 @@ def _parse(text):
 
     role = values.get("MRNOBODY_ROLE", "standalone")
     master_url = values.get("MRNOBODY_MASTER_URL", "")
-    # Master will be enabled together with the future Single VM flow.
-    if role not in {"standalone", "agent"}:
+    # The lab installer rejects Master; provisioning uses the Single VM flow.
+    if role not in {"standalone", "agent", "master"}:
         raise ValueError("Unsupported deployment role")
     if master_url:
         match = MASTER_URL.fullmatch(master_url)
