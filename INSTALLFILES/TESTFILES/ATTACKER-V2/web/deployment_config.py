@@ -13,11 +13,15 @@ MASTER_URL = re.compile(
 )
 
 
+LAB_MASTER_URL = re.compile(MASTER_URL.pattern.replace("https://", "https?://", 1))
+
+
 @dataclass(frozen=True)
 class DeploymentConfig:
     role: str = "standalone"
     master_url: str = ""
     config_status: str = "default"
+    lab_http: bool = False
 
     def public_status(self):
         """Report configuration only; never imply a Master connection exists."""
@@ -25,7 +29,9 @@ class DeploymentConfig:
             "role": self.role,
             "config_status": self.config_status,
             "master_url_configured": bool(self.master_url),
-            "transport_enabled": False,
+            "transport_enabled": None if self.role == "agent" and self.config_status == "loaded" and self.master_url else False,
+            "lab_http_enabled": self.lab_http,
+            "master_scheme": "https" if self.master_url.startswith("https://") else "http" if self.master_url.startswith("http://") else None,
         }
 
 
@@ -37,7 +43,7 @@ def _parse(text):
             continue
         key, separator, value = line.partition("=")
         key = key.strip()
-        if not separator or key not in {"MRNOBODY_ROLE", "MRNOBODY_MASTER_URL"} or key in values:
+        if not separator or key not in {"MRNOBODY_ROLE", "MRNOBODY_MASTER_URL", "MRNOBODY_LAB_HTTP"} or key in values:
             raise ValueError("Unknown, duplicate or malformed deployment setting")
         # Parse quoting only. No shell sourcing, variable expansion or commands.
         parts = shlex.split(value, comments=False, posix=True)
@@ -45,16 +51,20 @@ def _parse(text):
             raise ValueError("Deployment setting must contain one value")
         values[key] = parts[0] if parts else ""
 
+    flag = values.get("MRNOBODY_LAB_HTTP", "0")
+    if flag not in {"0", "1"}:
+        raise ValueError("Lab HTTP flag must be 0 or 1")
+    lab_http = flag == "1"
     role = values.get("MRNOBODY_ROLE", "standalone")
     master_url = values.get("MRNOBODY_MASTER_URL", "")
     # The lab installer rejects Master; provisioning uses the Single VM flow.
     if role not in {"standalone", "agent", "master"}:
         raise ValueError("Unsupported deployment role")
     if master_url:
-        match = MASTER_URL.fullmatch(master_url)
+        match = (LAB_MASTER_URL if lab_http else MASTER_URL).fullmatch(master_url)
         if not match or not 1 <= int(match.group(3) or "443") <= 65535:
             raise ValueError("Invalid HTTPS Master URL")
-    return DeploymentConfig(role, master_url, "loaded")
+    return DeploymentConfig(role, master_url, "loaded", lab_http)
 
 
 def load_deployment_config(path=DEPLOYMENT_FILE):
