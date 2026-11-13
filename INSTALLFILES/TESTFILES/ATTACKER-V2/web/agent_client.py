@@ -42,6 +42,15 @@ class AgentConfig:
     lab_http: bool=False
 
 
+def _credential_object(pairs):
+    result={}
+    for key,value in pairs:
+        if key in result:
+            raise FatalAgentError("Duplicate credential fields are not allowed.")
+        result[key]=value
+    return result
+
+
 def load_agent_config(path=CREDENTIALS, deployment=None):
     deployment=load_deployment_config() if deployment is None else deployment
     if deployment.role!="agent" or deployment.config_status!="loaded" or not deployment.master_url:
@@ -56,7 +65,7 @@ def load_agent_config(path=CREDENTIALS, deployment=None):
         raw=handle.read(8193)
     if len(raw)>8192:
         raise FatalAgentError("Credential file is too large.")
-    data=json.loads(raw.decode("utf-8"))
+    data=json.loads(raw.decode("utf-8"),object_pairs_hook=_credential_object)
     allowed={"agent_id","token","name","ca_file","protocol_version","heartbeat_interval"}
     if not isinstance(data,dict) or not {"agent_id","token"}<=data.keys() or data.keys()-allowed:
         raise FatalAgentError("Invalid credential fields.")
