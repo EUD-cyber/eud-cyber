@@ -359,6 +359,14 @@ write_files:
           "$INSTALL_DIR/web/master_api.py"
 
       download_file \
+          "web/agent_client.py" \
+          "$INSTALL_DIR/web/agent_client.py"
+
+      download_file \
+          "systemd/mrnobody-agent.service" \
+          "$INSTALL_DIR/systemd/mrnobody-agent.service"
+
+      download_file \
           "web/app.py" \
           "$INSTALL_DIR/web/app.py"
 
