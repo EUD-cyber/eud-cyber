@@ -22,7 +22,9 @@ spec.loader.exec_module(menu)
 class SingleVMPreview(unittest.TestCase):
     def raw(self, **changes):
         value = dict(role="master", vmid=9000, name="mrnobody-master", bridge="vmbr7",
-                     ipv4="192.0.2.10/24", gateway="192.0.2.1", dns="192.0.2.53")
+                     ipv4="192.0.2.10/24", gateway="192.0.2.1", dns="192.0.2.53",
+                     cpu=4, memory_mib=4096, disk_expansion="32G",
+                     disk_storage="local-lvm", snippet_storage="local")
         value.update(changes)
         return value
 
@@ -80,25 +82,26 @@ class SingleVMPreview(unittest.TestCase):
                 planner.validate_plan(self.raw(role=role, master_url=url))
 
     def test_prompt_shows_plan_without_commands_or_network(self):
-        answers = iter(["", "9000", "", "", "192.0.2.10/24", "192.0.2.1", "192.0.2.53", ""])
+        answers = iter(["", "9000", "", "", "192.0.2.10/24", "192.0.2.1", "192.0.2.53", "", "", "", "local-lvm", "local", ""])
         output = []
         with patch("subprocess.run", side_effect=AssertionError("unexpected command")), \
              patch("os.system", side_effect=AssertionError("unexpected shell")), \
              patch("socket.create_connection", side_effect=AssertionError("unexpected network")):
-            plan = planner.interactive_preview("vmbr7", read=lambda prompt: next(answers), write=output.append)
+            plan = planner.interactive_preview("vmbr7", read=lambda prompt: next(answers), write=output.append, offline=True)
         self.assertEqual(plan["role"], "master")
         self.assertEqual(plan["bridge"], "vmbr7")
         self.assertFalse(plan["deployment_enabled"])
+        self.assertEqual(plan["host_check"]["status"], "not_checked")
         self.assertIn("Ingen VM oprettes", "\n".join(output))
         self.assertIn("Ingen indstillinger er gemt", "\n".join(output))
 
     def test_cancel_and_invalid_input_do_not_return_a_plan(self):
         for response in ("q", KeyboardInterrupt(), EOFError()):
             reader = Mock(side_effect=response) if isinstance(response, BaseException) else lambda prompt: response
-            self.assertIsNone(planner.interactive_preview(read=reader, write=lambda value: None))
+            self.assertIsNone(planner.interactive_preview(read=reader, write=lambda value: None, offline=True))
         answers = iter(["master", "invalid-vmid", "q"])
         messages = []
-        self.assertIsNone(planner.interactive_preview(read=lambda prompt: next(answers), write=messages.append))
+        self.assertIsNone(planner.interactive_preview(read=lambda prompt: next(answers), write=messages.append, offline=True))
         self.assertIn("Ugyldig plan", "\n".join(messages))
 
     def test_menu_preview_never_reaches_lab_selection_output(self):
@@ -135,8 +138,8 @@ class SingleVMPreview(unittest.TestCase):
             assert root.resolve().parent == ROOT.resolve()
             before = set(root.iterdir())
             result = subprocess.run(
-                [sys.executable, "-B", str(ROOT / "installer_menu.py"), "single-preview"],
-                input="\n9000\n\n\n192.0.2.10/24\n192.0.2.1\n192.0.2.53\n\n",
+                [sys.executable, "-B", str(ROOT / "installer_menu.py"), "single-preview", "--offline"],
+                input="\n".join(["", "9000", "", "", "192.0.2.10/24", "192.0.2.1", "192.0.2.53", "", "", "", "local-lvm", "local", ""]) + "\n",
                 cwd=root, env=dict(os.environ, BRIDGE="vmbr7"), capture_output=True, text=True, timeout=10,
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
