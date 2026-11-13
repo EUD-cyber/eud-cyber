@@ -45,7 +45,7 @@ class MenuRoles(unittest.TestCase):
         self.assertIn("agent/slave", screen.lines[18])
         self.assertIn("fremtidig Custom", screen.lines[18])
         self.assertIn("Single VM / Master", screen.lines[19])
-        self.assertIn("kan ikke vælges endnu", screen.lines[19])
+        self.assertIn("vis plan (ingen installation)", screen.lines[19])
         self.assertIn("Op/ned: Big/Mini", screen.lines[21])
 
     def test_profile_keys_still_toggle_only_big_and_mini(self):
@@ -71,6 +71,12 @@ class MenuRoles(unittest.TestCase):
         selected = menu.validate_selection(dict(profile=self.view.profile, labs=self.view.labs,
                                                 components=list(self.view.selected)))
         self.assertEqual(selected, dict(profile="Big", labs=1, components=["MRNOBODY"]))
+
+    def test_single_vm_hotkey_opens_preview_without_changing_lab_choices(self):
+        self.view.profile, self.view.labs, self.view.selected = "Mini", 3, {"MRNOBODY"}
+        self.assertEqual(self.view.handle(ord("S")), "single-preview")
+        self.assertEqual((self.view.profile, self.view.labs, self.view.selected), ("Mini", 3, {"MRNOBODY"}))
+        self.assertEqual(self.view.stage, "profile")
 
     def test_master_and_single_vm_cannot_be_selected(self):
         for profile in ("Single VM", "Single", "Master", "Custom"):
