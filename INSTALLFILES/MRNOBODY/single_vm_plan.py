@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Plan one MrNobody VM. No host commands, file writes or deployment."""
+"""Plan one MrNobody VM with optional read-only host checks. No deployment."""
 import ipaddress
 import json
+import os
+from pathlib import Path
 import re
+
+from .single_vm_host import BRIDGE, STORAGE, check_host_plan, inspect_host
 
 
 NAME = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?")
-BRIDGE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,14}")
 MASTER_URL = re.compile(
     r"https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?"
     r"(:([0-9]{1,5}))?(/[A-Za-z0-9._~%/+-]*)?"
@@ -15,10 +18,11 @@ MASTER_URL = re.compile(
 
 def validate_plan(value):
     """Validate explicit Single VM input; never reserve or create anything."""
-    required = {"role", "vmid", "name", "bridge", "ipv4", "gateway", "dns"}
+    required = {"role", "vmid", "name", "bridge", "ipv4", "gateway", "dns",
+                "cpu", "memory_mib", "disk_expansion", "disk_storage", "snippet_storage"}
     if not isinstance(value, dict) or not required <= value.keys() or value.keys() - required - {"master_url"}:
         raise ValueError("Planen mangler felter eller indeholder ukendte felter.")
-    if not all(isinstance(value[key], str) for key in required - {"vmid"}):
+    if not all(isinstance(value[key], str) for key in required - {"vmid", "cpu", "memory_mib"}):
         raise ValueError("Rolle, navn og netværksfelter skal være tekst.")
     role = value["role"]
     if role not in {"standalone", "agent", "master"}:
@@ -49,6 +53,12 @@ def validate_plan(value):
             raise ValueError("Gateway skal være en anden adresse på samme subnet.")
         if gateway.is_unspecified or gateway.is_multicast or gateway.is_loopback or (address.network.prefixlen < 31 and gateway in (address.network.network_address, address.network.broadcast_address)):
             raise ValueError("Gateway skal være en gyldig hostadresse.")
+    if any(type(value[key]) is not int or value[key] < 1 for key in ("cpu", "memory_mib")):
+        raise ValueError("CPU og RAM (MiB) skal være positive heltal.")
+    if not re.fullmatch(r"[1-9][0-9]*[GMT]", value["disk_expansion"]):
+        raise ValueError("Diskudvidelse skal være fx 32G og lægges til image-disken.")
+    if any(not STORAGE.fullmatch(value[key]) for key in ("disk_storage", "snippet_storage")):
+        raise ValueError("Angiv gyldige storage-ID'er til disk og snippets.")
     master_url = value.get("master_url", "")
     if not isinstance(master_url, str):
         raise ValueError("Master-URL skal være tekst.")
@@ -59,42 +69,86 @@ def validate_plan(value):
     return dict(kind="single-vm-preview", deployment_enabled=False, role=role,
                 vmid=value["vmid"], name=value["name"], bridge=value["bridge"],
                 ipv4=str(address), gateway=str(gateway) if gateway else "", dns=str(dns),
-                master_url=master_url)
+                master_url=master_url, cpu=value["cpu"], memory_mib=value["memory_mib"],
+                disk_expansion=value["disk_expansion"], disk_storage=value["disk_storage"],
+                snippet_storage=value["snippet_storage"])
 
 
-def interactive_preview(default_bridge="", read=input, write=print):
-    """Show validated operator input, then return to the caller without saving."""
+def hardware_defaults(environ=None, source=None):
+    """Read the active shared installer's defaults, never source its shell."""
+    environ = os.environ if environ is None else environ
+    source = Path(__file__).with_name("mrnobody_installer.sh").read_text(encoding="utf-8") if source is None else source
+    result = {}
+    for key, field, setting in (
+        ("cpu", "CORES", "MRNOBODY_CPU"),
+        ("memory_mib", "MEMORY", "MRNOBODY_MEM"),
+        ("disk_expansion", "DISK_SIZE", "MRNOBODY_HDD"),
+    ):
+        match = re.search(r'^' + field + r'="\$\{' + setting + r':-([^}]+)\}"', source, re.M)
+        if not match:
+            raise ValueError(f"Kan ikke læse hardware-standard: {field}.")
+        value = environ.get(setting) or match[1]
+        result[key] = value if key == "disk_expansion" else int(value)
+    return result
+
+
+def interactive_preview(default_bridge="", read=input, write=print, *, offline=False):
+    """Show a plan, optionally check the host, then return without deployment."""
     write("Single VM / MrNobody - kun forhåndsvisning")
-    write("Ingen VM oprettes. VMID, bridge, storage og netværksadgang kontrolleres ikke på værten.")
-    write("Q i et felt vender tilbage. Master-installation er endnu ikke aktiveret.")
+    write("Ingen VM oprettes, og intet reserveres. Master-installation er endnu ikke aktiveret.")
+    write("Q i et felt vender tilbage.")
 
     def ask(label, default=""):
-        answer = read(label + (f" [{default}]" if default else "") + ": ").strip()
+        answer = read(label + (f" [{default}]" if default != "" else "") + ": ").strip()
         if answer.lower() == "q":
             raise EOFError
-        return answer or default
+        return answer or str(default)
 
     try:
+        try:
+            defaults = hardware_defaults()
+            inventory = None if offline else inspect_host()
+        except (ValueError, OSError) as exc:
+            write(f"Forhåndsvisning stoppet: {exc}")
+            ask("Enter for at vende tilbage")
+            return None
+        if inventory is None:
+            write("OFFLINE: Kun input valideres; værten kontrolleres ikke.")
+            disk_default, snippet_default = os.environ.get("LVM", ""), os.environ.get("LOCAL", "")
+        else:
+            for label, key in (("Bridges", "bridges"), ("Disk-storage (images)", "disk_storages"),
+                               ("Snippet-storage", "snippet_storages")):
+                write(label + ": " + ", ".join(inventory[key]))
+            default_bridge = default_bridge if default_bridge in inventory["bridges"] else ""
+            def preferred(setting, key):
+                choices = inventory[key]
+                value = os.environ.get(setting, "")
+                return value if value in choices else choices[0] if len(choices) == 1 else ""
+            disk_default, snippet_default = preferred("LVM", "disk_storages"), preferred("LOCAL", "snippet_storages")
         while True:
             try:
                 role = ask("Rolle: standalone/agent/master", "master")
                 raw = dict(
-                    role=role,
-                    vmid=int(ask("VMID (reserveres ikke)")),
+                    role=role, vmid=int(ask("VMID (reserveres ikke)")),
                     name=ask("VM-navn", f"mrnobody-{role}" if role in {"standalone", "agent", "master"} else ""),
-                    bridge=ask("Bridge", default_bridge),
-                    ipv4=ask("IPv4/CIDR"),
-                    gateway=ask("Gateway (tom er tilladt)"),
-                    dns=ask("DNS (IPv4)"),
+                    bridge=ask("Bridge", default_bridge), ipv4=ask("IPv4/CIDR"),
+                    gateway=ask("Gateway (tom er tilladt)"), dns=ask("DNS (IPv4)"),
+                    cpu=int(ask("vCPU", defaults["cpu"])),
+                    memory_mib=int(ask("RAM (MiB)", defaults["memory_mib"])),
+                    disk_expansion=ask("Diskudvidelse (+SIZE, fx 32G)", defaults["disk_expansion"]),
+                    disk_storage=ask("Disk-storage", disk_default),
+                    snippet_storage=ask("Snippet-storage", snippet_default),
                     master_url=ask("Master-URL (valgfri HTTPS)") if role == "agent" else "",
                 )
                 plan = validate_plan(raw)
+                plan["host_check"] = dict(status="not_checked", reserved=False) if inventory is None else check_host_plan(plan, inventory)
                 break
             except ValueError as exc:
                 write(f"Ugyldig plan: {exc}")
                 write("Prøv igen, eller Q for at vende tilbage.")
         write(json.dumps(plan, ensure_ascii=False, indent=2))
-        write("Kun input er valideret. Ingen indstillinger er gemt eller sendt til deploy.sh.")
+        write("Værtskontrol er et øjebliksbillede. Kapacitet og netværksadgang er ikke afprøvet.")
+        write("Ingen indstillinger er gemt eller sendt til deploy.sh.")
         ask("Enter for at vende tilbage til menuen")
         return plan
     except (EOFError, KeyboardInterrupt):
