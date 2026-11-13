@@ -146,7 +146,9 @@ class SingleVMPreview(unittest.TestCase):
             self.assertEqual(view.stage, "single")
             self.assertEqual(view.handle(10), "single-install")
             view.handle(curses.KEY_DOWN)
-            self.assertIsNone(view.handle(10))
+            self.assertEqual(view.handle(10), "single-install-agent")
+            view.handle(curses.KEY_DOWN)
+            self.assertEqual(view.handle(10), "single-install-standalone")
             self.assertEqual(view.stage, "single")
 
     def test_master_menu_only_asks_network_and_uses_initial_settings(self):
@@ -200,6 +202,46 @@ class SingleVMPreview(unittest.TestCase):
             self.assertEqual(commands.call_count, 1)  # image download only
             self.assertNotIn(["qm", "start", "9000"], [call.args[0] for call in commands.call_args_list])
             self.assertFalse(any("er installeret og startet" in str(call) for call in output.call_args_list))
+
+    def test_slave_menu_saves_master_host_and_selected_transport(self):
+        from MRNOBODY import single_vm_host as host
+        inventory = dict(vmids=[], bridges=["vmbr7"], disk_storages=["local-lvm"],
+                         snippet_storages=["local"], checked_at_utc="test")
+        for scheme in ("https", "http", ""):
+            answers = iter(["192.0.2.10/24", "192.0.2.1", "192.0.2.53", "master.test:8443", scheme])
+            prompts = []
+            def read(prompt):
+                prompts.append(prompt)
+                return next(answers)
+            with self.subTest(scheme=scheme), patch.object(host, "inspect_host", return_value=inventory), \
+                 patch.dict(os.environ, {"BRIDGE":"vmbr7", "LVM":"local-lvm", "LOCAL":"local"}):
+                plan = menu.single_menu_plan("agent", read=read, write=lambda value: None)
+            self.assertEqual(plan["master_url"], (scheme or "https")+"://master.test:8443")
+            self.assertEqual(plan["lab_http"], scheme=="http")
+            self.assertEqual(plan["role"], "agent")
+            self.assertEqual(len(prompts), 5)
+
+    def test_lab_http_requires_agent_and_explicit_boolean_opt_in(self):
+        self.assertEqual(planner.validate_plan(self.raw(role="agent", master_url="http://master.test", lab_http=True))["master_url"],
+                         "http://master.test")
+        for changes in (dict(role="master", lab_http=True), dict(role="standalone", lab_http=True),
+                        dict(role="agent", lab_http="1"), dict(role="agent", master_url="http://master.test"),
+                        dict(role="agent", lab_http=True, master_url="http://user:pass@master.test"),
+                        dict(role="agent", lab_http=True, master_url="http://master.test:0")):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                planner.validate_plan(self.raw(**changes))
+
+    def test_standalone_has_no_master_questions(self):
+        from MRNOBODY import single_vm_host as host
+        inventory = dict(vmids=[], bridges=["vmbr7"], disk_storages=["local-lvm"],
+                         snippet_storages=["local"], checked_at_utc="test")
+        reader = Mock(side_effect=["192.0.2.10/24", "192.0.2.1", "192.0.2.53"])
+        with patch.object(host, "inspect_host", return_value=inventory), \
+             patch.dict(os.environ, {"BRIDGE":"vmbr7", "LVM":"local-lvm", "LOCAL":"local"}):
+            plan = menu.single_menu_plan("standalone", read=reader, write=lambda value: None)
+        self.assertEqual(reader.call_count, 3)
+        self.assertEqual(plan["master_url"], "")
+        self.assertFalse(plan["lab_http"])
 
     def test_master_cancel_stops_before_image_download_or_creation(self):
         from MRNOBODY import single_vm_create as creator

@@ -20,7 +20,7 @@ def validate_plan(value):
     """Validate explicit Single VM input; never reserve or create anything."""
     required = {"role", "vmid", "name", "bridge", "ipv4", "gateway", "dns",
                 "cpu", "memory_mib", "disk_expansion", "disk_storage", "snippet_storage"}
-    if not isinstance(value, dict) or not required <= value.keys() or value.keys() - required - {"master_url"}:
+    if not isinstance(value, dict) or not required <= value.keys() or value.keys() - required - {"master_url", "lab_http"}:
         raise ValueError("Planen mangler felter eller indeholder ukendte felter.")
     if not all(isinstance(value[key], str) for key in required - {"vmid", "cpu", "memory_mib"}):
         raise ValueError("Rolle, navn og netværksfelter skal være tekst.")
@@ -62,14 +62,18 @@ def validate_plan(value):
     master_url = value.get("master_url", "")
     if not isinstance(master_url, str):
         raise ValueError("Master-URL skal være tekst.")
+    lab_http = value.get("lab_http", False)
+    if type(lab_http) is not bool or (lab_http and role != "agent"):
+        raise ValueError("Lab HTTP kræver agentrollen og et boolesk tilvalg.")
     if master_url:
-        match = MASTER_URL.fullmatch(master_url)
+        pattern = re.compile(MASTER_URL.pattern.replace("https://", "https?://", 1)) if lab_http else MASTER_URL
+        match = pattern.fullmatch(master_url)
         if role != "agent" or not match or not 1 <= int(match.group(3) or "443") <= 65535:
-            raise ValueError("Kun agent kan have en Master-URL; brug HTTPS uden login, query eller fragment.")
+            raise ValueError("Kun agent kan have Master-URL; HTTPS eller eksplicit lab HTTP uden login, query eller fragment.")
     return dict(kind="single-vm-preview", deployment_enabled=False, role=role,
                 vmid=value["vmid"], name=value["name"], bridge=value["bridge"],
                 ipv4=str(address), gateway=str(gateway) if gateway else "", dns=str(dns),
-                master_url=master_url, cpu=value["cpu"], memory_mib=value["memory_mib"],
+                master_url=master_url, lab_http=lab_http, cpu=value["cpu"], memory_mib=value["memory_mib"],
                 disk_expansion=value["disk_expansion"], disk_storage=value["disk_storage"],
                 snippet_storage=value["snippet_storage"])
 

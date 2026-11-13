@@ -58,6 +58,16 @@ class CreateSingleVM(unittest.TestCase):
         options.update(changes)
         return creator.create_vm(self.plan,self.image,**options)
 
+    def test_agent_http_opt_in_is_written_only_to_generated_config(self):
+        for scheme in ("http", "https"):
+            value = dict(self.plan)
+            value.update(role="agent", master_url=scheme+"://master.test", lab_http=scheme=="http")
+            rendered = creator.render_userdata(self.template, value, instance_id="a"*16)
+            self.assertIn("MRNOBODY_ROLE=agent", rendered)
+            self.assertIn("MRNOBODY_MASTER_URL="+scheme+"://master.test", rendered)
+            self.assertEqual('MRNOBODY_LAB_HTTP="1"' in rendered, scheme=="http")
+            self.assertNotIn("MRNOBODY_LAB_HTTP", self.template)
+
     def test_creates_only_selected_vm_with_one_bridge_and_no_start(self):
         result = self.create()
         self.assertEqual(self.inspect.call_count, 2)

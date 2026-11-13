@@ -2,10 +2,18 @@
 
 ## Fra hovedmenuen
 
-Vælg Single VM og derefter MrNobody Master. Menuen spørger kun om
+Vælg Single VM og derefter MrNobody Master, slave/agent eller standalone.
+For alle roller spørger menuen om
 IP-adresse/subnet, gateway og DNS. Bridge, storage og Ubuntu-image genbruges
 fra hovedinstallerens valg; VMID vælges fra 9000 og op, og hardware får
-MrNobody-standardværdierne. Slave/agent er endnu ikke åbnet.
+MrNobody-standardværdierne.
+Slave spørger desuden efter Master-IP/værtsnavn (med valgfri port) og HTTP/HTTPS.
+HTTPS er standard. HTTP indsætter MRNOBODY_LAB_HTTP="1" i den nye agents
+deployment.conf; samme flag skal sættes på Master for HTTP.
+Standalone og Master får ingen Master-adressespørgsmål.
+Agentnøgle og CA-tillid sættes op efter installation som beskrevet i
+[mrnobody-agent-client.md](mrnobody-agent-client.md). Agentservicen aktiveres
+ikke automatisk, og ingen nøgle gemmes i Proxmox-snippet.
 
 Menuen henter image, opretter VM og starter første boot. Den venter på, at VM'en
 selv slukker via cloud-init poweroff. Derefter oprettes First_snapshot, og Master

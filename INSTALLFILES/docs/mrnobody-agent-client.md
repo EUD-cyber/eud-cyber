@@ -21,8 +21,12 @@ Agent-ID'et er knyttet til den ene nøgle. Læg ikke virkelige nøgler i Git.
 
 ## 2. Vælg transport efter installation
 
-Valget ligger i /etc/mrnobody/deployment.conf; installationsmenuen ændres ikke
-i denne pakke. Bevar filens rolle og angiv Master-URL på agenten.
+Single VM-menuens slavevalg spørger nu om Master-IP/værtsnavn og HTTP/HTTPS
+og gemmer valget i /etc/mrnobody/deployment.conf. Standalone spørger ikke om Master.
+Big/Mini-flowet ændres ikke. Menuen udsteder ingen nøgle og aktiverer ikke
+agentservicen; følg nøgle-, tillids- og aktiveringstrinnene her.
+Eksisterende VM'er kan fortsat ændres efter installation. Bevar filens rolle
+og angiv Master-URL på agenten.
 
 HTTPS på agenten:
 
