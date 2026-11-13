@@ -288,9 +288,9 @@ def install_single_master():
                            check=True, timeout=1200)
             result = create_vm(plan, image)
         verify_boot(result["vmid"], result["instance_id"])
-        print("Installation kontrolleret og First_snapshot oprettet. Starter Master...")
+        print("VM'en har slukket, og First_snapshot er oprettet. Starter Master...")
         subprocess.run(["qm", "start", str(result["vmid"])], check=True, timeout=120)
-        print(f"Master VM {result['vmid']} er installeret og startet: https://{plan['ipv4'].split('/')[0]}")
+        print(f"Master VM {result['vmid']} er startet efter automatisk slukning og snapshot: https://{plan['ipv4'].split('/')[0]}")
 
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         print(f"Master-installation stoppet: {exc}. Eventuel VM bevares; ingen automatisk sletning.")
