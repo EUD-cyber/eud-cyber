@@ -28,6 +28,13 @@ def installer():
 
 
 class FreshInstall(unittest.TestCase):
+    def test_outbound_agent_client(self):
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "tests/mrnobody/agent_client.py"), "-v"],
+            capture_output=True, text=True, timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_master_registration_and_heartbeat(self):
         result = subprocess.run(
             [sys.executable, str(ROOT / "tests/mrnobody/master_registry.py"), "-v"],
