@@ -575,6 +575,54 @@ const MrnUI = (() => {
     }
     const setText = (id,text) => {const el=byId(id);if(el)el.textContent=text;};
     async function get(url) {const response=await fetch(url);if(!response.ok)throw new Error('Unavailable');return response.json();}
+    let masterAgentsRequest = 0;
+    async function refreshMasterAgents() {
+        const panel = byId('masterAgentsPanel'), root = byId('masterAgentsRuntime');
+        if (!panel || panel.hidden || !root) return;
+        const request = ++masterAgentsRequest;
+        root.replaceChildren();
+        node(root, 'p', 'Loading agents…', 'muted');
+        try {
+            const data = await get('/api/master/agents');
+            if (request !== masterAgentsRequest || panel.hidden) return;
+            if (!Array.isArray(data.agents)) throw new Error('Invalid agent list');
+            root.replaceChildren();
+            if (!data.agents.length) {
+                node(root, 'p', data.initialized === false
+                    ? 'No agent keys issued yet. Issue an exercise identity on the Master to begin.'
+                    : 'No agents in the registry.', 'empty-state');
+                return;
+            }
+            const list = node(root, 'div');
+            for (const agent of data.agents) {
+                const row = node(list, 'dl', undefined, 'overview-fields');
+                const timestamp = value => Number.isFinite(value) && value > 0
+                    && !Number.isNaN(new Date(value * 1000).getTime())
+                    ? new Date(value * 1000).toLocaleString() : 'Never';
+                const status = {pending:'Pending registration', online:'Online', offline:'Offline', revoked:'Revoked'}[agent.status] || 'Unknown';
+                for (const [label, value] of [['Agent ID', agent.agent_id], ['Name', agent.name || 'Not registered'],
+                        ['Status', status], ['Last contact', timestamp(agent.last_seen_at)]]) {
+                    node(row, 'dt', label);
+                    node(row, 'dd', String(value ?? 'Unavailable'));
+                }
+            }
+        } catch {
+            if (request === masterAgentsRequest && !panel.hidden)
+                setText('masterAgentsRuntime', 'Agent registry unavailable. Use Refresh agents to retry.');
+        }
+    }
+    function configureMasterAgents(deployment) {
+        const panel = byId('masterAgentsPanel');
+        if (!panel) return;
+        panel.hidden = !(deployment?.role === 'master' && deployment.config_status === 'loaded');
+        if (panel.hidden) {
+            masterAgentsRequest++;
+            byId('masterAgentsRuntime')?.replaceChildren();
+            return;
+        }
+        byId('masterAgentsRefresh').onclick = refreshMasterAgents;
+        refreshMasterAgents();
+    }
     function renderDeploymentStatus(deployment) {
         const root = byId('deploymentRuntime');
         if (!root) return;
@@ -615,8 +663,9 @@ const MrnUI = (() => {
                 get('/api/health').then(health=>{
                     setText('dashboardHealth',health.status==='ok'?'Online':health.status || 'Unknown');
                     renderDeploymentStatus(health.deployment);
+                    configureMasterAgents(health.deployment);
                     const root=byId('settingsRuntime');if(root){root.replaceChildren();const dl=node(root,'dl',undefined,'overview-fields');for(const [label,value] of [['Service',health.service],['Version',health.version],['API health',health.status],['Transport',window.location?.protocol === 'https:' ? 'HTTPS (current browser connection)' : 'HTTP (current browser connection)']]){node(dl,'dt',label);node(dl,'dd',value || 'Unavailable');}}
-                }).catch(()=>{setText('dashboardHealth','Unavailable');setText('settingsRuntime','Application health unavailable. Retry by opening Settings again.');setText('deploymentRuntime','Deployment status unavailable. Retry by opening Settings again.');}),
+                }).catch(()=>{configureMasterAgents(null);setText('dashboardHealth','Unavailable');setText('settingsRuntime','Application health unavailable. Retry by opening Settings again.');setText('deploymentRuntime','Deployment status unavailable. Retry by opening Settings again.');}),
                 get('/api/scenarios').then(data=>setText('dashboardScenarioCount',data.scenarios.length)).catch(()=>setText('dashboardScenarioCount','Unavailable')),
                 get('/api/schedules').then(data=>{setText('dashboardScheduleCount',data.schedules.length);setText('dashboardScheduleEnabled',`${data.schedules.filter(x=>x.enabled).length} enabled`);}).catch(()=>{setText('dashboardScheduleCount','Unavailable');setText('dashboardScheduleEnabled','Schedule status unavailable');}),
                 get('/api/reports').then(data=>{
