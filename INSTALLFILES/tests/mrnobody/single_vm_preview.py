@@ -124,6 +124,36 @@ class SingleVMPreview(unittest.TestCase):
         self.assertIsNone(planner.interactive_preview(read=lambda prompt: next(answers), write=messages.append, offline=True))
         self.assertIn("Ugyldig plan", "\n".join(messages))
 
+    def test_single_vm_is_visible_third_profile_and_master_opens_creation(self):
+        curses = types.SimpleNamespace(KEY_UP=1001, KEY_DOWN=1002, KEY_LEFT=1003,
+                                       KEY_RIGHT=1004, KEY_ENTER=1005)
+        with patch.dict(sys.modules, {"curses": curses}):
+            view = menu.Menu({"Big": {"rows": []}, "Mini": {"rows": []}})
+            view.handle(curses.KEY_DOWN)
+            self.assertEqual(view.profile, "Mini")
+            view.handle(curses.KEY_DOWN)
+            self.assertEqual(view.profile, "Single VM")
+            view.handle(10)
+            self.assertEqual(view.stage, "single")
+            self.assertEqual(view.handle(10), "single-install")
+            view.handle(curses.KEY_DOWN)
+            self.assertIsNone(view.handle(10))
+            self.assertEqual(view.stage, "single")
+
+    def test_menu_master_creation_keeps_bridge_and_never_calls_lab_deploy(self):
+        from MRNOBODY import single_vm_create as creator
+        result = dict(vmid=9000, instance_id="a"*16)
+        with patch.object(planner, "interactive_preview", return_value=planner.validate_plan(self.raw())) as preview, \
+             patch.object(creator, "create_vm", return_value=result) as create, \
+             patch.dict(os.environ, {"BRIDGE": "vmbr7"}), \
+             patch("builtins.input", side_effect=["/cloud.img", "OPRET 9000", ""]), \
+             patch("builtins.print"):
+            menu.install_single_master()
+        preview.assert_called_once_with(default_bridge="vmbr7", role="master",
+                                        return_label="Enter for at fortsætte")
+        self.assertEqual(create.call_args.args[0]["role"], "master")
+        self.assertEqual(create.call_args.args[1], Path("/cloud.img"))
+
     def test_menu_preview_never_reaches_lab_selection_output(self):
         with tempfile.TemporaryDirectory(dir=ROOT) as temporary:
             root = Path(temporary)

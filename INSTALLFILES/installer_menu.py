@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import sys
+import subprocess
 
 # Tag, resource variable prefix, display name, shared installer, always included.
 VMS = [
@@ -109,6 +110,7 @@ class Menu:
         self.selected = set()
         self.stage = "profile"
         self.cursor = 0
+        self.single_cursor = 0
 
     def text(self, screen, y, text, highlighted=False):
         import curses
@@ -124,11 +126,14 @@ class Menu:
             self.text(screen, 2, "Udvid vinduet, eller tryk Q for at annullere.")
             screen.refresh()
             return False
-        rows = self.profiles[self.profile]["rows"]
+        rows = self.profiles[self.profile if self.profile != "Single VM" else "Big"]["rows"]
         self.text(screen, 0, "CyberLab - " + ("Størrelse og minimumskrav" if self.stage == "profile" else "Tilvalg"))
         self.text(screen, 1, "=" * min(width - 4, 84))
         if self.stage == "profile":
-            for index, profile in enumerate(("Big", "Mini")):
+            for index, profile in enumerate(("Big", "Mini", "Single VM")):
+                if profile == "Single VM":
+                    self.text(screen, 3 + index, "(*) Single VM - MrNobody" if self.profile == profile else "( ) Single VM - MrNobody", self.profile == profile)
+                    continue
                 minimum = totals(self.profiles[profile]["rows"], base_only=True)
                 self.text(screen, 3 + index, f'{"(*)" if profile == self.profile else "( )"} {profile:4} Min./lab: {summary(minimum)}', profile == self.profile)
             self.text(screen, 6, f"Antal labs: {self.labs}  (+/- ændrer, 1-16)")
@@ -138,8 +143,17 @@ class Menu:
                 self.text(screen, 10 + index, f'{row["name"]:18} {row["cpu"]:6} {fmt(row["memory_mib"] / 1024):>10} {fmt(row["disk_gib"]):>11}')
             self.text(screen, 16, f'Minimum, {self.labs} lab(s): {summary(totals(rows, labs=self.labs, base_only=True))}')
             self.text(screen, 18, "MrNobody i Big/Mini: agent/slave (også i fremtidig Custom).")
-            self.text(screen, 19, "S: Single VM / Master - vis plan (ingen installation).")
-            self.text(screen, 21, "Op/ned: Big/Mini | +/-: labs | Enter: tilvalg | Q/Esc: annullér")
+            self.text(screen, 19, "S: Single VM - MrNobody Master eller slave.")
+            self.text(screen, 21, "Op/ned: Big/Mini/Single VM | Enter: vælg | Q/Esc: annullér")
+        elif self.stage == "single":
+            self.text(screen, 3, "Single VM - MrNobody")
+            self.text(screen, 5, "Master - opret én VM", self.single_cursor == 0)
+            self.text(screen, 6, "Slave/agent - ikke åbnet endnu", self.single_cursor == 1)
+            self.text(screen, 9, "Master bruger bridgen valgt ved installationens start.")
+            self.text(screen, 10, "Du bliver spurgt om IP/CIDR, gateway og DNS.")
+            self.text(screen, 12, "Master oprettes slukket; første boot køres separat.")
+            self.text(screen, 14, "Slave/agent har endnu ingen opsætningsspørgsmål.")
+            self.text(screen, 21, "Op/ned: vælg | Enter: fortsæt | B: tilbage | Q: stop")
         else:
             self.text(screen, 3, f"Profil: {self.profile} | Labs: {self.labs} | 4 basis-VM'er inkluderet")
             self.text(screen, 5, f'{"Tilvalg (pr. lab)":22} {"vCPU":>6} {"RAM GiB":>10} {"Disk +GiB":>11}')
@@ -165,15 +179,25 @@ class Menu:
             return "cancel"
         if self.stage == "profile":
             if key in (curses.KEY_UP, curses.KEY_DOWN, ord(" ")):
-                self.profile = "Mini" if self.profile == "Big" else "Big"
+                choices = ("Big", "Mini", "Single VM")
+                step = -1 if key == curses.KEY_UP else 1
+                self.profile = choices[(choices.index(self.profile) + step) % len(choices)]
             elif key in (ord("+"), ord("="), curses.KEY_RIGHT):
                 self.labs = min(16, self.labs + 1)
             elif key in (ord("-"), curses.KEY_LEFT):
                 self.labs = max(1, self.labs - 1)
             elif key in (ord("s"), ord("S")):
-                return "single-preview"
+                self.profile = "Single VM"
+                self.stage = "single"
             elif key in (10, 13, curses.KEY_ENTER):
-                self.stage = "options"
+                self.stage = "single" if self.profile == "Single VM" else "options"
+        elif self.stage == "single":
+            if key in (curses.KEY_UP, curses.KEY_DOWN):
+                self.single_cursor = 1 - self.single_cursor
+            elif key in (ord("b"), ord("B"), curses.KEY_LEFT):
+                self.stage = "profile"
+            elif key in (10, 13, curses.KEY_ENTER) and self.single_cursor == 0:
+                return "single-install"
         else:
             if key == curses.KEY_UP:
                 self.cursor = (self.cursor - 1) % len(OPTIONS)
@@ -203,11 +227,37 @@ class Menu:
             action = self.handle(key)
             if action == "cancel":
                 return None
-            if action == "single-preview":
-                return "single-preview"
+            if action == "single-install":
+                return "single-install"
             if action == "accept":
                 return validate_selection(dict(profile=self.profile, labs=self.labs,
                                                components=[c for c in OPTIONS if c in self.selected]))
+
+
+def install_single_master():
+    """Run only the existing Master creation wizard; never call lab deploy."""
+    from MRNOBODY.single_vm_create import create_vm
+    from MRNOBODY.single_vm_plan import interactive_preview
+    try:
+        plan = interactive_preview(default_bridge=os.environ.get("BRIDGE", ""),
+                                   role="master", return_label="Enter for at fortsætte")
+        if plan is None:
+            return
+        image = input("Sti til eksisterende lokal Ubuntu cloud-image (Q: tilbage): ").strip()
+        if not image or image.lower() == "q":
+            return
+        if input(f"Skriv OPRET {plan['vmid']} for at oprette Master: ").strip() != f"OPRET {plan['vmid']}":
+            print("Afbrudt. Ingen VM oprettet.")
+            return
+        result = create_vm(plan, Path(image))
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print("Master oprettet slukket. Kør første boot separat:")
+        print(f"python3 -m MRNOBODY.single_vm_boot --vmid {result['vmid']} --instance-id {result['instance_id']}")
+    except (ValueError, OSError, subprocess.SubprocessError) as exc:
+        print(f"Master-oprettelse stoppet: {exc}")
+    except (EOFError, KeyboardInterrupt):
+        print("Afbrudt.")
+    input("Enter for at vende tilbage til menuen: ")
 
 
 def main():
@@ -242,6 +292,9 @@ def main():
             view = Menu(profiles)
             while True:
                 result = curses.wrapper(view.run)
+                if result == "single-install":
+                    install_single_master()
+                    continue
                 if result != "single-preview":
                     break
                 from MRNOBODY.single_vm_plan import interactive_preview
