@@ -219,6 +219,14 @@ class API(unittest.TestCase):
                 self.assertEqual(self.call()[1],404)
         self.assertEqual(self.store.list_agents()[0]["status"],"pending")
 
+    def test_plain_http_requires_the_master_lab_flag(self):
+        self.assertEqual(self.call(secure=False)[1],403)
+        self.config.lab_http=True
+        self.assertEqual(self.call(secure=False)[1],200)
+        self.assertEqual(self.call("heartbeat",secure=False)[1],200)
+        self.config.role="agent"
+        self.assertEqual(self.call(secure=False)[1],404)
+
     def test_tls_is_required_and_forwarded_proto_only_trusted_from_loopback(self):
         self.assertEqual(self.call(secure=False)[1],403)
         self.assertEqual(self.call(secure=False,forwarded="https")[1],403)
