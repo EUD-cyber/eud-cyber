@@ -1,7 +1,7 @@
 # MrNobody Master: registrering og heartbeat, protokol 1
 
 Denne pakke tilføjer kun identitet og tilstedeværelsesstatus i den eksisterende
-backend. Agentklienten, jobkørsel og filoverførsel er endnu ikke implementeret.
+backend. Agentklienten beskrives i mrnobody-agent-client.md. Jobkørsel og filoverførsel er endnu ikke implementeret.
 
 ## Operatør på Master VM
 
@@ -22,7 +22,9 @@ registrering og heartbeat. Ny nøgle kræver i denne version et nyt agent-ID.
 
 ## Agent-API
 
-Begge endpoints kræver HTTPS og Authorization: Bearer <agentens nøgle>.
+Begge endpoints kræver Authorization: Bearer <agentens nøgle>. HTTPS er standard.
+HTTP accepteres kun ved eksplicit MRNOBODY_LAB_HTTP=1 på Master; agentklienten
+kræver samme opt-in. HTTP viser nøglen i capture-trafikken og er til labøvelser.
 
 POST /api/master/agents/register:
 
@@ -48,11 +50,13 @@ Andre roller og ugyldig deployment-konfiguration giver 404.
 
 X-Forwarded-Proto=https accepteres kun fra loopback, hvor den eksisterende
 nginx-proxy overskriver headeren. Eksterne afsendere kan ikke bruge headeren
-til at omgå HTTPS-kravet. Fremtidig agentklient skal verificere Masterens
+til at omgå standardkravet om HTTPS. Port 80 videresender kun de to præcise
+agent-endpoints med X-Forwarded-Proto=http; backendflaget bestemmer, om HTTP
+accepteres. Andre HTTP-stier beholder redirect til HTTPS. Fremtidig agentklient skal verificere Masterens
 certifikat; loopback-undtagelsen i installationskontrollen bruges ikke her.
 
 Autentifikationen gælder de to nye endpoints. Den ændrer ikke de eksisterende
 UI-/execution-ruters adgangskontrol. Masterens administrationsflade skal fortsat
 ligge bag labbets adgangsgrænse; offentlig administration kræver særskilt
-adgangskontrol. Der er endnu ingen agentoversigt i UI eller automatisk
-udgående agentforbindelse gennem NAT.
+adgangskontrol. Der er endnu ingen agentoversigt i UI. Agentklienten konfigureres og aktiveres
+eksplicit og forbinder ud gennem NAT.
