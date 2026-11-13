@@ -60,6 +60,15 @@ packages:
 
 write_files:
 
+  # Reserved deployment settings; not consumed by services yet.
+  # Keep local configuration outside /opt/nordic-attack, which is rebuilt.
+  - path: /etc/mrnobody/deployment.conf
+    owner: root:root
+    permissions: '0600'
+    content: |
+      MRNOBODY_ROLE="standalone"
+      MRNOBODY_MASTER_URL=""
+
   - path: /usr/local/sbin/install-mrnobody
     owner: root:root
     permissions: '0755'
