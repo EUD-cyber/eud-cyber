@@ -82,7 +82,7 @@ class SingleVMPreview(unittest.TestCase):
                 planner.validate_plan(self.raw(role=role, master_url=url))
 
     def test_prompt_shows_plan_without_commands_or_network(self):
-        answers = iter(["", "9000", "", "", "192.0.2.10/24", "192.0.2.1", "192.0.2.53", "", "", "", "local-lvm", "local", ""])
+        answers = iter(["", "9000", "", "192.0.2.10/24", "192.0.2.1", "192.0.2.53", "", "", "", "local-lvm", "local", ""])
         output = []
         with patch("subprocess.run", side_effect=AssertionError("unexpected command")), \
              patch("os.system", side_effect=AssertionError("unexpected shell")), \
@@ -95,11 +95,31 @@ class SingleVMPreview(unittest.TestCase):
         self.assertIn("Ingen VM oprettes", "\n".join(output))
         self.assertIn("Ingen indstillinger er gemt", "\n".join(output))
 
+    def test_other_roles_return_before_any_vm_or_network_questions(self):
+        for role in ("agent", "standalone"):
+            reader = Mock(side_effect=[role])
+            plan = planner.interactive_preview("vmbr7", read=reader, write=lambda value: None, offline=True)
+            self.assertIsNone(plan)
+            self.assertEqual(reader.call_count, 1)
+
+    def test_master_reuses_initial_bridge_and_prompts_for_ip(self):
+        answers = iter(["master", "9000", "", "192.0.2.10/24", "192.0.2.1", "192.0.2.53",
+                        "", "", "", "local-lvm", "local", ""])
+        prompts = []
+        def read(prompt):
+            prompts.append(prompt)
+            return next(answers)
+        plan = planner.interactive_preview("vmbr7", read=read, write=lambda value: None, offline=True)
+        self.assertEqual(plan["bridge"], "vmbr7")
+        self.assertEqual(plan["ipv4"], "192.0.2.10/24")
+        self.assertFalse(any(prompt.startswith("Bridge") for prompt in prompts))
+        self.assertTrue(any(prompt.startswith("Master IPv4/CIDR") for prompt in prompts))
+
     def test_cancel_and_invalid_input_do_not_return_a_plan(self):
         for response in ("q", KeyboardInterrupt(), EOFError()):
             reader = Mock(side_effect=response) if isinstance(response, BaseException) else lambda prompt: response
             self.assertIsNone(planner.interactive_preview(read=reader, write=lambda value: None, offline=True))
-        answers = iter(["master", "invalid-vmid", "q"])
+        answers = iter(["master", "vmbr7", "invalid-vmid", "q"])
         messages = []
         self.assertIsNone(planner.interactive_preview(read=lambda prompt: next(answers), write=messages.append, offline=True))
         self.assertIn("Ugyldig plan", "\n".join(messages))
@@ -139,7 +159,7 @@ class SingleVMPreview(unittest.TestCase):
             before = set(root.iterdir())
             result = subprocess.run(
                 [sys.executable, "-B", str(ROOT / "installer_menu.py"), "single-preview", "--offline"],
-                input="\n".join(["", "9000", "", "", "192.0.2.10/24", "192.0.2.1", "192.0.2.53", "", "", "", "local-lvm", "local", ""]) + "\n",
+                input="\n".join(["", "9000", "", "192.0.2.10/24", "192.0.2.1", "192.0.2.53", "", "", "", "local-lvm", "local", ""]) + "\n",
                 cwd=root, env=dict(os.environ, BRIDGE="vmbr7"), capture_output=True, text=True, timeout=10,
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
