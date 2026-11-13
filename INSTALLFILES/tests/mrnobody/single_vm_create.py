@@ -76,7 +76,7 @@ class CreateSingleVM(unittest.TestCase):
         self.assertFalse(any("start" in argv or "destroy" in argv for argv in self.calls))
         rendered = Path(result["snippet"]).read_text()
         self.assertIn("MRNOBODY_ROLE=master",rendered)
-        self.assertIn("  condition: false",rendered)
+        self.assertIn("  condition: true",rendered)
         self.assertIn(result["instance_id"],rendered)
         self.assertIn("MRNOBODY_SINGLE_VM:"+result["instance_id"]+":master",command)
         self.assertIn("  condition: true",self.template)
