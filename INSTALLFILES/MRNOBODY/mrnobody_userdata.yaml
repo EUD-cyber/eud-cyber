@@ -351,6 +351,14 @@ write_files:
           "$INSTALL_DIR/web/deployment_config.py"
 
       download_file \
+          "web/master_registry.py" \
+          "$INSTALL_DIR/web/master_registry.py"
+
+      download_file \
+          "web/master_api.py" \
+          "$INSTALL_DIR/web/master_api.py"
+
+      download_file \
           "web/app.py" \
           "$INSTALL_DIR/web/app.py"
 
