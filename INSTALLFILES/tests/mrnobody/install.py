@@ -27,6 +27,13 @@ def installer():
 
 
 class FreshInstall(unittest.TestCase):
+    def test_single_vm_creation(self):
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "tests/mrnobody/single_vm_create.py"), "-v"],
+            capture_output=True, text=True, timeout=20,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_single_vm_host_checks(self):
         result = subprocess.run(
             [sys.executable, str(ROOT / "tests/mrnobody/single_vm_host_checks.py"), "-v"],
