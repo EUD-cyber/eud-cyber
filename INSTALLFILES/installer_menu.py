@@ -137,6 +137,8 @@ class Menu:
             for index, row in enumerate(r for r in rows if r["base"]):
                 self.text(screen, 10 + index, f'{row["name"]:18} {row["cpu"]:6} {fmt(row["memory_mib"] / 1024):>10} {fmt(row["disk_gib"]):>11}')
             self.text(screen, 16, f'Minimum, {self.labs} lab(s): {summary(totals(rows, labs=self.labs, base_only=True))}')
+            self.text(screen, 18, "MrNobody i Big/Mini: agent/slave (også i fremtidig Custom).")
+            self.text(screen, 19, "Single VM / Master: kommer senere - kan ikke vælges endnu.")
             self.text(screen, 21, "Op/ned: Big/Mini | +/-: labs | Enter: tilvalg | Q/Esc: annullér")
         else:
             self.text(screen, 3, f"Profil: {self.profile} | Labs: {self.labs} | 4 basis-VM'er inkluderet")
@@ -151,6 +153,7 @@ class Menu:
             self.text(screen, 16, "Tilvalg/lab: " + summary(extra))
             total = totals(rows, self.selected, self.labs)
             self.text(screen, 18, f'I alt, {total["vms"]} VM: {summary(total)}', True)
+            self.text(screen, 20, "MrNobody: agent/slave. Master kræver fremtidig Single VM.")
             self.text(screen, 21, "Op/ned: flyt | Space: vælg | B: tilbage | Enter: fortsæt | Q: stop")
         self.text(screen, 22, "vCPU=kerner x sockets | Disk=udvidelse | Ekskl. Proxmox/image")
         screen.refresh()
