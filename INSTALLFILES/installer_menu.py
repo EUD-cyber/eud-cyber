@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CyberLab hardware reader and terminal menu. Never execute VM installers here."""
+"""CyberLab menu with isolated Master creation and unchanged lab selection."""
 import argparse
 import json
 import os
@@ -234,30 +234,67 @@ class Menu:
                                                components=[c for c in OPTIONS if c in self.selected]))
 
 
+def master_menu_plan(read=input, write=print):
+    """Only network questions; reuse the initial installer choices."""
+    from MRNOBODY.single_vm_host import inspect_host, check_host_plan
+    from MRNOBODY.single_vm_plan import validate_plan, hardware_defaults
+    inventory = inspect_host()
+    bridge, disk, snippets = (os.environ.get(key, "") for key in ("BRIDGE", "LVM", "LOCAL"))
+    if bridge not in inventory["bridges"] or disk not in inventory["disk_storages"] or snippets not in inventory["snippet_storages"]:
+        raise ValueError("De oprindelige bridge/storage-valg er ikke tilgængelige. Kontrollér hovedinstallerens valg og snippets-understøttelse.")
+    used = set(inventory["vmids"])
+    vmid = next((value for value in range(9000, 999_999_999 + 1) if value not in used), None)
+    if vmid is None:
+        raise ValueError("Intet ledigt Master-VMID.")
+    write("Installer MrNobody Master")
+    write(f"Bridge: {bridge} | VMID: {vmid} | Storage: {disk}")
+    write("Q annullerer.")
+    while True:
+        try:
+            answers = []
+            for label in ("IP-adresse/subnet (fx 192.0.2.10/24)", "Gateway (tom er tilladt)", "DNS (IPv4)"):
+                value = read(label + ": ").strip()
+                if value.lower() == "q":
+                    return None
+                answers.append(value)
+            plan = validate_plan(dict(role="master", vmid=vmid, name="mrnobody-master",
+                                      bridge=bridge, ipv4=answers[0], gateway=answers[1], dns=answers[2],
+                                      disk_storage=disk, snippet_storage=snippets, **hardware_defaults()))
+            plan["host_check"] = check_host_plan(plan, inventory)
+            return plan
+        except ValueError as exc:
+            write(f"Ugyldigt netværk: {exc}")
+
+
 def install_single_master():
-    """Run only the existing Master creation wizard; never call lab deploy."""
+    """Create Master with inherited settings and the selected Ubuntu image."""
+    import tempfile
+    from urllib.parse import urlsplit
     from MRNOBODY.single_vm_create import create_vm
-    from MRNOBODY.single_vm_plan import interactive_preview
     try:
-        plan = interactive_preview(default_bridge=os.environ.get("BRIDGE", ""),
-                                   role="master", return_label="Enter for at fortsætte")
+        image_url = os.environ.get("LINUX_IMG", "")
+        if urlsplit(image_url).scheme not in {"http", "https"} or not urlsplit(image_url).netloc:
+            raise ValueError("Ubuntu-image mangler. Start via hovedinstalleren.")
+        plan = master_menu_plan()
         if plan is None:
             return
-        image = input("Sti til eksisterende lokal Ubuntu cloud-image (Q: tilbage): ").strip()
-        if not image or image.lower() == "q":
-            return
-        if input(f"Skriv OPRET {plan['vmid']} for at oprette Master: ").strip() != f"OPRET {plan['vmid']}":
-            print("Afbrudt. Ingen VM oprettet.")
-            return
-        result = create_vm(plan, Path(image))
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        print("Master oprettet slukket. Kør første boot separat:")
+        with tempfile.TemporaryDirectory(prefix="mrnobody-master-") as temporary:
+            image = Path(temporary) / "ubuntu-cloud.img"
+            print("Henter den allerede valgte Ubuntu-image...")
+            subprocess.run(["curl", "--fail", "--location", "--proto", "=http,https",
+                            "--proto-redir", "=http,https", "--output", str(image), image_url],
+                           check=True, timeout=1200)
+            result = create_vm(plan, image)
+        print(f"Master VM {result['vmid']} oprettet slukket. Kør første boot:")
         print(f"python3 -m MRNOBODY.single_vm_boot --vmid {result['vmid']} --instance-id {result['instance_id']}")
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         print(f"Master-oprettelse stoppet: {exc}")
     except (EOFError, KeyboardInterrupt):
         print("Afbrudt.")
-    input("Enter for at vende tilbage til menuen: ")
+    try:
+        input("Enter for at vende tilbage til menuen: ")
+    except (EOFError, KeyboardInterrupt):
+        pass
 
 
 def main():
