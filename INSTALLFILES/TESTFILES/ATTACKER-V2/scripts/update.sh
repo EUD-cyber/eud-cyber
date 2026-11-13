@@ -31,6 +31,8 @@ NGINX_CHANGED=0
 SYSTEMD_CHANGED=0
 WEB_CHANGED=0
 CLI_CHANGED=0
+AGENT_CHANGED=0
+AGENT_WAS_ACTIVE=0
 
 UPDATE_STARTED=0
 
@@ -386,6 +388,46 @@ if [[ -f "${DOWNLOAD_DIR}/scripts/mrnobody" ]]; then
     CLI_CHANGED=1
 fi
 
+# Agent activation is always explicit. Updating must never start an inactive unit
+# or turn a Master/standalone VM into an agent.
+capture_agent_state() {
+    if (( AGENT_CHANGED != 1 )); then
+        return 0
+    fi
+    if python3 - "$INSTALL_DIR/web" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1])
+try:
+    from deployment_config import load_deployment_config
+    config = load_deployment_config()
+    valid = config.role == "agent" and config.config_status == "loaded"
+except (ImportError, OSError, ValueError):
+    valid = False
+raise SystemExit(0 if valid else 1)
+PY
+    then
+        if systemctl is-active --quiet mrnobody-agent.service; then
+            AGENT_WAS_ACTIVE=1
+        fi
+    fi
+}
+
+restart_updated_agent() {
+    if (( AGENT_CHANGED == 1 && AGENT_WAS_ACTIVE == 1 )); then
+        log "Reloading the already active MrNobody agent..."
+        systemctl daemon-reload || return $?
+        systemctl restart mrnobody-agent.service || return $?
+        systemctl is-active --quiet mrnobody-agent.service || return $?
+    fi
+}
+
+for agent_file in web/agent_client.py web/deployment_config.py web/master_registry.py systemd/mrnobody-agent.service; do
+    if [[ -f "$DOWNLOAD_DIR/$agent_file" ]]; then
+        AGENT_CHANGED=1
+    fi
+done
+capture_agent_state
+
 # ============================================================
 # CREATE BACKUP
 # ============================================================
@@ -584,6 +626,8 @@ rollback() {
         >/dev/null 2>&1 || true
 
     log
+    restart_updated_agent >/dev/null 2>&1 || log "Agent restart after rollback failed; check mrnobody-agent.service."
+
     log "Rollback completed."
     log "Previous MrNobody installation restored."
     log
@@ -748,6 +792,8 @@ fi
 # ============================================================
 # COMPLETE
 # ============================================================
+
+restart_updated_agent || rollback $?
 
 # Retire only after activation and health checks: rollback can still use old code.
 retire_old_code
