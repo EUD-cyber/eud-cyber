@@ -311,12 +311,16 @@ async function checkDeploymentStatus(page) {
     };
     try {
         for (const [value, expected] of [
-            [{role:'master',config_status:'loaded',master_url_configured:false,transport_enabled:false}, ['Master','Loaded','Not configured','Not enabled']],
-            [{role:'standalone',config_status:'default',master_url_configured:false,transport_enabled:false}, ['Standalone','Local defaults','Not configured','Not enabled']],
-            [{role:'agent',config_status:'loaded',master_url_configured:false,transport_enabled:false}, ['Agent','Loaded','Not configured','Not enabled']],
-            [{role:'agent',config_status:'loaded',master_url_configured:true,transport_enabled:false}, ['Agent','Loaded','Configured','Not enabled']],
-            [{role:'standalone',config_status:'invalid',master_url_configured:false,transport_enabled:false}, ['Standalone (fallback)','Invalid — local defaults in use','Not configured','Not enabled']],
-            [{role:'agent',config_status:'loaded',master_url_configured:true,transport_enabled:true}, ['Agent','Loaded','Configured','Unavailable']],
+            [{role:'agent',config_status:'loaded',master_url_configured:true,transport_enabled:null,master_scheme:'http',lab_http_enabled:true}, ['Agent','Loaded','Configured','Not monitored','HTTP (lab)']],
+            [{role:'agent',config_status:'loaded',master_url_configured:true,transport_enabled:null,master_scheme:'https',lab_http_enabled:true}, ['Agent','Loaded','Configured','Not monitored','HTTPS']],
+            [{role:'master',config_status:'loaded',master_url_configured:false,transport_enabled:false,lab_http_enabled:true}, ['Master','Loaded','Not configured','Not enabled','HTTPS and HTTP (lab)']],
+
+            [{role:'master',config_status:'loaded',master_url_configured:false,transport_enabled:false}, ['Master','Loaded','Not configured','Not enabled','HTTPS']],
+            [{role:'standalone',config_status:'default',master_url_configured:false,transport_enabled:false}, ['Standalone','Local defaults','Not configured','Not enabled','Local only']],
+            [{role:'agent',config_status:'loaded',master_url_configured:false,transport_enabled:false}, ['Agent','Loaded','Not configured','Not enabled','Not configured']],
+            [{role:'agent',config_status:'loaded',master_url_configured:true,transport_enabled:false}, ['Agent','Loaded','Configured','Not enabled','Unavailable']],
+            [{role:'standalone',config_status:'invalid',master_url_configured:false,transport_enabled:false}, ['Standalone (fallback)','Invalid — local defaults in use','Not configured','Not enabled','Unavailable']],
+            [{role:'agent',config_status:'loaded',master_url_configured:true,transport_enabled:true}, ['Agent','Loaded','Configured','Unavailable','Unavailable']],
         ]) {
             deployment = value;
             await refresh(expected);
