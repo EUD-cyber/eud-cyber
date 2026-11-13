@@ -575,6 +575,38 @@ const MrnUI = (() => {
     }
     const setText = (id,text) => {const el=byId(id);if(el)el.textContent=text;};
     async function get(url) {const response=await fetch(url);if(!response.ok)throw new Error('Unavailable');return response.json();}
+    function renderDeploymentStatus(deployment) {
+        const root = byId('deploymentRuntime');
+        if (!root) return;
+        root.replaceChildren();
+        if (!deployment || !['standalone', 'agent', 'master'].includes(deployment.role)
+                || !['default', 'loaded', 'invalid'].includes(deployment.config_status)) {
+            node(root, 'p', 'Deployment status is unavailable from this backend.', 'muted');
+            return;
+        }
+        const invalid = deployment.config_status === 'invalid';
+        const role = invalid ? 'Standalone (fallback)' : {standalone:'Standalone', agent:'Agent', master:'Master'}[deployment.role];
+        const configuration = deployment.config_status === 'default' ? 'Local defaults'
+            : invalid ? 'Invalid — local defaults in use' : 'Loaded';
+        const masterUrl = typeof deployment.master_url_configured === 'boolean'
+            ? deployment.master_url_configured ? 'Configured' : 'Not configured' : 'Unavailable';
+        // Configuration is not connection telemetry. Never infer "Connected".
+        const connection = deployment.transport_enabled === false ? 'Not enabled'
+            : deployment.transport_enabled === null ? 'Not monitored' : 'Unavailable';
+        const mode = invalid ? 'Unavailable' : deployment.role === 'standalone' ? 'Local only'
+            : deployment.role === 'master' ? deployment.lab_http_enabled === true ? 'HTTPS and HTTP (lab)' : 'HTTPS'
+            : deployment.master_scheme === 'https' ? 'HTTPS'
+            : deployment.master_scheme === 'http' && deployment.lab_http_enabled === true ? 'HTTP (lab)'
+            : deployment.master_url_configured === false ? 'Not configured' : 'Unavailable';
+        const fields = node(root, 'dl', undefined, 'overview-fields');
+        for (const [label, value] of [
+            ['Deployment role', role], ['Configuration', configuration],
+            ['Master URL', masterUrl], ['Master connection', connection], ['Agent transport', mode],
+        ]) {
+            node(fields, 'dt', label);
+            node(fields, 'dd', value);
+        }
+    }
     async function refreshDashboard(force=false) {
         if(dashboardPending || (!force && Date.now()-dashboardLoaded<30000))return;
         dashboardPending=true;
@@ -582,8 +614,9 @@ const MrnUI = (() => {
             await Promise.allSettled([
                 get('/api/health').then(health=>{
                     setText('dashboardHealth',health.status==='ok'?'Online':health.status || 'Unknown');
+                    renderDeploymentStatus(health.deployment);
                     const root=byId('settingsRuntime');if(root){root.replaceChildren();const dl=node(root,'dl',undefined,'overview-fields');for(const [label,value] of [['Service',health.service],['Version',health.version],['API health',health.status],['Transport',window.location?.protocol === 'https:' ? 'HTTPS (current browser connection)' : 'HTTP (current browser connection)']]){node(dl,'dt',label);node(dl,'dd',value || 'Unavailable');}}
-                }).catch(()=>{setText('dashboardHealth','Unavailable');setText('settingsRuntime','Application health unavailable. Retry by opening Settings again.');}),
+                }).catch(()=>{setText('dashboardHealth','Unavailable');setText('settingsRuntime','Application health unavailable. Retry by opening Settings again.');setText('deploymentRuntime','Deployment status unavailable. Retry by opening Settings again.');}),
                 get('/api/scenarios').then(data=>setText('dashboardScenarioCount',data.scenarios.length)).catch(()=>setText('dashboardScenarioCount','Unavailable')),
                 get('/api/schedules').then(data=>{setText('dashboardScheduleCount',data.schedules.length);setText('dashboardScheduleEnabled',`${data.schedules.filter(x=>x.enabled).length} enabled`);}).catch(()=>{setText('dashboardScheduleCount','Unavailable');setText('dashboardScheduleEnabled','Schedule status unavailable');}),
                 get('/api/reports').then(data=>{

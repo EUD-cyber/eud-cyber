@@ -37,6 +37,11 @@ esac
 [[ "$LABCOUNT" =~ ^([1-9]|1[0-6])$ ]] || die "Lab count must be between 1 and 16."
 export SPEC LABCOUNT
 
+# Lab profiles always install MrNobody as an agent; Master is Single VM only.
+export MRNOBODY_ROLE="agent"
+# Pass an explicit empty value too, overriding stale tmux server settings.
+export MRNOBODY_MASTER_URL="${MRNOBODY_MASTER_URL:-}"
+
 OPNSENSE="OPNSENSE/OPNSENSE_installer.sh"
 GUAC_CONFIG="GUACVM/GUACVM_ip.sh"
 # Both profiles have the same base VMs and optional components.
@@ -170,7 +175,8 @@ done
 # An existing tmux server may retain old environment values. Pass the settings
 # selected by install.sh explicitly, clearing stale values when they are unset.
 settings=(SPEC LABCOUNT LINUX_IMG KALI_IMG WAZUH_IMG OPNSENSE_IMG_URL
-          OPNSENSE_VERSION LOCAL LVM BRIDGE "${HARDWARE_SETTINGS[@]}")
+          OPNSENSE_VERSION LOCAL LVM BRIDGE MRNOBODY_ROLE MRNOBODY_MASTER_URL
+          "${HARDWARE_SETTINGS[@]}")
 worker_env=(env)
 for setting in "${settings[@]}"; do
     worker_env+=(-u "$setting")

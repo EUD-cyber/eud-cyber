@@ -1,0 +1,31 @@
+[Unit]
+Description=MrNobody outbound agent identity and heartbeat
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/mrnobody/agent.json
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/nordic-attack/web
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 /opt/nordic-attack/web/agent_client.py
+Restart=on-failure
+RestartSec=15
+RestartPreventExitStatus=2
+TimeoutStopSec=20
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+LockPersonality=true
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

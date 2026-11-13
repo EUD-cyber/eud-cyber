@@ -60,6 +60,15 @@ packages:
 
 write_files:
 
+  # Deployment settings are read by the backend for status only.
+  # Keep local configuration outside /opt/nordic-attack, which is rebuilt.
+  - path: /etc/mrnobody/deployment.conf
+    owner: root:root
+    permissions: '0600'
+    content: |
+      MRNOBODY_ROLE="standalone"
+      MRNOBODY_MASTER_URL=""
+
   - path: /usr/local/sbin/install-mrnobody
     owner: root:root
     permissions: '0755'
@@ -336,6 +345,26 @@ write_files:
       download_file \
           "web/static/planning.js" \
           "$INSTALL_DIR/web/static/planning.js"
+
+      download_file \
+          "web/deployment_config.py" \
+          "$INSTALL_DIR/web/deployment_config.py"
+
+      download_file \
+          "web/master_registry.py" \
+          "$INSTALL_DIR/web/master_registry.py"
+
+      download_file \
+          "web/master_api.py" \
+          "$INSTALL_DIR/web/master_api.py"
+
+      download_file \
+          "web/agent_client.py" \
+          "$INSTALL_DIR/web/agent_client.py"
+
+      download_file \
+          "systemd/mrnobody-agent.service" \
+          "$INSTALL_DIR/systemd/mrnobody-agent.service"
 
       download_file \
           "web/app.py" \

@@ -137,6 +137,8 @@ class Menu:
             for index, row in enumerate(r for r in rows if r["base"]):
                 self.text(screen, 10 + index, f'{row["name"]:18} {row["cpu"]:6} {fmt(row["memory_mib"] / 1024):>10} {fmt(row["disk_gib"]):>11}')
             self.text(screen, 16, f'Minimum, {self.labs} lab(s): {summary(totals(rows, labs=self.labs, base_only=True))}')
+            self.text(screen, 18, "MrNobody i Big/Mini: agent/slave (også i fremtidig Custom).")
+            self.text(screen, 19, "S: Single VM / Master - vis plan (ingen installation).")
             self.text(screen, 21, "Op/ned: Big/Mini | +/-: labs | Enter: tilvalg | Q/Esc: annullér")
         else:
             self.text(screen, 3, f"Profil: {self.profile} | Labs: {self.labs} | 4 basis-VM'er inkluderet")
@@ -151,6 +153,7 @@ class Menu:
             self.text(screen, 16, "Tilvalg/lab: " + summary(extra))
             total = totals(rows, self.selected, self.labs)
             self.text(screen, 18, f'I alt, {total["vms"]} VM: {summary(total)}', True)
+            self.text(screen, 20, "MrNobody: agent/slave. Master kræver fremtidig Single VM.")
             self.text(screen, 21, "Op/ned: flyt | Space: vælg | B: tilbage | Enter: fortsæt | Q: stop")
         self.text(screen, 22, "vCPU=kerner x sockets | Disk=udvidelse | Ekskl. Proxmox/image")
         screen.refresh()
@@ -167,6 +170,8 @@ class Menu:
                 self.labs = min(16, self.labs + 1)
             elif key in (ord("-"), curses.KEY_LEFT):
                 self.labs = max(1, self.labs - 1)
+            elif key in (ord("s"), ord("S")):
+                return "single-preview"
             elif key in (10, 13, curses.KEY_ENTER):
                 self.stage = "options"
         else:
@@ -198,6 +203,8 @@ class Menu:
             action = self.handle(key)
             if action == "cancel":
                 return None
+            if action == "single-preview":
+                return "single-preview"
             if action == "accept":
                 return validate_selection(dict(profile=self.profile, labs=self.labs,
                                                components=[c for c in OPTIONS if c in self.selected]))
@@ -212,11 +219,16 @@ def main():
     choose = commands.add_parser("choose")
     choose.add_argument("--profiles", type=Path, required=True)
     choose.add_argument("--output", type=Path, required=True)
+    preview = commands.add_parser("single-preview", help="Plan Single VM uden deployment")
+    preview.add_argument("--offline", action="store_true", help="Valider kun input uden værtskontrol")
     selection = commands.add_parser("selection")
     selection.add_argument("file", type=Path)
     args = parser.parse_args()
     if args.command == "resources":
         print(json.dumps(hardware(args.root, args.profile)))
+    elif args.command == "single-preview":
+        from MRNOBODY.single_vm_plan import interactive_preview
+        interactive_preview(default_bridge=os.environ.get("BRIDGE", ""), offline=args.offline)
     elif args.command == "selection":
         result = validate_selection(json.loads(args.file.read_text()))
         print("\n".join([result["profile"], str(result["labs"]), *result["components"]]))
@@ -227,7 +239,13 @@ def main():
         if set(profiles) != {"Big", "Mini"}:
             raise ValueError("Menuen mangler Big/Mini-hardwareværdier.")
         try:
-            result = curses.wrapper(Menu(profiles).run)
+            view = Menu(profiles)
+            while True:
+                result = curses.wrapper(view.run)
+                if result != "single-preview":
+                    break
+                from MRNOBODY.single_vm_plan import interactive_preview
+                interactive_preview(default_bridge=os.environ.get("BRIDGE", ""))
         except curses.error as exc:
             raise ValueError("Kan ikke åbne menuen. Brug en interaktiv terminal med TERM sat.") from exc
         if result is None:

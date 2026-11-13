@@ -9,6 +9,48 @@ if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
+# Explicit settings get their own snippet; ordinary calls keep legacy reuse.
+MRNOBODY_CUSTOM_USERDATA=""
+if [[ -n "${MRNOBODY_ROLE+x}${MRNOBODY_MASTER_URL+x}" ]]; then
+  MRNOBODY_CUSTOM_USERDATA=1
+  command -v python3 >/dev/null 2>&1 || {
+    echo "python3 is required to render MrNobody deployment settings." >&2
+    exit 1
+  }
+fi
+
+# Deployment settings are written to cloud-init; services do not consume them yet.
+# Keep existing direct calls compatible. Lab deployment will select agent later.
+MRNOBODY_ROLE="${MRNOBODY_ROLE:-standalone}"
+MRNOBODY_MASTER_URL="${MRNOBODY_MASTER_URL:-}"
+
+case "$MRNOBODY_ROLE" in
+  standalone|agent) ;;
+  master)
+    echo "Master is reserved for the future Single VM installer." >&2
+    exit 1
+    ;;
+  *)
+    echo "MRNOBODY_ROLE must be standalone or agent." >&2
+    exit 1
+    ;;
+esac
+
+# An empty URL is valid: existing labs must not require an available Master.
+# Accept an HTTPS DNS/IPv4 authority with an optional port and path.
+if [[ -n "$MRNOBODY_MASTER_URL" ]]; then
+  master_url_pattern='^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:([0-9]{1,5}))?(/[A-Za-z0-9._~%/+-]*)?$'
+  if ! [[ "$MRNOBODY_MASTER_URL" =~ $master_url_pattern ]]; then
+    echo "MRNOBODY_MASTER_URL must be an HTTPS URL without credentials, query or fragment." >&2
+    exit 1
+  fi
+  master_port="${BASH_REMATCH[3]:-443}"
+  if (( 10#$master_port < 1 || 10#$master_port > 65535 )); then
+    echo "MRNOBODY_MASTER_URL port must be between 1 and 65535." >&2
+    exit 1
+  fi
+fi
+
 LOGFILE="$(pwd)/LOGS/mrnobody${LAB}.log"
 
 # Create log file and ensure permissions
@@ -45,8 +87,47 @@ DST_USERDATA="mrnobody_userdata_lab${LAB}.yaml"            # destination filenam
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
 
-# Check if snippet already exists
-if [[ -f "$DST_PATH" ]]; then
+# Explicit settings must never reuse or overwrite another VM's snippet.
+if [[ -n "$MRNOBODY_CUSTOM_USERDATA" ]]; then
+  DST_USERDATA="$(python3 - "$SRC_USERDATA" "$SNIPPET_DIR" "$LAB" \
+      "$MRNOBODY_ROLE" "$MRNOBODY_MASTER_URL" <<'PY'
+import os
+from pathlib import Path
+import shlex
+import sys
+import tempfile
+
+source, directory, lab, role, master_url = sys.argv[1:]
+with open(source, encoding="utf-8", newline="") as handle:
+    template = handle.read()
+newline = "\r\n" if "\r\n" in template else "\n"
+rendered = template
+for key, default, value in (
+    ("MRNOBODY_ROLE", "standalone", role),
+    ("MRNOBODY_MASTER_URL", "", master_url),
+):
+    anchor = f'      {key}="{default}"{newline}'
+    if rendered.count(anchor) != 1:
+        raise SystemExit(f"Missing or ambiguous deployment setting: {key}")
+    rendered = rendered.replace(anchor, f"      {key}={shlex.quote(value)}{newline}")
+
+# A unique file prevents stale settings and preserves snippets used by other VMs.
+fd, destination = tempfile.mkstemp(
+    prefix=f"mrnobody_userdata_lab{lab}_", suffix=".yaml", dir=directory
+)
+try:
+    with os.fdopen(fd, "w", encoding="utf-8", newline="") as handle:
+        handle.write(rendered)
+    os.chmod(destination, 0o644)
+except BaseException:
+    os.unlink(destination)
+    raise
+print(Path(destination).name)
+PY
+  )"
+  DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
+  echo "Deployment user-data created: $DST_PATH"
+elif [[ -f "$DST_PATH" ]]; then
   echo "User-data already exists: $DST_PATH"
 else
   echo "User-data not found. Copying..."
