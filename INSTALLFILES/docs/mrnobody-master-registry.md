@@ -58,5 +58,25 @@ certifikat; loopback-undtagelsen i installationskontrollen bruges ikke her.
 Autentifikationen gælder de to nye endpoints. Den ændrer ikke de eksisterende
 UI-/execution-ruters adgangskontrol. Masterens administrationsflade skal fortsat
 ligge bag labbets adgangsgrænse; offentlig administration kræver særskilt
-adgangskontrol. Der er endnu ingen agentoversigt i UI. Agentklienten konfigureres og aktiveres
+adgangskontrol. Settings viser nu Master agents med agent-ID, navn, status og seneste kontakt.
+Oversigten er read-only og opdateres med Refresh agents. Den vises kun på
+Master. Ingen nøgler eller nøglehashes sendes til browseren. Agentklienten konfigureres og aktiveres
 eksplicit og forbinder ud gennem NAT.
+
+## Administrationsoversigt
+
+GET /api/master/agents er en HTTPS-only læserute på den eksisterende
+administrationsflade. Den følger samme labnet-adgangsgrænse som den øvrige UI;
+den bruger ikke agentnøgler som administratorlogin. Lab-HTTP-flaget gælder kun
+registrering og heartbeat. Andre roller returnerer 404. En endnu ikke oprettet
+database giver en tom oversigt uden at oprette filer. Registerfejl giver 503.
+Online er seneste kontakt inden for 90 sekunder; visningen opdateres manuelt.
+
+Efter opdatering af runtime kræves genstart af nordic-incident-web og en
+browsergenindlæsning. Big/Mini og installationsflowet ændres ikke.
+
+Browserregressionstesten kan køres med Playwright og Chromium installeret:
+
+    MRN_CHROME_PATH=/sti/til/chromium node INSTALLFILES/tests/mrnobody/master_overview.cjs
+
+Alle browserens requests håndteres af test-fixtures; der kræves ingen kørende Master.
