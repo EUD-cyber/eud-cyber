@@ -92,10 +92,10 @@ def hardware_defaults(environ=None, source=None):
     return result
 
 
-def interactive_preview(default_bridge="", read=input, write=print, *, offline=False):
+def interactive_preview(default_bridge="", read=input, write=print, *, offline=False, return_label="Enter for at vende tilbage til menuen"):
     """Show a plan, optionally check the host, then return without deployment."""
     write("Single VM / MrNobody - kun forhåndsvisning")
-    write("Ingen VM oprettes, og intet reserveres. Master-installation er endnu ikke aktiveret.")
+    write("Ingen VM oprettes, og intet reserveres. VM-oprettelse udføres kun via Single VM-oprettelsesværktøjet.")
     write("Q i et felt vender tilbage.")
 
     def ask(label, default=""):
@@ -149,7 +149,7 @@ def interactive_preview(default_bridge="", read=input, write=print, *, offline=F
         write(json.dumps(plan, ensure_ascii=False, indent=2))
         write("Værtskontrol er et øjebliksbillede. Kapacitet og netværksadgang er ikke afprøvet.")
         write("Ingen indstillinger er gemt eller sendt til deploy.sh.")
-        ask("Enter for at vende tilbage til menuen")
+        ask(return_label)
         return plan
     except (EOFError, KeyboardInterrupt):
         write("\nForhåndsvisning afsluttet uden deployment.")
