@@ -132,7 +132,7 @@ class HostChecks(unittest.TestCase):
 
     def test_online_prompt_checks_selected_values_and_reports_snapshot(self):
         inventory, _ = self.fixture()
-        answers = iter(["","9000","","","192.0.2.10/24","192.0.2.1","192.0.2.53","","","","","",""])
+        answers = iter(["","9000","","192.0.2.10/24","192.0.2.1","192.0.2.53","","","","","",""])
         output = []
         with patch.object(planner, "inspect_host", return_value=inventory), \
              patch.object(planner, "hardware_defaults", return_value=dict(cpu=4,memory_mib=4096,disk_expansion="32G")):
@@ -141,6 +141,16 @@ class HostChecks(unittest.TestCase):
         self.assertFalse(plan["deployment_enabled"])
         self.assertEqual((plan["disk_storage"],plan["snippet_storage"]),("local-lvm","local"))
         self.assertIn("Snippet-storage: local", "\n".join(output))
+
+    def test_missing_initial_bridge_stops_without_selecting_another(self):
+        inventory, _ = self.fixture()
+        reader = Mock(side_effect=["master"])
+        output = []
+        with patch.object(planner, "inspect_host", return_value=inventory):
+            plan = planner.interactive_preview("vmbr9", read=reader, write=output.append)
+        self.assertIsNone(plan)
+        self.assertEqual(reader.call_count, 1)
+        self.assertIn("Vælg bridge igen i hovedinstalleren", "\\n".join(output))
 
     def test_failed_host_inspection_returns_no_plan(self):
         output = []
