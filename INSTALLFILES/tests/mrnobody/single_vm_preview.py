@@ -20,6 +20,15 @@ spec.loader.exec_module(menu)
 
 
 class SingleVMPreview(unittest.TestCase):
+    def setUp(self):
+        temporary_directory = tempfile.TemporaryDirectory
+        def temporary(**options):
+            options.setdefault("dir", ROOT)
+            return temporary_directory(**options)
+        patcher = patch("tempfile.TemporaryDirectory", side_effect=temporary)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def raw(self, **changes):
         value = dict(role="master", vmid=9000, name="mrnobody-master", bridge="vmbr7",
                      ipv4="192.0.2.10/24", gateway="192.0.2.1", dns="192.0.2.53",
@@ -159,18 +168,38 @@ class SingleVMPreview(unittest.TestCase):
         self.assertEqual(plan["ipv4"], "192.0.2.10/24")
 
     def test_menu_master_downloads_selected_image_without_configuration_questions(self):
-        from MRNOBODY import single_vm_create as creator
+        from MRNOBODY import single_vm_create as creator, single_vm_boot as boot
         result = dict(vmid=9000, instance_id="a"*16)
         with patch.object(menu, "master_menu_plan", return_value=planner.validate_plan(self.raw())), \
              patch.object(creator, "create_vm", return_value=result) as create, \
+             patch.object(boot, "verify_boot") as verify, \
              patch.dict(os.environ, {"LINUX_IMG":"https://images.example/ubuntu.img"}), \
              patch.object(menu.subprocess, "run") as download, \
              patch("builtins.input", return_value="") as read, patch("builtins.print"):
             menu.install_single_master()
         self.assertEqual(read.call_count, 1)
         self.assertEqual(create.call_args.args[0]["role"], "master")
-        self.assertEqual(download.call_args.args[0][-1], "https://images.example/ubuntu.img")
-        self.assertTrue(download.call_args.kwargs["check"])
+        self.assertEqual(download.call_args_list[0].args[0][-1], "https://images.example/ubuntu.img")
+        self.assertTrue(download.call_args_list[0].kwargs["check"])
+        verify.assert_called_once_with(9000, "a"*16)
+        self.assertEqual(download.call_args_list[1].args[0], ["qm", "start", "9000"])
+        self.assertTrue(download.call_args_list[1].kwargs["check"])
+
+
+    def test_boot_failure_preserves_vm_and_does_not_run_final_start(self):
+        from MRNOBODY import single_vm_create as creator, single_vm_boot as boot
+        for error in (ValueError("cloud-init failed"), TimeoutError("timeout"), KeyboardInterrupt()):
+            with self.subTest(error=type(error).__name__), \
+                 patch.object(menu, "master_menu_plan", return_value=planner.validate_plan(self.raw())), \
+                 patch.object(creator, "create_vm", return_value=dict(vmid=9000, instance_id="a"*16)), \
+                 patch.object(boot, "verify_boot", side_effect=error), \
+                 patch.dict(os.environ, {"LINUX_IMG":"https://images.example/ubuntu.img"}), \
+                 patch.object(menu.subprocess, "run") as commands, \
+                 patch("builtins.input", return_value=""), patch("builtins.print") as output:
+                menu.install_single_master()
+            self.assertEqual(commands.call_count, 1)  # image download only
+            self.assertNotIn(["qm", "start", "9000"], [call.args[0] for call in commands.call_args_list])
+            self.assertFalse(any("er installeret og startet" in str(call) for call in output.call_args_list))
 
     def test_master_cancel_stops_before_image_download_or_creation(self):
         from MRNOBODY import single_vm_create as creator

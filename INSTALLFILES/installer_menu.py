@@ -151,7 +151,7 @@ class Menu:
             self.text(screen, 6, "Slave/agent - ikke åbnet endnu", self.single_cursor == 1)
             self.text(screen, 9, "Master bruger bridgen valgt ved installationens start.")
             self.text(screen, 10, "Du bliver spurgt om IP/CIDR, gateway og DNS.")
-            self.text(screen, 12, "Master oprettes slukket; første boot køres separat.")
+            self.text(screen, 12, "Master installeres, kontrolleres og startes automatisk.")
             self.text(screen, 14, "Slave/agent har endnu ingen opsætningsspørgsmål.")
             self.text(screen, 21, "Op/ned: vælg | Enter: fortsæt | B: tilbage | Q: stop")
         else:
@@ -267,10 +267,12 @@ def master_menu_plan(read=input, write=print):
 
 
 def install_single_master():
-    """Create Master with inherited settings and the selected Ubuntu image."""
+    """Create, verify, snapshot and start Master with inherited settings."""
     import tempfile
     from urllib.parse import urlsplit
     from MRNOBODY.single_vm_create import create_vm
+    from MRNOBODY.single_vm_boot import verify_boot
+    result = None
     try:
         image_url = os.environ.get("LINUX_IMG", "")
         if urlsplit(image_url).scheme not in {"http", "https"} or not urlsplit(image_url).netloc:
@@ -285,12 +287,17 @@ def install_single_master():
                             "--proto-redir", "=http,https", "--output", str(image), image_url],
                            check=True, timeout=1200)
             result = create_vm(plan, image)
-        print(f"Master VM {result['vmid']} oprettet slukket. Kør første boot:")
-        print(f"python3 -m MRNOBODY.single_vm_boot --vmid {result['vmid']} --instance-id {result['instance_id']}")
+        verify_boot(result["vmid"], result["instance_id"])
+        print("Installation kontrolleret og First_snapshot oprettet. Starter Master...")
+        subprocess.run(["qm", "start", str(result["vmid"])], check=True, timeout=120)
+        print(f"Master VM {result['vmid']} er installeret og startet: https://{plan['ipv4'].split('/')[0]}")
+
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
-        print(f"Master-oprettelse stoppet: {exc}")
+        print(f"Master-installation stoppet: {exc}. Eventuel VM bevares; ingen automatisk sletning.")
     except (EOFError, KeyboardInterrupt):
         print("Afbrudt.")
+    if result is not None:
+        print(f"VMID: {result['vmid']} | Instance-ID: {result['instance_id']}")
     try:
         input("Enter for at vende tilbage til menuen: ")
     except (EOFError, KeyboardInterrupt):

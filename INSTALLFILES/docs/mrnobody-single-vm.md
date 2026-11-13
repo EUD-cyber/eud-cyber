@@ -1,4 +1,20 @@
-# MrNobody Single VM-oprettelse
+# MrNobody Single VM-installation
+
+## Fra hovedmenuen
+
+Vælg Single VM og derefter MrNobody Master. Menuen spørger kun om
+IP-adresse/subnet, gateway og DNS. Bridge, storage og Ubuntu-image genbruges
+fra hovedinstallerens valg; VMID vælges fra 9000 og op, og hardware får
+MrNobody-standardværdierne. Slave/agent er endnu ikke åbnet.
+
+Menuen henter image, opretter VM, starter første boot og venter på verificeret
+cloud-init og lokal health. Derefter slukkes VM normalt, First_snapshot oprettes,
+og Master startes igen. Der vises kun succes, hvis hele forløbet lykkes.
+Ved fejl eller afbrydelse bevares VM og dens identitet til fejlsøgning.
+Eksisterende VM'er overtages ikke automatisk af en ny menuinstallation.
+
+## Separate CLI-værktøjer
+
 
 Denne vej opretter én slukket MrNobody Master-VM med én bridge.
 Master bruger BRIDGE fra hovedinstallerens første valg uden et nyt bridgevalg.
