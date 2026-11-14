@@ -25,6 +25,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install cloud-init renderer test dependency
+        run: python -m pip install 'PyYAML>=6,<7'
       - name: Check installer syntax without running installers
         run: |
           python -m compileall -q installer_menu.py single_vm_install.py MRNOBODY tests/installer
