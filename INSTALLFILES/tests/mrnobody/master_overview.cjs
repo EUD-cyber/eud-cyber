@@ -30,11 +30,33 @@ const shared={status:'idle',active:false,execution:null,phases:[],scenarios:[],s
   assert.match(await page.locator('#masterAgentsRuntime').textContent(), /Last heartbeat/);
   assert.match(await page.locator('#masterAgentsRuntime').textContent(), /Name/);
   assert.equal(await page.locator('#masterAgentsRuntime img').count(),0);
+  const firstAgent=page.getByRole('button',{name:'View agent agent-1',exact:true});
+  await firstAgent.focus();await page.keyboard.press('Enter');
+  const detail=page.locator('#masterAgentDetail');
+  assert.match(await detail.textContent(), /Agent details.*Agent ID.*agent-1.*Name.*<img.*Status.*Online.*Last heartbeat/s);
+  assert.match(await detail.textContent(), /Report metadata and report download are not available yet/);
+  assert.equal(await detail.locator('img').count(),0);
+  assert.equal(await firstAgent.getAttribute('aria-expanded'),'true');
+  assert.equal(await page.locator('#masterAgentDetailTitle').evaluate(el=>el===document.activeElement),true);
+  agents=[{agent_id:'agent-1',name:'Renamed slave',status:'offline',last_seen_at:1700000060}];
+  await page.clock.runFor(30000);
+  await page.waitForFunction(()=>document.getElementById('masterAgentDetail')?.textContent.includes('Renamed slave'));
+  assert.match(await detail.textContent(), /Offline/);
+  const heartbeat=await detail.locator('dd').last().textContent();
+  assert.equal(heartbeat,await page.evaluate(()=>new Date(1700000060*1000).toLocaleString()));
   for(const width of [1440,768,390]){await page.setViewportSize({width,height:1050});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));}
+  await page.getByRole('button',{name:'Back to agents',exact:true}).click();
+  assert.equal(await detail.count(),0);
+  assert.equal(await firstAgent.evaluate(el=>el===document.activeElement),true);
   agents=[{agent_id:'agent-offline',name:'Offline slave',status:'offline',last_seen_at:1700000000},{agent_id:'agent-pending',name:'Pending slave',status:'pending',last_seen_at:null}];
   await page.clock.runFor(30000);
   await page.waitForFunction(()=>document.getElementById('masterAgentsRuntime').textContent.includes('agent-pending'));
   assert.match(await page.locator('#masterAgentsRuntime').textContent(), /Offline.*Pending registration.*Never/s);
+  await page.getByRole('button',{name:'View agent agent-pending',exact:true}).click();
+  assert.match(await detail.textContent(), /Pending registration.*Never/s);
+  await page.getByRole('button',{name:'View agent agent-offline',exact:true}).click();
+  assert.match(await detail.textContent(), /agent-offline.*Offline/s);
+  assert.doesNotMatch(await detail.textContent(), /agent-pending/);
   await page.locator('[data-page="system"]').click();
   await page.waitForLoadState('networkidle');
   const backgroundRequests=requests;
@@ -43,14 +65,18 @@ const shared={status:'idle',active:false,execution:null,phases:[],scenarios:[],s
   await page.locator('#masterAgentsTab').click();
   agents=[]; await page.locator('#masterAgentsRefresh').click();
   await page.waitForFunction(()=>document.getElementById('masterAgentsRuntime').textContent.includes('No agents registered yet'));
+  assert.match(await detail.textContent(), /no longer available/);
   failed=true; await page.locator('#masterAgentsRefresh').click();
   await page.waitForFunction(()=>document.getElementById('masterAgentsRuntime').textContent.includes('unavailable'));
+  assert.equal(await detail.count(),0);
   failed=false;malformed=true;await page.locator('#masterAgentsRefresh').click();
   await page.waitForFunction(()=>document.getElementById('masterAgentsRuntime').textContent.includes('unavailable'));
   malformed=false;
   failed=false;agents=[{agent_id:'agent-2',name:'Lab2',status:'revoked',last_seen_at:null}];
   await page.locator('#masterAgentsRefresh').click();
   await page.waitForFunction(()=>document.getElementById('masterAgentsRuntime').textContent.includes('Revoked'));
+  await page.getByRole('button',{name:'View agent agent-2',exact:true}).click();
+  assert.match(await detail.textContent(), /agent-2.*Revoked.*Never/s);
   for(const [testRole,status,unavailable] of [['agent','loaded',false],['standalone','default',false],['master','invalid',false],['master','loaded',true]]) {
    const previous=requests;role=testRole;configStatus=status;healthFailed=unavailable;
    await page.reload();await page.locator('[data-page="system"]').click();
@@ -60,6 +86,6 @@ const shared={status:'idle',active:false,execution:null,phases:[],scenarios:[],s
    await page.clock.runFor(30000);assert.equal(requests,previous);
   }
   assert.equal(writes,0);assert.deepEqual(errors,[]);
-  console.log('Agents browser tests passed: Master-only tab, heartbeat, all statuses, 30s refresh, inactive-tab pause, safe text, empty/error/retry/malformed states, 3 widths, unchanged agent/standalone visibility and no writes.');
+  console.log('Agents browser tests passed: keyboard/click details, back/focus, selection switching, selected heartbeat refresh, removed agent, Master-only tab, all statuses, inactive-tab pause, safe text, empty/error/retry/malformed states, 3 widths, unchanged agent/standalone visibility and no writes.');
  }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

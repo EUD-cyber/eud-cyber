@@ -575,7 +575,61 @@ const MrnUI = (() => {
     }
     const setText = (id,text) => {const el=byId(id);if(el)el.textContent=text;};
     async function get(url) {const response=await fetch(url);if(!response.ok)throw new Error('Unavailable');return response.json();}
-    let masterAgentsRequest = 0, masterAgentsTimer = null;
+    let masterAgentsRequest = 0, masterAgentsTimer = null, selectedMasterAgent = null;
+    function renderMasterAgents(agents) {
+        const root = byId('masterAgentsRuntime');
+        root.replaceChildren();
+        const timestamp = value => Number.isFinite(value) && value > 0
+            && !Number.isNaN(new Date(value * 1000).getTime())
+            ? new Date(value * 1000).toLocaleString() : 'Never';
+        function fields(parent, agent) {
+            const row = node(parent, 'dl', undefined, 'overview-fields');
+            const status = {pending:'Pending registration', online:'Online', offline:'Offline', revoked:'Revoked'}[agent.status] || 'Unknown';
+            for (const [label, value] of [['Agent ID', agent.agent_id], ['Name', agent.name || 'Not registered'],
+                    ['Status', status], ['Last heartbeat', timestamp(agent.last_seen_at)]]) {
+                node(row, 'dt', label);
+                node(row, 'dd', String(value ?? 'Unavailable'));
+            }
+        }
+        if (selectedMasterAgent !== null) {
+            const detail = node(root, 'section');
+            detail.id = 'masterAgentDetail';
+            detail.setAttribute('aria-labelledby', 'masterAgentDetailTitle');
+            const heading = node(detail, 'h3', 'Agent details');
+            heading.id = 'masterAgentDetailTitle';
+            heading.tabIndex = -1;
+            const back = node(detail, 'button', 'Back to agents', 'button button-small');
+            back.type = 'button';
+            back.onclick = () => {
+                const previous = selectedMasterAgent;
+                selectedMasterAgent = null;
+                renderMasterAgents(agents);
+                Array.from(root.querySelectorAll('[data-agent-id]')).find(button => button.dataset.agentId === previous)?.focus();
+            };
+            const agent = agents.find(item => item.agent_id === selectedMasterAgent);
+            if (agent) fields(detail, agent);
+            else node(detail, 'p', 'This agent is no longer available in the registry.', 'empty-state');
+            node(detail, 'p', 'Report metadata and report download are not available yet.', 'muted');
+        }
+        if (!agents.length) {
+            node(root, 'p', 'No agents registered yet. Slaves appear here after enrollment with this Master.', 'empty-state');
+            return;
+        }
+        const list = node(root, 'div');
+        for (const agent of agents) {
+            const entry = node(list, 'div');
+            const button = node(entry, 'button', `View agent ${agent.agent_id}`, 'button button-small');
+            button.type = 'button';
+            button.dataset.agentId = agent.agent_id;
+            button.setAttribute('aria-expanded', String(agent.agent_id === selectedMasterAgent));
+            button.onclick = () => {
+                selectedMasterAgent = agent.agent_id;
+                renderMasterAgents(agents);
+                byId('masterAgentDetailTitle').focus();
+            };
+            fields(entry, agent);
+        }
+    }
     async function refreshMasterAgents() {
         const panel = byId('masterAgentsPanel'), root = byId('masterAgentsRuntime');
         if (!panel || panel.hidden || !root) return;
@@ -586,24 +640,7 @@ const MrnUI = (() => {
             const data = await get('/api/master/agents');
             if (request !== masterAgentsRequest || panel.hidden) return;
             if (!Array.isArray(data.agents)) throw new Error('Invalid agent list');
-            root.replaceChildren();
-            if (!data.agents.length) {
-                node(root, 'p', 'No agents registered yet. Slaves appear here after enrollment with this Master.', 'empty-state');
-                return;
-            }
-            const list = node(root, 'div');
-            for (const agent of data.agents) {
-                const row = node(list, 'dl', undefined, 'overview-fields');
-                const timestamp = value => Number.isFinite(value) && value > 0
-                    && !Number.isNaN(new Date(value * 1000).getTime())
-                    ? new Date(value * 1000).toLocaleString() : 'Never';
-                const status = {pending:'Pending registration', online:'Online', offline:'Offline', revoked:'Revoked'}[agent.status] || 'Unknown';
-                for (const [label, value] of [['Agent ID', agent.agent_id], ['Name', agent.name || 'Not registered'],
-                        ['Status', status], ['Last heartbeat', timestamp(agent.last_seen_at)]]) {
-                    node(row, 'dt', label);
-                    node(row, 'dd', String(value ?? 'Unavailable'));
-                }
-            }
+            renderMasterAgents(data.agents);
         } catch {
             if (request === masterAgentsRequest && !panel.hidden)
                 setText('masterAgentsRuntime', 'Agent registry unavailable. Use Refresh agents to retry.');
@@ -618,6 +655,7 @@ const MrnUI = (() => {
             clearInterval(masterAgentsTimer);
             masterAgentsTimer = null;
             masterAgentsRequest++;
+            selectedMasterAgent = null;
             byId('masterAgentsRuntime')?.replaceChildren();
             if (page.classList.contains('app-page-active')) showPage('dashboard');
             return;

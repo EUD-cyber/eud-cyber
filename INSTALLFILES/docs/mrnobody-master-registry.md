@@ -62,7 +62,7 @@ certifikat; loopback-undtagelsen i installationskontrollen bruges ikke her.
 Autentifikationen gælder de to nye endpoints. Den ændrer ikke de eksisterende
 UI-/execution-ruters adgangskontrol. Masterens administrationsflade skal fortsat
 ligge bag labbets adgangsgrænse; offentlig administration kræver særskilt
-adgangskontrol. Settings viser nu Master agents med agent-ID, navn, status og seneste kontakt.
+adgangskontrol. Agents-fanen viser Master agents med agent-ID, navn, status og seneste kontakt.
 Oversigten er read-only og opdateres med Refresh agents. Den vises kun på
 Master. Ingen nøgler eller nøglehashes sendes til browseren. Agentklienten konfigureres og aktiveres
 eksplicit og forbinder ud gennem NAT.
@@ -74,7 +74,12 @@ administrationsflade. Den følger samme labnet-adgangsgrænse som den øvrige UI
 den bruger ikke agentnøgler som administratorlogin. Lab-HTTP-flaget gælder kun
 registrering og heartbeat. Andre roller returnerer 404. En endnu ikke oprettet
 database giver en tom oversigt uden at oprette filer. Registerfejl giver 503.
-Online er seneste kontakt inden for 90 sekunder; visningen opdateres manuelt.
+Online er seneste kontakt inden for 90 sekunder. Oversigten og den valgte
+Agent-detaljevisning opdateres hvert 30. sekund, når fanen er synlig, samt med
+Refresh agents. Klik View agent for at se ID, navn, status og seneste heartbeat;
+Back to agents lukker detaljen. Pending og Revoked bevares som særskilte statusser.
+Detaljen bruger samme GET-svar som listen og introducerer ingen nye API-ruter.
+Ved registerfejl fjernes de viste data, indtil en opdatering lykkes.
 
 Efter opdatering af runtime kræves genstart af nordic-incident-web og en
 browsergenindlæsning. Big/Mini og installationsflowet ændres ikke.
@@ -84,3 +89,34 @@ Browserregressionstesten kan køres med Playwright og Chromium installeret:
     MRN_CHROME_PATH=/sti/til/chromium node INSTALLFILES/tests/mrnobody/master_overview.cjs
 
 Alle browserens requests håndteres af test-fixtures; der kræves ingen kørende Master.
+
+## Opdatering og manuel kontrol
+
+Kør på Master og derefter på Slave:
+
+    sudo mrnobody update
+
+Updateren genstarter webservicen ved ændrede webfiler. Genindlæs Master-browseren
+helt (Ctrl+F5), åbn Agents og klik View agent. Kontroller ID, navn, status og
+seneste heartbeat. Lad fanen være synlig og kontroller, at kontaktens tidspunkt
+opdateres. Uden kontakt i mere end 90 sekunder skal status blive Offline ved
+næste opdatering. Slave behøver ingen ny protokol til denne UI-ændring.
+VM-testen skal udføres i det eksisterende lab; browsertesten bruger fixtures.
+
+## Næste lille trin: rapportmetadata gennem udgående forbindelse
+
+Rapportmetadata og rapportdownload er endnu ikke implementeret. AgentTransport
+sender kun register/heartbeat og validerer svarets felter præcist. Masterens
+POST-ruter afviser ekstra felter og har en grænse på 4096 bytes. Metadata bør
+derfor ikke blot føjes til heartbeat.
+
+Næste særskilte ændring bør være et begrænset, autentificeret metadata-POST fra
+Slaven til Master over samme udgående transport og individuelle agentnøgle.
+Det kræver ingen indgående forbindelse til Slaven eller portåbning i OPNsense.
+Afklar og test før implementering: stabilt rapport-ID, navn, tidspunkt,
+phase/scenarie, antal/størrelsesgrænser, idempotent synkronisering, slettede
+rapporter samt genforsøg uden at blokere heartbeat. Master skal binde metadata
+til den autentificerede agent og understøtte Slaves uden metadatafunktionen.
+Eventuel lab-HTTP-rute skal tilføjes eksplicit i nginx; HTTPS er standard.
+Rapportindhold/download er et efterfølgende trin. Ingen af disse ændringer må
+indføre remote execution eller scenario launch.
