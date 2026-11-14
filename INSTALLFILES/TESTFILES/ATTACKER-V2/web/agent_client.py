@@ -8,6 +8,7 @@ import random
 import signal
 import ssl
 import stat
+import tempfile
 import threading
 import urllib.error
 import urllib.request
@@ -82,6 +83,43 @@ def load_agent_config(path=CREDENTIALS, deployment=None):
     if ca_file is not None and (not isinstance(ca_file,str) or not Path(ca_file).is_absolute() or not Path(ca_file).is_file()):
         raise FatalAgentError("CA file must be an existing absolute path.")
     return AgentConfig(deployment.master_url,agent_id,name,token,ca_file,deployment.lab_http)
+
+
+def pair_agent(source, *, destination=CREDENTIALS, ca_file=None, deployment=None, transport=None):
+    """Import a Master-issued private file only after authenticated HTTPS succeeds.
+
+    Never replace an existing identity. The caller explicitly enables the unit.
+    """
+    deployment=load_deployment_config() if deployment is None else deployment
+    if not deployment.master_url.startswith("https://"):
+        raise FatalAgentError("Pairing requires HTTPS with certificate verification.")
+    destination=Path(destination)
+    if destination.exists() or destination.is_symlink():
+        raise FatalAgentError("Agent identity already exists; it was not overwritten.")
+    config=load_agent_config(source,deployment)
+    if ca_file is not None:
+        from dataclasses import replace
+        config=replace(config,ca_file=str(Path(ca_file).resolve(strict=True)))
+    sender=(AgentTransport if transport is None else transport)(config)
+    sender.post("register")
+    sender.post("heartbeat")
+    if destination.parent.is_symlink():
+        raise FatalAgentError("Credential directory must not be a symlink.")
+    destination.parent.mkdir(mode=0o700,parents=True,exist_ok=True)
+    data=dict(agent_id=config.agent_id,token=config.token,name=config.name,
+              protocol_version=1,heartbeat_interval=HEARTBEAT_INTERVAL)
+    if config.ca_file:
+        data["ca_file"]=config.ca_file
+    # Publish a complete mode-0600 file atomically, without overwriting a racer.
+    fd,temporary=tempfile.mkstemp(prefix=".agent-",dir=destination.parent)
+    try:
+        with os.fdopen(fd,"w",encoding="utf-8") as handle:
+            json.dump(data,handle)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.link(temporary,destination)
+    finally:
+        Path(temporary).unlink()
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -196,8 +234,19 @@ def main():
     mode=parser.add_mutually_exclusive_group()
     mode.add_argument("--check",action="store_true",help="Validate configuration/trust without network")
     mode.add_argument("--once",action="store_true",help="Register and send one heartbeat")
+    mode.add_argument("--pair",type=Path,metavar="PRIVATE_JSON",help="Import Master-issued credentials after verified HTTPS registration")
+    parser.add_argument("--ca-file",type=Path,help="Trusted CA/public certificate for --pair; never the Master private key")
     args=parser.parse_args()
+    if args.ca_file and not args.pair:
+        parser.error("--ca-file requires --pair")
     try:
+        if args.pair:
+            if not hasattr(os,"geteuid") or os.geteuid()!=0:
+                raise FatalAgentError("Run pairing as root on the agent VM.")
+            pair_agent(args.pair,destination=args.credentials,ca_file=args.ca_file)
+            print("Pairing and heartbeat accepted; private agent identity installed.")
+            print("Activate explicitly: systemctl enable --now mrnobody-agent.service")
+            return 0
         config=load_agent_config(args.credentials)
         sender=AgentTransport(config)
         if args.check:
@@ -222,6 +271,10 @@ def main():
     except RegistrationRequired:
         print("Master requires registration again.")
         return 1
+    except FileNotFoundError:
+        print("Agent identity or trust file is missing. Pair using --pair PRIVATE_JSON.")
+        print("Guide: https://github.com/EUD-cyber/eud-cyber/blob/main/INSTALLFILES/docs/mrnobody-agent-client.md")
+        return 2
     except (OSError,ValueError,RecursionError):
         print("Agent configuration could not be loaded.")
         return 2

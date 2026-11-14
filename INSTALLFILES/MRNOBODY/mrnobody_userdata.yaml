@@ -422,6 +422,22 @@ write_files:
         "$INSTALL_DIR/systemd/nordic-incident-web.service" \
         /etc/systemd/system/nordic-incident-web.service
 
+      # Install only on a valid agent deployment. Pairing and activation are
+      # explicit; never invent a token or enable an agent on Master/Standalone.
+      if python3 - "$INSTALL_DIR/web" <<'PY'
+      import sys
+      sys.path.insert(0, sys.argv[1])
+      from deployment_config import load_deployment_config
+      config = load_deployment_config()
+      raise SystemExit(0 if config.role == "agent" and config.config_status == "loaded" else 1)
+      PY
+      then
+        install -m 0644 "$INSTALL_DIR/systemd/mrnobody-agent.service" \
+          /etc/systemd/system/mrnobody-agent.service
+        systemctl daemon-reload
+        log "Agent service installed; awaiting secure Master pairing. Guide: https://github.com/EUD-cyber/eud-cyber/blob/main/INSTALLFILES/docs/mrnobody-agent-client.md"
+      fi
+
 
       # ======================================================
       # NORMALIZE WINDOWS LINE ENDINGS

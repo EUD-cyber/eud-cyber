@@ -33,6 +33,7 @@ WEB_CHANGED=0
 CLI_CHANGED=0
 AGENT_CHANGED=0
 AGENT_WAS_ACTIVE=0
+AGENT_UNIT_INSTALLED=0
 
 UPDATE_STARTED=0
 
@@ -97,7 +98,9 @@ TMP_DIR="$(mktemp -d)"
 
 REMOTE_MANIFEST="${TMP_DIR}/update-manifest.txt"
 DOWNLOAD_DIR="${TMP_DIR}/files"
-BACKUP_DIR="${TMP_DIR}/backup"
+# Retain rollback files after this process exits. No credentials or registry
+# files are distributed by the manifest or overwritten by this updater.
+BACKUP_DIR="$(mktemp -d /var/backups/mrnobody-update.XXXXXXXX)"
 
 mkdir -p \
     "$DOWNLOAD_DIR" \
@@ -113,6 +116,7 @@ log " MrNobody Update"
 log "========================================"
 log
 log "Installation: $INSTALL_DIR"
+log "Backup: $BACKUP_DIR"
 log
 log "Checking GitHub..."
 
@@ -244,10 +248,55 @@ if [[ -f "${DOWNLOAD_DIR}/web/report_exports.py" || -f "${INSTALL_DIR}/web/repor
     /usr/bin/python3 -c 'import reportlab' || die "PDF dependency validation failed"
 fi
 
+is_agent_deployment() {
+    python3 - "$INSTALL_DIR/web" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1])
+try:
+    from deployment_config import load_deployment_config
+    config = load_deployment_config()
+    valid = config.role == "agent" and config.config_status == "loaded"
+except (ImportError, OSError, ValueError):
+    valid = False
+raise SystemExit(0 if valid else 1)
+PY
+}
+
+install_agent_unit() {
+    is_agent_deployment || return 0
+    local source="$INSTALL_DIR/systemd/mrnobody-agent.service"
+    local target="/etc/systemd/system/mrnobody-agent.service"
+    [[ -f "$source" ]] || { log "Agent unit is missing; rerun mrnobody update."; return 1; }
+    if ! cmp -s "$source" "$target"; then
+        mkdir -p "$BACKUP_DIR/system/systemd" || return $?
+        if [[ -e "$target" || -L "$target" ]]; then
+            cp -a "$target" "$BACKUP_DIR/system/systemd/mrnobody-agent.service" || return $?
+        fi
+        AGENT_UNIT_INSTALLED=1
+        if ! install -m 0644 "$source" "$target" || ! systemctl daemon-reload; then
+            # Also restore the unit in the no-code-change repair path, where
+            # the full updater rollback function has not been defined yet.
+            rm -f "$target"
+            if [[ -e "$BACKUP_DIR/system/systemd/mrnobody-agent.service" || -L "$BACKUP_DIR/system/systemd/mrnobody-agent.service" ]]; then
+                cp -a "$BACKUP_DIR/system/systemd/mrnobody-agent.service" "$target" || return $?
+            fi
+            AGENT_UNIT_INSTALLED=0
+            systemctl daemon-reload >/dev/null 2>&1 || true
+            return 1
+        fi
+    fi
+    if ! python3 "$INSTALL_DIR/web/agent_client.py" --check >/dev/null 2>&1; then
+        log "Agent awaits configuration/pairing; no service was enabled. Guide: https://github.com/EUD-cyber/eud-cyber/blob/main/INSTALLFILES/docs/mrnobody-agent-client.md"
+    else
+        log "Agent unit installed. Activate explicitly after pairing: systemctl enable --now mrnobody-agent.service"
+    fi
+}
+
 if (( NEW == 0 && CHANGED == 0 )); then
 
     log
     retire_old_code
+    install_agent_unit || die "Agent service repair failed; backup: $BACKUP_DIR"
     log "MrNobody is already up to date."
 
     exit 0
@@ -394,17 +443,7 @@ capture_agent_state() {
     if (( AGENT_CHANGED != 1 )); then
         return 0
     fi
-    if python3 - "$INSTALL_DIR/web" <<'PY'
-import sys
-sys.path.insert(0, sys.argv[1])
-try:
-    from deployment_config import load_deployment_config
-    config = load_deployment_config()
-    valid = config.role == "agent" and config.config_status == "loaded"
-except (ImportError, OSError, ValueError):
-    valid = False
-raise SystemExit(0 if valid else 1)
-PY
+    if is_agent_deployment
     then
         if systemctl is-active --quiet mrnobody-agent.service; then
             AGENT_WAS_ACTIVE=1
@@ -612,6 +651,13 @@ rollback() {
         fi
     fi
 
+    if (( AGENT_UNIT_INSTALLED == 1 )); then
+        rm -f /etc/systemd/system/mrnobody-agent.service
+        if [[ -e "$BACKUP_DIR/system/systemd/mrnobody-agent.service" || -L "$BACKUP_DIR/system/systemd/mrnobody-agent.service" ]]; then
+            cp -a "$BACKUP_DIR/system/systemd/mrnobody-agent.service" /etc/systemd/system/mrnobody-agent.service
+        fi
+    fi
+
     systemctl daemon-reload \
         >/dev/null 2>&1 || true
 
@@ -793,6 +839,7 @@ fi
 # COMPLETE
 # ============================================================
 
+install_agent_unit || rollback $?
 restart_updated_agent || rollback $?
 
 # Retire only after activation and health checks: rollback can still use old code.

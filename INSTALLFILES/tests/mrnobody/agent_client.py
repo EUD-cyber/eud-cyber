@@ -80,6 +80,63 @@ class Configuration(unittest.TestCase):
         self.path.write_text(json.dumps(data),encoding="utf-8")
         self.path.chmod(0o600)
 
+    def test_pairing_registers_with_master_and_saves_private_identity_without_replacing_it(self):
+        from master_registry import Registry
+        store=Registry(self.root/"master"/"registry.sqlite3")
+        token=store.issue("agent-1")
+        self.save(token=token)
+        target=self.root/"installed"/"agent.json"
+        calls=[]
+        class Transport:
+            def __init__(self,config):
+                self.config=config
+            def post(self,kind):
+                calls.append(kind)
+                if kind=="register":
+                    return store.register(self.config.agent_id,self.config.token,self.config.name)
+                return store.heartbeat(self.config.agent_id,self.config.token)
+        agent.pair_agent(self.path,destination=target,deployment=self.deployment,transport=Transport)
+        self.assertEqual(calls,["register","heartbeat"])
+        loaded=agent.load_agent_config(target,self.deployment)
+        self.assertEqual(loaded.token,token)
+        self.assertEqual(store.list_agents()[0]["status"],"online")
+        if os.name=="posix":
+            self.assertEqual(target.stat().st_mode&0o777,0o600)
+        original=target.read_bytes()
+        with self.assertRaises(agent.FatalAgentError):
+            agent.pair_agent(self.path,destination=target,deployment=self.deployment,transport=Transport)
+        self.assertEqual(target.read_bytes(),original)
+        self.assertEqual(len(calls),2)
+
+    def test_failed_pairing_and_other_roles_do_not_install_credentials(self):
+        self.save()
+        target=self.root/"new"/"agent.json"
+        for error in (agent.FatalAgentError("refused"),agent.RetryableAgentError("offline")):
+            transport=Mock(return_value=Mock(post=Mock(side_effect=error)))
+            with self.assertRaises(type(error)):
+                agent.pair_agent(self.path,destination=target,deployment=self.deployment,transport=transport)
+            self.assertFalse(target.exists())
+        for deployment in (replace(self.deployment,role="master"),replace(self.deployment,role="standalone"),
+                           replace(self.deployment,master_url="http://master.test",lab_http=True)):
+            transport=Mock()
+            with self.assertRaises(agent.FatalAgentError):
+                agent.pair_agent(self.path,destination=target,deployment=deployment,transport=transport)
+            transport.assert_not_called()
+            self.assertFalse(target.exists())
+
+    def test_pairing_keeps_tls_verification_and_refuses_symlink_destination(self):
+        self.save()
+        target=self.root/"new.json"
+        with patch.object(agent.AgentTransport,"post",side_effect=agent.FatalAgentError("certificate mismatch")):
+            with self.assertRaises(agent.FatalAgentError):
+                agent.pair_agent(self.path,destination=target,deployment=self.deployment)
+        self.assertFalse(target.exists())
+        if os.name=="posix":
+            target.symlink_to(self.root/"missing")
+            with self.assertRaises(agent.FatalAgentError):
+                agent.pair_agent(self.path,destination=target,deployment=self.deployment)
+            self.assertFalse((self.root/"missing").exists())
+
     def test_duplicate_credential_fields_are_refused_without_exposing_values(self):
         for key,first,last in (("agent_id","agent-2","agent-1"),
                                ("token","y"*43,"x"*43),
