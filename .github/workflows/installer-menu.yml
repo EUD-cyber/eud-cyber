@@ -1,0 +1,35 @@
+name: Installer menus and Single VM
+on:
+  pull_request:
+    paths:
+      - 'install.sh'
+      - 'INSTALLFILES/installer_menu.py'
+      - 'INSTALLFILES/single_vm_install.py'
+      - 'INSTALLFILES/*/*_installer.sh'
+      - 'INSTALLFILES/MRNOBODY/**'
+      - 'INSTALLFILES/tests/installer/**'
+      - 'INSTALLFILES/tests/mrnobody/single_vm*.py'
+      - 'INSTALLFILES/tests/mrnobody/installer_roles.py'
+      - '.github/workflows/installer-menu.yml'
+permissions:
+  contents: read
+defaults:
+  run:
+    working-directory: INSTALLFILES
+jobs:
+  menus-and-single-vm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check installer syntax without running installers
+        run: |
+          python -m compileall -q installer_menu.py single_vm_install.py MRNOBODY tests/installer
+          for file in ../install.sh deploy.sh */*_installer.sh GUACVM/GUACVM_ip.sh OPNSENSE/generate_config.sh; do bash -n "$file"; done
+      - name: Verify menus, hardware profiles, roles and isolated VM creation
+        run: |
+          python -m unittest discover -s tests/installer -v
+          python -m unittest discover -s tests/mrnobody -p 'single_vm*.py' -v
+          python tests/mrnobody/installer_roles.py -v

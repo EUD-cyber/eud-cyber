@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CyberLab menu with isolated Master creation and unchanged lab selection."""
+"""CyberLab profiles and individual lab VMs with shared hardware settings."""
 import argparse
 import json
 import os
@@ -69,7 +69,9 @@ def hardware(root, profile, environ=None):
                     raise ValueError(f"Ukendt CPU/socket-regel i {relative}.")
                 sockets = 1
         rows.append(dict(tag=tag, name=name, base=base, cpu=cores * sockets,
-                         memory_mib=memory, disk_gib=disk_gib(values["HDD"], prefix + "_HDD")))
+                         memory_mib=memory, disk_gib=disk_gib(values["HDD"], prefix + "_HDD"),
+                         settings={prefix + "_" + kind: values[kind] for kind in ("CPU", "MEM", "HDD")
+                                   if environ.get(prefix + "_" + kind)}))
     return dict(profile=profile, rows=rows)
 
 
@@ -111,6 +113,12 @@ class Menu:
         self.stage = "profile"
         self.cursor = 0
         self.single_cursor = 0
+        self.vm_cursor = 0
+        self.single_profile = "Big"
+
+    def single_choice(self, role=None):
+        return dict(kind="single-install", vm=VMS[self.vm_cursor][0],
+                    profile=self.single_profile, role=role)
 
     def text(self, screen, y, text, highlighted=False):
         import curses
@@ -132,7 +140,7 @@ class Menu:
         if self.stage == "profile":
             for index, profile in enumerate(("Big", "Mini", "Single VM")):
                 if profile == "Single VM":
-                    self.text(screen, 3 + index, "(*) Single VM - MrNobody" if self.profile == profile else "( ) Single VM - MrNobody", self.profile == profile)
+                    self.text(screen, 3 + index, "(*) Single VM" if self.profile == profile else "( ) Single VM", self.profile == profile)
                     continue
                 minimum = totals(self.profiles[profile]["rows"], base_only=True)
                 self.text(screen, 3 + index, f'{"(*)" if profile == self.profile else "( )"} {profile:4} Min./lab: {summary(minimum)}', profile == self.profile)
@@ -143,14 +151,26 @@ class Menu:
                 self.text(screen, 10 + index, f'{row["name"]:18} {row["cpu"]:6} {fmt(row["memory_mib"] / 1024):>10} {fmt(row["disk_gib"]):>11}')
             self.text(screen, 16, f'Minimum, {self.labs} lab(s): {summary(totals(rows, labs=self.labs, base_only=True))}')
             self.text(screen, 18, "MrNobody i Big/Mini: agent/slave (også i fremtidig Custom).")
-            self.text(screen, 19, "S: Single VM - vælg MrNobody og derefter rolle.")
+            self.text(screen, 19, "S: Single VM - vælg VM, Big/Mini og labnummer [1].")
             self.text(screen, 21, "Op/ned: Big/Mini/Single VM | Enter: vælg | Q/Esc: annullér")
         elif self.stage == "single":
             self.text(screen, 3, "Single VM")
-            self.text(screen, 5, "MrNobody", True)
-            self.text(screen, 21, "Enter: vælg rolle | B: tilbage | Q: stop")
+            for index, vm in enumerate(VMS):
+                self.text(screen, 5 + index, vm[2], index == self.vm_cursor)
+            self.text(screen, 18, "Tilføj én VM til et eksisterende lab. Labnummer [1].")
+            self.text(screen, 21, "Op/ned: vælg VM | Enter: Big/Mini | B: tilbage | Q: stop")
+        elif self.stage == "single-size":
+            vm = VMS[self.vm_cursor]
+            self.text(screen, 3, "Single VM - " + vm[2])
+            for index, profile in enumerate(("Big", "Mini")):
+                row = next(row for row in self.profiles[profile]["rows"] if row["tag"] == vm[0])
+                self.text(screen, 5 + index, profile + ": " + summary(row), profile == self.single_profile)
+            self.text(screen, 9, "Samme CPU, RAM og diskvariabler som Big/Mini-labbet.")
+            self.text(screen, 10, "Disk er udvidelse af image-disken (+GiB).")
+            self.text(screen, 12, "Næste: " + ("Master / Slave / Standalone" if vm[0] == "MRNOBODY" else "labnummer [1]"))
+            self.text(screen, 21, "Op/ned: Big/Mini | Enter: fortsæt | B: VM-liste | Q: stop")
         elif self.stage == "single-role":
-            self.text(screen, 3, "Single VM - MrNobody")
+            self.text(screen, 3, "Single VM - MrNobody / " + self.single_profile)
             self.text(screen, 5, "Master - opret én VM", self.single_cursor == 0)
             self.text(screen, 6, "Slave/agent - forbind til Master", self.single_cursor == 1)
             self.text(screen, 7, "Standalone - kør uden Master", self.single_cursor == 2)
@@ -158,6 +178,8 @@ class Menu:
             self.text(screen, 10, "Slave/Standalone: statiske LAN1/LAN2/OOBM-værdier fra labbet.")
             self.text(screen, 12, "VM installeres, slukker, får snapshot og startes igen.")
             self.text(screen, 14, "Slave spørger også om Master-adresse og HTTP/HTTPS.")
+            row = next(row for row in self.profiles[self.single_profile]["rows"] if row["tag"] == "MRNOBODY")
+            self.text(screen, 17, summary(row))
             self.text(screen, 21, "Op/ned: vælg | Enter: fortsæt | B: tilbage | Q: stop")
         else:
             self.text(screen, 3, f"Profil: {self.profile} | Labs: {self.labs} | 4 basis-VM'er inkluderet")
@@ -197,17 +219,29 @@ class Menu:
             elif key in (10, 13, curses.KEY_ENTER):
                 self.stage = "single" if self.profile == "Single VM" else "options"
         elif self.stage == "single":
-            if key in (ord("b"), ord("B"), curses.KEY_LEFT):
+            if key in (curses.KEY_UP, curses.KEY_DOWN):
+                self.vm_cursor = (self.vm_cursor + (-1 if key == curses.KEY_UP else 1)) % len(VMS)
+            elif key in (ord("b"), ord("B"), curses.KEY_LEFT):
                 self.stage = "profile"
             elif key in (10, 13, curses.KEY_ENTER):
-                self.stage = "single-role"
+                self.stage = "single-size"
+        elif self.stage == "single-size":
+            if key in (curses.KEY_UP, curses.KEY_DOWN, ord(" ")):
+                self.single_profile = "Mini" if self.single_profile == "Big" else "Big"
+            elif key in (ord("b"), ord("B"), curses.KEY_LEFT):
+                self.stage = "single"
+            elif key in (10, 13, curses.KEY_ENTER):
+                if VMS[self.vm_cursor][0] == "MRNOBODY":
+                    self.stage = "single-role"
+                else:
+                    return self.single_choice()
         elif self.stage == "single-role":
             if key in (curses.KEY_UP, curses.KEY_DOWN):
                 self.single_cursor = (self.single_cursor + (-1 if key == curses.KEY_UP else 1)) % 3
             elif key in (ord("b"), ord("B"), curses.KEY_LEFT):
-                self.stage = "single"
+                self.stage = "single-size"
             elif key in (10, 13, curses.KEY_ENTER):
-                return ("single-install", "single-install-agent", "single-install-standalone")[self.single_cursor]
+                return self.single_choice(("master", "agent", "standalone")[self.single_cursor])
         else:
             if key == curses.KEY_UP:
                 self.cursor = (self.cursor - 1) % len(OPTIONS)
@@ -237,31 +271,30 @@ class Menu:
             action = self.handle(key)
             if action == "cancel":
                 return None
-            if action in {"single-install", "single-install-agent", "single-install-standalone"}:
+            if isinstance(action, dict) and action.get("kind") == "single-install":
                 return action
             if action == "accept":
                 return validate_selection(dict(profile=self.profile, labs=self.labs,
                                                components=[c for c in OPTIONS if c in self.selected]))
 
 
-def single_menu_plan(role, read=input, write=print):
+def single_menu_plan(role, read=input, write=print, *, lab=None, environ=None):
     """Master asks for networking; lab roles reuse the shared static defaults."""
     from MRNOBODY.single_vm_host import inspect_host, check_host_plan
     from MRNOBODY.single_vm_plan import validate_plan, hardware_defaults, lab_network_defaults
     if role not in {"master", "agent", "standalone"}:
         raise ValueError("Ukendt Single VM-rolle.")
+    environ = os.environ if environ is None else environ
     inventory = inspect_host()
-    bridge, disk, snippets = (os.environ.get(key, "") for key in ("BRIDGE", "LVM", "LOCAL"))
+    bridge, disk, snippets = (environ.get(key, "") for key in ("BRIDGE", "LVM", "LOCAL"))
     if (role == "master" and bridge not in inventory["bridges"]) or disk not in inventory["disk_storages"] or snippets not in inventory["snippet_storages"]:
         raise ValueError("De oprindelige bridge/storage-valg er ikke tilgængelige. Kontrollér hovedinstallerens valg og snippets-understøttelse.")
     used = set(inventory["vmids"])
     vmid = next((value for value in range(9000, 999_999_999 + 1) if value not in used), None)
-    if vmid is None:
-        raise ValueError("Intet ledigt Single VMID.")
     write("Installer MrNobody " + {"master":"Master", "agent":"slave/agent", "standalone":"standalone"}[role])
-    write(f"VMID: {vmid} | Storage: {disk}")
+    write(f"Storage: {disk}")
     if role == "master":
-        write(f"Bridge: {bridge}")
+        write(f"Bridge: {bridge} | VMID: {vmid}")
     labs = []
     if role != "master":
         labs = sorted({int(match[1]) for name in inventory["bridges"]
@@ -282,20 +315,22 @@ def single_menu_plan(role, read=input, write=print):
                         return None
                     answers.append(value)
             else:
-                if len(labs) == 1:
-                    lab = labs[0]
-                else:
-                    value = read("Vælg eksisterende lab (" + ", ".join(map(str, labs)) + "): ").strip()
-                    if value.lower() == "q":
+                if lab is None:
+                    from single_vm_install import ask_lab
+                    lab = ask_lab(read=read, write=write)
+                    if lab is None:
                         return None
-                    lab = positive_integer(value, "Labnummer")
-                    if lab not in labs:
-                        raise ValueError("Vælg et af de eksisterende lab-netværk.")
+                if lab not in labs:
+                    raise ValueError("Det valgte lab mangler LAN1/LAN2/OOBM-bridges.")
+                vmid = next((value for value in range(lab * 1000, (lab + 1) * 1000) if value not in used), None)
                 network = lab_network_defaults(lab)
                 lab_fields = dict(lab=lab)
                 bridge = network["bridge"]
                 answers = [network[key] for key in ("ipv4", "gateway", "dns")]
                 write(f"Lab {lab}: LAN1 {network['ipv4']}, LAN2 {network['ipv4_2']}, OOBM {network['ipv4_1']}")
+                write(f"VMID: {vmid}")
+            if vmid is None:
+                raise ValueError("Intet ledigt VMID i det valgte interval.")
             master_url, lab_http = "", False
             if role == "agent":
                 host = read("Master IP/værtsnavn (valgfri :port): ").strip()
@@ -311,20 +346,22 @@ def single_menu_plan(role, read=input, write=print):
                 master_url, lab_http = protocol + "://" + host, protocol == "http"
                 if lab_http:
                     write("HTTP-lab: Master skal også have LAB_HTTP=1. Trafikken viser øvelsesnøglen i klartekst.")
-            plan = validate_plan(dict(role=role, vmid=vmid, name="mrnobody-" + role,
+            plan = validate_plan(dict(role=role, vmid=vmid, name=f"lab{lab}-MrNobody" if lab_fields else "mrnobody-" + role,
                                       bridge=bridge, ipv4=answers[0], gateway=answers[1], dns=answers[2],
-                                      disk_storage=disk, snippet_storage=snippets, master_url=master_url, lab_http=lab_http, **lab_fields, **hardware_defaults()))
+                                      disk_storage=disk, snippet_storage=snippets, master_url=master_url, lab_http=lab_http, **lab_fields, **hardware_defaults(environ=environ)))
             plan["host_check"] = check_host_plan(plan, inventory)
             return plan
         except ValueError as exc:
             write(f"Ugyldigt netværk: {exc}")
+            if role != "master":
+                lab = None
 
 
-def master_menu_plan(read=input, write=print):
-    return single_menu_plan("master", read=read, write=write)
+def master_menu_plan(read=input, write=print, **kwargs):
+    return single_menu_plan("master", read=read, write=write, **kwargs)
 
 
-def install_single_master(role="master"):
+def install_single_master(role="master", *, environ=None, lab=None):
     """Create, verify, snapshot and start Master with inherited settings."""
     import tempfile
     from urllib.parse import urlsplit
@@ -332,10 +369,13 @@ def install_single_master(role="master"):
     from MRNOBODY.single_vm_boot import verify_boot
     result = None
     try:
-        image_url = os.environ.get("LINUX_IMG", "")
+        image_url = (os.environ if environ is None else environ).get("LINUX_IMG", "")
         if urlsplit(image_url).scheme not in {"http", "https"} or not urlsplit(image_url).netloc:
             raise ValueError("Ubuntu-image mangler. Start via hovedinstalleren.")
-        plan = master_menu_plan() if role == "master" else single_menu_plan(role)
+        if role == "master":
+            plan = master_menu_plan() if environ is None else master_menu_plan(environ=environ)
+        else:
+            plan = single_menu_plan(role, lab=lab, environ=environ)
         if plan is None:
             return
         with tempfile.TemporaryDirectory(prefix="mrnobody-single-") as temporary:
@@ -396,6 +436,10 @@ def main():
             view = Menu(profiles)
             while True:
                 result = curses.wrapper(view.run)
+                if isinstance(result, dict) and result.get("kind") == "single-install":
+                    from single_vm_install import install_single_vm
+                    install_single_vm(result, profiles)
+                    continue
                 if isinstance(result, str) and result in {"single-install", "single-install-agent", "single-install-standalone"}:
                     if result == "single-install":
                         install_single_master()

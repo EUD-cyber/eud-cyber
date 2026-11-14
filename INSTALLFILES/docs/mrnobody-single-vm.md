@@ -2,7 +2,7 @@
 
 ## Fra hovedmenuen
 
-Vælg Single VM, derefter MrNobody og til sidst Master, Slave eller Standalone.
+Vælg Single VM, derefter MrNobody, Big/Mini og til sidst Master, Slave eller Standalone.
 Kun Master spørger om egen IP-adresse/subnet, gateway og DNS og genbruger
 bridgen fra hovedinstallerens valg. Slave og Standalone bruger eksisterende
 lab-bridges og statiske IP'er som beskrevet nedenfor.
@@ -93,7 +93,7 @@ stadig afprøves på rigtig Proxmox; de isolerede tests bruger simulerede svar.
 
 ## Single VM-menu: roller og lab-netværk
 
-Vælg `Single VM` → `MrNobody` → `Master`, `Slave` eller `Standalone`.
+Vælg `Single VM` → `MrNobody` → `Big`/`Mini` → `Master`, `Slave` eller `Standalone`.
 Master beholder den oprindeligt valgte bridge og spørgsmål om egen IP/CIDR,
 gateway og DNS. Slave og Standalone læser i stedet de statiske værdier fra
 `MRNOBODY/mrnobody_installer.sh`:
@@ -105,7 +105,28 @@ gateway og DNS. Slave og Standalone læser i stedet de statiske værdier fra
 | net2 / LAN2 | `lab${LAB}_lan2` | `192.168.2.254/24` |
 
 Gateway og DNS er `192.168.1.1`. Alle tre bridges skal eksistere; menuen
-opretter dem ikke. Ét komplet lab vælges automatisk; ved flere vælges kun
-labnummeret. Der spørges aldrig om Slave/Standalone-VM'ens egne IP-adresser.
+opretter dem ikke. Labnummer spørges altid med standarden `1`; Enter vælger
+lab1. Der spørges aldrig om Slave/Standalone-VM'ens egne IP-adresser.
 Kun Slave spørger om Master-adresse og HTTPS/HTTP. Big/Mini og fremtidig
 Custom beholder agent/slave-rollen; denne rettelse tilføjer ingen Custom-profil.
+
+## Øvrige lab-VM'er under Single VM
+
+Alle 11 VM'er fra Big/Mini-menuen kan vælges enkeltvis: OPNsense, GUACVM,
+Kali01, VulnSrv01, VulnSrv02, Kali02, AppSrv01, Client01, Wazuh, T-Pot og
+MrNobody. Efter VM-valget vises Big og Mini med CPU, RAM og diskudvidelse
+fra de samme variabler som hovedmenuen, inklusive eventuelle egne overrides.
+Single VM bruger præcis den valgte profils indstillinger uden at eksportere
+dem tilbage til Big/Mini-menuen. Eksisterende Big-socketstandarder bevares.
+
+Labnummer `[1]` vælger de eksisterende lab-bridges, IP-standarder og VM-navne.
+Enter vælger lab1; 1-16 accepteres, og Q vender tilbage. VMID vælges af den
+fælles installer fra labnummer × 1000. MrNobody Slave/Standalone bruger samme
+labinterval og navnet `labN-MrNobody`; Master bevarer den separate netopsætning
+og VMID fra 9000 og spørger ikke om labnummer.
+
+Kun den valgte VM installeres. OPNsense kører først sin WAN-konfiguration,
+og GUACVM kører først sin IP-konfiguration. Ingen fuld labinstallation eller
+OVS-/værtsopsætning startes. Manglende bridges/storage eller en eksisterende
+VM af samme type i labbet stopper før installation. Andre VM'er i samme lab
+forhindrer ikke, at en manglende VM tilføjes.
