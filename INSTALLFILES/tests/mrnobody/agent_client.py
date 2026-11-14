@@ -80,6 +80,34 @@ class Configuration(unittest.TestCase):
         self.path.write_text(json.dumps(data),encoding="utf-8")
         self.path.chmod(0o600)
 
+    def test_lab_bootstrap_is_offline_unique_and_reuses_persistent_credentials(self):
+        deployment=replace(self.deployment,master_url="http://10.134.71.3",lab_http=True)
+        with patch.object(agent.AgentTransport,"post",side_effect=AssertionError("No network during bootstrap")):
+            first=agent.bootstrap_agent(self.path,deployment)
+            original=self.path.read_bytes()
+            second=agent.bootstrap_agent(self.path,deployment)
+            other=agent.bootstrap_agent(self.root/"other.json",deployment)
+        self.assertEqual(first,second)
+        self.assertEqual(self.path.read_bytes(),original)
+        self.assertNotEqual(first.agent_id,other.agent_id)
+        self.assertNotEqual(first.token,other.token)
+        if os.name=="posix":
+            self.assertEqual(self.path.stat().st_mode&0o777,0o600)
+
+    def test_bootstrap_gates_roles_and_never_replaces_bad_existing_credentials(self):
+        for deployment in (self.deployment,replace(self.deployment,lab_http=True,role="master"),
+                           replace(self.deployment,lab_http=True,role="standalone"),
+                           replace(self.deployment,lab_http=True,master_url=""),
+                           replace(self.deployment,lab_http=True,config_status="invalid")):
+            with self.assertRaises(agent.FatalAgentError):
+                agent.bootstrap_agent(self.path,deployment)
+            self.assertFalse(self.path.exists())
+        self.path.write_text("broken")
+        self.path.chmod(0o600)
+        with self.assertRaises(ValueError):
+            agent.bootstrap_agent(self.path,replace(self.deployment,lab_http=True))
+        self.assertEqual(self.path.read_text(),"broken")
+
     def test_pairing_registers_with_master_and_saves_private_identity_without_replacing_it(self):
         from master_registry import Registry
         store=Registry(self.root/"master"/"registry.sqlite3")
@@ -369,12 +397,12 @@ class MasterRoundtrip(unittest.TestCase):
                 return register
         self.api.install_master_api(App(),lambda:DeploymentConfig("master","","loaded",self.master_http),self.path)
 
-    def opener(self):
+    def opener(self,remote="198.51.100.8"):
         outer=self
         class Opener:
             def open(self,request,timeout):
                 parsed=urlsplit(request.full_url)
-                incoming=types.SimpleNamespace(is_secure=parsed.scheme=="https",remote_addr="198.51.100.8",
+                incoming=types.SimpleNamespace(is_secure=parsed.scheme=="https",remote_addr=remote,
                     headers={"Authorization":request.get_header("Authorization")},is_json=True,
                     content_length=len(request.data),stream=io.BytesIO(request.data))
                 with patch.object(outer.api,"request",incoming):
@@ -384,6 +412,33 @@ class MasterRoundtrip(unittest.TestCase):
                     raise urllib.error.HTTPError(request.full_url,status,"refused",{},io.BytesIO(raw))
                 return Response(raw)
         return Opener()
+
+    def test_ztd_bootstrap_register_retry_and_restart_with_two_agents_behind_nat(self):
+        deployment=DeploymentConfig("agent","http://10.134.71.3","loaded",True)
+        self.master_http=True
+        ids=[]
+        for number in range(2):
+            path=self.root/(str(number)+".json")
+            config=agent.bootstrap_agent(path,deployment)
+            original=path.read_bytes()
+            sender=agent.AgentTransport(config,self.opener(remote="10.134.71.2"))
+            real_post=sender.post
+            # The Master commits the first registration but its response is lost.
+            def lost_reply(kind):
+                real_post(kind)
+                raise agent.RetryableAgentError("lost response")
+            with patch.object(sender,"post",side_effect=[agent.RetryableAgentError("offline")]):
+                agent.run_loop(config,sender=sender,stop=Stop(1),jitter=lambda a,b:1,write=lambda value:None)
+            with patch.object(sender,"post",side_effect=lost_reply):
+                agent.run_loop(config,sender=sender,stop=Stop(1),jitter=lambda a,b:1,write=lambda value:None)
+            restarted=agent.bootstrap_agent(path,deployment)
+            stop=Stop(2)
+            agent.run_loop(restarted,sender=sender,stop=stop,write=lambda value:None)
+            self.assertEqual(stop.waits,[30,30])
+            self.assertEqual(path.read_bytes(),original)
+            ids.append(config.agent_id)
+        self.assertEqual(len(set(ids)),2)
+        self.assertEqual({row["agent_id"] for row in self.store.list_agents() if row["status"]=="online"},set(ids))
 
     def test_https_client_and_actual_registry_handlers_agree(self):
         sender=agent.AgentTransport(config(token=self.token),self.opener())
@@ -439,15 +494,16 @@ class Service(unittest.TestCase):
             self.assertIn("client_max_body_size 4k;",block)
             self.assertIn("proxy_pass http://127.0.0.1:8082;",block)
 
-    def test_unit_is_opt_in_and_restart_stops_on_permanent_errors(self):
+    def test_unit_checks_role_and_restart_stops_on_permanent_errors(self):
         unit=(WEB.parent/"systemd/mrnobody-agent.service").read_text()
         self.assertIn("ConditionPathExists=/etc/mrnobody/agent.json",unit)
         self.assertIn("RestartPreventExitStatus=2",unit)
         self.assertIn("ProtectSystem=strict",unit)
         self.assertIn("NoNewPrivileges=true",unit)
         userdata=(ROOT/"MRNOBODY/mrnobody_userdata.yaml").read_text(encoding="utf-8")
-        self.assertNotIn("systemctl enable mrnobody-agent",userdata)
-        self.assertNotIn("systemctl start mrnobody-agent",userdata)
+        self.assertIn("ExecCondition=/usr/bin/python3 /opt/nordic-attack/web/agent_client.py --check",unit)
+        self.assertIn('if python3 "$INSTALL_DIR/web/agent_client.py" --bootstrap; then',userdata)
+        self.assertIn("systemctl enable --now mrnobody-agent.service",userdata)
 
 
 if __name__=="__main__":

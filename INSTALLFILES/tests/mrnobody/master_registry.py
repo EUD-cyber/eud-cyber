@@ -72,6 +72,20 @@ class RegistryCases(unittest.TestCase):
         self.assertEqual(entry["last_seen_at"],130)
         self.assertEqual(entry["name"],"Lab1-Renamed")
 
+    def test_auto_enrollment_is_atomic_persistent_and_cannot_replace_or_unrevoke_identity(self):
+        self.store.register("new-agent","x"*43,"Slave",enroll=True)
+        self.now=130
+        self.store.register("new-agent","x"*43,"Slave",enroll=True)
+        self.assertEqual(self.store.list_agents()[0]["registered_at"],100)
+        self.assertEqual(Registry(self.path).heartbeat("new-agent","x"*43)["accepted"],True)
+        with self.assertRaises(Unauthorized):
+            self.store.register("new-agent","y"*43,"Replacement",enroll=True)
+        self.store.revoke("new-agent")
+        with self.assertRaises(Unauthorized):
+            self.store.register("new-agent","x"*43,"Slave",enroll=True)
+        self.assertEqual(self.store.list_agents()[0]["status"],"revoked")
+        self.assertNotIn(b"x"*43,self.path.read_bytes())
+
     def test_token_is_bound_to_issued_agent_and_unknown_agents_cannot_enroll(self):
         one=self.store.issue("agent-1")
         two=self.store.issue("agent-2")
@@ -167,7 +181,7 @@ class API(unittest.TestCase):
         api.install_master_api(App(),lambda:self.config,self.path)
         self.token=self.store.issue("agent-1")
 
-    def call(self,kind="register",data=None,*,raw=None,token=None,secure=True,remote="198.51.100.8",forwarded=None,length="auto",is_json=True):
+    def call(self,kind="register",data=None,*,raw=None,token=None,secure=True,remote="198.51.100.8",forwarded=None,real_ip=None,length="auto",is_json=True):
         if data is None:
             data=dict(agent_id="agent-1",protocol_version=1)
             if kind=="register":
@@ -176,6 +190,8 @@ class API(unittest.TestCase):
         headers={"Authorization":"Bearer "+(self.token if token is None else token)}
         if forwarded is not None:
             headers["X-Forwarded-Proto"]=forwarded
+        if real_ip is not None:
+            headers["X-Real-IP"]=real_ip
         request=types.SimpleNamespace(is_secure=secure,remote_addr=remote,headers=headers,is_json=is_json,
                                      content_length=len(body) if length=="auto" else length,stream=io.BytesIO(body))
         with patch.object(api,"request",request):
@@ -263,6 +279,20 @@ class API(unittest.TestCase):
         self.assertEqual(self.call("heartbeat",secure=False)[1],200)
         self.config.role="agent"
         self.assertEqual(self.call(secure=False)[1],404)
+
+    def test_lab_auto_enrollment_handles_nat_and_rejects_public_or_spoofed_peers(self):
+        data=dict(agent_id="new-agent",name="Slave",protocol_version=1)
+        self.assertEqual(self.call(data=data,remote="10.134.71.2")[1],401)
+        self.config.lab_http=True
+        for remote,real_ip in (("8.8.8.8",None),("8.8.8.8","10.0.0.1"),
+                               ("127.0.0.1","8.8.8.8"),("127.0.0.1","invalid")):
+            self.assertEqual(self.call(data=data,remote=remote,real_ip=real_ip,secure=False)[1],401)
+        for number in range(2):
+            data["agent_id"]="nat-agent-"+str(number)
+            self.assertEqual(self.call(data=data,remote="127.0.0.1",real_ip="10.134.71.2",secure=False)[1],200)
+            self.assertEqual(self.call(data=data,remote="10.134.71.2",secure=False)[1],200)
+        agents=self.store.list_agents()
+        self.assertEqual(sum(row["status"]=="online" for row in agents),2)
 
     def test_tls_is_required_and_forwarded_proto_only_trusted_from_loopback(self):
         self.assertEqual(self.call(secure=False)[1],403)

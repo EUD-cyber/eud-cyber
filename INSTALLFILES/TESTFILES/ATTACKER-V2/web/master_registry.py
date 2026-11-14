@@ -94,10 +94,21 @@ class Registry:
             raise Unauthorized()
         return row
 
-    def register(self,agent_id,token,name):
+    def register(self,agent_id,token,name, *, enroll=False):
+        validate_id(agent_id)
+        if not isinstance(token,str) or not TOKEN.fullmatch(token):
+            raise Unauthorized()
         if not isinstance(name,str) or not NAME.fullmatch(name):
             raise ValueError("Invalid agent name.")
-        with self._db(write=True) as db:
+        with self._db(create=enroll,write=True) as db:
+            if enroll:
+                # A private per-VM credential is persisted before first contact.
+                # Retrying after a lost response must never rotate credentials,
+                # replace an existing identity, or undo revocation.
+                db.execute("""INSERT OR IGNORE INTO agents
+                              (agent_id,token_hash,name,created_at) VALUES(?,?,?,?)""",
+                           (agent_id,hashlib.sha256(token.encode("ascii")).hexdigest(),
+                            name,int(self.clock())))
             row=self._authenticate(db,agent_id,token)
             now=max(int(self.clock()),row["last_seen_at"] or 0)
             db.execute("""UPDATE agents SET name=?, registered_at=COALESCE(registered_at,?),

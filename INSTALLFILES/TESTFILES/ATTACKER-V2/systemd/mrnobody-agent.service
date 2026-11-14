@@ -11,6 +11,7 @@ Group=root
 WorkingDirectory=/opt/nordic-attack/web
 Environment=PYTHONUNBUFFERED=1
 Environment=PYTHONDONTWRITEBYTECODE=1
+ExecCondition=/usr/bin/python3 /opt/nordic-attack/web/agent_client.py --check
 ExecStart=/usr/bin/python3 /opt/nordic-attack/web/agent_client.py
 Restart=on-failure
 RestartSec=15

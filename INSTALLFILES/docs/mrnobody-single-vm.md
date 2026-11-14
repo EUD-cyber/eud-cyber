@@ -90,7 +90,7 @@ VM-oprettelsen. Tidligere VM'er uden instance-ID overtages ikke automatisk.
 ## Det resterende Master-arbejde
 
 Rollen master genkendes af den eksisterende backend/UI, men Master/agent-
-registrering og heartbeat findes; agenten afventer eksplicit parring og aktivering. Provisionering og opstartsforløb skal
+registrering og heartbeat findes; lab-agenten får automatisk en persistent identitet og aktiveres uden parring. Provisionering og opstartsforløb skal
 stadig afprøves på rigtig Proxmox; de isolerede tests bruger simulerede svar.
 
 ## Single VM-menu: roller og lab-netværk

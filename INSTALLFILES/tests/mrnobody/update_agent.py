@@ -34,7 +34,7 @@ class AgentUpdate(unittest.TestCase):
         self.config.write_text('MRNOBODY_ROLE="agent"\nMRNOBODY_MASTER_URL="https://master.test"\n', encoding="utf-8")
 
     @unittest.skipUnless(BASH, "Bash lifecycle runs on Linux/CI")
-    def test_missing_or_stale_unit_is_repaired_only_for_valid_agent_without_activation(self):
+    def test_missing_or_stale_unit_without_credentials_is_repaired_only_for_valid_agent(self):
         unit = self.root / "installed.service"
         source = self.root / "systemd/mrnobody-agent.service"
         source.parent.mkdir()
@@ -148,7 +148,7 @@ exit 0
         self.assertEqual(result.returncode, 1)
 
     @unittest.skipUnless(BASH, "Bash lifecycle runs on Linux/CI")
-    def test_actual_cloud_init_block_installs_only_agent_and_never_enables_it(self):
+    def test_actual_cloud_init_block_without_credentials_installs_only_agent(self):
         import yaml
         data = yaml.safe_load((ROOT / "MRNOBODY/mrnobody_userdata.yaml").read_text())
         bootstrap = next(item["content"] for item in data["write_files"] if item["path"] == "/usr/local/sbin/install-mrnobody")
@@ -170,6 +170,44 @@ exit 0
             self.assertEqual("CALL:daemon-reload" in result.stdout, role == "agent")
             self.assertNotIn("enable", result.stdout)
             self.assertNotIn("start", result.stdout)
+
+    @unittest.skipUnless(BASH, "Bash lifecycle runs on Linux/CI")
+    def test_lab_cloud_init_and_update_bootstrap_enable_offline_and_preserve_identity(self):
+        import yaml
+        data=yaml.safe_load((ROOT/"MRNOBODY/mrnobody_userdata.yaml").read_text())
+        bootstrap=next(item["content"] for item in data["write_files"] if item["path"]=="/usr/local/sbin/install-mrnobody")
+        cloud=bootstrap[bootstrap.index("# Install only on a valid agent deployment."):]
+        cloud=cloud[:cloud.index("# ======================================================")]
+        update=SOURCE[SOURCE.index("is_agent_deployment() {"):SOURCE.index("if (( NEW == 0 && CHANGED == 0 )); then")]+"\ninstall_agent_unit\n"
+        credentials=self.root/"agent.json"
+        for name in ("agent_client.py","master_registry.py"):
+            text=(PLATFORM/"web"/name).read_text()
+            text=text.replace('CREDENTIALS=Path("/etc/mrnobody/agent.json")',
+                              "CREDENTIALS=Path("+json.dumps(str(credentials))+")")
+            (self.web/name).write_text(text)
+        unit=self.root/"installed.service"
+        (self.root/"systemd").mkdir()
+        (self.root/"systemd/mrnobody-agent.service").write_text("agent unit\n")
+        backup=self.root/"backup"
+        backup.mkdir()
+        original=None
+        for role in ("master","standalone","bad","agent","agent"):
+            self.config.write_text('MRNOBODY_ROLE="'+role+'"\nMRNOBODY_MASTER_URL="http://10.134.71.3"\nMRNOBODY_LAB_HTTP="1"\n')
+            for block in (cloud,update):
+                script='set -eu\nlog() { :; }\nsystemctl() { echo "CALL:$*"; }\n'+block
+                script=script.replace("/etc/systemd/system/mrnobody-agent.service",str(unit))
+                result=subprocess.run([BASH],input=script,text=True,capture_output=True,
+                                      env=dict(os.environ,INSTALL_DIR=str(self.root),BACKUP_DIR=str(backup)),timeout=10)
+                self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+                self.assertEqual("CALL:enable --now mrnobody-agent.service" in result.stdout,role=="agent")
+                if role=="agent":
+                    if original is None:
+                        original=credentials.read_bytes()
+                    self.assertEqual(credentials.read_bytes(),original)
+                    self.assertEqual(credentials.stat().st_mode&0o777,0o600)
+                else:
+                    self.assertFalse(credentials.exists())
+                    self.assertFalse(unit.exists())
 
     @unittest.skipUnless(BASH, "Bash lifecycle runs on Linux/CI")
     def test_full_updater_shell_syntax(self):

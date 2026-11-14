@@ -113,7 +113,12 @@ sys.exit(subprocess.call([os.environ['REAL_INSTALL'], *sys.argv[1:]]))
                 (commands / name).write_text('#!/bin/sh\nexit 0\n')
             for p in commands.iterdir():
                 p.chmod(0o755)
-            result = subprocess.run(['bash', str(BASE / 'scripts/update.sh')], env=dict(
+            # Keep the updater's persistent backups inside this fixture too.
+            backups = root / 'backups'
+            backups.mkdir()
+            updater = root / 'update.sh'
+            updater.write_text((BASE / 'scripts/update.sh').read_text().replace('/var/backups', str(backups)))
+            result = subprocess.run(['bash', str(updater)], env=dict(
                 os.environ, PATH=str(commands) + os.pathsep + os.environ['PATH'],
                 NORDIC_BASE_DIR=str(installed), FIXTURE_REMOTE=str(remote),
                 FIXTURE_MODE=mode, REAL_INSTALL=real_install), capture_output=True, text=True, timeout=30)

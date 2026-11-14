@@ -285,10 +285,11 @@ install_agent_unit() {
             return 1
         fi
     fi
-    if ! python3 "$INSTALL_DIR/web/agent_client.py" --check >/dev/null 2>&1; then
-        log "Agent awaits configuration/pairing; no service was enabled. Guide: https://github.com/EUD-cyber/eud-cyber/blob/main/INSTALLFILES/docs/mrnobody-agent-client.md"
+    if python3 "$INSTALL_DIR/web/agent_client.py" --bootstrap; then
+        systemctl enable --now mrnobody-agent.service || return $?
+        log "Persistent agent identity ready; automatic registration enabled."
     else
-        log "Agent unit installed. Activate explicitly after pairing: systemctl enable --now mrnobody-agent.service"
+        log "Agent configuration required; identity was not overwritten. See docs/mrnobody-agent-client.md."
     fi
 }
 
@@ -437,8 +438,8 @@ if [[ -f "${DOWNLOAD_DIR}/scripts/mrnobody" ]]; then
     CLI_CHANGED=1
 fi
 
-# Agent activation is always explicit. Updating must never start an inactive unit
-# or turn a Master/standalone VM into an agent.
+# Track active agents for code reload/rollback. Lab bootstrap above also repairs
+# disabled agents; Master/standalone must never activate the unit.
 capture_agent_state() {
     if (( AGENT_CHANGED != 1 )); then
         return 0

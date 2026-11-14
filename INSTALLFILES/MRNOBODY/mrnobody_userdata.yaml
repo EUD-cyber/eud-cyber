@@ -422,8 +422,8 @@ write_files:
         "$INSTALL_DIR/systemd/nordic-incident-web.service" \
         /etc/systemd/system/nordic-incident-web.service
 
-      # Install only on a valid agent deployment. Pairing and activation are
-      # explicit; never invent a token or enable an agent on Master/Standalone.
+      # Install only on a valid agent deployment. Bootstrap is local/offline;
+      # Master/Standalone never install or activate the agent unit.
       if python3 - "$INSTALL_DIR/web" <<'PY'
       import sys
       sys.path.insert(0, sys.argv[1])
@@ -435,7 +435,12 @@ write_files:
         install -m 0644 "$INSTALL_DIR/systemd/mrnobody-agent.service" \
           /etc/systemd/system/mrnobody-agent.service
         systemctl daemon-reload
-        log "Agent service installed; awaiting secure Master pairing. Guide: https://github.com/EUD-cyber/eud-cyber/blob/main/INSTALLFILES/docs/mrnobody-agent-client.md"
+        if python3 "$INSTALL_DIR/web/agent_client.py" --bootstrap; then
+          systemctl enable --now mrnobody-agent.service
+          log "Agent enabled; automatic lab registration retries if Master is offline."
+        else
+          log "Agent configuration required; see docs/mrnobody-agent-client.md."
+        fi
       fi
 
 

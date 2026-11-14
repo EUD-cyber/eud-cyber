@@ -5,6 +5,7 @@ import json
 import os
 from pathlib import Path
 import random
+import secrets
 import signal
 import ssl
 import stat
@@ -12,6 +13,7 @@ import tempfile
 import threading
 import urllib.error
 import urllib.request
+import uuid
 
 from deployment_config import load_deployment_config, MASTER_URL, LAB_MASTER_URL
 from master_registry import AGENT_ID, NAME, TOKEN, HEARTBEAT_INTERVAL
@@ -111,6 +113,10 @@ def pair_agent(source, *, destination=CREDENTIALS, ca_file=None, deployment=None
               protocol_version=1,heartbeat_interval=HEARTBEAT_INTERVAL)
     if config.ca_file:
         data["ca_file"]=config.ca_file
+    _publish_credentials(destination,data)
+
+
+def _publish_credentials(destination,data):
     # Publish a complete mode-0600 file atomically, without overwriting a racer.
     fd,temporary=tempfile.mkstemp(prefix=".agent-",dir=destination.parent)
     try:
@@ -121,6 +127,29 @@ def pair_agent(source, *, destination=CREDENTIALS, ca_file=None, deployment=None
         os.link(temporary,destination)
     finally:
         Path(temporary).unlink()
+
+
+def bootstrap_agent(path=CREDENTIALS, deployment=None):
+    """Create one durable per-VM lab identity, without contacting the Master."""
+    deployment=load_deployment_config() if deployment is None else deployment
+    if deployment.role!="agent" or deployment.config_status!="loaded" or not deployment.master_url:
+        raise FatalAgentError("A valid agent deployment and Master URL are required.")
+    path=Path(path)
+    if path.exists() or path.is_symlink():
+        return load_agent_config(path,deployment)
+    if deployment.lab_http is not True:
+        raise FatalAgentError("Automatic enrollment requires explicit lab mode.")
+    if path.parent.is_symlink():
+        raise FatalAgentError("Credential directory must not be a symlink.")
+    path.parent.mkdir(mode=0o700,parents=True,exist_ok=True)
+    agent_id="agent-"+uuid.uuid4().hex
+    data=dict(agent_id=agent_id,name=agent_id,token=secrets.token_urlsafe(32),
+              protocol_version=1,heartbeat_interval=HEARTBEAT_INTERVAL)
+    try:
+        _publish_credentials(path,data)
+    except FileExistsError:
+        pass  # A concurrent bootstrap published the winning identity.
+    return load_agent_config(path,deployment)
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -234,6 +263,7 @@ def main():
     parser.add_argument("--credentials",type=Path,default=CREDENTIALS)
     mode=parser.add_mutually_exclusive_group()
     mode.add_argument("--check",action="store_true",help="Validate configuration/trust without network")
+    mode.add_argument("--bootstrap",action="store_true",help="Create/reuse persistent lab identity without network")
     mode.add_argument("--once",action="store_true",help="Register and send one heartbeat")
     mode.add_argument("--pair",type=Path,metavar="PRIVATE_JSON",help="Import Master-issued credentials after authenticated registration")
     parser.add_argument("--ca-file",type=Path,help="Trusted CA/public certificate for --pair; never the Master private key")
@@ -247,6 +277,10 @@ def main():
             pair_agent(args.pair,destination=args.credentials,ca_file=args.ca_file)
             print("Pairing and heartbeat accepted; private agent identity installed.")
             print("Activate explicitly: systemctl enable --now mrnobody-agent.service")
+            return 0
+        if args.bootstrap:
+            bootstrap_agent(args.credentials)
+            print("Persistent agent identity ready.")
             return 0
         config=load_agent_config(args.credentials)
         sender=AgentTransport(config)

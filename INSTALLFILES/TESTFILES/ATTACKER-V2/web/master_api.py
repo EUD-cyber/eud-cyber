@@ -1,5 +1,6 @@
 """Master-only authenticated endpoints; HTTPS by default, explicit lab HTTP."""
 import json
+import ipaddress
 import sqlite3
 from pathlib import Path
 
@@ -7,6 +8,22 @@ from flask import jsonify, request
 from master_registry import DATABASE, Registry, Unauthorized, Conflict, Unavailable, TOKEN
 
 MAX_BODY = 4096
+LAB_NETWORKS = tuple(ipaddress.ip_network(value) for value in
+                     ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "fc00::/7", "::1/128"))
+
+
+def lab_peer():
+    # Only the local nginx may supply X-Real-IP; it overwrites client headers.
+    peer=request.remote_addr
+    if peer in {"127.0.0.1","::1"}:
+        peer=request.headers.get("X-Real-IP",peer)
+    try:
+        address=ipaddress.ip_address(peer)
+        if address.version==6 and address.ipv4_mapped:
+            address=address.ipv4_mapped
+        return any(address in network for network in LAB_NETWORKS)
+    except ValueError:
+        return False
 
 
 def _object(pairs):
@@ -46,7 +63,8 @@ def install_master_api(app,deployment,registry_path=DATABASE):
             if not isinstance(data,dict) or set(data)!=fields or type(data["protocol_version"]) is not int or data["protocol_version"]!=1:
                 raise ValueError("Invalid protocol payload.")
             store=Registry(registry_path)
-            result=(store.register(data["agent_id"],token,data["name"]) if register
+            result=(store.register(data["agent_id"],token,data["name"],
+                                   enroll=getattr(config,"lab_http",False) is True and lab_peer()) if register
                     else store.heartbeat(data["agent_id"],token))
             return jsonify(result),200
         except Unauthorized:

@@ -391,7 +391,7 @@ def install_single_master(role="master", *, environ=None, lab=None):
         subprocess.run(["qm", "start", str(result["vmid"])], check=True, timeout=120)
         print(f"MrNobody {role} VM {result['vmid']} er startet: https://{plan['ipv4'].split('/')[0]}")
         if role == "agent":
-            print("Master-adressen er gemt til HTTP. Par med en Master-udstedt agentnøgle før agentservicen aktiveres; ingen CA-opsætning er nødvendig.")
+            print("Master-adressen er gemt til lab HTTP. Slave opretter automatisk sin identitet og registrerer sig hos Master; den prøver igen, hvis Master er offline.")
 
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         print(f"Single VM-installation stoppet: {exc}. Eventuel VM bevares; ingen automatisk sletning.")
