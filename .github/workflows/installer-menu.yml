@@ -4,6 +4,7 @@ on:
     paths:
       - 'install.sh'
       - 'INSTALLFILES/installer_menu.py'
+      - 'INSTALLFILES/deploy.sh'
       - 'INSTALLFILES/single_vm_install.py'
       - 'INSTALLFILES/*/*_installer.sh'
       - 'INSTALLFILES/MRNOBODY/**'
@@ -33,3 +34,5 @@ jobs:
           python -m unittest discover -s tests/installer -v
           python -m unittest discover -s tests/mrnobody -p 'single_vm*.py' -v
           python tests/mrnobody/installer_roles.py -v
+      - name: Verify foreground prompts and closed-input worker for 1-16 labs
+        run: sudo python3 -m unittest discover -s tests/installer -p test_lab_mrnobody.py -v

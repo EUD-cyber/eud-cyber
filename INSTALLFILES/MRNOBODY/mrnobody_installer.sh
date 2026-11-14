@@ -19,8 +19,8 @@ if [[ -n "${MRNOBODY_ROLE+x}${MRNOBODY_MASTER_URL+x}" ]]; then
   }
 fi
 
-# Deployment settings are written to cloud-init; services do not consume them yet.
-# Keep existing direct calls compatible. Lab deployment will select agent later.
+# Deployment settings are written to cloud-init for the selected lab role.
+# Keep existing direct calls compatible with the standalone default.
 MRNOBODY_ROLE="${MRNOBODY_ROLE:-standalone}"
 MRNOBODY_MASTER_URL="${MRNOBODY_MASTER_URL:-}"
 

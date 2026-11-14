@@ -398,7 +398,7 @@ class SingleVMPreview(unittest.TestCase):
                  patch.object(planner, "interactive_preview", return_value=planner.validate_plan(self.raw())) as preview:
                 self.assertEqual(menu.main(), 0)
                 preview.assert_called_once_with(default_bridge="vmbr7")
-            self.assertEqual(json.loads(selection.read_text()), dict(profile="Mini", labs=3, components=["MRNOBODY"]))
+            self.assertEqual(json.loads(selection.read_text()), dict(profile="Mini", labs=3, components=["MRNOBODY"], mrnobody_role="standalone"))
 
     def test_cli_preview_works_without_profiles_or_host_tools(self):
         with tempfile.TemporaryDirectory(dir=ROOT) as temporary:
