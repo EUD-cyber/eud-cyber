@@ -609,16 +609,23 @@ const MrnUI = (() => {
             const agent = agents.find(item => item.agent_id === selectedMasterAgent);
             if (agent) fields(detail, agent);
             else node(detail, 'p', 'This agent is no longer available in the registry.', 'empty-state');
-            node(detail, 'h4', 'Slave report metadata');
+            node(detail, 'h4', 'Slave reports');
             if (agent?.reports_synced_at) {
                 node(detail, 'p', `Last metadata sync: ${timestamp(agent.reports_synced_at)}. Latest synchronized reports (up to 50).`, 'muted');
                 const reports = Array.isArray(agent.reports) ? agent.reports : [];
                 if (!reports.length) node(detail, 'p', 'No report metadata available.', 'empty-state');
                 for (const report of reports) {
                     node(detail, 'p', `${report.id} · ${report.report_type} · ${report.status} · ${report.phase_id ? 'P' + report.phase_id : 'Campaign'} · ${report.started || 'Time unavailable'}`);
+                    if (agent.status !== 'revoked' && (agent.available_reports || []).includes(report.id)) {
+                        const url = '/api/master/agents/' + encodeURIComponent(agent.agent_id) + '/reports/' + encodeURIComponent(report.id);
+                        const view = node(detail, 'a', 'View report', 'button button-small');
+                        view.href = url; view.target = '_blank'; view.rel = 'noopener';
+                        const download = node(detail, 'a', 'Download JSON', 'button button-small');
+                        download.href = url + '?download=1';
+                    } else node(detail, 'p', report.status === 'running' ? 'Report is still running.' : 'Waiting for Slave report sync. Update the Slave if this persists.', 'muted');
                 }
             } else node(detail, 'p', 'Report metadata has not been synchronized. Update the Slave and wait for its next heartbeat.', 'muted');
-            node(detail, 'p', 'Report viewing and download are not available yet.', 'muted');
+            node(detail, 'p', 'Finalized JSON snapshots sync one per heartbeat. Report copies persist on Master; no connection into the Slave is required.', 'muted');
         }
         if (!agents.length) {
             node(root, 'p', 'No agents registered yet. Slaves appear here after enrollment with this Master.', 'empty-state');

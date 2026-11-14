@@ -414,7 +414,7 @@ class MasterRoundtrip(unittest.TestCase):
         return Opener()
 
     def test_metadata_roundtrip_uses_outbound_authenticated_transport(self):
-        sender=agent.AgentTransport(config(token=self.token),self.opener())
+        sender=agent.AgentTransport(config(token=self.token),self.opener(remote="10.0.0.20"))
         sender.post("register")
         reports=self.root/"reports"
         reports.mkdir()
@@ -428,10 +428,13 @@ class MasterRoundtrip(unittest.TestCase):
         inventory=agent.collect_report_metadata(reports)
         self.assertEqual(len(inventory),1)
         self.assertEqual(inventory[0]["completed"],"2026-11-14T12:01:00Z")
-        with patch.object(agent,"collect_report_metadata",return_value=inventory):
+        with patch.object(agent,"collect_report_metadata",return_value=inventory), patch.object(agent,"read_report_snapshot",return_value=snapshot):
             sender.sync_reports()
         self.assertEqual(self.store.list_agents()[0]["reports"],inventory)
         self.assertNotIn("do-not-transfer",json.dumps(inventory))
+        cached=self.store.read_report("agent-1","MRN-test")
+        self.assertIsNotNone(cached)
+        self.assertNotIn("do-not-transfer",cached["content"])
         sender.post("heartbeat")
 
     def test_metadata_failure_does_not_interrupt_heartbeat_loop(self):

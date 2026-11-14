@@ -109,5 +109,10 @@ Metadata sendes særskilt fra heartbeat, via samme udgående forbindelse og nøg
 Fejl stopper ikke heartbeat. Gamle Slaves virker fortsat uden metadata; en ny
 Slave kan fortsat holde kontakt med en gammel Master. Se
 [registry-guiden](mrnobody-master-registry.md#rapportmetadata-gennem-udgående-forbindelse)
-for felter, grænser og manuel kontrol. Rapportvisning/download og fjernstart af
-phases/scenarier er fortsat efterfølgende trin.
+for felter, grænser og manuel kontrol. Afsluttede rapporter overføres nu én ad
+gangen med Agent-initieret polling og upload af navngivne JSON-snapshots.
+Master viser View report og Download JSON efter modtagelse. Eksisterende filtrering
+af følsomme rapportdata genbruges; højst 2 MiB pr. rapport. Visning og download
+kræver lab HTTPS. Identitet, ZTD og heartbeat er bevaret. Fjernstart af phases og
+scenarier er endnu ikke implementeret. Se
+[rapportguiden](mrnobody-master-registry.md#rapportvisning-og-download).

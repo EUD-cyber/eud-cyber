@@ -1,4 +1,4 @@
-"""Persistent agent identities and heartbeat state; no execution or file transfer."""
+"""Persistent agent identities, heartbeat and bounded report snapshots; no execution."""
 import argparse
 from contextlib import contextmanager
 import hashlib
@@ -40,6 +40,21 @@ def validate_id(agent_id):
 
 MAX_REPORTS = 50
 REPORT_ID = re.compile(r"(?:MRN|H3)-[A-Za-z0-9][A-Za-z0-9_-]{0,100}")
+MAX_REPORT_BYTES = 2*1024*1024
+
+
+def validate_snapshot(report_id, content):
+    if not isinstance(report_id,str) or not REPORT_ID.fullmatch(report_id):
+        raise ValueError("Invalid report ID.")
+    if not isinstance(content,dict) or content.get("schema_version")!=1:
+        raise ValueError("Invalid report snapshot.")
+    incident=content.get("incident")
+    if not isinstance(incident,dict) or incident.get("id")!=report_id:
+        raise ValueError("Report identity mismatch.")
+    raw=json.dumps(content,ensure_ascii=True,allow_nan=False)
+    if len(raw.encode("utf-8"))>MAX_REPORT_BYTES:
+        raise ValueError("Report too large.")
+    return raw
 
 
 def validate_reports(reports):
@@ -166,7 +181,60 @@ class Registry:
             now=int(self.clock())
             db.execute("INSERT OR REPLACE INTO report_inventory VALUES(?,?,?)",
                        (agent_id,json.dumps(reports),now))
+            self._report_table(db)
+            # Remove old snapshots, including changed metadata, within the same transaction.
+            versions={r["id"]:json.dumps(r,sort_keys=True) for r in reports if r["status"]!="running"}
+            for cached in db.execute("SELECT report_id,version FROM report_content WHERE agent_id=?",(agent_id,)).fetchall():
+                if versions.get(cached["report_id"])!=cached["version"]:
+                    db.execute("DELETE FROM report_content WHERE agent_id=? AND report_id=?",(agent_id,cached["report_id"]))
         return dict(agent_id=agent_id,accepted=True,protocol_version=1,server_time=now)
+
+    @staticmethod
+    def _report_table(db):
+        db.execute("""CREATE TABLE IF NOT EXISTS report_content (
+            agent_id TEXT NOT NULL, report_id TEXT NOT NULL, version TEXT NOT NULL,
+            content TEXT NOT NULL, sha256 TEXT NOT NULL, PRIMARY KEY(agent_id,report_id))""")
+
+    def transfer_report(self,agent_id,token,report_id=None,content=None):
+        """Agent polls for one missing finalized inventory snapshot, then uploads it."""
+        with self._db(write=True) as db:
+            row=self._authenticate(db,agent_id,token)
+            if row["registered_at"] is None:
+                raise Conflict("Registration required.")
+            self._report_table(db)
+            inventory=db.execute("SELECT reports FROM report_inventory WHERE agent_id=?",(agent_id,)).fetchone()
+            reports=json.loads(inventory[0]) if inventory else []
+            if report_id is not None:
+                from report_exports import safe_report
+                content=safe_report(content)
+                raw=validate_snapshot(report_id,content)
+                item=next((r for r in reports if r["id"]==report_id and r["status"]!="running"),None)
+                incident=content["incident"]
+                if (item is None or any(item[k]!=incident.get(v) for k,v in
+                        (("status","status"),("started","started"),("completed","ended")))
+                        or item["report_type"]!=content.get("report_type","campaign")
+                        or item["phase_id"]!=content.get("phase_id")):
+                    raise ValueError("Snapshot is outside the current inventory.")
+                db.execute("INSERT OR REPLACE INTO report_content VALUES(?,?,?,?,?)",
+                           (agent_id,report_id,json.dumps(item,sort_keys=True),raw,hashlib.sha256(raw.encode()).hexdigest()))
+            elif content is not None:
+                raise ValueError("Unexpected content.")
+            cached={r[0] for r in db.execute("SELECT report_id FROM report_content WHERE agent_id=?",(agent_id,))}
+            missing=next((r["id"] for r in reports if r["status"]!="running" and r["id"] not in cached),None)
+        return dict(agent_id=agent_id,protocol_version=1,server_time=int(self.clock()),accepted=True,report_id=missing)
+
+    def read_report(self,agent_id,report_id):
+        validate_id(agent_id)
+        if not isinstance(report_id,str) or not REPORT_ID.fullmatch(report_id):
+            raise ValueError("Invalid report ID.")
+        with self._db() as db:
+            row=db.execute("SELECT revoked FROM agents WHERE agent_id=?",(agent_id,)).fetchone()
+            if row is None or row[0]:
+                return None
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE name='report_content'").fetchone():
+                return None
+            cached=db.execute("SELECT content,sha256 FROM report_content WHERE agent_id=? AND report_id=?",(agent_id,report_id)).fetchone()
+            return dict(cached) if cached else None
 
     def revoke(self,agent_id):
         validate_id(agent_id)
@@ -181,12 +249,17 @@ class Registry:
             rows=db.execute("""SELECT agent_id,name,created_at,registered_at,last_seen_at,revoked
                                FROM agents ORDER BY agent_id""").fetchall()
             inventory={}
+            available={}
+            if db.execute("SELECT 1 FROM sqlite_master WHERE name='report_content'").fetchone():
+                for cached in db.execute("SELECT agent_id,report_id FROM report_content"):
+                    available.setdefault(cached["agent_id"],[]).append(cached["report_id"])
             if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='report_inventory'").fetchone():
                 inventory={r["agent_id"]:dict(reports=json.loads(r["reports"]),reports_synced_at=r["synced_at"])
                            for r in db.execute("SELECT * FROM report_inventory")}
         result=[]
         for row in rows:
             item=dict(row)
+            item["available_reports"]=[] if row["revoked"] else available.get(row["agent_id"],[])
             item.update(inventory.get(row["agent_id"],dict(reports=[],reports_synced_at=None)))
             item["status"]=("revoked" if row["revoked"] else "pending" if row["registered_at"] is None
                             else "online" if now-row["last_seen_at"] <= OFFLINE_AFTER else "offline")

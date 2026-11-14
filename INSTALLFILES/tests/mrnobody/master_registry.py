@@ -217,7 +217,7 @@ class API(unittest.TestCase):
             self.assertNotIn(self.token,response.get_data(as_text=True))
             self.assertEqual(client.get("/api/master/agents/heartbeat",base_url="https://master.test").status_code,405)
 
-    def test_api_register_heartbeat_roundtrip_and_only_two_post_routes(self):
+    def test_api_register_heartbeat_roundtrip_and_bounded_routes(self):
         result,status=self.call()
         self.assertEqual(status,200)
         self.assertTrue(result["registered"])
@@ -225,7 +225,7 @@ class API(unittest.TestCase):
         result,status=self.call("heartbeat")
         self.assertEqual(status,200)
         self.assertTrue(result["accepted"])
-        self.assertEqual(len(self.routes),4)
+        self.assertEqual(len(self.routes),6)
         self.assertEqual(self.methods["/api/master/agents/register"],["POST"])
         self.assertEqual(self.methods["/api/master/agents/heartbeat"],["POST"])
         self.assertEqual(self.methods["/api/master/agents"],["GET"])
@@ -236,7 +236,7 @@ class API(unittest.TestCase):
         with patch.object(api,"request",request):
             result,status=self.routes["/api/master/agents"]()
             self.assertEqual(status,200)
-            self.assertEqual(set(result["agents"][0]),{"agent_id","name","status","last_seen_at","registered_at","reports","reports_synced_at"})
+            self.assertEqual(set(result["agents"][0]),{"agent_id","name","status","last_seen_at","registered_at","reports","reports_synced_at","available_reports"})
             self.assertNotIn(self.token,json.dumps(result))
             self.assertNotIn("token_hash",json.dumps(result))
             self.assertEqual(result["agents"][0]["status"],"online")

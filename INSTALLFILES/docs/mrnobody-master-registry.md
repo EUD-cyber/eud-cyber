@@ -125,7 +125,7 @@ Afgrænsning:
 
 - Højst 50 poster og 32768 bytes pr. POST; register/heartbeat beholder 4096 bytes.
 - Kun rapport-ID, status, campaign/standalone_phase, phase-ID og start/sluttid.
-  Ingen lokale stier, output, credentials eller rapportindhold sendes.
+  Metadata-ruten sender ingen lokale stier, output, credentials eller rapportindhold.
 - Agenten undersøger højst 1000 lokale JSON-kandidater, sorteret efter filnavn
   inden for dette udsnit. Hver fil er højst 2 MiB; samlet læsebudget er 8 MiB
   pr. synkronisering. Oversigten er derfor et afgrænset udsnit, ikke et fuldt arkiv.
@@ -140,12 +140,50 @@ rapport på Slaven, både campaign og standalone_phase hvis de findes. Kontrolle
 at heartbeat fortsat flytter sig. En tom oversigt vises særskilt fra en Slave,
 der endnu ikke har synkroniseret. Ingen rapport skal køres for at teste overførslen.
 
+## Rapportvisning og download
+
+Efter metadata spørger Agenten via autentificeret POST til
+`/api/master/agents/report-transfer` efter én manglende, afsluttet JSON-rapport.
+Den læser kun `<kendt rapport-ID>.json` i `/opt/nordic-attack/reports` og uploader
+højst én rapport pr. kontakt (normalt hvert 30. sekund). Ingen shellkommandoer,
+vilkårlige filstier eller indgående Slave-forbindelser anvendes. Running-rapporter
+venter på afslutning. Genforsøg og gamle Masters stopper ikke heartbeat.
+
+Master gemmer rapportkopier i en ekstra SQLite-tabel i samme private registry.
+Der bruges højst 50 aktuelle kopier á 2 MiB pr. Agent; HTTP-body er begrænset til
+2 MiB + 4096 bytes. Kopier fjernes, når inventaret fjerner rapporten eller ændrer
+dens metadata. Afsluttede snapshots med uændrede metadata behandles som uforanderlige;
+indholdsændringer alene udløser ikke ny overførsel. Dette er et udsnit, ikke backup.
+Kopier overlever genstart og update. Ingen credentials eller konfigurationsfiler ændres.
+
+Agents → View agent viser **View report** og **Download JSON**, når kopien findes.
+View report genbruger den eksisterende HTML-rapporteksport med escaping og en
+scriptfri browserpolitik. JSON-download bruger den eksisterende filtrering af
+følsomme felter og tekst før overførsel og igen før lagring på Master. Umarkerede
+hemmeligheder i fri tekst kan ikke garanteres genkendt; rapporter skal kun indeholde
+labdata. `X-Report-SHA256` er SHA256 af de præcise downloadbytes, ikke originalfilen
+på Slaven. Begge browserfunktioner kræver HTTPS fra et privat labnet og følger
+UI'ens eksisterende netværksbaserede adgangsmodel. Spærrede Agents kan ikke uploades
+eller læses. HTTP-overførsel kræver eksisterende lab-opt-in, privat kildeadresse og
+Agentens individuelle nøgle; HTTPS-certifikater verificeres fortsat.
+
+Manuel kontrol: opdater Master først, derefter Slave med `sudo mrnobody update`.
+Genindlæs Master med Ctrl+F5, og åbn Agents → View agent. Brug en eksisterende,
+afsluttet rapport; ingen phase skal startes. Vent normalt 30–60 sekunder på første
+kopi og længere for flere rapporter. Kontroller læsbar visning, JSON-download,
+rapport-ID, og at heartbeat fortsætter. Kontroller efter Master-genstart, at kopien
+stadig kan hentes. En gammel Slave viser metadata og ventestatus, indtil den opdateres.
+
+Offline-tests: `python INSTALLFILES/tests/mrnobody/master_reports.py -v` samt
+Agent-, registry- og Master-browserregressionerne. Den nye test indgår i CI.
+Faktisk NAT/OPNsense, nginx-reload og VM-genstart skal stadig verificeres i labbet.
+
 ## Efterfølgende roadmap
 
-Næste lille trin er visning/download af eksisterende Slave-rapporter via
-Agent-initieret overførsel med eksplicitte filtyper og størrelsesgrænser.
-Rapportindhold og download er endnu ikke implementeret.
+Næste lille trin er read-only capability-discovery og jobstatus til Master Campaign
+Control via Agent-initieret polling. Eksekvering skal forblive slået fra, indtil en
+fast godkendt jobtype, labafgrænsning og statusforløb er testet.
 
 Et vigtigt senere krav er start/stop af både individuelle phases og komplette
 scenarier på én eller flere Slaves fra Master. Der er ingen ny fjernstart eller
-fjernstyring i metadata-trinnet. P01–P11, standalone og ZTD-flowet er bevaret.
+fjernstyring i rapporttrinnet. P01–P11, standalone og ZTD-flowet er bevaret.

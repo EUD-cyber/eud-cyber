@@ -43,6 +43,13 @@ const shared={status:'idle',active:false,execution:null,phases:[],scenarios:[],s
   await page.waitForFunction(()=>document.getElementById('masterAgentDetail')?.textContent.includes('Renamed slave'));
   assert.match(await detail.textContent(), /Offline/);
   assert.match(await detail.textContent(), /Last metadata sync:.*MRN-test.*standalone_phase.*complete.*P01/s);
+  assert.match(await detail.textContent(), /Waiting for Slave report sync/);
+  assert.equal(await detail.getByRole('link',{name:'View report',exact:true}).count(),0);
+  agents[0].available_reports=['MRN-test'];
+  await page.locator('#masterAgentsRefresh').click();
+  await page.waitForFunction(()=>document.querySelector('#masterAgentDetail a')!==null);
+  assert.equal(await detail.getByRole('link',{name:'View report',exact:true}).getAttribute('href'),'/api/master/agents/agent-1/reports/MRN-test');
+  assert.equal(await detail.getByRole('link',{name:'Download JSON',exact:true}).getAttribute('href'),'/api/master/agents/agent-1/reports/MRN-test?download=1');
   const heartbeat=await detail.locator('dd').last().textContent();
   assert.equal(heartbeat,await page.evaluate(()=>new Date(1700000060*1000).toLocaleString()));
   for(const width of [1440,768,390]){await page.setViewportSize({width,height:1050});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));}

@@ -16,7 +16,7 @@ import urllib.request
 import uuid
 
 from deployment_config import load_deployment_config, MASTER_URL, LAB_MASTER_URL
-from master_registry import AGENT_ID, NAME, TOKEN, HEARTBEAT_INTERVAL, MAX_REPORTS, REPORT_ID, validate_reports
+from master_registry import AGENT_ID, NAME, TOKEN, HEARTBEAT_INTERVAL, MAX_REPORTS, REPORT_ID, validate_reports, validate_snapshot, MAX_REPORT_BYTES
 
 
 CREDENTIALS=Path("/etc/mrnobody/agent.json")
@@ -199,6 +199,26 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         raise FatalAgentError("Master redirects are refused.")
 
 
+def read_report_snapshot(report_id,directory=Path("/opt/nordic-attack/reports")):
+    if not isinstance(report_id,str) or not REPORT_ID.fullmatch(report_id) or directory.is_symlink():
+        raise ValueError("Invalid report location.")
+    path=directory/(report_id+".json")
+    if path.is_symlink():
+        raise ValueError("Report must not be a symlink.")
+    descriptor=os.open(path,os.O_RDONLY | getattr(os,"O_NOFOLLOW",0) | getattr(os,"O_NONBLOCK",0))
+    with os.fdopen(descriptor,"rb") as handle:
+        info=os.fstat(handle.fileno())
+        if path.is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_size>MAX_REPORT_BYTES:
+            raise ValueError("Invalid report file.")
+        raw=handle.read(MAX_REPORT_BYTES+1)
+    if len(raw)>MAX_REPORT_BYTES:
+        raise ValueError("Report too large.")
+    data=json.loads(raw)
+    validate_snapshot(report_id,data)
+    from report_exports import safe_report
+    return safe_report(data)
+
+
 class AgentTransport:
     def __init__(self,config,opener=None):
         pattern=LAB_MASTER_URL if config.lab_http is True else MASTER_URL
@@ -216,16 +236,28 @@ class AgentTransport:
             urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=self.context),NoRedirect())
 
     def sync_reports(self):
-        self.post("reports",collect_report_metadata())
+        inventory=collect_report_metadata()
+        self.post("reports",inventory)
+        result=self.post("report-transfer")
+        if result["report_id"] is not None:
+            ident=result["report_id"]
+            if not any(item["id"]==ident and item["status"]!="running" for item in inventory):
+                raise FatalAgentError("Master requested a report outside the finalized inventory.")
+            self.post("report-transfer",snapshot=(ident,read_report_snapshot(ident)))
 
-    def post(self,kind, reports=None):
-        if kind not in {"register","heartbeat","reports"}:
+    def post(self,kind, reports=None, *, snapshot=None):
+        if kind not in {"register","heartbeat","reports","report-transfer"}:
             raise FatalAgentError("Unsupported agent operation.")
         data=dict(agent_id=self.config.agent_id,protocol_version=1)
         if kind=="register":
             data["name"]=self.config.name
         if kind=="reports":
             data["reports"]=validate_reports(reports)
+        if kind=="report-transfer":
+            ident,content=snapshot if snapshot is not None else (None,None)
+            if ident is not None:
+                validate_snapshot(ident,content)
+            data.update(report_id=ident,content=content)
         url=self.config.master_url.rstrip("/")+"/api/master/agents/"+kind
         request=urllib.request.Request(url,data=json.dumps(data).encode("utf-8"),method="POST",
                                       headers={"Content-Type":"application/json","Authorization":"Bearer "+self.config.token})
@@ -257,6 +289,8 @@ class AgentTransport:
             raise FatalAgentError("Invalid Master response.") from None
         expected={"agent_id","protocol_version","server_time"}
         expected |= {"registered","heartbeat_interval"} if kind=="register" else {"accepted"}
+        if kind=="report-transfer":
+            expected.add("report_id")
         if (not isinstance(result,dict) or set(result)!=expected or result["agent_id"]!=self.config.agent_id
                 or type(result["protocol_version"]) is not int or result["protocol_version"]!=1
                 or type(result["server_time"]) is not int or result["server_time"]<0):
@@ -267,6 +301,9 @@ class AgentTransport:
                 raise FatalAgentError("Master registration was not accepted.")
         elif result["accepted"] is not True:
             raise FatalAgentError("Master heartbeat was not accepted.")
+        if kind=="report-transfer" and result["report_id"] is not None:
+            if not isinstance(result["report_id"],str) or not REPORT_ID.fullmatch(result["report_id"]):
+                raise FatalAgentError("Invalid report request.")
         return result
 
 
@@ -290,8 +327,8 @@ def run_loop(config, *, sender=None, stop=None, jitter=None, write=print):
             if hasattr(sender,"sync_reports"):
                 try:
                     sender.sync_reports()
-                except (FatalAgentError,RetryableAgentError,RegistrationRequired,OSError,ValueError):
-                    write("Report metadata sync unavailable; heartbeat remains active.")
+                except (FatalAgentError,RetryableAgentError,RegistrationRequired,OSError,ValueError,RecursionError):
+                    write("Report sync unavailable; heartbeat remains active.")
             if stop.wait(HEARTBEAT_INTERVAL):
                 break
         except RegistrationRequired:
