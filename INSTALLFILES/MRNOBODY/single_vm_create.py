@@ -9,7 +9,7 @@ import re
 import subprocess
 
 from .single_vm_host import check_host_plan, inspect_host
-from .single_vm_plan import interactive_preview, validate_plan
+from .single_vm_plan import interactive_preview, validate_plan, lab_network_defaults
 
 
 def normalized_plan(value):
@@ -111,6 +111,12 @@ def create_vm(value, image, *, run=None, inspect=None, template=None, write=prin
             "--agent", "enabled=1", "--onboot", "0", "--ciupgrade", "1",
             "--ipconfig0", ipconfig, "--nameserver", plan["dns"], "--cicustom", "user=" + volume,
         ]
+        if "lab" in plan:
+            network = lab_network_defaults(plan["lab"])
+            for index in (1, 2):
+                argv += [f"--net{index}", "virtio,bridge=" + network[f"bridge{index}"],
+                         f"--ipconfig{index}", "ip=" + network[f"ipv4_{index}"]]
+            argv += ["--searchdomain", "cloud.local"]
         write(f"Opretter VM {plan['vmid']}; cloud-init: {snippet}")
         attempted = True
         command(argv, timeout=1200)

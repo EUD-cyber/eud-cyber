@@ -2,11 +2,12 @@
 
 ## Fra hovedmenuen
 
-Vælg Single VM og derefter MrNobody Master, slave/agent eller standalone.
-For alle roller spørger menuen om
-IP-adresse/subnet, gateway og DNS. Bridge, storage og Ubuntu-image genbruges
-fra hovedinstallerens valg; VMID vælges fra 9000 og op, og hardware får
-MrNobody-standardværdierne.
+Vælg Single VM, derefter MrNobody og til sidst Master, Slave eller Standalone.
+Kun Master spørger om egen IP-adresse/subnet, gateway og DNS og genbruger
+bridgen fra hovedinstallerens valg. Slave og Standalone bruger eksisterende
+lab-bridges og statiske IP'er som beskrevet nedenfor.
+Storage og Ubuntu-image genbruges fra hovedinstallerens valg; VMID vælges
+fra 9000 og op, og hardware får MrNobody-standardværdierne.
 Slave spørger desuden efter Master-IP/værtsnavn (med valgfri port) og HTTP/HTTPS.
 HTTPS er standard. HTTP indsætter MRNOBODY_LAB_HTTP="1" i den nye agents
 deployment.conf; samme flag skal sættes på Master for HTTP.
@@ -89,3 +90,22 @@ VM-oprettelsen. Tidligere VM'er uden instance-ID overtages ikke automatisk.
 Rollen master genkendes af den eksisterende backend/UI, men Master/agent-
 kommunikation er fortsat deaktiveret. Provisionering og opstartsforløb skal
 stadig afprøves på rigtig Proxmox; de isolerede tests bruger simulerede svar.
+
+## Single VM-menu: roller og lab-netværk
+
+Vælg `Single VM` → `MrNobody` → `Master`, `Slave` eller `Standalone`.
+Master beholder den oprindeligt valgte bridge og spørgsmål om egen IP/CIDR,
+gateway og DNS. Slave og Standalone læser i stedet de statiske værdier fra
+`MRNOBODY/mrnobody_installer.sh`:
+
+| Netkort | Bridge | IP/CIDR |
+| --- | --- | --- |
+| net0 / LAN1 | `lab${LAB}_lan1` | `192.168.1.254/24` |
+| net1 / OOBM | `lab${LAB}_oobm` | `172.20.0.254/24` |
+| net2 / LAN2 | `lab${LAB}_lan2` | `192.168.2.254/24` |
+
+Gateway og DNS er `192.168.1.1`. Alle tre bridges skal eksistere; menuen
+opretter dem ikke. Ét komplet lab vælges automatisk; ved flere vælges kun
+labnummeret. Der spørges aldrig om Slave/Standalone-VM'ens egne IP-adresser.
+Kun Slave spørger om Master-adresse og HTTPS/HTTP. Big/Mini og fremtidig
+Custom beholder agent/slave-rollen; denne rettelse tilføjer ingen Custom-profil.

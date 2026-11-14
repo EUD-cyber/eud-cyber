@@ -91,6 +91,37 @@ class CreateSingleVM(unittest.TestCase):
         self.assertIn("MRNOBODY_SINGLE_VM:"+result["instance_id"]+":master",command)
         self.assertIn("  condition: true",self.template)
 
+    def test_lab_roles_create_three_static_interfaces_and_keep_role_config(self):
+        for role in ("agent", "standalone"):
+            self.calls.clear()
+            raw = {key: value for key, value in self.plan.items()
+                   if key not in {"kind", "deployment_enabled", "host_check"}}
+            raw.update(role=role, lab=3, master_url="https://master.test" if role == "agent" else "")
+            self.plan = planner.validate_plan(raw)
+            self.inventory["bridges"] = ["lab3_lan1", "lab3_oobm", "lab3_lan2"]
+            result = self.create()
+            command = next(argv for argv in self.calls if argv[:2] == ["qm", "create"])
+            for key, value in (("--net0", "virtio,bridge=lab3_lan1"),
+                               ("--net1", "virtio,bridge=lab3_oobm"),
+                               ("--net2", "virtio,bridge=lab3_lan2"),
+                               ("--ipconfig0", "ip=192.168.1.254/24,gw=192.168.1.1"),
+                               ("--ipconfig1", "ip=172.20.0.254/24"),
+                               ("--ipconfig2", "ip=192.168.2.254/24"),
+                               ("--nameserver", "192.168.1.1")):
+                self.assertEqual(command[command.index(key) + 1], value)
+            rendered = Path(result["snippet"]).read_text()
+            self.assertIn("MRNOBODY_ROLE=" + role, rendered)
+            self.assertIn("MRNOBODY_MASTER_URL=" + ("https://master.test" if role == "agent" else "''"), rendered)
+
+    def test_missing_secondary_bridge_prevents_any_creation(self):
+        raw = {key: value for key, value in self.plan.items()
+               if key not in {"kind", "deployment_enabled", "host_check"}}
+        self.plan = planner.validate_plan(dict(raw, role="agent", lab=3))
+        self.inventory["bridges"] = ["lab3_lan1", "lab3_oobm"]
+        with self.assertRaisesRegex(ValueError, "LAN1"):
+            self.create()
+        self.assertEqual(self.calls, [])
+
     def test_forged_saved_check_is_ignored_and_existing_vmid_stops_everything(self):
         self.plan["host_check"] = {"status":"checked","vmid_free":True}
         self.inspect.return_value = dict(self.inventory,vmids=[9000])
