@@ -16,12 +16,40 @@ MASTER_URL = re.compile(
 )
 
 
+def lab_network_defaults(lab, source=None):
+    """Read static networking from the shared installer without executing Bash."""
+    if type(lab) is not int or lab < 1:
+        raise ValueError("Labnummer skal være et positivt heltal.")
+    source = Path(__file__).with_name("mrnobody_installer.sh").read_text(encoding="utf-8") if source is None else source
+    def setting(name):
+        matches = re.findall(r'^' + name + r'="([^"\n]+)"\s*$', source, re.M)
+        if len(matches) != 1:
+            raise ValueError(f"Kan ikke læse netværksstandard: {name}.")
+        return matches[0].replace("${LAB}", str(lab))
+    return dict(bridge=setting("BRIDGE"), bridge1=setting("BRIDGE1"), bridge2=setting("BRIDGE2"),
+                ipv4=setting("IP_ADDR").removeprefix("ip="),
+                ipv4_1=setting("OOBM_IP").removeprefix("ip="),
+                ipv4_2=setting("IP_ADDR2").removeprefix("ip="),
+                gateway=setting("IP_GW").removeprefix("gw="), dns=setting("DNS_SERVER"))
+
+
 def validate_plan(value):
     """Validate explicit Single VM input; never reserve or create anything."""
     required = {"role", "vmid", "name", "bridge", "ipv4", "gateway", "dns",
                 "cpu", "memory_mib", "disk_expansion", "disk_storage", "snippet_storage"}
-    if not isinstance(value, dict) or not required <= value.keys() or value.keys() - required - {"master_url", "lab_http"}:
+    if not isinstance(value, dict) or not required <= value.keys() or value.keys() - required - {"master_url", "lab_http", "lab"}:
         raise ValueError("Planen mangler felter eller indeholder ukendte felter.")
+    lab_fields = {}
+    if "lab" in value:
+        if value["role"] not in {"agent", "standalone"}:
+            raise ValueError("Kun Slave og Standalone bruger lab-netværk.")
+        network = lab_network_defaults(value["lab"])
+        if any(not BRIDGE.fullmatch(network[key]) for key in ("bridge", "bridge1", "bridge2")):
+            raise ValueError("Ugyldige lab-bridges i MrNobody-installeren.")
+        for key in ("ipv4_1", "ipv4_2"):
+            ipaddress.IPv4Interface(network[key])
+        value = dict(value, **{key: network[key] for key in ("bridge", "ipv4", "gateway", "dns")})
+        lab_fields = dict(lab=value["lab"])
     if not all(isinstance(value[key], str) for key in required - {"vmid", "cpu", "memory_mib"}):
         raise ValueError("Rolle, navn og netværksfelter skal være tekst.")
     role = value["role"]
@@ -75,7 +103,7 @@ def validate_plan(value):
                 ipv4=str(address), gateway=str(gateway) if gateway else "", dns=str(dns),
                 master_url=master_url, lab_http=lab_http, cpu=value["cpu"], memory_mib=value["memory_mib"],
                 disk_expansion=value["disk_expansion"], disk_storage=value["disk_storage"],
-                snippet_storage=value["snippet_storage"])
+                snippet_storage=value["snippet_storage"], **lab_fields)
 
 
 def hardware_defaults(environ=None, source=None):
@@ -171,3 +199,4 @@ def interactive_preview(default_bridge="", read=input, write=print, *, offline=F
     except (EOFError, KeyboardInterrupt):
         write("\nForhåndsvisning afsluttet uden deployment.")
         return None
+

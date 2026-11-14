@@ -143,15 +143,19 @@ class Menu:
                 self.text(screen, 10 + index, f'{row["name"]:18} {row["cpu"]:6} {fmt(row["memory_mib"] / 1024):>10} {fmt(row["disk_gib"]):>11}')
             self.text(screen, 16, f'Minimum, {self.labs} lab(s): {summary(totals(rows, labs=self.labs, base_only=True))}')
             self.text(screen, 18, "MrNobody i Big/Mini: agent/slave (også i fremtidig Custom).")
-            self.text(screen, 19, "S: Single VM - MrNobody Master eller slave.")
+            self.text(screen, 19, "S: Single VM - vælg MrNobody og derefter rolle.")
             self.text(screen, 21, "Op/ned: Big/Mini/Single VM | Enter: vælg | Q/Esc: annullér")
         elif self.stage == "single":
+            self.text(screen, 3, "Single VM")
+            self.text(screen, 5, "MrNobody", True)
+            self.text(screen, 21, "Enter: vælg rolle | B: tilbage | Q: stop")
+        elif self.stage == "single-role":
             self.text(screen, 3, "Single VM - MrNobody")
             self.text(screen, 5, "Master - opret én VM", self.single_cursor == 0)
             self.text(screen, 6, "Slave/agent - forbind til Master", self.single_cursor == 1)
             self.text(screen, 7, "Standalone - kør uden Master", self.single_cursor == 2)
-            self.text(screen, 9, "Alle bruger bridgen valgt ved installationens start.")
-            self.text(screen, 10, "Du bliver spurgt om IP/CIDR, gateway og DNS.")
+            self.text(screen, 9, "Master: valgt bridge samt spørgsmål om IP, gateway og DNS.")
+            self.text(screen, 10, "Slave/Standalone: statiske LAN1/LAN2/OOBM-værdier fra labbet.")
             self.text(screen, 12, "VM installeres, slukker, får snapshot og startes igen.")
             self.text(screen, 14, "Slave spørger også om Master-adresse og HTTP/HTTPS.")
             self.text(screen, 21, "Op/ned: vælg | Enter: fortsæt | B: tilbage | Q: stop")
@@ -193,10 +197,15 @@ class Menu:
             elif key in (10, 13, curses.KEY_ENTER):
                 self.stage = "single" if self.profile == "Single VM" else "options"
         elif self.stage == "single":
+            if key in (ord("b"), ord("B"), curses.KEY_LEFT):
+                self.stage = "profile"
+            elif key in (10, 13, curses.KEY_ENTER):
+                self.stage = "single-role"
+        elif self.stage == "single-role":
             if key in (curses.KEY_UP, curses.KEY_DOWN):
                 self.single_cursor = (self.single_cursor + (-1 if key == curses.KEY_UP else 1)) % 3
             elif key in (ord("b"), ord("B"), curses.KEY_LEFT):
-                self.stage = "profile"
+                self.stage = "single"
             elif key in (10, 13, curses.KEY_ENTER):
                 return ("single-install", "single-install-agent", "single-install-standalone")[self.single_cursor]
         else:
@@ -236,30 +245,57 @@ class Menu:
 
 
 def single_menu_plan(role, read=input, write=print):
-    """Only network questions; reuse the initial installer choices."""
+    """Master asks for networking; lab roles reuse the shared static defaults."""
     from MRNOBODY.single_vm_host import inspect_host, check_host_plan
-    from MRNOBODY.single_vm_plan import validate_plan, hardware_defaults
+    from MRNOBODY.single_vm_plan import validate_plan, hardware_defaults, lab_network_defaults
     if role not in {"master", "agent", "standalone"}:
         raise ValueError("Ukendt Single VM-rolle.")
     inventory = inspect_host()
     bridge, disk, snippets = (os.environ.get(key, "") for key in ("BRIDGE", "LVM", "LOCAL"))
-    if bridge not in inventory["bridges"] or disk not in inventory["disk_storages"] or snippets not in inventory["snippet_storages"]:
+    if (role == "master" and bridge not in inventory["bridges"]) or disk not in inventory["disk_storages"] or snippets not in inventory["snippet_storages"]:
         raise ValueError("De oprindelige bridge/storage-valg er ikke tilgængelige. Kontrollér hovedinstallerens valg og snippets-understøttelse.")
     used = set(inventory["vmids"])
     vmid = next((value for value in range(9000, 999_999_999 + 1) if value not in used), None)
     if vmid is None:
         raise ValueError("Intet ledigt Single VMID.")
     write("Installer MrNobody " + {"master":"Master", "agent":"slave/agent", "standalone":"standalone"}[role])
-    write(f"Bridge: {bridge} | VMID: {vmid} | Storage: {disk}")
+    write(f"VMID: {vmid} | Storage: {disk}")
+    if role == "master":
+        write(f"Bridge: {bridge}")
+    labs = []
+    if role != "master":
+        labs = sorted({int(match[1]) for name in inventory["bridges"]
+                       if (match := re.fullmatch(r"lab([1-9][0-9]*)_lan1", name))
+                       and all(lab_network_defaults(int(match[1]))[key] in inventory["bridges"]
+                               for key in ("bridge", "bridge1", "bridge2"))})
+        if not labs:
+            raise ValueError("Ingen komplette lab-netværk med LAN1/LAN2/OOBM. Opret labbet først.")
     write("Q annullerer.")
     while True:
         try:
             answers = []
-            for label in ("IP-adresse/subnet (fx 192.0.2.10/24)", "Gateway (tom er tilladt)", "DNS (IPv4)"):
-                value = read(label + ": ").strip()
-                if value.lower() == "q":
-                    return None
-                answers.append(value)
+            lab_fields = {}
+            if role == "master":
+                for label in ("IP-adresse/subnet (fx 192.0.2.10/24)", "Gateway (tom er tilladt)", "DNS (IPv4)"):
+                    value = read(label + ": ").strip()
+                    if value.lower() == "q":
+                        return None
+                    answers.append(value)
+            else:
+                if len(labs) == 1:
+                    lab = labs[0]
+                else:
+                    value = read("Vælg eksisterende lab (" + ", ".join(map(str, labs)) + "): ").strip()
+                    if value.lower() == "q":
+                        return None
+                    lab = positive_integer(value, "Labnummer")
+                    if lab not in labs:
+                        raise ValueError("Vælg et af de eksisterende lab-netværk.")
+                network = lab_network_defaults(lab)
+                lab_fields = dict(lab=lab)
+                bridge = network["bridge"]
+                answers = [network[key] for key in ("ipv4", "gateway", "dns")]
+                write(f"Lab {lab}: LAN1 {network['ipv4']}, LAN2 {network['ipv4_2']}, OOBM {network['ipv4_1']}")
             master_url, lab_http = "", False
             if role == "agent":
                 host = read("Master IP/værtsnavn (valgfri :port): ").strip()
@@ -277,7 +313,7 @@ def single_menu_plan(role, read=input, write=print):
                     write("HTTP-lab: Master skal også have LAB_HTTP=1. Trafikken viser øvelsesnøglen i klartekst.")
             plan = validate_plan(dict(role=role, vmid=vmid, name="mrnobody-" + role,
                                       bridge=bridge, ipv4=answers[0], gateway=answers[1], dns=answers[2],
-                                      disk_storage=disk, snippet_storage=snippets, master_url=master_url, lab_http=lab_http, **hardware_defaults()))
+                                      disk_storage=disk, snippet_storage=snippets, master_url=master_url, lab_http=lab_http, **lab_fields, **hardware_defaults()))
             plan["host_check"] = check_host_plan(plan, inventory)
             return plan
         except ValueError as exc:
@@ -386,3 +422,4 @@ if __name__ == "__main__":
         raise SystemExit(1)
     except KeyboardInterrupt:
         raise SystemExit(130)
+

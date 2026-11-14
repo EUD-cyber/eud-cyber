@@ -72,6 +72,11 @@ def inspect_host(run=None, which=None):
 
 def check_host_plan(plan, inventory):
     """Check a validated plan against a snapshot. This does not reserve a VMID."""
+    if "lab" in plan:
+        from .single_vm_plan import lab_network_defaults
+        network = lab_network_defaults(plan["lab"])
+        if any(network[key] not in inventory["bridges"] for key in ("bridge", "bridge1", "bridge2")):
+            raise ValueError("Labbet skal have eksisterende LAN1-, LAN2- og OOBM-bridges.")
     if plan["vmid"] in inventory["vmids"]:
         raise ValueError("VMID findes allerede i clusteret; vælg et andet.")
     for field, available, label in (
@@ -85,3 +90,4 @@ def check_host_plan(plan, inventory):
                 vmid_free=True, bridge_exists=True, disk_storage_active=True,
                 snippet_storage_active=True, reserved=False,
                 capacity_checked=False, network_reachability_checked=False)
+

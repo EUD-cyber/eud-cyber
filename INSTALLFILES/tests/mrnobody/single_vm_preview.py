@@ -144,12 +144,14 @@ class SingleVMPreview(unittest.TestCase):
             self.assertEqual(view.profile, "Single VM")
             view.handle(10)
             self.assertEqual(view.stage, "single")
+            self.assertIsNone(view.handle(10))
+            self.assertEqual(view.stage, "single-role")
             self.assertEqual(view.handle(10), "single-install")
             view.handle(curses.KEY_DOWN)
             self.assertEqual(view.handle(10), "single-install-agent")
             view.handle(curses.KEY_DOWN)
             self.assertEqual(view.handle(10), "single-install-standalone")
-            self.assertEqual(view.stage, "single")
+            self.assertEqual(view.stage, "single-role")
 
     def test_master_menu_only_asks_network_and_uses_initial_settings(self):
         from MRNOBODY import single_vm_host as host
@@ -205,10 +207,10 @@ class SingleVMPreview(unittest.TestCase):
 
     def test_slave_menu_saves_master_host_and_selected_transport(self):
         from MRNOBODY import single_vm_host as host
-        inventory = dict(vmids=[], bridges=["vmbr7"], disk_storages=["local-lvm"],
+        inventory = dict(vmids=[], bridges=["lab3_lan1", "lab3_lan2", "lab3_oobm"], disk_storages=["local-lvm"],
                          snippet_storages=["local"], checked_at_utc="test")
         for scheme in ("https", "http", ""):
-            answers = iter(["192.0.2.10/24", "192.0.2.1", "192.0.2.53", "master.test:8443", scheme])
+            answers = iter(["master.test:8443", scheme])
             prompts = []
             def read(prompt):
                 prompts.append(prompt)
@@ -219,7 +221,11 @@ class SingleVMPreview(unittest.TestCase):
             self.assertEqual(plan["master_url"], (scheme or "https")+"://master.test:8443")
             self.assertEqual(plan["lab_http"], scheme=="http")
             self.assertEqual(plan["role"], "agent")
-            self.assertEqual(len(prompts), 5)
+            self.assertEqual(len(prompts), 2)
+            self.assertTrue(all(prompt.startswith("Master") for prompt in prompts))
+            self.assertEqual(plan["lab"], 3)
+            self.assertEqual(plan["bridge"], "lab3_lan1")
+            self.assertEqual(plan["ipv4"], "192.168.1.254/24")
 
     def test_lab_http_requires_agent_and_explicit_boolean_opt_in(self):
         self.assertEqual(planner.validate_plan(self.raw(role="agent", master_url="http://master.test", lab_http=True))["master_url"],
@@ -233,15 +239,52 @@ class SingleVMPreview(unittest.TestCase):
 
     def test_standalone_has_no_master_questions(self):
         from MRNOBODY import single_vm_host as host
-        inventory = dict(vmids=[], bridges=["vmbr7"], disk_storages=["local-lvm"],
+        inventory = dict(vmids=[], bridges=["lab3_lan1", "lab3_lan2", "lab3_oobm"], disk_storages=["local-lvm"],
                          snippet_storages=["local"], checked_at_utc="test")
-        reader = Mock(side_effect=["192.0.2.10/24", "192.0.2.1", "192.0.2.53"])
+        reader = Mock(side_effect=AssertionError("Standalone must not ask any network questions"))
         with patch.object(host, "inspect_host", return_value=inventory), \
              patch.dict(os.environ, {"BRIDGE":"vmbr7", "LVM":"local-lvm", "LOCAL":"local"}):
             plan = menu.single_menu_plan("standalone", read=reader, write=lambda value: None)
-        self.assertEqual(reader.call_count, 3)
+        reader.assert_not_called()
+        self.assertEqual(plan["bridge"], "lab3_lan1")
+        self.assertEqual(plan["ipv4"], "192.168.1.254/24")
         self.assertEqual(plan["master_url"], "")
         self.assertFalse(plan["lab_http"])
+
+    def test_multiple_labs_only_asks_which_lab_and_preserves_static_network(self):
+        from MRNOBODY import single_vm_host as host
+        inventory = dict(vmids=[], bridges=[f"lab{lab}_{net}" for lab in (1, 2) for net in ("lan1", "lan2", "oobm")],
+                         disk_storages=["local-lvm"], snippet_storages=["local"], checked_at_utc="test")
+        reader = Mock(side_effect=["2"])
+        with patch.object(host, "inspect_host", return_value=inventory), \
+             patch.dict(os.environ, {"BRIDGE":"vmbr7", "LVM":"local-lvm", "LOCAL":"local"}):
+            plan = menu.single_menu_plan("standalone", read=reader, write=lambda value: None)
+        self.assertEqual(reader.call_count, 1)
+        self.assertIn("eksisterende lab", reader.call_args.args[0])
+        self.assertEqual(plan["bridge"], "lab2_lan1")
+
+    def test_missing_lab_network_stops_before_questions(self):
+        from MRNOBODY import single_vm_host as host
+        inventory = dict(vmids=[], bridges=["lab3_lan1", "lab3_lan2"], disk_storages=["local-lvm"],
+                         snippet_storages=["local"], checked_at_utc="test")
+        reader = Mock(side_effect=AssertionError("Must stop before asking"))
+        with patch.object(host, "inspect_host", return_value=inventory), \
+             patch.dict(os.environ, {"LVM":"local-lvm", "LOCAL":"local"}):
+            for role in ("agent", "standalone"):
+                with self.assertRaisesRegex(ValueError, "Ingen komplette lab"):
+                    menu.single_menu_plan(role, read=reader, write=lambda value: None)
+        reader.assert_not_called()
+
+    def test_static_network_is_read_from_shared_installer_without_shell(self):
+        source = (ROOT / "MRNOBODY/mrnobody_installer.sh").read_text(encoding="utf-8")
+        source = source.replace("192.168.2.254/24", "192.168.2.253/24")
+        with patch("subprocess.run", side_effect=AssertionError("Must only read assignments")):
+            network = planner.lab_network_defaults(7, source=source)
+        self.assertEqual(network["ipv4_2"], "192.168.2.253/24")
+        self.assertEqual(network["bridge1"], "lab7_oobm")
+        self.assertEqual(network["gateway"], "192.168.1.1")
+        with self.assertRaisesRegex(ValueError, "Kun Slave"):
+            planner.validate_plan(self.raw(lab=7))
 
     def test_master_cancel_stops_before_image_download_or_creation(self):
         from MRNOBODY import single_vm_create as creator
@@ -311,3 +354,4 @@ class SingleVMPreview(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+

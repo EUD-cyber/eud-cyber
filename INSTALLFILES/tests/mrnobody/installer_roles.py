@@ -44,15 +44,14 @@ class MenuRoles(unittest.TestCase):
         self.assertTrue(self.view.draw(screen))
         self.assertIn("agent/slave", screen.lines[18])
         self.assertIn("fremtidig Custom", screen.lines[18])
-        self.assertIn("Single VM / Master", screen.lines[19])
-        self.assertIn("vis plan (ingen installation)", screen.lines[19])
+        self.assertIn("Single VM", screen.lines[19])
+        self.assertIn("MrNobody", screen.lines[19])
         self.assertIn("Op/ned: Big/Mini", screen.lines[21])
 
-    def test_profile_keys_still_toggle_only_big_and_mini(self):
-        for key in (CURSES.KEY_DOWN, CURSES.KEY_UP, ord(" ")):
-            before = self.view.profile
-            self.view.handle(key)
-            self.assertEqual(self.view.profile, "Mini" if before == "Big" else "Big")
+    def test_profile_keys_cycle_big_mini_single(self):
+        for expected in ("Mini", "Single VM", "Big"):
+            self.view.handle(CURSES.KEY_DOWN)
+            self.assertEqual(self.view.profile, expected)
         before = self.view.profile
         self.view.handle(ord("m"))
         self.assertEqual(self.view.profile, before)
@@ -72,11 +71,23 @@ class MenuRoles(unittest.TestCase):
                                                 components=list(self.view.selected)))
         self.assertEqual(selected, dict(profile="Big", labs=1, components=["MRNOBODY"]))
 
-    def test_single_vm_hotkey_opens_preview_without_changing_lab_choices(self):
+    def test_single_vm_list_shows_only_mrnobody_before_roles(self):
         self.view.profile, self.view.labs, self.view.selected = "Mini", 3, {"MRNOBODY"}
-        self.assertEqual(self.view.handle(ord("S")), "single-preview")
-        self.assertEqual((self.view.profile, self.view.labs, self.view.selected), ("Mini", 3, {"MRNOBODY"}))
+        self.assertIsNone(self.view.handle(ord("S")))
+        screen = Screen()
+        self.view.draw(screen)
+        self.assertEqual(screen.lines[5], "MrNobody")
+        self.assertFalse(any("Master" in line or "Standalone" in line for line in screen.lines.values()))
+        self.view.handle(10)
+        self.view.draw(screen)
+        self.assertIn("Master", screen.lines[5])
+        self.assertIn("Slave", screen.lines[6])
+        self.assertIn("Standalone", screen.lines[7])
+        self.view.handle(ord("B"))
+        self.assertEqual(self.view.stage, "single")
+        self.view.handle(ord("B"))
         self.assertEqual(self.view.stage, "profile")
+        self.assertEqual((self.view.labs, self.view.selected), (3, {"MRNOBODY"}))
 
     def test_master_and_single_vm_cannot_be_selected(self):
         for profile in ("Single VM", "Single", "Master", "Custom"):
@@ -93,3 +104,4 @@ class MenuRoles(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
