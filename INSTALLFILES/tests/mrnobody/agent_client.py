@@ -117,7 +117,7 @@ class Configuration(unittest.TestCase):
                 agent.pair_agent(self.path,destination=target,deployment=self.deployment,transport=transport)
             self.assertFalse(target.exists())
         for deployment in (replace(self.deployment,role="master"),replace(self.deployment,role="standalone"),
-                           replace(self.deployment,master_url="http://master.test",lab_http=True)):
+                           replace(self.deployment,master_url="http://master.test",lab_http=False)):
             transport=Mock()
             with self.assertRaises(agent.FatalAgentError):
                 agent.pair_agent(self.path,destination=target,deployment=deployment,transport=transport)
@@ -404,6 +404,27 @@ class MasterRoundtrip(unittest.TestCase):
         self.master_http=True
         sender.post("register")
         sender.post("heartbeat")
+        self.assertEqual(self.store.list_agents()[0]["status"],"online")
+
+    def test_http_pairing_accepts_master_issued_token_without_ca_setup(self):
+        from deployment_config import load_deployment_config
+        source=self.root/"issued.json"
+        source.write_text(json.dumps(dict(agent_id="agent-1",token=self.token)))
+        source.chmod(0o600)
+        settings=self.root/"deployment.conf"
+        settings.write_text('MRNOBODY_ROLE=agent\nMRNOBODY_MASTER_URL=http://master.test\nMRNOBODY_LAB_HTTP=1\n')
+        deployment=load_deployment_config(settings)
+        target=self.root/"agent.json"
+        transport=lambda config:agent.AgentTransport(config,self.opener())
+        # A Master that has not enabled HTTP still refuses pairing.
+        with self.assertRaises(agent.FatalAgentError):
+            agent.pair_agent(source,destination=target,deployment=deployment,transport=transport)
+        self.assertFalse(target.exists())
+        self.master_http=True
+        agent.pair_agent(source,destination=target,deployment=deployment,transport=transport)
+        loaded=agent.load_agent_config(target,deployment)
+        self.assertIsNone(loaded.ca_file)
+        self.assertEqual(loaded.master_url,"http://master.test")
         self.assertEqual(self.store.list_agents()[0]["status"],"online")
 
 

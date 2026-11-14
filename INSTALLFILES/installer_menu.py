@@ -290,11 +290,10 @@ def single_menu_plan(role, read=input, write=print, *, lab=None, environ=None):
     if (role == "master" and bridge not in inventory["bridges"]) or disk not in inventory["disk_storages"] or snippets not in inventory["snippet_storages"]:
         raise ValueError("De oprindelige bridge/storage-valg er ikke tilgængelige. Kontrollér hovedinstallerens valg og snippets-understøttelse.")
     used = set(inventory["vmids"])
-    vmid = next((value for value in range(9000, 999_999_999 + 1) if value not in used), None)
     write("Installer MrNobody " + {"master":"Master", "agent":"slave/agent", "standalone":"standalone"}[role])
     write(f"Storage: {disk}")
     if role == "master":
-        write(f"Bridge: {bridge} | VMID: {vmid}")
+        write(f"Bridge: {bridge}")
     labs = []
     if role != "master":
         labs = sorted({int(match[1]) for name in inventory["bridges"]
@@ -309,6 +308,14 @@ def single_menu_plan(role, read=input, write=print, *, lab=None, environ=None):
             answers = []
             lab_fields = {}
             if role == "master":
+                value = read("Master VMID (100-999999999): ").strip()
+                if value.lower() == "q":
+                    return None
+                if not re.fullmatch(r"[0-9]{3,9}", value) or not 100 <= int(value) <= 999_999_999:
+                    raise ValueError("VMID skal være et heltal mellem 100 og 999999999.")
+                vmid = int(value)
+                if vmid in used:
+                    raise ValueError(f"VMID {vmid} er allerede i brug i clusteret. Vælg et andet.")
                 for label in ("IP-adresse/subnet (fx 192.0.2.10/24)", "Gateway (tom er tilladt)", "DNS (IPv4)"):
                     value = read(label + ": ").strip()
                     if value.lower() == "q":
@@ -331,28 +338,22 @@ def single_menu_plan(role, read=input, write=print, *, lab=None, environ=None):
                 write(f"VMID: {vmid}")
             if vmid is None:
                 raise ValueError("Intet ledigt VMID i det valgte interval.")
-            master_url, lab_http = "", False
+            master_url, lab_http = "", role == "master"
             if role == "agent":
                 host = read("Master IP/værtsnavn (valgfri :port): ").strip()
                 if host.lower() == "q":
                     return None
                 if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::[0-9]{1,5})?", host):
                     raise ValueError("Angiv kun Master IP/værtsnavn og valgfri port, uden protokol eller sti.")
-                protocol = read("Master-protokol HTTPS/HTTP [HTTPS]: ").strip().lower() or "https"
-                if protocol == "q":
-                    return None
-                if protocol not in {"http", "https"}:
-                    raise ValueError("Vælg HTTP eller HTTPS.")
-                master_url, lab_http = protocol + "://" + host, protocol == "http"
-                if lab_http:
-                    write("HTTP-lab: Master skal også have LAB_HTTP=1. Trafikken viser øvelsesnøglen i klartekst.")
+                master_url, lab_http = "http://" + host, True
+                write("Master/Slave bruger HTTP på labnettet. Agentnøglen sendes ukrypteret; websiden bruger fortsat HTTPS.")
             plan = validate_plan(dict(role=role, vmid=vmid, name=f"lab{lab}-MrNobody" if lab_fields else "mrnobody-" + role,
                                       bridge=bridge, ipv4=answers[0], gateway=answers[1], dns=answers[2],
                                       disk_storage=disk, snippet_storage=snippets, master_url=master_url, lab_http=lab_http, **lab_fields, **hardware_defaults(environ=environ)))
             plan["host_check"] = check_host_plan(plan, inventory)
             return plan
         except ValueError as exc:
-            write(f"Ugyldigt netværk: {exc}")
+            write(f"Ugyldigt valg: {exc}")
             if role != "master":
                 lab = None
 
@@ -390,7 +391,7 @@ def install_single_master(role="master", *, environ=None, lab=None):
         subprocess.run(["qm", "start", str(result["vmid"])], check=True, timeout=120)
         print(f"MrNobody {role} VM {result['vmid']} er startet: https://{plan['ipv4'].split('/')[0]}")
         if role == "agent":
-            print("Master-adresse og transport er gemt. Agentnøgle og eventuel CA-tillid skal sættes op før agentservicen aktiveres.")
+            print("Master-adressen er gemt til HTTP. Par med en Master-udstedt agentnøgle før agentservicen aktiveres; ingen CA-opsætning er nødvendig.")
 
     except (ValueError, OSError, subprocess.SubprocessError) as exc:
         print(f"Single VM-installation stoppet: {exc}. Eventuel VM bevares; ingen automatisk sletning.")

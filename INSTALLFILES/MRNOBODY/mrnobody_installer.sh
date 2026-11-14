@@ -37,14 +37,16 @@ case "$MRNOBODY_ROLE" in
 esac
 
 # An empty URL is valid: existing labs must not require an available Master.
-# Accept an HTTPS DNS/IPv4 authority with an optional port and path.
+# Lab agents use HTTP; retain explicit HTTPS compatibility without downgrades.
 if [[ -n "$MRNOBODY_MASTER_URL" ]]; then
-  master_url_pattern='^https://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:([0-9]{1,5}))?(/[A-Za-z0-9._~%/+-]*)?$'
+  master_url_pattern='^https?://[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:([0-9]{1,5}))?(/[A-Za-z0-9._~%/+-]*)?$'
   if ! [[ "$MRNOBODY_MASTER_URL" =~ $master_url_pattern ]]; then
-    echo "MRNOBODY_MASTER_URL must be an HTTPS URL without credentials, query or fragment." >&2
+    echo "MRNOBODY_MASTER_URL must be an HTTP/HTTPS URL without credentials, query or fragment." >&2
     exit 1
   fi
-  master_port="${BASH_REMATCH[3]:-443}"
+  default_master_port=80
+  [[ "$MRNOBODY_MASTER_URL" != https://* ]] || default_master_port=443
+  master_port="${BASH_REMATCH[3]:-$default_master_port}"
   if (( 10#$master_port < 1 || 10#$master_port > 65535 )); then
     echo "MRNOBODY_MASTER_URL port must be between 1 and 65535." >&2
     exit 1
@@ -110,6 +112,12 @@ for key, default, value in (
     if rendered.count(anchor) != 1:
         raise SystemExit(f"Missing or ambiguous deployment setting: {key}")
     rendered = rendered.replace(anchor, f"      {key}={shlex.quote(value)}{newline}")
+
+if role == "agent":
+    if "MRNOBODY_LAB_HTTP=" in rendered:
+        raise SystemExit("Ambiguous lab HTTP setting")
+    anchor = f"      MRNOBODY_MASTER_URL={shlex.quote(master_url)}{newline}"
+    rendered = rendered.replace(anchor, anchor + '      MRNOBODY_LAB_HTTP="1"' + newline)
 
 # A unique file prevents stale settings and preserves snippets used by other VMs.
 fd, destination = tempfile.mkstemp(

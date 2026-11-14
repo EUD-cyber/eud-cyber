@@ -1,7 +1,10 @@
 # MrNobody agent: udgående identitet og heartbeat
 
 Agenten forbinder ud gennem NAT. Den åbner ingen lytteport og udfører ikke jobs
-eller filoverførsel. HTTPS er standard; HTTP er et eksplicit undervisningsvalg.
+eller filoverførsel. Nye installationer bruger HTTP mellem Master og Slave på
+det interne labnet. MrNobody-websiden og registry-oversigten beholder HTTPS.
+HTTP sender agenttoken ukrypteret. Brug forbindelsen på et betroet, isoleret
+labnet; nøglefiler overføres fortsat sikkert via SSH/SCP.
 
 ## 1. Udsted nøgle på Master
 
@@ -36,86 +39,64 @@ Filen skal være ejet af root og have mode 600 på Slave. Fx som root på Master
     scp /root/lab1-agent.json root@SLAVE_IP:/root/lab1-agent.json
 
 Er root-SSH ikke tilgængeligt, benyttes den eksisterende sikre administrationskanal.
-Kopiér også det offentlige CA-/tillidscertifikat via den betroede kanal ved intern
-CA eller selvsigneret TLS. Masterens private TLS-nøgle må aldrig overføres.
+HTTP-forbindelsen kræver ingen CA-fil. Masterens private TLS-nøgle må aldrig overføres.
 
-## 2. Vælg transport efter installation
+## 2. HTTP mellem Master og Slave
 
-Single VM-menuens slavevalg spørger nu om Master-IP/værtsnavn og HTTP/HTTPS
-og gemmer valget i /etc/mrnobody/deployment.conf. Standalone spørger ikke om Master.
-Big/Mini/Custom beholder agentrollen. Menuen udsteder ingen nøgle og aktiverer ikke
-agentservicen; følg nøgle-, tillids- og aktiveringstrinnene her.
-Eksisterende VM'er kan fortsat ændres efter installation. Bevar filens rolle
-og angiv Master-URL på agenten.
+Single VM-menuen spørger Slave om Master-IP/værtsnavn og valgfri port.
+Den gemmer `http://...` og aktiverer lab-HTTP uden spørgsmål om protokol eller CA.
+En ny Master får også lab-HTTP aktiveret. Slave og Standalone spørger altid om
+labnummer og bruger første ledige VMID i intervallet lab × 1000 til +999.
+Master spørger i stedet om et VMID og kontrollerer hele clusteret for kollisioner;
+kontrollen gentages umiddelbart før oprettelse.
 
-HTTPS på agenten:
+Big/Mini/Custom beholder agentrollen. Den fælles Big/Mini-renderer tillader HTTP
+og sætter lab-HTTP på nye agenter. Ingen nøgle genereres på Slave eller indbygges
+i installationsloggen. Standalone får ingen Master-forbindelse.
+
+Eksisterende installationer bevarer deres valgte transport ved update.
+For at skifte en eksisterende installation til HTTP redigeres
+`/etc/mrnobody/deployment.conf`. Bevar rollen og de øvrige indstillinger;
+tilføj eller erstat flaget, så det kun forekommer én gang.
+
+På Master:
+
+    MRNOBODY_ROLE="master"
+    MRNOBODY_MASTER_URL=""
+    MRNOBODY_LAB_HTTP="1"
+
+På Slave (tilpas adressen):
 
     MRNOBODY_ROLE="agent"
-    MRNOBODY_MASTER_URL="https://master.lab.example"
-    MRNOBODY_LAB_HTTP="0"
+    MRNOBODY_MASTER_URL="http://10.134.71.3"
+    MRNOBODY_LAB_HTTP="1"
 
-Master beholder rolle master og MRNOBODY_LAB_HTTP="0" som standard.
-Ved intern CA eller selvsigneret certifikat tilføjes en absolut sti til et
-offentligt CA-/tillidscertifikat i agent.json, fx:
+Genstart `nordic-incident-web` på Master efter ændring af indstillingerne.
+På en allerede parret Slave genstartes `mrnobody-agent` efter ændring af URL'en.
+En uparret Slave følger trin 3. En eksisterende agentidentitet skal ikke udstedes
+igen. Ingen CA-fil eller certifikatændring er nødvendig for HTTP-forbindelsen.
 
-    "ca_file": "/etc/mrnobody/master-ca.pem"
-
-Masterens certifikat skal matche URL'ens DNS-navn eller IP. Det eksisterende
-standardcertifikat med CN=incidentvm passer ikke automatisk til et nyt navn.
-Der findes ingen mulighed for at ignorere certifikatfejl i HTTPS-klienten.
-Brug et CA-udstedt certifikat med korrekt subjectAltName, eller klargør et
-selvsigneret certifikat med korrekt DNS-/IP-SAN på Master først. Til et isoleret
-lab med Master-IP 10.134.71.3 kan følgende køres som root på Master, før parring.
-Tilpas IP'en, og behold backupmappen, hvis certifikatet skal rulles tilbage:
-
-    backup=$(mktemp -d /var/backups/mrnobody-tls.XXXXXXXX)
-    cp -a /etc/nordic-incident/tls/incident.crt /etc/nordic-incident/tls/incident.key "$backup/"
-    openssl req -x509 -nodes -newkey rsa:3072 -sha256 -days 365 \
-      -subj '/CN=10.134.71.3' -addext 'subjectAltName=IP:10.134.71.3' \
-      -keyout "$backup/new.key" -out "$backup/new.crt"
-    install -m 0600 "$backup/new.key" /etc/nordic-incident/tls/incident.key
-    install -m 0644 "$backup/new.crt" /etc/nordic-incident/tls/incident.crt
-    nginx -t && systemctl reload nginx
-
-Hvis kontrollen fejler, gendannes incident.crt og incident.key fra backupmappen
-før reload. Eksisterende agenter skal have opdateret tillid ved certifikatskift.
-Overfør kun `incident.crt` til `/etc/mrnobody/master-ca.pem` på Slave via den
-betroede SSH-kanal. Par aldrig mod et tilfældigt hentet, ubekræftet certifikat.
-Masterens private TLS-nøgle skal ikke kopieres til agenten.
-
-### HTTP til trafikøvelser
-
-Sæt MRNOBODY_LAB_HTTP="1" i deployment.conf på både Master og agent.
-Agentens URL vælges eksplicit som http://master.lab.example. På Master er
-MRNOBODY_MASTER_URL fortsat tom; serverflaget tillader kun registrering og heartbeat
-over HTTP. HTTPS fungerer stadig, og HTTPS-validering slås ikke fra af flaget.
-
-HTTP viser Authorization-nøglen og JSON-payload i capture-trafikken. Brug
-særskilte øvelsesnøgler, og spær dem bagefter med registry-CLI'ens revoke.
-UI og øvrige HTTP-stier beholder HTTPS-redirect. Der følges ingen redirects
-eller automatisk fallback mellem protokollerne.
-
-Efter ændring af Masterens deployment.conf genstartes nordic-incident-web.
-På agenten genstartes mrnobody-agent efter konfigurationsændringer; genstart
-også webservicen, hvis Settings skal læse de nye konfigurationsværdier.
+Kun `/api/master/agents/register` og `/api/master/agents/heartbeat` er åbne på HTTP.
+Webside, Settings, registry-listen og alle andre HTTP-stier omdirigerer fortsat
+til HTTPS. Der er ingen automatisk protokolfallback, og en tidligere eksplicit
+HTTPS-konfiguration beholder fuld certifikatvalidering.
 
 ## 3. Kontrol og eksplicit aktivering
 
-Disse kommandoer køres som root på agenten efter overførsel af nøgle og tillid:
+Disse kommandoer køres som root på agenten efter sikker overførsel af nøglefilen:
 
     chmod 600 /root/lab1-agent.json
-    python3 /opt/nordic-attack/web/agent_client.py --pair /root/lab1-agent.json --ca-file /etc/mrnobody/master-ca.pem
+    python3 /opt/nordic-attack/web/agent_client.py --pair /root/lab1-agent.json
     systemctl enable --now mrnobody-agent.service
 
     python3 /opt/nordic-attack/web/agent_client.py --check
     systemctl status mrnobody-agent.service --no-pager
 
-Udelad --ca-file ved et certifikat, der allerede er betroet af operativsystemet.
-`--pair` kræver gyldig agentrolle, Master-URL og HTTPS, validerer den private
-Master-udstedte fil, registrerer sig og sender heartbeat. Først efter succes
+`--pair` kræver gyldig agentrolle og Master-URL med lab-HTTP aktiveret. Den validerer
+den private Master-udstedte fil, registrerer sig og sender heartbeat. Først efter succes
 gemmes identiteten atomisk som `/etc/mrnobody/agent.json` med mode 600.
-En eksisterende identitet overskrives aldrig. Forkert token, manglende CA,
-certifikat/navnefejl eller utilgængelig Master efterlader ingen ny lokal identitet;
+En eksisterende identitet overskrives aldrig. Forkert token, deaktiveret HTTP
+på Master eller utilgængelig Master efterlader ingen ny lokal identitet;
 ret årsagen og gentag parringen med den samme udstedte fil.
 Aktivering er et separat eksplicit trin. `--check` validerer lokalt uden netværk;
 `--once` kan fortsat bruges til én registrering og heartbeat.

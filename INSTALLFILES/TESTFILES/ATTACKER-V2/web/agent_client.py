@@ -86,13 +86,14 @@ def load_agent_config(path=CREDENTIALS, deployment=None):
 
 
 def pair_agent(source, *, destination=CREDENTIALS, ca_file=None, deployment=None, transport=None):
-    """Import a Master-issued private file only after authenticated HTTPS succeeds.
+    """Import a Master-issued private file after authenticated registration succeeds.
 
     Never replace an existing identity. The caller explicitly enables the unit.
     """
     deployment=load_deployment_config() if deployment is None else deployment
-    if not deployment.master_url.startswith("https://"):
-        raise FatalAgentError("Pairing requires HTTPS with certificate verification.")
+    if not (deployment.master_url.startswith("https://") or
+            (deployment.master_url.startswith("http://") and deployment.lab_http is True)):
+        raise FatalAgentError("Pairing requires configured lab HTTP or verified HTTPS.")
     destination=Path(destination)
     if destination.exists() or destination.is_symlink():
         raise FatalAgentError("Agent identity already exists; it was not overwritten.")
@@ -234,7 +235,7 @@ def main():
     mode=parser.add_mutually_exclusive_group()
     mode.add_argument("--check",action="store_true",help="Validate configuration/trust without network")
     mode.add_argument("--once",action="store_true",help="Register and send one heartbeat")
-    mode.add_argument("--pair",type=Path,metavar="PRIVATE_JSON",help="Import Master-issued credentials after verified HTTPS registration")
+    mode.add_argument("--pair",type=Path,metavar="PRIVATE_JSON",help="Import Master-issued credentials after authenticated registration")
     parser.add_argument("--ca-file",type=Path,help="Trusted CA/public certificate for --pair; never the Master private key")
     args=parser.parse_args()
     if args.ca_file and not args.pair:

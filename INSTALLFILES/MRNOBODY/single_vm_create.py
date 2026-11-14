@@ -36,8 +36,8 @@ def render_userdata(template, plan, *, source_ref=None, instance_id=None):
             raise ValueError(f"Cloud-init mangler et entydigt felt: {key}.")
         template = template.replace(anchor, f"      {key}={shlex.quote(value)}{newline}")
     if plan.get("lab_http", False):
-        if plan["role"] != "agent" or "MRNOBODY_LAB_HTTP=" in template:
-            raise ValueError("Lab HTTP kan ikke indsættes entydigt for agenten.")
+        if plan["role"] not in {"master", "agent"} or "MRNOBODY_LAB_HTTP=" in template:
+            raise ValueError("Lab HTTP kan ikke indsættes entydigt for Master/agenten.")
         anchor = f"      MRNOBODY_MASTER_URL={shlex.quote(plan['master_url'])}{newline}"
         if template.count(anchor) != 1:
             raise ValueError("Cloud-init mangler Master-URL til lab HTTP.")

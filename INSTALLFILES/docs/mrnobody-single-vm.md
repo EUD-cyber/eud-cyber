@@ -6,13 +6,15 @@ Vælg Single VM, derefter MrNobody, Big/Mini og til sidst Master, Slave eller St
 Kun Master spørger om egen IP-adresse/subnet, gateway og DNS og genbruger
 bridgen fra hovedinstallerens valg. Slave og Standalone bruger eksisterende
 lab-bridges og statiske IP'er som beskrevet nedenfor.
-Storage og Ubuntu-image genbruges fra hovedinstallerens valg; VMID vælges
-fra 9000 og op, og hardware får MrNobody-standardværdierne.
-Slave spørger desuden efter Master-IP/værtsnavn (med valgfri port) og HTTP/HTTPS.
-HTTPS er standard. HTTP indsætter MRNOBODY_LAB_HTTP="1" i den nye agents
-deployment.conf; samme flag skal sættes på Master for HTTP.
+Storage, Ubuntu-image og valgt hardware genbruges fra hovedinstallerens valg.
+Master spørger om VMID; et optaget ID afvises, og kontrollen gentages før oprettelse.
+Slave og Standalone spørger om labnummer og bruger første ledige VMID i
+intervallet labnummer × 1000 til labnummer × 1000 + 999.
+Slave spørger desuden efter Master-IP/værtsnavn med valgfri port og bruger HTTP.
+Master og Slave får MRNOBODY_LAB_HTTP="1" i deres nye deployment.conf.
+Websiden beholder HTTPS. Ingen CA-opsætning kræves til Master/Slave-forbindelsen.
 Standalone og Master får ingen Master-adressespørgsmål.
-Agentnøgle og CA-tillid sættes op efter installation som beskrevet i
+Agentnøgle parres efter installation som beskrevet i
 [mrnobody-agent-client.md](mrnobody-agent-client.md). Agentservicen aktiveres
 ikke automatisk, og ingen nøgle gemmes i Proxmox-snippet.
 
@@ -88,7 +90,7 @@ VM-oprettelsen. Tidligere VM'er uden instance-ID overtages ikke automatisk.
 ## Det resterende Master-arbejde
 
 Rollen master genkendes af den eksisterende backend/UI, men Master/agent-
-kommunikation er fortsat deaktiveret. Provisionering og opstartsforløb skal
+registrering og heartbeat findes; agenten afventer eksplicit parring og aktivering. Provisionering og opstartsforløb skal
 stadig afprøves på rigtig Proxmox; de isolerede tests bruger simulerede svar.
 
 ## Single VM-menu: roller og lab-netværk
@@ -107,7 +109,7 @@ gateway og DNS. Slave og Standalone læser i stedet de statiske værdier fra
 Gateway og DNS er `192.168.1.1`. Alle tre bridges skal eksistere; menuen
 opretter dem ikke. Labnummer spørges altid med standarden `1`; Enter vælger
 lab1. Der spørges aldrig om Slave/Standalone-VM'ens egne IP-adresser.
-Kun Slave spørger om Master-adresse og HTTPS/HTTP. Big/Mini og fremtidig
+Kun Slave spørger om Master-adresse; forbindelsen bruger HTTP. Big/Mini og fremtidig
 Custom beholder agent/slave-rollen; denne rettelse tilføjer ingen Custom-profil.
 
 ## Øvrige lab-VM'er under Single VM
@@ -123,7 +125,7 @@ Labnummer `[1]` vælger de eksisterende lab-bridges, IP-standarder og VM-navne.
 Enter vælger lab1; 1-16 accepteres, og Q vender tilbage. VMID vælges af den
 fælles installer fra labnummer × 1000. MrNobody Slave/Standalone bruger samme
 labinterval og navnet `labN-MrNobody`; Master bevarer den separate netopsætning
-og VMID fra 9000 og spørger ikke om labnummer.
+og spørger om et ledigt VMID. Master spørger ikke om labnummer.
 
 Kun den valgte VM installeres. OPNsense kører først sin WAN-konfiguration,
 og GUACVM kører først sin IP-konfiguration. Ingen fuld labinstallation eller

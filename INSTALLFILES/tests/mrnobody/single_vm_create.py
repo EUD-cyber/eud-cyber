@@ -1,6 +1,8 @@
 """Simulated Single VM creation only: never call real Proxmox commands."""
 import json
+import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -68,6 +70,45 @@ class CreateSingleVM(unittest.TestCase):
             self.assertEqual('MRNOBODY_LAB_HTTP="1"' in rendered, scheme=="http")
             self.assertNotIn("MRNOBODY_LAB_HTTP", self.template)
 
+    def test_new_master_enables_http_agent_endpoints_in_its_generated_config(self):
+        rendered=creator.render_userdata(self.template,self.plan)
+        self.assertIn('MRNOBODY_LAB_HTTP="1"',rendered)
+        config=self.root/"master.conf"
+        config.write_text("\n".join(line.strip() for line in rendered.splitlines() if line.strip().startswith("MRNOBODY_")))
+        loaded=load_deployment_config(config)
+        self.assertEqual((loaded.role,loaded.config_status,loaded.lab_http),("master","loaded",True))
+        self.assertNotIn("MRNOBODY_LAB_HTTP",self.template)
+
+    def test_shared_big_mini_agent_renderer_supports_http_without_changing_template(self):
+        import yaml
+        source=(ROOT/"MRNOBODY/mrnobody_installer.sh").read_text()
+        code=source.split("<<'PY'\n",1)[1].split("\nPY\n",1)[0]
+        template=ROOT/"MRNOBODY/mrnobody_userdata.yaml"
+        original=template.read_bytes()
+        for role in ("agent","standalone"):
+            url="http://master.test" if role=="agent" else ""
+            result=subprocess.run([sys.executable,"-c",code,str(template),str(self.snippets),"3",role,url],
+                                  capture_output=True,text=True,check=True)
+            data=yaml.safe_load((self.snippets/result.stdout.strip()).read_text())
+            content=next(item["content"] for item in data["write_files"] if item["path"]=="/etc/mrnobody/deployment.conf")
+            config=self.root/"lab.conf"
+            config.write_text(content)
+            loaded=load_deployment_config(config)
+            self.assertEqual((loaded.role,loaded.master_url,loaded.config_status),(role,url,"loaded"))
+            self.assertEqual(loaded.lab_http,role=="agent")
+        self.assertEqual(template.read_bytes(),original)
+
+    @unittest.skipUnless(os.name!="nt" and shutil.which("bash"),"Shared shell validation runs on Linux/CI")
+    def test_shared_installer_accepts_http_and_rejects_invalid_master_authorities(self):
+        prefix=(ROOT/"MRNOBODY/mrnobody_installer.sh").read_text().split('LOGFILE=',1)[0]
+        for url,expected in (("http://master.test",0),("http://192.0.2.10:8080",0),
+                             ("https://master.test:443",0),("http://master.test:0",1),
+                             ("http://master.test:65536",1),("http://user:secret@master.test",1),
+                             ("http://master.test?token=secret",1)):
+            result=subprocess.run(["bash","-s","--","3"],input=prefix,text=True,capture_output=True,
+                                  env=dict(os.environ,MRNOBODY_ROLE="agent",MRNOBODY_MASTER_URL=url))
+            self.assertEqual(result.returncode,expected,result.stdout+result.stderr)
+
     def test_creates_only_selected_vm_with_one_bridge_and_no_start(self):
         result = self.create()
         self.assertEqual(self.inspect.call_count, 2)
@@ -96,7 +137,7 @@ class CreateSingleVM(unittest.TestCase):
             self.calls.clear()
             raw = {key: value for key, value in self.plan.items()
                    if key not in {"kind", "deployment_enabled", "host_check"}}
-            raw.update(role=role, lab=3, master_url="https://master.test" if role == "agent" else "")
+            raw.update(role=role, lab=3, vmid=3000, lab_http=role=="agent", master_url="http://master.test" if role == "agent" else "")
             self.plan = planner.validate_plan(raw)
             self.inventory["bridges"] = ["lab3_lan1", "lab3_oobm", "lab3_lan2"]
             result = self.create()
@@ -111,12 +152,12 @@ class CreateSingleVM(unittest.TestCase):
                 self.assertEqual(command[command.index(key) + 1], value)
             rendered = Path(result["snippet"]).read_text()
             self.assertIn("MRNOBODY_ROLE=" + role, rendered)
-            self.assertIn("MRNOBODY_MASTER_URL=" + ("https://master.test" if role == "agent" else "''"), rendered)
+            self.assertIn("MRNOBODY_MASTER_URL=" + ("http://master.test" if role == "agent" else "''"), rendered)
 
     def test_missing_secondary_bridge_prevents_any_creation(self):
         raw = {key: value for key, value in self.plan.items()
                if key not in {"kind", "deployment_enabled", "host_check"}}
-        self.plan = planner.validate_plan(dict(raw, role="agent", lab=3))
+        self.plan = planner.validate_plan(dict(raw, role="agent", lab=3, vmid=3000))
         self.inventory["bridges"] = ["lab3_lan1", "lab3_oobm"]
         with self.assertRaisesRegex(ValueError, "LAN1"):
             self.create()

@@ -58,6 +58,8 @@ def validate_plan(value):
     # Proxmox pve-vmid schema: github.com/proxmox/pve-common/blob/master/src/PVE/JSONSchema.pm
     if type(value["vmid"]) is not int or not 100 <= value["vmid"] <= 999_999_999:
         raise ValueError("VMID skal være et heltal mellem 100 og 999999999.")
+    if lab_fields and not value["lab"] * 1000 <= value["vmid"] < (value["lab"] + 1) * 1000:
+        raise ValueError("Slave/Standalone VMID skal ligge i labnummerets interval: lab × 1000 til lab × 1000 + 999.")
     if not NAME.fullmatch(value["name"]):
         raise ValueError("VM-navnet skal være 1-63 bogstaver/tal/bindestreg uden bindestreg i enderne.")
     if not BRIDGE.fullmatch(value["bridge"]):
@@ -90,9 +92,9 @@ def validate_plan(value):
     master_url = value.get("master_url", "")
     if not isinstance(master_url, str):
         raise ValueError("Master-URL skal være tekst.")
-    lab_http = value.get("lab_http", False)
-    if type(lab_http) is not bool or (lab_http and role != "agent"):
-        raise ValueError("Lab HTTP kræver agentrollen og et boolesk tilvalg.")
+    lab_http = value.get("lab_http", role == "master")
+    if type(lab_http) is not bool or (lab_http and role not in {"master", "agent"}):
+        raise ValueError("Lab HTTP kræver Master/agentrollen og et boolesk tilvalg.")
     if master_url:
         pattern = re.compile(MASTER_URL.pattern.replace("https://", "https?://", 1)) if lab_http else MASTER_URL
         match = pattern.fullmatch(master_url)
