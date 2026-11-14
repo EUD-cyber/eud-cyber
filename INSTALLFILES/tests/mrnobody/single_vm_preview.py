@@ -144,13 +144,16 @@ class SingleVMPreview(unittest.TestCase):
             self.assertEqual(view.profile, "Single VM")
             view.handle(10)
             self.assertEqual(view.stage, "single")
+            view.vm_cursor = next(index for index, vm in enumerate(menu.VMS) if vm[0] == "MRNOBODY")
+            self.assertIsNone(view.handle(10))
+            self.assertEqual(view.stage, "single-size")
             self.assertIsNone(view.handle(10))
             self.assertEqual(view.stage, "single-role")
-            self.assertEqual(view.handle(10), "single-install")
+            self.assertEqual(view.handle(10)["role"], "master")
             view.handle(curses.KEY_DOWN)
-            self.assertEqual(view.handle(10), "single-install-agent")
+            self.assertEqual(view.handle(10)["role"], "agent")
             view.handle(curses.KEY_DOWN)
-            self.assertEqual(view.handle(10), "single-install-standalone")
+            self.assertEqual(view.handle(10)["role"], "standalone")
             self.assertEqual(view.stage, "single-role")
 
     def test_master_menu_only_asks_network_and_uses_initial_settings(self):
@@ -217,7 +220,7 @@ class SingleVMPreview(unittest.TestCase):
                 return next(answers)
             with self.subTest(scheme=scheme), patch.object(host, "inspect_host", return_value=inventory), \
                  patch.dict(os.environ, {"BRIDGE":"vmbr7", "LVM":"local-lvm", "LOCAL":"local"}):
-                plan = menu.single_menu_plan("agent", read=read, write=lambda value: None)
+                plan = menu.single_menu_plan("agent", read=read, write=lambda value: None, lab=3)
             self.assertEqual(plan["master_url"], (scheme or "https")+"://master.test:8443")
             self.assertEqual(plan["lab_http"], scheme=="http")
             self.assertEqual(plan["role"], "agent")
@@ -226,6 +229,8 @@ class SingleVMPreview(unittest.TestCase):
             self.assertEqual(plan["lab"], 3)
             self.assertEqual(plan["bridge"], "lab3_lan1")
             self.assertEqual(plan["ipv4"], "192.168.1.254/24")
+            self.assertEqual(plan["vmid"], 3000)
+            self.assertEqual(plan["name"], "lab3-MrNobody")
 
     def test_lab_http_requires_agent_and_explicit_boolean_opt_in(self):
         self.assertEqual(planner.validate_plan(self.raw(role="agent", master_url="http://master.test", lab_http=True))["master_url"],
@@ -244,7 +249,7 @@ class SingleVMPreview(unittest.TestCase):
         reader = Mock(side_effect=AssertionError("Standalone must not ask any network questions"))
         with patch.object(host, "inspect_host", return_value=inventory), \
              patch.dict(os.environ, {"BRIDGE":"vmbr7", "LVM":"local-lvm", "LOCAL":"local"}):
-            plan = menu.single_menu_plan("standalone", read=reader, write=lambda value: None)
+            plan = menu.single_menu_plan("standalone", read=reader, write=lambda value: None, lab=3)
         reader.assert_not_called()
         self.assertEqual(plan["bridge"], "lab3_lan1")
         self.assertEqual(plan["ipv4"], "192.168.1.254/24")
@@ -260,7 +265,7 @@ class SingleVMPreview(unittest.TestCase):
              patch.dict(os.environ, {"BRIDGE":"vmbr7", "LVM":"local-lvm", "LOCAL":"local"}):
             plan = menu.single_menu_plan("standalone", read=reader, write=lambda value: None)
         self.assertEqual(reader.call_count, 1)
-        self.assertIn("eksisterende lab", reader.call_args.args[0])
+        self.assertIn("Labnummer [1]", reader.call_args.args[0])
         self.assertEqual(plan["bridge"], "lab2_lan1")
 
     def test_missing_lab_network_stops_before_questions(self):
@@ -285,6 +290,31 @@ class SingleVMPreview(unittest.TestCase):
         self.assertEqual(network["gateway"], "192.168.1.1")
         with self.assertRaisesRegex(ValueError, "Kun Slave"):
             planner.validate_plan(self.raw(lab=7))
+
+    def test_enter_uses_lab1_and_selected_hardware_without_own_ip_questions(self):
+        from MRNOBODY import single_vm_host as host
+        inventory = dict(vmids=[1000], bridges=["lab1_lan1", "lab1_lan2", "lab1_oobm"],
+                         disk_storages=["local-lvm"], snippet_storages=["local"], checked_at_utc="test")
+        reader = Mock(return_value="")
+        env = dict(LVM="local-lvm", LOCAL="local", MRNOBODY_CPU="2", MRNOBODY_MEM="2048", MRNOBODY_HDD="32G")
+        with patch.object(host, "inspect_host", return_value=inventory):
+            plan = menu.single_menu_plan("standalone", read=reader, write=lambda value: None, environ=env)
+        self.assertEqual(reader.call_count, 1)
+        self.assertIn("Labnummer [1]", reader.call_args.args[0])
+        self.assertEqual((plan["lab"], plan["vmid"], plan["name"]), (1, 1001, "lab1-MrNobody"))
+        self.assertEqual((plan["cpu"], plan["memory_mib"], plan["disk_expansion"]), (2, 2048, "32G"))
+
+    def test_master_uses_selected_size_and_keeps_original_network_questions(self):
+        from MRNOBODY import single_vm_host as host
+        inventory = dict(vmids=[], bridges=["vmbr7"], disk_storages=["local-lvm"],
+                         snippet_storages=["local"], checked_at_utc="test")
+        reader = Mock(side_effect=["192.0.2.10/24", "192.0.2.1", "192.0.2.53"])
+        env = dict(BRIDGE="vmbr7", LVM="local-lvm", LOCAL="local", MRNOBODY_CPU="2", MRNOBODY_MEM="2048")
+        with patch.object(host, "inspect_host", return_value=inventory):
+            plan = menu.master_menu_plan(read=reader, write=lambda value: None, environ=env)
+        self.assertEqual(reader.call_count, 3)
+        self.assertEqual((plan["bridge"], plan["vmid"], plan["cpu"], plan["memory_mib"]), ("vmbr7", 9000, 2, 2048))
+        self.assertNotIn("lab", plan)
 
     def test_master_cancel_stops_before_image_download_or_creation(self):
         from MRNOBODY import single_vm_create as creator
