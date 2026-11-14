@@ -575,7 +575,7 @@ const MrnUI = (() => {
     }
     const setText = (id,text) => {const el=byId(id);if(el)el.textContent=text;};
     async function get(url) {const response=await fetch(url);if(!response.ok)throw new Error('Unavailable');return response.json();}
-    let masterAgentsRequest = 0;
+    let masterAgentsRequest = 0, masterAgentsTimer = null;
     async function refreshMasterAgents() {
         const panel = byId('masterAgentsPanel'), root = byId('masterAgentsRuntime');
         if (!panel || panel.hidden || !root) return;
@@ -588,9 +588,7 @@ const MrnUI = (() => {
             if (!Array.isArray(data.agents)) throw new Error('Invalid agent list');
             root.replaceChildren();
             if (!data.agents.length) {
-                node(root, 'p', data.initialized === false
-                    ? 'No agent keys issued yet. Issue an exercise identity on the Master to begin.'
-                    : 'No agents in the registry.', 'empty-state');
+                node(root, 'p', 'No agents registered yet. Slaves appear here after enrollment with this Master.', 'empty-state');
                 return;
             }
             const list = node(root, 'div');
@@ -601,7 +599,7 @@ const MrnUI = (() => {
                     ? new Date(value * 1000).toLocaleString() : 'Never';
                 const status = {pending:'Pending registration', online:'Online', offline:'Offline', revoked:'Revoked'}[agent.status] || 'Unknown';
                 for (const [label, value] of [['Agent ID', agent.agent_id], ['Name', agent.name || 'Not registered'],
-                        ['Status', status], ['Last contact', timestamp(agent.last_seen_at)]]) {
+                        ['Status', status], ['Last heartbeat', timestamp(agent.last_seen_at)]]) {
                     node(row, 'dt', label);
                     node(row, 'dd', String(value ?? 'Unavailable'));
                 }
@@ -612,15 +610,22 @@ const MrnUI = (() => {
         }
     }
     function configureMasterAgents(deployment) {
-        const panel = byId('masterAgentsPanel');
-        if (!panel) return;
+        const panel = byId('masterAgentsPanel'), tab = byId('masterAgentsTab'), page = byId('page-agents');
+        if (!panel || !tab || !page) return;
         panel.hidden = !(deployment?.role === 'master' && deployment.config_status === 'loaded');
+        tab.hidden = page.hidden = panel.hidden;
         if (panel.hidden) {
+            clearInterval(masterAgentsTimer);
+            masterAgentsTimer = null;
             masterAgentsRequest++;
             byId('masterAgentsRuntime')?.replaceChildren();
+            if (page.classList.contains('app-page-active')) showPage('dashboard');
             return;
         }
         byId('masterAgentsRefresh').onclick = refreshMasterAgents;
+        if (masterAgentsTimer === null) masterAgentsTimer = setInterval(() => {
+            if (!document.hidden && page.classList.contains('app-page-active')) refreshMasterAgents();
+        }, 30000);
         refreshMasterAgents();
     }
     function renderDeploymentStatus(deployment) {
@@ -3420,7 +3425,7 @@ async function runUpdate() {
 
 function showPage(pageName) {
     if (pageName) ++reportNavigationVersion;
-    if (["dashboard", "system"].includes(pageName)) MrnUI.refreshDashboard(true);
+    if (["dashboard", "system", "agents"].includes(pageName)) MrnUI.refreshDashboard(true);
     const primaryPage = {builder: "scenarios", campaigns: "scenarios", inventory: "system"}[pageName] || pageName;
 
     if (pageName === "reports") refreshReports();

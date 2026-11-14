@@ -99,6 +99,7 @@
 
         <nav class="sidebar-nav" aria-label="Main navigation">
 <button class="nav-item nav-active" type="button" data-page="dashboard"><span class="nav-icon" aria-hidden="true">⌂</span><span>Dashboard</span></button>
+<button class="nav-item" type="button" data-page="agents" id="masterAgentsTab" hidden><span class="nav-icon" aria-hidden="true">◉</span><span>Agents</span></button>
 <button class="nav-item" type="button" data-page="phases"><span class="nav-icon" aria-hidden="true">◆</span><span>Attack Techniques</span></button>
 <button class="nav-item" type="button" data-page="scenarios"><span class="nav-icon" aria-hidden="true">⬡</span><span>Scenarios</span></button>
 <button class="nav-item" type="button" data-page="schedules"><span class="nav-icon" aria-hidden="true">◷</span><span>Scheduler</span></button>
@@ -1477,16 +1478,6 @@
     </section>
 
 
-    <section class="panel" id="masterAgentsPanel" hidden>
-        <div class="panel-header">
-            <h2>Master agents</h2>
-            <button class="button button-small" type="button" id="masterAgentsRefresh">Refresh agents</button>
-        </div>
-        <p class="muted">Read only. Online means contact within 90 seconds. Refresh to update.</p>
-        <div id="masterAgentsRuntime" aria-live="polite"></div>
-    </section>
-
-
     <section class="panel">
 
         <div class="panel-header">
@@ -1521,6 +1512,17 @@
 </section>
 
             
+<section id="page-agents" class="app-page" hidden>
+    <section class="panel" id="masterAgentsPanel" hidden>
+        <div class="panel-header">
+            <h2>Agents</h2>
+            <button class="button button-small" type="button" id="masterAgentsRefresh">Refresh agents</button>
+        </div>
+        <p class="muted">Registered Slaves. Read only. Online means contact within 90 seconds. Refreshes every 30 seconds while this tab is visible.</p>
+        <div id="masterAgentsRuntime" aria-live="polite"></div>
+    </section>
+</section>
+
 <section id="page-mitre" class="app-page"><section class="panel intro-panel"><p class="eyebrow">Registry mappings</p><h1>MITRE ATT&amp;CK</h1><p>Implementation / mapping coverage</p><p class="muted">Explore tactics and techniques mapped by the installed MrNobody registry. Counts describe implemented mappings, not measured detection effectiveness. A single MrNobody Attack Technique may map to several ATT&amp;CK techniques.</p><a href="https://attack.mitre.org/tactics/enterprise/" target="_blank" rel="noopener noreferrer">Official Enterprise tactics ↗</a></section><section class="panel"><div id="mitreSummary" class="report-metrics"></div><div id="mitreCoverage" class="mitre-coverage" aria-live="polite">Loading registry mappings…</div></section></section>
 <section id="page-builder" class="app-page"><section class="panel"><p class="eyebrow">Scenario workspace</p><h1>Scenario Builder</h1><div id="builderBody"></div></section></section>
 <section id="page-schedules" class="app-page"><section class="panel"><h1>Scheduler</h1><p class="eyebrow">Execution planning</p><p class="muted">Schedules survive restarts. Missed recurring runs coalesce into one execution. Busy runs are skipped. Temporary credentials must be supplied again after a service restart.</p><div id="scheduleList"></div><div id="scheduleEditor"></div></section></section>
