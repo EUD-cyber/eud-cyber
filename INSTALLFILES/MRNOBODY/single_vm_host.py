@@ -90,4 +90,3 @@ def check_host_plan(plan, inventory):
                 vmid_free=True, bridge_exists=True, disk_storage_active=True,
                 snippet_storage_active=True, reserved=False,
                 capacity_checked=False, network_reachability_checked=False)
-

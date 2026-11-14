@@ -162,4 +162,3 @@ if __name__ == "__main__":
     except (EOFError, KeyboardInterrupt):
         print("\nAfbrudt.")
         raise SystemExit(130)
-

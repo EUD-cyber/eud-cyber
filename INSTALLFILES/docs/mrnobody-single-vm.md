@@ -109,4 +109,3 @@ opretter dem ikke. Ét komplet lab vælges automatisk; ved flere vælges kun
 labnummeret. Der spørges aldrig om Slave/Standalone-VM'ens egne IP-adresser.
 Kun Slave spørger om Master-adresse og HTTPS/HTTP. Big/Mini og fremtidig
 Custom beholder agent/slave-rollen; denne rettelse tilføjer ingen Custom-profil.
-
