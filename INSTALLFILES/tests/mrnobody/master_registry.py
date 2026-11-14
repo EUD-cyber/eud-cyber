@@ -225,7 +225,7 @@ class API(unittest.TestCase):
         result,status=self.call("heartbeat")
         self.assertEqual(status,200)
         self.assertTrue(result["accepted"])
-        self.assertEqual(len(self.routes),3)
+        self.assertEqual(len(self.routes),4)
         self.assertEqual(self.methods["/api/master/agents/register"],["POST"])
         self.assertEqual(self.methods["/api/master/agents/heartbeat"],["POST"])
         self.assertEqual(self.methods["/api/master/agents"],["GET"])
@@ -236,7 +236,7 @@ class API(unittest.TestCase):
         with patch.object(api,"request",request):
             result,status=self.routes["/api/master/agents"]()
             self.assertEqual(status,200)
-            self.assertEqual(set(result["agents"][0]),{"agent_id","name","status","last_seen_at","registered_at"})
+            self.assertEqual(set(result["agents"][0]),{"agent_id","name","status","last_seen_at","registered_at","reports","reports_synced_at"})
             self.assertNotIn(self.token,json.dumps(result))
             self.assertNotIn("token_hash",json.dumps(result))
             self.assertEqual(result["agents"][0]["status"],"online")
@@ -321,6 +321,34 @@ class API(unittest.TestCase):
         self.assertEqual(self.call(raw=b"x"*4097)[1],413)
         self.assertEqual(self.call(raw=b"x"*4097,length=None)[1],413)
         self.assertEqual(self.call(is_json=False)[1],415)
+
+    def test_report_inventory_auth_validation_persistence_and_legacy_heartbeat(self):
+        payload=dict(agent_id="agent-1",protocol_version=1,reports=[])
+        self.assertEqual(self.call("reports",payload)[1],409)
+        self.call()
+        report=dict(id="MRN-test",status="complete",report_type="standalone_phase",phase_id="01",
+                    started="2026-11-14T12:00:00+00:00",completed=None)
+        payload["reports"]=[report]
+        self.assertEqual(self.call("reports",payload,token="x"*43)[1],401)
+        self.assertEqual(self.call("reports",payload,secure=False)[1],403)
+        self.config.lab_http=True
+        self.assertEqual(self.call("reports",payload,secure=False)[1],200)
+        saved=Registry(self.path).list_agents()[0]
+        self.assertEqual(saved["reports"],[report])
+        self.assertIsInstance(saved["reports_synced_at"],int)
+        for invalid in [[report]*51,[report,report],[dict(report,path="/etc/shadow")],
+                        [dict(report,id="../escape")],[dict(report,started="bad")],
+                        [dict(report,status={})],[dict(report,report_type="arbitrary")]]:
+            self.assertEqual(self.call("reports",dict(payload,reports=invalid))[1],400)
+            self.assertEqual(Registry(self.path).list_agents()[0]["reports"],[report])
+        self.assertEqual(self.call("reports",raw=b"x"*32769,length=None)[1],413)
+        self.assertEqual(self.call("heartbeat")[1],200)
+        self.assertEqual(self.call("reports",dict(payload,reports=[]))[1],200)
+        self.assertEqual(Registry(self.path).list_agents()[0]["reports"],[])
+        self.store.revoke("agent-1")
+        self.assertEqual(self.call("reports",payload)[1],401)
+        self.config.role="agent"
+        self.assertEqual(self.call("reports",payload)[1],404)
 
     def test_heartbeat_before_registration_is_a_conflict(self):
         self.assertEqual(self.call("heartbeat")[1],409)

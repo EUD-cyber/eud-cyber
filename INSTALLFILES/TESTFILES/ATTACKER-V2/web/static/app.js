@@ -609,7 +609,16 @@ const MrnUI = (() => {
             const agent = agents.find(item => item.agent_id === selectedMasterAgent);
             if (agent) fields(detail, agent);
             else node(detail, 'p', 'This agent is no longer available in the registry.', 'empty-state');
-            node(detail, 'p', 'Report metadata and report download are not available yet.', 'muted');
+            node(detail, 'h4', 'Slave report metadata');
+            if (agent?.reports_synced_at) {
+                node(detail, 'p', `Last metadata sync: ${timestamp(agent.reports_synced_at)}. Latest synchronized reports (up to 50).`, 'muted');
+                const reports = Array.isArray(agent.reports) ? agent.reports : [];
+                if (!reports.length) node(detail, 'p', 'No report metadata available.', 'empty-state');
+                for (const report of reports) {
+                    node(detail, 'p', `${report.id} · ${report.report_type} · ${report.status} · ${report.phase_id ? 'P' + report.phase_id : 'Campaign'} · ${report.started || 'Time unavailable'}`);
+                }
+            } else node(detail, 'p', 'Report metadata has not been synchronized. Update the Slave and wait for its next heartbeat.', 'muted');
+            node(detail, 'p', 'Report viewing and download are not available yet.', 'muted');
         }
         if (!agents.length) {
             node(root, 'p', 'No agents registered yet. Slaves appear here after enrollment with this Master.', 'empty-state');

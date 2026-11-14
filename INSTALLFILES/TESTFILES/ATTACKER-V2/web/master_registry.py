@@ -38,6 +38,36 @@ def validate_id(agent_id):
     return agent_id
 
 
+MAX_REPORTS = 50
+REPORT_ID = re.compile(r"(?:MRN|H3)-[A-Za-z0-9][A-Za-z0-9_-]{0,100}")
+
+
+def validate_reports(reports):
+    """Allow only bounded inventory fields, never paths, output or credentials."""
+    from datetime import datetime
+    if not isinstance(reports,list) or len(reports)>MAX_REPORTS:
+        raise ValueError("Invalid report inventory.")
+    ids=set()
+    for item in reports:
+        if not isinstance(item,dict) or set(item)!={"id","status","report_type","phase_id","started","completed"}:
+            raise ValueError("Invalid metadata fields.")
+        ident=item["id"]
+        if not isinstance(ident,str) or not REPORT_ID.fullmatch(ident) or ident in ids:
+            raise ValueError("Invalid report ID.")
+        ids.add(ident)
+        if item["status"] not in ("complete","failed","partial","interrupted","running","unknown") or item["report_type"] not in ("campaign","standalone_phase"):
+            raise ValueError("Invalid report state.")
+        phase=item["phase_id"]
+        if phase is not None and (not isinstance(phase,str) or not re.fullmatch(r"[0-9]{2}",phase)):
+            raise ValueError("Invalid phase.")
+        for key in ("started","completed"):
+            value=item[key]
+            if value is not None:
+                if not isinstance(value,str) or len(value)>40 or datetime.fromisoformat(value.replace("Z","+00:00")).tzinfo is None:
+                    raise ValueError("Invalid timestamp.")
+    return reports
+
+
 class Registry:
     def __init__(self,path=DATABASE,clock=None):
         self.path=Path(path)
@@ -125,6 +155,19 @@ class Registry:
             db.execute("UPDATE agents SET last_seen_at=? WHERE agent_id=?",(now,agent_id))
         return dict(agent_id=agent_id,accepted=True,protocol_version=1,server_time=now)
 
+    def sync_reports(self,agent_id,token,reports):
+        validate_reports(reports)
+        with self._db(write=True) as db:
+            row=self._authenticate(db,agent_id,token)
+            if row["registered_at"] is None:
+                raise Conflict("Agent must register first.")
+            # Lazy additive migration supports existing registries and old agents.
+            db.execute("CREATE TABLE IF NOT EXISTS report_inventory (agent_id TEXT PRIMARY KEY, reports TEXT NOT NULL, synced_at INTEGER NOT NULL)")
+            now=int(self.clock())
+            db.execute("INSERT OR REPLACE INTO report_inventory VALUES(?,?,?)",
+                       (agent_id,json.dumps(reports),now))
+        return dict(agent_id=agent_id,accepted=True,protocol_version=1,server_time=now)
+
     def revoke(self,agent_id):
         validate_id(agent_id)
         with self._db(write=True) as db:
@@ -137,9 +180,14 @@ class Registry:
         with self._db() as db:
             rows=db.execute("""SELECT agent_id,name,created_at,registered_at,last_seen_at,revoked
                                FROM agents ORDER BY agent_id""").fetchall()
+            inventory={}
+            if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='report_inventory'").fetchone():
+                inventory={r["agent_id"]:dict(reports=json.loads(r["reports"]),reports_synced_at=r["synced_at"])
+                           for r in db.execute("SELECT * FROM report_inventory")}
         result=[]
         for row in rows:
             item=dict(row)
+            item.update(inventory.get(row["agent_id"],dict(reports=[],reports_synced_at=None)))
             item["status"]=("revoked" if row["revoked"] else "pending" if row["registered_at"] is None
                             else "online" if now-row["last_seen_at"] <= OFFLINE_AFTER else "offline")
             item["revoked"]=bool(item["revoked"])

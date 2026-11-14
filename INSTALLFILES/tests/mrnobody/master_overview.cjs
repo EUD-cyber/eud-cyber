@@ -34,14 +34,15 @@ const shared={status:'idle',active:false,execution:null,phases:[],scenarios:[],s
   await firstAgent.focus();await page.keyboard.press('Enter');
   const detail=page.locator('#masterAgentDetail');
   assert.match(await detail.textContent(), /Agent details.*Agent ID.*agent-1.*Name.*<img.*Status.*Online.*Last heartbeat/s);
-  assert.match(await detail.textContent(), /Report metadata and report download are not available yet/);
+  assert.match(await detail.textContent(), /Report metadata has not been synchronized/);
   assert.equal(await detail.locator('img').count(),0);
   assert.equal(await firstAgent.getAttribute('aria-expanded'),'true');
   assert.equal(await page.locator('#masterAgentDetailTitle').evaluate(el=>el===document.activeElement),true);
-  agents=[{agent_id:'agent-1',name:'Renamed slave',status:'offline',last_seen_at:1700000060}];
+  agents=[{agent_id:'agent-1',name:'Renamed slave',status:'offline',last_seen_at:1700000060,reports_synced_at:1700000060,reports:[{id:'MRN-test',report_type:'standalone_phase',phase_id:'01',status:'complete',started:'2026-11-14T12:00:00Z'}]}];
   await page.clock.runFor(30000);
   await page.waitForFunction(()=>document.getElementById('masterAgentDetail')?.textContent.includes('Renamed slave'));
   assert.match(await detail.textContent(), /Offline/);
+  assert.match(await detail.textContent(), /Last metadata sync:.*MRN-test.*standalone_phase.*complete.*P01/s);
   const heartbeat=await detail.locator('dd').last().textContent();
   assert.equal(heartbeat,await page.evaluate(()=>new Date(1700000060*1000).toLocaleString()));
   for(const width of [1440,768,390]){await page.setViewportSize({width,height:1050});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));}

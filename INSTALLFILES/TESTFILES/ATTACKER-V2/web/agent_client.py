@@ -16,7 +16,7 @@ import urllib.request
 import uuid
 
 from deployment_config import load_deployment_config, MASTER_URL, LAB_MASTER_URL
-from master_registry import AGENT_ID, NAME, TOKEN, HEARTBEAT_INTERVAL
+from master_registry import AGENT_ID, NAME, TOKEN, HEARTBEAT_INTERVAL, MAX_REPORTS, REPORT_ID, validate_reports
 
 
 CREDENTIALS=Path("/etc/mrnobody/agent.json")
@@ -152,6 +152,48 @@ def bootstrap_agent(path=CREDENTIALS, deployment=None):
     return load_agent_config(path,deployment)
 
 
+def collect_report_metadata(directory=Path("/opt/nordic-attack/reports")):
+    """Inventory at most 50 recent named snapshots; skip invalid/oversize files."""
+    import itertools
+    import stat
+    if directory.is_symlink():
+        raise ValueError("Report directory must not be a symlink.")
+    result=[]
+    remaining=8*1024*1024
+    paths=sorted(itertools.islice(directory.glob("*.json"),1000),reverse=True)
+    for path in paths:
+        if len(result)>=MAX_REPORTS:
+            break
+        if not REPORT_ID.fullmatch(path.stem):
+            continue
+        try:
+            if path.is_symlink():
+                continue
+            descriptor=os.open(path,os.O_RDONLY | getattr(os,"O_NOFOLLOW",0) | getattr(os,"O_NONBLOCK",0))
+            with os.fdopen(descriptor,"rb") as handle:
+                info=os.fstat(handle.fileno())
+                if path.is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_size>2*1024*1024:
+                    continue
+                if info.st_size>remaining:
+                    break
+                raw=handle.read(2*1024*1024+1)
+                remaining-=len(raw)
+            if len(raw)>2*1024*1024:
+                continue
+            data=json.loads(raw)
+            incident=data["incident"]
+            if data.get("schema_version")!=1 or incident.get("id")!=path.stem:
+                continue
+            item={key:incident.get(key) for key in ("id","status","started","completed")}
+            item["completed"]=incident.get("ended")
+            item.update(report_type=data.get("report_type","campaign"),phase_id=data.get("phase_id"))
+            validate_reports([item])
+            result.append(item)
+        except (OSError,ValueError,KeyError,TypeError,AttributeError,RecursionError):
+            continue
+    return result
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self,req,fp,code,msg,headers,newurl):
         raise FatalAgentError("Master redirects are refused.")
@@ -173,12 +215,17 @@ class AgentTransport:
         self.opener=opener or urllib.request.build_opener(
             urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=self.context),NoRedirect())
 
-    def post(self,kind):
-        if kind not in {"register","heartbeat"}:
+    def sync_reports(self):
+        self.post("reports",collect_report_metadata())
+
+    def post(self,kind, reports=None):
+        if kind not in {"register","heartbeat","reports"}:
             raise FatalAgentError("Unsupported agent operation.")
         data=dict(agent_id=self.config.agent_id,protocol_version=1)
         if kind=="register":
             data["name"]=self.config.name
+        if kind=="reports":
+            data["reports"]=validate_reports(reports)
         url=self.config.master_url.rstrip("/")+"/api/master/agents/"+kind
         request=urllib.request.Request(url,data=json.dumps(data).encode("utf-8"),method="POST",
                                       headers={"Content-Type":"application/json","Authorization":"Bearer "+self.config.token})
@@ -239,6 +286,12 @@ def run_loop(config, *, sender=None, stop=None, jitter=None, write=print):
             if state!=last_state:
                 write("Master "+state+".")
                 last_state=state
+            # Metadata is optional: old Masters or broken snapshots must not stop heartbeat.
+            if hasattr(sender,"sync_reports"):
+                try:
+                    sender.sync_reports()
+                except (FatalAgentError,RetryableAgentError,RegistrationRequired,OSError,ValueError):
+                    write("Report metadata sync unavailable; heartbeat remains active.")
             if stop.wait(HEARTBEAT_INTERVAL):
                 break
         except RegistrationRequired:

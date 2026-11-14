@@ -85,8 +85,7 @@ reparation på Slave kan `sudo python3 /opt/nordic-attack/web/agent_client.py
 6. På Master/Standalone må agentservicen ikke være aktiv.
 
 Fejlsøg med `journalctl -u mrnobody-agent -n 50 --no-pager`. Registry-listen og
-websiden bruger fortsat HTTPS; kun de to eksakte register/heartbeat-stier tillader
-lab HTTP. Settings viser konfiguration, mens registry-listen viser faktisk kontakt.
+websiden bruger fortsat HTTPS; de eksakte register/heartbeat/reports-stier tillader lab HTTP. Settings viser konfiguration, mens registry-listen viser faktisk kontakt.
 
 ## Valgfri manuel HTTPS-parring
 
@@ -97,3 +96,18 @@ Overfør JSON privat til Slave, sæt mode 600, og brug
 Aktiver derefter agentservicen. Behold Masterens private TLS-nøgle på Master.
 En eksisterende identitet erstattes aldrig. Spærring udføres på Master med
 `sudo python3 /opt/nordic-attack/web/master_registry.py revoke AGENT_ID`.
+
+## Rapportmetadata i Master V2
+
+Opdater først Master og derefter Slave med `sudo mrnobody update`.
+En aktiv Agent-service genstartes af updateren; privat identitet og indstillinger
+bevares. Efter næste kontakt sender Slaven en afgrænset metadataoversigt fra
+eksisterende `/opt/nordic-attack/reports/*.json`. Masterens Agents → View agent
+viser posterne og tidspunktet for seneste modtagelse. Genindlæs browseren helt.
+
+Metadata sendes særskilt fra heartbeat, via samme udgående forbindelse og nøgle.
+Fejl stopper ikke heartbeat. Gamle Slaves virker fortsat uden metadata; en ny
+Slave kan fortsat holde kontakt med en gammel Master. Se
+[registry-guiden](mrnobody-master-registry.md#rapportmetadata-gennem-udgående-forbindelse)
+for felter, grænser og manuel kontrol. Rapportvisning/download og fjernstart af
+phases/scenarier er fortsat efterfølgende trin.

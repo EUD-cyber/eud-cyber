@@ -413,6 +413,51 @@ class MasterRoundtrip(unittest.TestCase):
                 return Response(raw)
         return Opener()
 
+    def test_metadata_roundtrip_uses_outbound_authenticated_transport(self):
+        sender=agent.AgentTransport(config(token=self.token),self.opener())
+        sender.post("register")
+        reports=self.root/"reports"
+        reports.mkdir()
+        snapshot=dict(schema_version=1,report_type="standalone_phase",phase_id="01",
+                      incident=dict(id="MRN-test",status="complete",started="2026-11-14T12:00:00Z",ended="2026-11-14T12:01:00Z"),
+                      secret="do-not-transfer",events=["raw-output"])
+        path=reports/"MRN-test.json"
+        path.write_text(json.dumps(snapshot))
+        (reports/"MRN-broken.json").write_text("broken")
+        (reports/"MRN-large.json").write_bytes(b"x"*(2*1024*1024+1))
+        inventory=agent.collect_report_metadata(reports)
+        self.assertEqual(len(inventory),1)
+        self.assertEqual(inventory[0]["completed"],"2026-11-14T12:01:00Z")
+        with patch.object(agent,"collect_report_metadata",return_value=inventory):
+            sender.sync_reports()
+        self.assertEqual(self.store.list_agents()[0]["reports"],inventory)
+        self.assertNotIn("do-not-transfer",json.dumps(inventory))
+        sender.post("heartbeat")
+
+    def test_metadata_failure_does_not_interrupt_heartbeat_loop(self):
+        sender=Sender([None,None,None])
+        sender.sync_reports=Mock(side_effect=agent.FatalAgentError("old Master"))
+        agent.run_loop(config(),sender=sender,stop=Stop(3),write=lambda value:None)
+        self.assertEqual(sender.calls,["register","heartbeat","heartbeat"])
+        self.assertEqual(sender.sync_reports.call_count,3)
+
+    def test_metadata_bounds_and_symlinks(self):
+        reports=self.root/"reports"
+        reports.mkdir()
+        for number in range(55):
+            ident=f"MRN-{number:03}"
+            (reports/(ident+".json")).write_text(json.dumps(dict(schema_version=1,
+                incident=dict(id=ident,status="interrupted",started=None,ended=None))))
+        if os.name=="posix":
+            (reports/"MRN-symlink.json").symlink_to(reports/"MRN-000.json")
+            os.mkfifo(reports/"MRN-pipe.json")
+        inventory=agent.collect_report_metadata(reports)
+        self.assertEqual(len(inventory),50)
+        self.assertEqual(inventory[0]["id"],"MRN-054")
+        self.assertEqual(inventory[0]["status"],"interrupted")
+        self.assertNotIn("MRN-symlink",[item["id"] for item in inventory])
+        self.assertNotIn("MRN-pipe",[item["id"] for item in inventory])
+
     def test_ztd_bootstrap_register_retry_and_restart_with_two_agents_behind_nat(self):
         deployment=DeploymentConfig("agent","http://10.134.71.3","loaded",True)
         self.master_http=True

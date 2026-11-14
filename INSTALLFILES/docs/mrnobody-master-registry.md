@@ -71,8 +71,7 @@ eksplicit og forbinder ud gennem NAT.
 
 GET /api/master/agents er en HTTPS-only læserute på den eksisterende
 administrationsflade. Den følger samme labnet-adgangsgrænse som den øvrige UI;
-den bruger ikke agentnøgler som administratorlogin. Lab-HTTP-flaget gælder kun
-registrering og heartbeat. Andre roller returnerer 404. En endnu ikke oprettet
+den bruger ikke agentnøgler som administratorlogin. Lab-HTTP-flaget gælder registrering, heartbeat og rapportmetadata. Andre roller returnerer 404. En endnu ikke oprettet
 database giver en tom oversigt uden at oprette filer. Registerfejl giver 503.
 Online er seneste kontakt inden for 90 sekunder. Oversigten og den valgte
 Agent-detaljevisning opdateres hvert 30. sekund, når fanen er synlig, samt med
@@ -100,23 +99,53 @@ Updateren genstarter webservicen ved ændrede webfiler. Genindlæs Master-browse
 helt (Ctrl+F5), åbn Agents og klik View agent. Kontroller ID, navn, status og
 seneste heartbeat. Lad fanen være synlig og kontroller, at kontaktens tidspunkt
 opdateres. Uden kontakt i mere end 90 sekunder skal status blive Offline ved
-næste opdatering. Slave behøver ingen ny protokol til denne UI-ændring.
+næste opdatering. Updateren genstarter også en allerede aktiv Agent-service og genindlæser nginx.
+Identitet og konfiguration bevares; der kræves ingen geninstallation eller ny parring.
 VM-testen skal udføres i det eksisterende lab; browsertesten bruger fixtures.
 
-## Næste lille trin: rapportmetadata gennem udgående forbindelse
+## Rapportmetadata gennem udgående forbindelse
 
-Rapportmetadata og rapportdownload er endnu ikke implementeret. AgentTransport
-sender kun register/heartbeat og validerer svarets felter præcist. Masterens
-POST-ruter afviser ekstra felter og har en grænse på 4096 bytes. Metadata bør
-derfor ikke blot føjes til heartbeat.
+Agenten sender efter hver vellykket registrering/heartbeat en separat
+autentificeret POST til `/api/master/agents/reports`. Heartbeat-payloaden og
+protokolversion 1 er bevaret. NAT og OPNsense kræver ingen indgående åbning til
+Slaven. HTTPS og eksisterende certifikatkontrol er standard; den eksakte
+metadata-rute tillader også allerede konfigureret lab HTTP med individuel nøgle.
 
-Næste særskilte ændring bør være et begrænset, autentificeret metadata-POST fra
-Slaven til Master over samme udgående transport og individuelle agentnøgle.
-Det kræver ingen indgående forbindelse til Slaven eller portåbning i OPNsense.
-Afklar og test før implementering: stabilt rapport-ID, navn, tidspunkt,
-phase/scenarie, antal/størrelsesgrænser, idempotent synkronisering, slettede
-rapporter samt genforsøg uden at blokere heartbeat. Master skal binde metadata
-til den autentificerede agent og understøtte Slaves uden metadatafunktionen.
-Eventuel lab-HTTP-rute skal tilføjes eksplicit i nginx; HTTPS er standard.
-Rapportindhold/download er et efterfølgende trin. Ingen af disse ændringer må
-indføre remote execution eller scenario launch.
+Master gemmer én atomisk erstattet metadataoversigt pr. autentificeret Agent i
+en ekstra SQLite-tabel. Gentagne anmodninger er idempotente; tom oversigt fjerner
+tidligere metadata. Synkronisering ændrer ikke heartbeat-tidspunkt eller status.
+Eksisterende databaser kræver ingen manuel migration. Gamle Slaves fortsætter
+med register/heartbeat. En ny Slave fortsætter heartbeat, hvis en gammel Master
+afviser metadata-ruten, eller metadataoverførslen fejler; der forsøges igen efter
+næste vellykkede kontakt. Ved fejl beholder Master senest modtagne oversigt og
+dens synkroniseringstid. Det viste tidspunkt dokumenterer modtagelse, ikke at
+rapportindhold er overført eller verificeret.
+
+Afgrænsning:
+
+- Højst 50 poster og 32768 bytes pr. POST; register/heartbeat beholder 4096 bytes.
+- Kun rapport-ID, status, campaign/standalone_phase, phase-ID og start/sluttid.
+  Ingen lokale stier, output, credentials eller rapportindhold sendes.
+- Agenten undersøger højst 1000 lokale JSON-kandidater, sorteret efter filnavn
+  inden for dette udsnit. Hver fil er højst 2 MiB; samlet læsebudget er 8 MiB
+  pr. synkronisering. Oversigten er derfor et afgrænset udsnit, ikke et fuldt arkiv.
+- Symlinks, ikke-regulære filer, ugyldige snapshots og forkert schema/ID springes
+  over. Nye rapporter, rettelser og sletninger afspejles ved næste synkronisering
+  inden for udsnittet. Der oprettes ingen rapporter af synkroniseringen.
+
+Efter `sudo mrnobody update` først på Master og derefter på Slave: genindlæs
+browseren med Ctrl+F5, åbn Agents → View agent, og vent på næste kontakt samt
+fanens opdatering (normalt under et minut). Kontroller metadata mod en eksisterende
+rapport på Slaven, både campaign og standalone_phase hvis de findes. Kontroller,
+at heartbeat fortsat flytter sig. En tom oversigt vises særskilt fra en Slave,
+der endnu ikke har synkroniseret. Ingen rapport skal køres for at teste overførslen.
+
+## Efterfølgende roadmap
+
+Næste lille trin er visning/download af eksisterende Slave-rapporter via
+Agent-initieret overførsel med eksplicitte filtyper og størrelsesgrænser.
+Rapportindhold og download er endnu ikke implementeret.
+
+Et vigtigt senere krav er start/stop af både individuelle phases og komplette
+scenarier på én eller flere Slaves fra Master. Der er ingen ny fjernstart eller
+fjernstyring i metadata-trinnet. P01–P11, standalone og ZTD-flowet er bevaret.

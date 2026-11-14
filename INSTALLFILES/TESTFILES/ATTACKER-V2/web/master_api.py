@@ -36,7 +36,7 @@ def _object(pairs):
 
 
 def install_master_api(app,deployment,registry_path=DATABASE):
-    def handle(register):
+    def handle(register, reports=False):
         config=deployment()
         if config.role!="master" or config.config_status!="loaded":
             return jsonify({"message":"Not found."}),404
@@ -52,19 +52,23 @@ def install_master_api(app,deployment,registry_path=DATABASE):
             return jsonify({"message":"Unauthorized."}),401
         if not request.is_json:
             return jsonify({"message":"JSON required."}),415
-        if request.content_length is not None and request.content_length>MAX_BODY:
+        limit=32768 if reports else MAX_BODY
+        if request.content_length is not None and request.content_length>limit:
             return jsonify({"message":"Request too large."}),413
-        body=request.stream.read(MAX_BODY+1)
-        if len(body)>MAX_BODY:
+        body=request.stream.read(limit+1)
+        if len(body)>limit:
             return jsonify({"message":"Request too large."}),413
         try:
             data=json.loads(body.decode("utf-8"),object_pairs_hook=_object)
             fields={"agent_id","protocol_version","name"} if register else {"agent_id","protocol_version"}
+            if reports:
+                fields.add("reports")
             if not isinstance(data,dict) or set(data)!=fields or type(data["protocol_version"]) is not int or data["protocol_version"]!=1:
                 raise ValueError("Invalid protocol payload.")
             store=Registry(registry_path)
             result=(store.register(data["agent_id"],token,data["name"],
                                    enroll=getattr(config,"lab_http",False) is True and lab_peer()) if register
+                    else store.sync_reports(data["agent_id"],token,data["reports"]) if reports
                     else store.heartbeat(data["agent_id"],token))
             return jsonify(result),200
         except Unauthorized:
@@ -84,6 +88,10 @@ def install_master_api(app,deployment,registry_path=DATABASE):
     def master_heartbeat():
         return handle(False)
 
+    @app.route("/api/master/agents/reports",methods=["POST"])
+    def master_reports():
+        return handle(False,reports=True)
+
     @app.route("/api/master/agents",methods=["GET"])
     def master_agents():
         # Administration follows the existing UI's lab-network access boundary.
@@ -100,7 +108,7 @@ def install_master_api(app,deployment,registry_path=DATABASE):
             if not path.exists() and not path.is_symlink():
                 return jsonify({"agents":[],"initialized":False}),200
             rows=Registry(registry_path).list_agents()
-            fields=("agent_id","name","status","last_seen_at","registered_at")
+            fields=("agent_id","name","status","last_seen_at","registered_at","reports","reports_synced_at")
             return jsonify({"agents":[{key:row[key] for key in fields} for row in rows],
                             "initialized":True}),200
         except (Unavailable,OSError,sqlite3.Error,ValueError):
