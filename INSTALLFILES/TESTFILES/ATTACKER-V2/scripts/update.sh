@@ -293,11 +293,47 @@ install_agent_unit() {
     fi
 }
 
+repair_nginx_config() {
+    # Download hashes describe the runtime copy, not the active nginx copy.
+    # Also reload equal files: an older updater may have missed activation.
+    local source="$INSTALL_DIR/nginx/nordic-incident.conf"
+    local target="/etc/nginx/sites-available/nordic-incident.conf"
+    local saved="$BACKUP_DIR/system/nginx/nordic-incident.conf.repair"
+    local changed=0 existed=0
+    [[ -f "$source" ]] || return 0
+    command -v nginx >/dev/null 2>&1 || return 1
+    if ! cmp -s "$source" "$target"; then
+        mkdir -p "$(dirname "$saved")" || return $?
+        if [[ -e "$target" || -L "$target" ]]; then
+            cp -a "$target" "$saved" || return $?
+            existed=1
+        fi
+        changed=1
+    fi
+    log "Validating and activating the installed nginx configuration..."
+    if (( changed == 0 )) || install -m 0644 "$source" "$target"; then
+        if nginx -t && systemctl reload nginx; then
+            return 0
+        fi
+    fi
+    log "nginx activation failed; restoring the previous configuration."
+    if (( changed == 1 )); then
+        if (( existed == 1 )); then
+            cp -a "$saved" "$target" || return $?
+        else
+            rm -f "$target" || return $?
+        fi
+        nginx -t && systemctl reload nginx || true
+    fi
+    return 1
+}
+
 if (( NEW == 0 && CHANGED == 0 )); then
 
     log
     retire_old_code
     install_agent_unit || die "Agent service repair failed; backup: $BACKUP_DIR"
+    repair_nginx_config || die "nginx repair failed; backup: $BACKUP_DIR"
     log "MrNobody is already up to date."
 
     exit 0
@@ -842,6 +878,9 @@ fi
 
 install_agent_unit || rollback $?
 restart_updated_agent || rollback $?
+if (( NGINX_CHANGED == 0 )); then
+    repair_nginx_config || rollback $?
+fi
 
 # Retire only after activation and health checks: rollback can still use old code.
 retire_old_code

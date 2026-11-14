@@ -327,8 +327,11 @@ def run_loop(config, *, sender=None, stop=None, jitter=None, write=print):
             if hasattr(sender,"sync_reports"):
                 try:
                     sender.sync_reports()
-                except (FatalAgentError,RetryableAgentError,RegistrationRequired,OSError,ValueError,RecursionError):
-                    write("Report sync unavailable; heartbeat remains active.")
+                except (FatalAgentError,RetryableAgentError,RegistrationRequired,OSError,ValueError,RecursionError) as exc:
+                    # Transport exceptions contain fixed messages/status codes, never tokens
+                    # or response bodies. Other failures expose only their category.
+                    detail=str(exc) if isinstance(exc,(FatalAgentError,RetryableAgentError)) else type(exc).__name__
+                    write("Report sync unavailable: "+detail+" Heartbeat remains active.")
             if stop.wait(HEARTBEAT_INTERVAL):
                 break
         except RegistrationRequired:

@@ -439,10 +439,22 @@ class MasterRoundtrip(unittest.TestCase):
 
     def test_metadata_failure_does_not_interrupt_heartbeat_loop(self):
         sender=Sender([None,None,None])
-        sender.sync_reports=Mock(side_effect=agent.FatalAgentError("old Master"))
-        agent.run_loop(config(),sender=sender,stop=Stop(3),write=lambda value:None)
+        sender.sync_reports=Mock(side_effect=agent.FatalAgentError("Master redirects are refused."))
+        messages=[]
+        agent.run_loop(config(),sender=sender,stop=Stop(3),write=messages.append)
         self.assertEqual(sender.calls,["register","heartbeat","heartbeat"])
+        self.assertTrue(any("Report sync unavailable: Master redirects are refused." in line for line in messages))
+        self.assertNotIn(config().token,"\n".join(messages))
         self.assertEqual(sender.sync_reports.call_count,3)
+
+    def test_report_file_errors_log_category_without_file_content_or_path(self):
+        sender=Sender([None])
+        sender.sync_reports=Mock(side_effect=OSError("private-file-content"))
+        messages=[]
+        agent.run_loop(config(),sender=sender,stop=Stop(1),write=messages.append)
+        self.assertTrue(any("Report sync unavailable: OSError" in line for line in messages))
+        self.assertNotIn("private-file-content","\n".join(messages))
+        self.assertEqual(sender.sync_reports.call_count,1)
 
     def test_metadata_bounds_and_symlinks(self):
         reports=self.root/"reports"

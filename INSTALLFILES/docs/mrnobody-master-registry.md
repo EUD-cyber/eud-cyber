@@ -142,6 +142,30 @@ der endnu ikke har synkroniseret. Ingen rapport skal køres for at teste overfø
 
 ## Rapportvisning og download
 
+### Reparation af eksisterende installationer
+
+Updateren sammenholder nu også runtime-kopien af nginx-konfigurationen med
+`/etc/nginx/sites-available/nordic-incident.conf`, selv når alle downloadhashes
+allerede matcher. En gammel aktiv kopi gemmes i update-backuppen, erstattes,
+valideres med `nginx -t` og genindlæses. Identiske filer valideres/genindlæses også,
+så en tidligere oversprunget aktivering repareres. Fejlet validering eller reload
+giver en fejlstatus og gendanner den tidligere kopi, hvis den blev ændret.
+
+Ved overgang fra en ældre updater: kør `sudo mrnobody update` to gange på Master.
+Første gennemløb henter updateren; andet gennemløb kører den nye reparation,
+også hvis der står "already up to date". Opdater derefter Slave. Ingen manuel
+kopiering af nginx-filer, ny parring eller geninstallation er nødvendig.
+
+Nyinstallation henter og aktiverer allerede samme nginx-konfiguration med
+eksakte lab HTTP-ruter for register, heartbeat, reports og report-transfer.
+Resten af HTTP-trafikken viderestilles fortsat til HTTPS. API'ens rolle-, nøgle-
+og labkontrol gælder fortsat. En regressionstest dækker dette installationsforløb.
+
+Agent-loggen viser nu sikre transportfejl, herunder afvist redirect/HTTP-status,
+mens heartbeat fortsætter. Filfejl logges som fejlkategori uden indhold eller sti.
+
+### Overførsel og adgang
+
 Efter metadata spørger Agenten via autentificeret POST til
 `/api/master/agents/report-transfer` efter én manglende, afsluttet JSON-rapport.
 Den læser kun `<kendt rapport-ID>.json` i `/opt/nordic-attack/reports` og uploader
