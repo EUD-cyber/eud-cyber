@@ -39,6 +39,7 @@ jobs:
         run: |
           python tests/mrnobody/agent_client.py -v
           python tests/mrnobody/master_registry.py -v
+          python tests/mrnobody/master_receiver.py -v
           python tests/mrnobody/master_reports.py -v
           python tests/mrnobody/update_agent.py -v
           python tests/mrnobody/update_nginx.py -v

@@ -58,7 +58,10 @@ class LabRoleTests(unittest.TestCase):
             with self.subTest(invalid=invalid), self.assertRaises(ValueError):
                 menu.master_url(invalid)
         answers = iter(["", "bad value", "master.test"])
-        self.assertEqual(menu.ask_master_url(read=lambda: next(answers), write=lambda _: None), "http://master.test")
+        output=[]
+        self.assertEqual(menu.ask_master_url(read=lambda: next(answers), write=output.append), "http://master.test")
+        self.assertEqual(output[0], "Indtast Master IP (x.x.x.x): ")
+        self.assertEqual(output[-1], "Indtast Master IP (x.x.x.x): ")
         with self.assertRaises(ValueError):
             menu.ask_master_url(read=lambda: "q", write=lambda _: None)
 
@@ -119,10 +122,10 @@ exec "$@" </dev/null
                         result = self.deploy(profile, labs, role, url="https://stale.test" if role == "standalone" else "",
                                              answers="" if role == "standalone" else "master.test:8080\n")
                         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                        self.assertEqual("Master IP/URL" in result.stdout, role == "agent")
+                        self.assertEqual("Indtast Master IP (x.x.x.x): " in result.stdout, role == "agent")
                         if role == "agent":
-                            self.assertLess(result.stdout.index(f"GUACVM/GUACVM_ip.sh {labs}\n"), result.stdout.index("Master IP/URL"))
-                            self.assertLess(result.stdout.index("Master IP/URL"), result.stdout.index("Preparing repository"))
+                            self.assertLess(result.stdout.index(f"GUACVM/GUACVM_ip.sh {labs}\n"), result.stdout.index("Indtast Master IP"))
+                            self.assertIn("Indtast Master IP (x.x.x.x): [+] Preparing repository", result.stdout)
                         events = (self.root / "events").read_text().splitlines()
                         expected = [f"{script} {lab}" for lab in range(1, labs + 1)
                                     for script in ("OPNSENSE/generate_config.sh", "GUACVM/GUACVM_ip.sh")]
@@ -172,11 +175,11 @@ exec "$@" </dev/null
     def test_explicit_https_no_component_and_invalid_role(self):
         result = self.deploy(url="https://master.test:8443/api/", answers="")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertNotIn("Master IP/URL", result.stdout + result.stderr)
+        self.assertNotIn("Indtast Master IP", result.stdout + result.stderr)
         self.assertIn("MRNOBODY_MASTER_URL=https://master.test:8443/api/", next((self.root / "snippets").glob("*")).read_text())
         result = self.deploy(selected=False, answers="")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertNotIn("Master IP/URL", result.stdout + result.stderr)
+        self.assertNotIn("Indtast Master IP", result.stdout + result.stderr)
         for role, url in (("master", ""), ("agent", "http://host:0")):
             (self.root / "events").unlink(missing_ok=True)
             result = self.deploy(role=role, url=url, answers="")

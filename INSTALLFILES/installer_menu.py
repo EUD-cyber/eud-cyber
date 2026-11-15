@@ -121,16 +121,16 @@ def master_url(value):
     return value
 
 
-def ask_master_url(read=input, write=lambda text: print(text, file=sys.stderr)):
+def ask_master_url(read=input, write=lambda text: print(text, file=sys.stderr, end="", flush=True)):
     while True:
-        write("MrNobody Slave/Agent - Master IP/URL (Q annullerer):")
+        write("Indtast Master IP (x.x.x.x): ")
         value = read().strip()
         if value.lower() == "q":
             raise ValueError("Installation annulleret.")
         try:
             return master_url(value)
         except ValueError as exc:
-            write(str(exc))
+            write(str(exc) + "\n")
 
 
 class Menu:

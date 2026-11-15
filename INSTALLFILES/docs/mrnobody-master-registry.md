@@ -204,6 +204,10 @@ Faktisk NAT/OPNsense, nginx-reload og VM-genstart skal stadig verificeres i labb
 
 ## Efterfølgende roadmap
 
+Det passive API til syntetiske HTTP-testevents er beskrevet i
+[Master Receiver V1](mrnobody-master-receiver.md). Det er uafhængigt af Campaign
+Control og tilføjer ingen fjernstart eller P06/P11-integration.
+
 Næste lille trin er read-only capability-discovery og jobstatus til Master Campaign
 Control via Agent-initieret polling. Eksekvering skal forblive slået fra, indtil en
 fast godkendt jobtype, labafgrænsning og statusforløb er testet.
