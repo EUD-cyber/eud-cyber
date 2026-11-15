@@ -241,6 +241,11 @@ class API(unittest.TestCase):
             self.assertNotIn(self.token,json.dumps(result))
             self.assertNotIn("token_hash",json.dumps(result))
             self.assertEqual(result["agents"][0]["status"],"online")
+            self.assertEqual(result["control_capabilities"], {
+                "remote_phase_start": False, "remote_phase_stop": False,
+                "remote_scenario_start": False, "remote_scenario_stop": False,
+                "execution_job_polling": False, "multi_agent_campaigns": False,
+            })
             request.is_secure=False
             self.config.lab_http=True
             self.assertEqual(self.routes["/api/master/agents"]()[1],403)
@@ -263,7 +268,7 @@ class API(unittest.TestCase):
         request=types.SimpleNamespace(is_secure=True,remote_addr="198.51.100.8",headers={})
         with patch.object(api,"request",request):
             result,status=self.routes["/api/master/agents"]()
-        self.assertEqual((result,status),({"agents":[],"initialized":False},200))
+        self.assertEqual((result,status),({"agents":[],"initialized":False,"control_capabilities":api.CONTROL_CAPABILITIES},200))
         self.assertFalse(missing.exists())
 
     def test_role_gating_keeps_standalone_agent_and_invalid_config_inactive(self):
