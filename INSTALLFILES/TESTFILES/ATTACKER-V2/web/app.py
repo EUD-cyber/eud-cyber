@@ -728,6 +728,19 @@ def api_run_phase(phase_id):
         except (ValueError, TypeError):
             return jsonify(status='error', message='P09 requires a private lab IPv4 target, username, runtime password and timeout of 5–300 seconds.'), 400
     phase_env = os.environ.copy()
+    # A previous process environment must never opt another submission in.
+    phase_env.pop('MRNOBODY_P11_LIVE_CONFIG', None)
+    if phase_id == '11':
+        from agent_client import FatalAgentError
+        try:
+            from p11_live_lab import settings
+            if settings(data) is not None:
+                from agent_client import load_agent_config
+                load_agent_config()
+                phase_env['MRNOBODY_P11_LIVE_CONFIG'] = json.dumps({
+                    key: data[key] for key in ('p11_live_lab','beacon_interval','beacon_duration','beacon_count','action') if key in data})
+        except (ValueError, OSError, FatalAgentError):
+            return jsonify(status='error', message='P11 Live Lab requires a configured Slave Agent, Create, interval 10–300s, duration 60–1800s and 1–60 attempts.'), 400
     if phase_id == '06':
         try:
             from p06_live_lab import validate_selection
@@ -754,7 +767,7 @@ def api_run_phase(phase_id):
     if "profile" in data:
         try:
             from scenario_model import keys
-            keys(data, set(allowed_phase_fields(phase_id)) | {"profile", "timing", "target_mode", "password", "dry_run", "auto", "staging_incident", "live_lab", "powershell", "powershell_windows", "bash"}, "phase execution")
+            keys(data, set(allowed_phase_fields(phase_id)) | {"profile", "timing", "target_mode", "password", "dry_run", "auto", "staging_incident", "live_lab", "p11_live_lab", "beacon_interval", "beacon_duration", "beacon_count", "powershell", "powershell_windows", "bash"}, "phase execution")
             spec = {"type": "phase", "id": phase_id, "profile": data["profile"],
                     "parameters": {k: v for k, v in data.items() if k in allowed_phase_fields(phase_id)},
                     "timing": data.get("timing", {}), "target_mode": data.get("target_mode", "fixed")}

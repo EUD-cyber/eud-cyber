@@ -190,6 +190,16 @@ class Registry:
                     db.execute("DELETE FROM report_content WHERE agent_id=? AND report_id=?",(agent_id,cached["report_id"]))
         return dict(agent_id=agent_id,accepted=True,protocol_version=1,server_time=now)
 
+    def receive_p11(self,data,token):
+        from p11_live_lab import validate_payload, MARKER
+        validate_payload(data)
+        event=dict(protocol_version=1,agent_id=data['agent_id'],campaign_id=data['campaign_id'],
+                   event_type='beacon',timestamp=data['timestamp'],bytes=len(MARKER),synthetic=True)
+        result=self.receive_event(event,token,p11=data['sequence'])
+        result.update(agent_id=data['agent_id'],campaign_id=data['campaign_id'],phase='P11',
+                      sequence=data['sequence'],verified=True,ack='MRN-EXERCISE-ACK')
+        return result
+
     def receive_p06(self,data,token):
         from p06_live_lab import validate_payload
         raw=validate_payload(data)
@@ -201,8 +211,8 @@ class Registry:
                       size=len(raw),sha256=hashlib.sha256(raw).hexdigest(),verified=True)
         return result
 
-    def receive_event(self,data,token, *, p06=None):
-        """Append synthetic evidence; optionally commit a validated P06 fixture atomically."""
+    def receive_event(self,data,token, *, p06=None, p11=None):
+        """Append synthetic evidence and optional validated phase receipt atomically."""
         fields={"protocol_version","agent_id","campaign_id","event_type","timestamp","bytes","synthetic"}
         if (not isinstance(data,dict) or set(data)!=fields
                 or type(data["protocol_version"]) is not int or data["protocol_version"]!=1
@@ -243,6 +253,10 @@ class Registry:
                 VALUES(?,?,?,?,?,?,'received')""",
                 (data["agent_id"],campaign,data["event_type"],stamp,data["bytes"],now))
             event_id=cursor.lastrowid
+            if p11 is not None:
+                db.execute("""CREATE TABLE IF NOT EXISTS p11_receipts (
+                    event_id INTEGER PRIMARY KEY, phase TEXT NOT NULL, sequence INTEGER NOT NULL)""")
+                db.execute("INSERT INTO p11_receipts VALUES(?,?,?)",(event_id,'P11',p11))
             if p06 is not None:
                 db.execute("""CREATE TABLE IF NOT EXISTS p06_receipts (
                     event_id INTEGER PRIMARY KEY, phase TEXT NOT NULL, sha256 TEXT NOT NULL, content BLOB NOT NULL)""")
@@ -285,6 +299,11 @@ class Registry:
                     receipt=db.execute("SELECT phase,sha256,length(content) AS received_size FROM p06_receipts WHERE event_id=?",(event['id'],)).fetchone()
                     if receipt:
                         event.update(dict(receipt),verified=True)
+            if db.execute("SELECT 1 FROM sqlite_master WHERE name='p11_receipts'").fetchone():
+                for event in events:
+                    receipt=db.execute("SELECT phase,sequence FROM p11_receipts WHERE event_id=?",(event['id'],)).fetchone()
+                    if receipt:
+                        event.update(dict(receipt),verified=True,verification='synthetic_beacon_received')
             return dict(events=events,
                         next_before=rows[limit-1]["id"] if len(rows)>limit else None)
         finally:

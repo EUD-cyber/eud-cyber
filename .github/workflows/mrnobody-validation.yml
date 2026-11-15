@@ -80,6 +80,7 @@ jobs:
       - name: Verify P06 standalone validation, dispatch and receiver evidence offline
         run: |
           python tests/mrnobody/p06_default.py -v
+          python tests/mrnobody/p11_live_lab.py
           python tests/mrnobody/p06_live_lab.py -v
           python tests/mrnobody/p06_standalone.py -v
           python tests/mrnobody/p09_standalone.py -v
@@ -139,6 +140,7 @@ jobs:
           mkdir -p "$MRN_UI_ARTIFACTS"
           NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/ui_browser.cjs
           NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/destination_defaults.cjs
+          NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/p11_live_lab.cjs
           NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/p06_live_lab.cjs
           NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/receiver_dashboard.cjs
       - uses: actions/upload-artifact@v4

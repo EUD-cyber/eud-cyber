@@ -275,6 +275,15 @@ def run(pid, env, invoke=subprocess.run):
     if 'success' in outcomes and 'failed' not in outcomes and not unresolved_transport:
         if any(x in outcomes for x in ('action_error', 'skipped')):
             emit(base, env, pid, 'REMOTE_ACTION_PARTIAL', execution_status='success_with_warning', warning='some_configured_actions_did_not_complete')
+        if pid == '11' and env.get('MRNOBODY_P11_LIVE_CONFIG'):
+            from p11_live_lab import run as live_run
+            try:
+                live_code = live_run(env)
+            except Exception:
+                live_code = 1
+            if live_code:
+                emit(base, env, pid, 'PHASE_FAILED', phase=pid, reason='live_lab_receipt_unavailable', cleanup_required='true')
+                return 1
         emit(base, env, pid, 'PHASE_COMPLETE', phase=pid)
         return 0
     if 'action_error' in outcomes and 'failed' not in outcomes and not unresolved_transport:

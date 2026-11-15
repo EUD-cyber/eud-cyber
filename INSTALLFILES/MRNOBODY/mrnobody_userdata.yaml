@@ -314,6 +314,10 @@ write_files:
           "$INSTALL_DIR/web/persistence_actions.py"
 
       download_file \
+          "web/p11_live_lab.py" \
+          "$INSTALL_DIR/web/p11_live_lab.py"
+
+      download_file \
           "web/p11_campaign.py" \
           "$INSTALL_DIR/web/p11_campaign.py"
 

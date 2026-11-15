@@ -1,5 +1,9 @@
 # P11 Linux Standalone acceptance plan
 
+Optional bounded Slave-to-Master HTTP(S) beacons are documented in the
+[P11 Live Lab guide](https://github.com/EUD-cyber/eud-cyber/blob/main/INSTALLFILES/docs/mrnobody-p11-live-lab.md).
+Existing persistence and target DNS behavior below is retained.
+
 Scope: Ubuntu 192.168.1.20, SSH user ubuntu. No deployment is performed by this change.
 Windows P11 and Linux cron payloads remain unchanged. Full Campaign orchestration is unchanged.
 

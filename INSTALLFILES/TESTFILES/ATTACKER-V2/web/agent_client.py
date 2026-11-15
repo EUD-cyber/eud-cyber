@@ -245,8 +245,8 @@ class AgentTransport:
                 raise FatalAgentError("Master requested a report outside the finalized inventory.")
             self.post("report-transfer",snapshot=(ident,read_report_snapshot(ident)))
 
-    def post(self,kind, reports=None, *, snapshot=None, p06=None):
-        if kind not in {"register","heartbeat","reports","report-transfer","p06-file"}:
+    def post(self,kind, reports=None, *, snapshot=None, p06=None, p11=None):
+        if kind not in {"register","heartbeat","reports","report-transfer","p06-file","p11-beacon"}:
             raise FatalAgentError("Unsupported agent operation.")
         data=dict(agent_id=self.config.agent_id,protocol_version=1)
         if kind=="register":
@@ -261,6 +261,10 @@ class AgentTransport:
         if kind=="p06-file":
             from p06_live_lab import validate_payload
             data.update(p06 or {})
+            validate_payload(data)
+        if kind=="p11-beacon":
+            from p11_live_lab import validate_payload
+            data.update(p11 or {})
             validate_payload(data)
         url=self.config.master_url.rstrip("/")+"/api/master/agents/"+kind
         request=urllib.request.Request(url,data=json.dumps(data).encode("utf-8"),method="POST",
@@ -291,6 +295,19 @@ class AgentTransport:
             result=json.loads(body.decode("utf-8"))
         except (ValueError,UnicodeError,RecursionError):
             raise FatalAgentError("Invalid Master response.") from None
+        if kind=="p11-beacon":
+            expected={'protocol_version','accepted','event_id','status','received_at',
+                      'agent_id','campaign_id','phase','sequence','verified','ack'}
+            if (not isinstance(result,dict) or set(result)!=expected
+                    or result['accepted'] is not True or result['verified'] is not True
+                    or result['ack']!='MRN-EXERCISE-ACK' or result['status']!='received'
+                    or type(result['protocol_version']) is not int or result['protocol_version']!=1
+                    or type(result['event_id']) is not int or result['event_id']<=0
+                    or type(result['received_at']) is not int or result['received_at']<0
+                    or type(result['sequence']) is not int
+                    or any(result[key]!=data[key] for key in ('agent_id','campaign_id','phase','sequence'))):
+                raise FatalAgentError('P11 Master receipt mismatch.')
+            return result
         if kind=="p06-file":
             expected={'protocol_version','accepted','event_id','status','received_at',
                       'agent_id','campaign_id','phase','size','sha256','verified'}
