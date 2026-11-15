@@ -52,6 +52,29 @@ def validate_payload(data):
     return data
 
 
+def campaign_selection(data, definition, phase_ids):
+    """Runtime-only opt-in; never save live traffic in a scenario or schedule."""
+    if data.get('live_lab') or data.get('p06_live_lab'):
+        raise ValueError('P06 Live Lab campaign integration is not available yet')
+    options = settings(data)
+    if options is None:
+        return None
+    phases = (definition or {}).get('phases', [{'id': pid} for pid in phase_ids])
+    enabled = {p['id']: p for p in phases if p.get('enabled', True)}
+    if '11' not in enabled or '03' not in enabled:
+        raise ValueError('Campaign Live Lab requires enabled P03 and P11 phases')
+    if list(enabled).index('03') > list(enabled).index('11'):
+        raise ValueError('Campaign Live Lab requires P03 before P11')
+    if enabled['11'].get('parameters', {}).get('action', 'create') != 'create':
+        raise ValueError('Campaign Live Lab requires P11 Create; stop before Cleanup')
+    from agent_client import load_agent_config, FatalAgentError
+    try:
+        load_agent_config()
+    except (FatalAgentError, OSError, ValueError):
+        raise ValueError('Live Lab requires a configured, paired Slave Agent') from None
+    return dict(p11_live_lab=True, **options)
+
+
 def bounded_post(payload, timeout, stop):
     """A disposable child bounds DNS, TLS and response reading as well as connect."""
     from agent_client import RetryableAgentError, FatalAgentError
@@ -108,16 +131,16 @@ def run_loop(config, campaign, options, *, post=bounded_post, stop=None,
         reason = 'stopped'
     record('P11_BEACON_STOP', attempts=attempts, acknowledged=acknowledged,
            failed=attempts-acknowledged, reason=reason)
-    return 0 if acknowledged and not reason.startswith('fatal') else 1
+    return 0 if acknowledged and reason != 'stopped' and not reason.startswith('fatal') else 1
 
 
 def run(env):
     from agent_client import load_agent_config
     from windows_actions import emit
     options = settings(json.loads(env['MRNOBODY_P11_LIVE_CONFIG']))
-    if (options is None or env.get('MRNOBODY_RUN_MODE') != 'standalone'
+    if (options is None or env.get('MRNOBODY_RUN_MODE') not in {'standalone', 'campaign'}
             or env.get('MRNOBODY_ACTION', '') not in {'', 'create'}):
-        raise ValueError('Explicit standalone Live Lab required')
+        raise ValueError('Explicit Create Live Lab required')
     config = load_agent_config()
     stop = threading.Event()
     previous = {sig: signal.signal(sig, lambda *_: stop.set()) for sig in (signal.SIGTERM, signal.SIGINT)}
