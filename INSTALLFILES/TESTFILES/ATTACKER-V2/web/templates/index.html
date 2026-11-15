@@ -100,6 +100,7 @@
         <nav class="sidebar-nav" aria-label="Main navigation">
 <button class="nav-item nav-active" type="button" data-page="dashboard"><span class="nav-icon" aria-hidden="true">⌂</span><span>Dashboard</span></button>
 <button class="nav-item" type="button" data-page="agents" id="masterAgentsTab" hidden><span class="nav-icon" aria-hidden="true">◉</span><span>Agents</span></button>
+<button class="nav-item" type="button" data-page="receiver" id="masterReceiverTab" hidden><span class="nav-icon" aria-hidden="true">◉</span><span>Receiver</span></button>
 <button class="nav-item" type="button" data-page="phases"><span class="nav-icon" aria-hidden="true">◆</span><span>Attack Techniques</span></button>
 <button class="nav-item" type="button" data-page="scenarios"><span class="nav-icon" aria-hidden="true">⬡</span><span>Scenarios</span></button>
 <button class="nav-item" type="button" data-page="schedules"><span class="nav-icon" aria-hidden="true">◷</span><span>Scheduler</span></button>
@@ -1512,6 +1513,22 @@
 </section>
 
             
+<section id="page-receiver" class="app-page" hidden>
+    <section class="panel" id="masterReceiverPanel" hidden>
+        <div class="panel-header"><h2>Receiver</h2><button class="button button-small" type="button" id="masterReceiverRefresh">Latest events</button></div>
+        <p class="muted">Read only. Newest receipts first, 50 per page. Refreshes every 30 seconds while visible. Bytes are declared synthetic bytes, not measured traffic or proof of transfer.</p>
+        <form id="masterReceiverFilters">
+            <label for="masterReceiverAgent">Agent ID (exact)</label>
+            <input id="masterReceiverAgent" type="text" maxlength="64" autocomplete="off">
+            <label for="masterReceiverCampaign">Campaign ID (exact)</label>
+            <input id="masterReceiverCampaign" type="text" maxlength="101" autocomplete="off">
+            <button class="button button-small" type="submit">Apply filters</button>
+        </form>
+        <div id="masterReceiverRuntime" aria-live="polite"></div>
+        <button class="button button-small" type="button" id="masterReceiverOlder" disabled>Older events</button>
+    </section>
+</section>
+
 <section id="page-agents" class="app-page" hidden>
     <section class="panel" id="masterAgentsPanel" hidden>
         <div class="panel-header">

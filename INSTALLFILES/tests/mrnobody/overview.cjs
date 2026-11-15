@@ -64,7 +64,7 @@ assert.equal(cards[0].classList.value,'phase-skipped');
 assert.equal(cards[1].status.textContent,'RUNNING');
 const nav=html.match(/<nav class="sidebar-nav"[^>]*>([\s\S]*?)<\/nav>/)[1];
 const order=[...nav.matchAll(/data-page="([^"]+)"/g)].map(m=>m[1]);
-assert.deepEqual(order,['dashboard','agents','phases','scenarios','schedules','reports','mitre','system']);
+assert.deepEqual(order,['dashboard','agents','receiver','phases','scenarios','schedules','reports','mitre','system']);
 const navItems=order.map(page=>({dataset:{page},setAttribute(){},removeAttribute(){},classList:{toggle(cls,active){this.active=active;}}}));
 context.document.querySelectorAll=s=>s==='.nav-item'?navItems:[];
 context.document.getElementById=()=>({classList:{add(){}}});

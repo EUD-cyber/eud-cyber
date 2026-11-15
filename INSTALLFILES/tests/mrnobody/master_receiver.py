@@ -144,7 +144,7 @@ class ReceiverTests(unittest.TestCase):
         self.assertEqual(self.rows(),[])
 
     def test_method_restriction_and_storage_failure_never_acknowledged(self):
-        self.assertEqual(self.client.get(URL).status_code,405)
+        self.assertEqual(self.client.delete(URL).status_code,405)
         self.assertEqual(self.client.put(URL).status_code,405)
         with patch.object(Registry,"receive_event",side_effect=sqlite3.OperationalError("private details")):
             result=self.post()

@@ -1,6 +1,7 @@
 """Master-only authenticated endpoints; HTTPS by default, explicit lab HTTP."""
 import json
 import ipaddress
+import re
 import sqlite3
 from pathlib import Path
 
@@ -95,6 +96,37 @@ def install_master_api(app,deployment,registry_path=DATABASE):
     @app.route("/api/master/receiver/events",methods=["POST"])
     def master_receive_event():
         return handle(False,receiver=True)
+
+    @app.route("/api/master/receiver/events",methods=["GET"])
+    def master_receiver_events():
+        config=deployment()
+        if config.role!="master" or config.config_status!="loaded":
+            return jsonify({"message":"Not found."}),404
+        secure=request.is_secure or (request.remote_addr in {"127.0.0.1","::1"}
+                                     and request.headers.get("X-Forwarded-Proto")=="https")
+        if not secure or not lab_peer():
+            return jsonify({"message":"Lab HTTPS access required."}),403
+        try:
+            allowed={"limit","before","agent_id","campaign_id"}
+            if set(request.args)-allowed or any(len(request.args.getlist(key))!=1 for key in request.args):
+                raise ValueError("Invalid query.")
+            def number(key,default):
+                value=request.args.get(key)
+                if value is None:
+                    return default
+                if not re.fullmatch(r"[1-9][0-9]{0,18}",value):
+                    raise ValueError("Invalid number.")
+                return int(value)
+            result=Registry(registry_path).list_receiver_events(
+                limit=number("limit",50),before=number("before",None),
+                agent_id=request.args.get("agent_id"),campaign_id=request.args.get("campaign_id"))
+            response=jsonify(result)
+            response.headers["Cache-Control"]="no-store"
+            return response,200
+        except ValueError:
+            return jsonify({"message":"Invalid receiver query."}),400
+        except (Unavailable,OSError,sqlite3.Error):
+            return jsonify({"message":"Receiver storage unavailable."}),503
 
     @app.route("/api/master/agents/heartbeat",methods=["POST"])
     def master_heartbeat():

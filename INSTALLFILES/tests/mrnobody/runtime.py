@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
 PLATFORM = ROOT / 'TESTFILES/ATTACKER-V2'
@@ -42,21 +43,25 @@ assert not parser.sections
 for page in ['dashboard', 'campaigns', 'scenarios', 'phases', 'system']:
     assert 'page-' + page in parser.panels
 
-# Test the legacy ID generator and the actual validation expressions without importing
-# the legacy app, which creates installation directories at import time.
-legacy = ast.parse((ROOT / 'INCIDENTVM/web/app.py').read_text(encoding='utf8'))
-generator = next(n for n in legacy.body if isinstance(n, ast.FunctionDef) and n.name == 'create_incident_id')
-namespace = {'datetime': datetime}
-exec(compile(ast.Module(body=[generator], type_ignores=[]), '<id generator>', 'exec'), namespace)
-assert re.fullmatch(r'MRN-\d{8}-\d{6}', namespace['create_incident_id']())
-for name in ['campaign_status', 'campaign_log']:
-    handler = next(n for n in legacy.body if isinstance(n, ast.FunctionDef) and n.name == name)
-    pattern = next(n.args[0].value for n in ast.walk(handler)
-                   if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
-                   and n.func.attr == 'fullmatch')
-    for prefix in ['MRN', 'H3']:
-        assert re.fullmatch(pattern, prefix + '-20261031-072933')
-    assert not re.fullmatch(pattern, '../H3-20261031-072933')
+# Inspect the active report ID validator and generator. The retired INCIDENTVM
+# mirror is no longer distributed. Evaluate only assignments, never run_phase.
+reports = ast.parse((PLATFORM / 'web/reports.py').read_text(encoding='utf8'))
+validator = next(n for n in reports.body if isinstance(n, ast.Assign)
+                 and any(isinstance(t, ast.Name) and t.id == 'INCIDENT_ID' for t in n.targets))
+handler = next(n for n in reports.body if isinstance(n, ast.FunctionDef) and n.name == 'run_phase')
+generator = next(n for n in handler.body if isinstance(n, ast.Assign)
+                 and any(isinstance(t, ast.Name) and t.id == 'incident_id' for t in n.targets))
+namespace = {'datetime': datetime, 'uuid': uuid, 're': re, 'requested_id': ''}
+exec(compile(ast.Module(body=[validator, generator], type_ignores=[]), '<id assignments>', 'exec'), namespace)
+assert re.fullmatch(r'MRN-\d{8}-\d{6}-[a-f0-9]{12}', namespace['incident_id'])
+for prefix in ['MRN', 'H3']:
+    historical = prefix + '-20261031-072933'
+    assert namespace['INCIDENT_ID'].fullmatch(historical)
+    namespace['requested_id'] = historical
+    exec(compile(ast.Module(body=[generator], type_ignores=[]), '<id assignment>', 'exec'), namespace)
+    assert namespace['incident_id'] == historical
+for unsafe in ['../H3-20261031-072933', 'MRN-test/escape', '']:
+    assert not namespace['INCIDENT_ID'].fullmatch(unsafe)
 
 scripts = list((PLATFORM / 'scripts').glob('[0-9]*.sh')) + list((PLATFORM / 'scenarios').glob('*.sh'))
 assert len(scripts) == 12
@@ -90,10 +95,9 @@ for line in (PLATFORM / 'update-manifest.txt').read_text().splitlines():
     digest, relative = line.split('|', 1)
     assert hashlib.sha256((PLATFORM / relative).read_bytes()).hexdigest() == digest, relative
 
-# The older frontend keeps its JavaScript inline.
-html = (ROOT / 'INCIDENTVM/web/templates/index.html').read_text(encoding='utf8')
-for script in re.findall(r'<script[^>]*>(.*?)</script>', html, re.S):
-    subprocess.run(['node', '--check'], input=script, text=True, check=True)
+# Check the JavaScript shipped by the active frontend.
+for script in ['app.js', 'planning.js']:
+    subprocess.run(['node', '--check', str(PLATFORM / 'web/static' / script)], check=True)
 
 print('Page placement, MRN IDs, legacy H3 validation and propagated runtime paths passed.'
       + (' Bash ID assignments evaluated safely.' if '--bash' in sys.argv else ' Bash evaluation reserved for CI.'))
