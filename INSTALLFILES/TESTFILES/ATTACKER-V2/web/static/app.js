@@ -1757,7 +1757,9 @@ function renderPhaseDetail(phase) {
         const liveLabel = document.createElement('label');
         const live = document.createElement('input');
         live.type = 'checkbox'; live.id = 'phase-06-live-lab';
-        liveLabel.append(live, document.createTextNode(' Live Lab: send the generated test file once from Slave to configured Master (paired Agent required)'));
+        const liveText = document.createElement('span');
+        liveText.textContent = ' Live Lab: send the generated test file once from Slave to configured Master (registered Agent required)';
+        liveLabel.appendChild(live); liveLabel.appendChild(liveText);
         phaseDetail.appendChild(liveLabel);
         const help = document.createElement("p");
         help.textContent = "Leave file and staging incident empty to create one corporate-secret-data.txt containing explicitly simulated company data on the target. P06 verifies received size and SHA256. To reuse P05 data, enter both its incident ID and exact registered synthetic file path. Existing user files and directories are never collected.";
