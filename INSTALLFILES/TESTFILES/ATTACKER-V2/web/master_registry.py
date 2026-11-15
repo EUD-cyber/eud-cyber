@@ -235,6 +235,39 @@ class Registry:
         # Success is returned only after the transaction committed.
         return dict(protocol_version=1,accepted=True,event_id=event_id,status="received",received_at=now)
 
+    def list_receiver_events(self, *, limit=50, before=None, agent_id=None, campaign_id=None):
+        """Bounded keyset page; never initialize, migrate or write the registry."""
+        if type(limit) is not int or not 1 <= limit <= 100:
+            raise ValueError("Invalid limit.")
+        if before is not None and (type(before) is not int or not 1 <= before <= 2**63-1):
+            raise ValueError("Invalid cursor.")
+        if agent_id is not None:
+            validate_id(agent_id)
+        if campaign_id is not None and (not isinstance(campaign_id,str) or not re.fullmatch(
+                r"[A-Za-z0-9][A-Za-z0-9_-]{0,100}",campaign_id)):
+            raise ValueError("Invalid campaign ID.")
+        if self.path.is_symlink() or self.path.parent.is_symlink():
+            raise Unavailable("Registry path must not be a symlink.")
+        if not self.path.exists():
+            return dict(events=[],next_before=None)
+        db=sqlite3.connect(self.path.resolve().as_uri()+"?mode=ro",uri=True,timeout=5)
+        db.row_factory=sqlite3.Row
+        try:
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='receiver_events'").fetchone():
+                return dict(events=[],next_before=None)
+            clauses,values=[],[]
+            for column,value in (("id",before),("agent_id",agent_id),("campaign_id",campaign_id)):
+                if value is not None:
+                    clauses.append(column+(" < ?" if column=="id" else " = ?"))
+                    values.append(value)
+            where=" WHERE "+" AND ".join(clauses) if clauses else ""
+            rows=db.execute("SELECT id,agent_id,campaign_id,event_type,timestamp,bytes,received_at,status "
+                            "FROM receiver_events"+where+" ORDER BY id DESC LIMIT ?",values+[limit+1]).fetchall()
+            return dict(events=[dict(row) for row in rows[:limit]],
+                        next_before=rows[limit-1]["id"] if len(rows)>limit else None)
+        finally:
+            db.close()
+
     @staticmethod
     def _report_table(db):
         db.execute("""CREATE TABLE IF NOT EXISTS report_content (

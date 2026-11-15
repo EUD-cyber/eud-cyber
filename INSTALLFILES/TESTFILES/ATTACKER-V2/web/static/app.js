@@ -682,6 +682,73 @@ const MrnUI = (() => {
         }, 30000);
         refreshMasterAgents();
     }
+    let receiverRequest = 0, receiverTimer = null, receiverBefore = null, receiverNext = null;
+    let receiverFilters = {};
+    async function refreshMasterReceiver() {
+        const panel = byId('masterReceiverPanel'), root = byId('masterReceiverRuntime');
+        if (!panel || panel.hidden || !root) return;
+        const request = ++receiverRequest;
+        byId('masterReceiverOlder').disabled = true;
+        const params = new URLSearchParams({limit: '50', ...receiverFilters});
+        if (receiverBefore !== null) params.set('before', String(receiverBefore));
+        try {
+            const data = await get('/api/master/receiver/events?' + params);
+            if (request !== receiverRequest || panel.hidden) return;
+            if (!Array.isArray(data.events) || data.events.length > 50
+                    || !(data.next_before === null || Number.isSafeInteger(data.next_before) && data.next_before > 0))
+                throw new Error('Invalid receiver page');
+            root.replaceChildren();
+            receiverNext = data.next_before;
+            if (!data.events.length) node(root, 'p', 'No receiver events match these filters.', 'empty-state');
+            for (const event of data.events) {
+                const entry = node(root, 'section');
+                node(entry, 'h3', 'Event ' + event.id);
+                const fields = node(entry, 'dl', undefined, 'overview-fields');
+                const received = Number.isFinite(event.received_at)
+                    ? new Date(event.received_at * 1000).toISOString() : 'Unavailable';
+                for (const [label, value] of [['Agent', event.agent_id], ['Campaign', event.campaign_id],
+                        ['event_type', event.event_type], ['Event timestamp (UTC)', event.timestamp],
+                        ['received_at (UTC)', received], ['Declared synthetic bytes', event.bytes], ['Status', event.status]]) {
+                    node(fields, 'dt', label); node(fields, 'dd', String(value ?? 'Unavailable'));
+                }
+            }
+            byId('masterReceiverOlder').disabled = receiverNext === null;
+        } catch {
+            if (request === receiverRequest && !panel.hidden) {
+                receiverNext = null;
+                setText('masterReceiverRuntime', 'Receiver unavailable. Use Latest events to retry.');
+            }
+        }
+    }
+    function configureMasterReceiver(deployment) {
+        const panel = byId('masterReceiverPanel'), tab = byId('masterReceiverTab'), page = byId('page-receiver');
+        if (!panel || !tab || !page) return;
+        panel.hidden = !(deployment?.role === 'master' && deployment.config_status === 'loaded');
+        tab.hidden = page.hidden = panel.hidden;
+        if (panel.hidden) {
+            clearInterval(receiverTimer); receiverTimer = null; receiverRequest++;
+            receiverBefore = receiverNext = null; receiverFilters = {};
+            byId('masterReceiverRuntime').replaceChildren();
+            if (page.classList.contains('app-page-active')) showPage('dashboard');
+            return;
+        }
+        byId('masterReceiverRefresh').onclick = () => {receiverBefore = null; refreshMasterReceiver();};
+        byId('masterReceiverFilters').onsubmit = event => {
+            event.preventDefault(); receiverFilters = {};
+            for (const [key, id] of [['agent_id', 'masterReceiverAgent'], ['campaign_id', 'masterReceiverCampaign']]) {
+                const value = byId(id).value.trim(); if (value) receiverFilters[key] = value;
+            }
+            receiverBefore = null; refreshMasterReceiver();
+        };
+        byId('masterReceiverOlder').onclick = () => {
+            if (receiverNext === null) return;
+            receiverBefore = receiverNext; refreshMasterReceiver();
+        };
+        if (receiverTimer === null) receiverTimer = setInterval(() => {
+            if (!document.hidden && page.classList.contains('app-page-active')) refreshMasterReceiver();
+        }, 30000);
+        if (!document.hidden && page.classList.contains('app-page-active')) refreshMasterReceiver();
+    }
     function renderDeploymentStatus(deployment) {
         const root = byId('deploymentRuntime');
         if (!root) return;
@@ -723,8 +790,9 @@ const MrnUI = (() => {
                     setText('dashboardHealth',health.status==='ok'?'Online':health.status || 'Unknown');
                     renderDeploymentStatus(health.deployment);
                     configureMasterAgents(health.deployment);
+                    configureMasterReceiver(health.deployment);
                     const root=byId('settingsRuntime');if(root){root.replaceChildren();const dl=node(root,'dl',undefined,'overview-fields');for(const [label,value] of [['Service',health.service],['Version',health.version],['API health',health.status],['Transport',window.location?.protocol === 'https:' ? 'HTTPS (current browser connection)' : 'HTTP (current browser connection)']]){node(dl,'dt',label);node(dl,'dd',value || 'Unavailable');}}
-                }).catch(()=>{configureMasterAgents(null);setText('dashboardHealth','Unavailable');setText('settingsRuntime','Application health unavailable. Retry by opening Settings again.');setText('deploymentRuntime','Deployment status unavailable. Retry by opening Settings again.');}),
+                }).catch(()=>{configureMasterAgents(null);configureMasterReceiver(null);setText('dashboardHealth','Unavailable');setText('settingsRuntime','Application health unavailable. Retry by opening Settings again.');setText('deploymentRuntime','Deployment status unavailable. Retry by opening Settings again.');}),
                 get('/api/scenarios').then(data=>setText('dashboardScenarioCount',data.scenarios.length)).catch(()=>setText('dashboardScenarioCount','Unavailable')),
                 get('/api/schedules').then(data=>{setText('dashboardScheduleCount',data.schedules.length);setText('dashboardScheduleEnabled',`${data.schedules.filter(x=>x.enabled).length} enabled`);}).catch(()=>{setText('dashboardScheduleCount','Unavailable');setText('dashboardScheduleEnabled','Schedule status unavailable');}),
                 get('/api/reports').then(data=>{
@@ -3479,7 +3547,7 @@ async function runUpdate() {
 
 function showPage(pageName) {
     if (pageName) ++reportNavigationVersion;
-    if (["dashboard", "system", "agents"].includes(pageName)) MrnUI.refreshDashboard(true);
+    if (["dashboard", "system", "agents", "receiver"].includes(pageName)) MrnUI.refreshDashboard(true);
     const primaryPage = {builder: "scenarios", campaigns: "scenarios", inventory: "system"}[pageName] || pageName;
 
     if (pageName === "reports") refreshReports();

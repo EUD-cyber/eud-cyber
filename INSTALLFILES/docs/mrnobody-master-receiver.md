@@ -2,7 +2,7 @@
 
 Passivt API til syntetiske HTTP-testevents i et isoleret lab. Ingen kommandoer,
 jobkø, callbacks, filer eller rigtig eksfiltration. Ingen P06/P11-integration
-eller ny UI i V1. De eksisterende phases, heartbeat og ZTD ændres ikke.
+i receiver-transport V1. Dashboard V1 tilføjer kun læsning. De eksisterende phases, heartbeat og ZTD ændres ikke.
 
 ## API
 
@@ -59,7 +59,7 @@ ikke `last_seen_at`. Loggen overlever procesgenstart og normale kodeopdateringer
 
 Kun accepterede events logges. Afviste requests får HTTP-fejl og bliver ikke
 ground truth. Genforsøg giver en ny kvittering og en ny række: ingen deduplikering
-i V1. Et tabt HTTP-svar kan derfor give dubletter. Ingen read/list API eller UI.
+i V1. Et tabt HTTP-svar kan derfor give dubletter. Dashboardet nedenfor viser kvitteringerne.
 Ingen automatisk oprydning/retention endnu; hold testmængden begrænset og overvåg
 diskplads. En storagefejl kvitteres aldrig som modtaget.
 
@@ -72,8 +72,44 @@ vedvarende logning, samtidige writes, fejlstatus og uændret heartbeat.
 Der er endnu ingen fjernstart i den aktuelle Master Campaign Control. Roadmapet
 bevarer **start/stop af enkelte attacks og hele scenarier fra Master** via
 Agent-initieret polling. Det implementeres særskilt; receiveren udfører aldrig jobs.
-P06/P11-integration, receiver-UI og korrelation er senere trin.
+P06/P11-integration og korrelation er senere trin.
 
 Ingen deploy eller `mrnobody update` skal køres på en igangværende Big-installation
 for at teste denne ændring. Faktisk nginx/NAT og genstart af Master-VM skal senere
 verificeres separat i labbet.
+
+## Receiver Dashboard V1
+
+Receiver-fanen vises kun ved rolle=master og indlæst konfiguration. Genbruger
+UI-styling og viser Agent-ID, Campaign-ID, event_type, event timestamp i UTC,
+received_at i UTC, deklarerede syntetiske bytes og status. Events er kvitteringer,
+ikke bevis for rigtig C2/eksfiltration eller målt trafik.
+
+`GET /api/master/receiver/events` følger den eksisterende administrative
+lab-HTTPS-grænse (nginx-adgang, ingen Agent Bearer-nøgle til UI-læsning).
+HTTP afvises også med lab_http. Ikke-Master/ugyldig konfiguration: 404;
+transport/labgrænse: 403; ugyldig query: 400; storagefejl: 503.
+Svar har Cache-Control: no-store og kun de otte dokumenterede eventfelter.
+Ingen nøgler, rå payloads eller agent credentials eksponeres.
+
+Query: limit=1..100 (standard 50), before=positivt SQLite event-ID,
+agent_id og campaign_id (eksakte, validerede ID'er). Ukendte/duplikerede
+parametre afvises. Sortering er id DESC, dvs. nyeste serverkvittering først,
+uafhængigt af afsenderens timestamp. Svaret er events samt next_before
+(null når sidste side er nået). Næste kald bruger before=next_before. Ingen
+ubegrænset liste eller OFFSET. Nye writes forskyder ikke ældre sider.
+
+UI viser 50 pr. side med Older events og Latest events, samt Agent/Campaign-filtre.
+Refresh sker hvert 30. sekund på den aktuelle side, når fanen/dokumentet er synligt.
+Latest events går tilbage til nyeste side med de anvendte filtre. Ved fejl fjernes
+gamle resultater, og der vises en retry-besked. Manglende database eller en ældre
+database uden receiver-tabellen giver en tom liste uden initialisering/migration.
+Læsningen bruger SQLite mode=ro og skriver aldrig. Ingen retention i dette trin.
+
+Tests: `python INSTALLFILES/tests/mrnobody/receiver_dashboard.py -v` og
+`node INSTALLFILES/tests/mrnobody/receiver_dashboard.cjs`. Browser-testen bruger
+lokale mock-svar; ingen test kontakter VM eller udfører attacks.
+
+Opdater kun Master med `sudo mrnobody update`, når installationen er færdig og
+VM'en er klar til normal opdatering. Slave behøver ingen opdatering til dashboardet.
+Ingen VM-genstart kræves af dette trin.

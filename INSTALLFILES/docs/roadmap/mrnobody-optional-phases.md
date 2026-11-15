@@ -31,3 +31,26 @@ Each candidate requires a separately requested milestone with reviewed scope,
 prerequisites, offline tests, authorized lab validation, installation/migration plan
 and evidence acceptance criteria. This removal introduces or modifies no offensive
 payloads. Plans here cannot be selected or executed by CLI, GUI or a campaign.
+
+## Master receiver og redigerbare phase-standarder
+
+Receiver Dashboard V1 er read-only. Følgende er backlog og implementeres ikke
+i dette trin:
+
+- Ved Slave/Agent med konfigureret Master: foreslå/prefill Master-adressen som
+  REDIGERBAR standard i relevante C2-/exfil-felter. Hent MRNOBODY_MASTER_URL
+  fra /etc/mrnobody/deployment.conf gennem eksisterende valideret public config/API;
+  eksponér aldrig tokens eller andre hemmeligheder. Udvid public API valideret, hvis
+  adressen ikke allerede er tilgængelig. Konfigureret betyder ikke forbundet.
+- Standalone eller ingen Master URL: blankt felt, ingen fallback til andre IP'er.
+  Bevar brugerens indtastning; overskriv ikke et bevidst valgt mål ved refresh.
+- Gennemgå både P06 og P11 samt øvrige phases for faktiske C2-/exfil-felter.
+  Ingen generel prefill af vilkårlige target-IP'er. Bevar http:// eller https://
+  og korrekt port i URL-felter. Udtræk kun host til et IP/host-felt; kopiér aldrig
+  URL til IP-felt. Hvis IP kræves, må et DNS-navn ikke indsættes som IP.
+- Forslaget må aldrig tvinge en forbindelse, ændre attack-scope eller bruge Master
+  som attack-target uden brugerens bevidste valg. Vis adressernes rolle tydeligt,
+  og kræv bevidst valg før eksekvering mod Master.
+- Fjernstart/stop fra Master af både individuelle attacks og hele scenarier
+  forbliver et roadmapkrav via Agent-initieret polling. Ingen fjernstart/stop
+  eller ændring af eksisterende Campaign Control i Receiver Dashboard V1.
