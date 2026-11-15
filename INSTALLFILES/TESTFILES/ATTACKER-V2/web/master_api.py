@@ -8,6 +8,17 @@ from pathlib import Path
 from flask import jsonify, request
 from master_registry import DATABASE, Registry, Unauthorized, Conflict, Unavailable, TOKEN, MAX_REPORT_BYTES
 
+# Installed implementation capabilities, never inferred from heartbeat/online state.
+# This is intentionally separate from the strict agent protocol v1 responses.
+CONTROL_CAPABILITIES = {
+    "remote_phase_start": False,
+    "remote_phase_stop": False,
+    "remote_scenario_start": False,
+    "remote_scenario_stop": False,
+    "execution_job_polling": False,
+    "multi_agent_campaigns": False,
+}
+
 MAX_BODY = 4096
 LAB_NETWORKS = tuple(ipaddress.ip_network(value) for value in
                      ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "127.0.0.0/8", "fc00::/7", "::1/128"))
@@ -197,10 +208,10 @@ def install_master_api(app,deployment,registry_path=DATABASE):
         try:
             path=Path(registry_path)
             if not path.exists() and not path.is_symlink():
-                return jsonify({"agents":[],"initialized":False}),200
+                return jsonify({"agents":[],"initialized":False,"control_capabilities":dict(CONTROL_CAPABILITIES)}),200
             rows=Registry(registry_path).list_agents()
             fields=("agent_id","name","status","last_seen_at","registered_at","reports","reports_synced_at","available_reports")
             return jsonify({"agents":[{key:row[key] for key in fields} for row in rows],
-                            "initialized":True}),200
+                            "initialized":True,"control_capabilities":dict(CONTROL_CAPABILITIES)}),200
         except (Unavailable,OSError,sqlite3.Error,ValueError):
             return jsonify({"message":"Registry unavailable."}),503

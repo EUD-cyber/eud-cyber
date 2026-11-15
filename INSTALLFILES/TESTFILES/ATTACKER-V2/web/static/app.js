@@ -580,10 +580,24 @@ const MrnUI = (() => {
     }
     const setText = (id,text) => {const el=byId(id);if(el)el.textContent=text;};
     async function get(url) {const response=await fetch(url);if(!response.ok)throw new Error('Unavailable');return response.json();}
-    let masterAgentsRequest = 0, masterAgentsTimer = null, selectedMasterAgent = null;
+    let masterAgentsRequest = 0, masterAgentsTimer = null, selectedMasterAgent = null, masterControlCapabilities = null;
     function renderMasterAgents(agents) {
         const root = byId('masterAgentsRuntime');
         root.replaceChildren();
+        const control = node(root, 'section', undefined, 'empty-state');
+        control.id = 'masterControlReadiness';
+        node(control, 'h3', 'Campaign control prerequisites');
+        node(control, 'p', 'Online indicates heartbeat contact only. It does not confirm remote start, stop or cleanup.');
+        const labels = {
+            remote_phase_start: 'Remote phase start', remote_phase_stop: 'Remote phase stop',
+            remote_scenario_start: 'Remote scenario start', remote_scenario_stop: 'Remote scenario stop',
+            execution_job_polling: 'Execution job polling', multi_agent_campaigns: 'Multi-agent campaigns'
+        };
+        for (const [key, label] of Object.entries(labels)) {
+            const value = masterControlCapabilities?.[key];
+            node(control, 'p', label + ': ' + (value === false ? 'Not implemented' : 'Unverified'));
+        }
+        node(control, 'p', 'Remote campaign submission is unavailable in this version. Existing local runs and synchronized reports remain available.');
         const timestamp = value => Number.isFinite(value) && value > 0
             && !Number.isNaN(new Date(value * 1000).getTime())
             ? new Date(value * 1000).toLocaleString() : 'Never';
@@ -661,6 +675,7 @@ const MrnUI = (() => {
             const data = await get('/api/master/agents');
             if (request !== masterAgentsRequest || panel.hidden) return;
             if (!Array.isArray(data.agents)) throw new Error('Invalid agent list');
+            masterControlCapabilities = data.control_capabilities;
             renderMasterAgents(data.agents);
         } catch {
             if (request === masterAgentsRequest && !panel.hidden)
@@ -677,6 +692,7 @@ const MrnUI = (() => {
             masterAgentsTimer = null;
             masterAgentsRequest++;
             selectedMasterAgent = null;
+            masterControlCapabilities = null;
             byId('masterAgentsRuntime')?.replaceChildren();
             if (page.classList.contains('app-page-active')) showPage('dashboard');
             return;

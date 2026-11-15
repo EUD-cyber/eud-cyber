@@ -5,6 +5,7 @@ const {chromium} = require('playwright');
 const base = path.resolve(__dirname, '../../TESTFILES/ATTACKER-V2/web');
 const html = fs.readFileSync(path.join(base, 'templates/index.html'), 'utf8').replace(/\{\{\s*url_for\('static', filename='([^']+)'\)\s*\}\}/g, (_, n) => '/static/' + n);
 let role='master', configStatus='loaded', failed=false, healthFailed=false, malformed=false, requests=0, writes=0;
+let capabilities={remote_phase_start:false,remote_phase_stop:false,remote_scenario_start:false,remote_scenario_stop:false,execution_job_polling:false,multi_agent_campaigns:false};
 let agents=[{agent_id:'agent-1',name:'<img src=x onerror=alert(1)>',status:'online',last_seen_at:1700000000}];
 const shared={status:'idle',active:false,execution:null,phases:[],scenarios:[],schedules:[],reports:[],networks:[],hosts:[],log:'',phase_status:{}};
 (async()=>{
@@ -19,7 +20,7 @@ const shared={status:'idle',active:false,execution:null,phases:[],scenarios:[],s
    if(url.pathname==='/')return route.fulfill({contentType:'text/html',body:html});
    if(['/static/app.js','/static/planning.js','/static/style.css'].includes(url.pathname))return route.fulfill({contentType:url.pathname.endsWith('.css')?'text/css':'text/javascript',body:fs.readFileSync(path.join(base,url.pathname.slice(1)))});
    if(url.pathname==='/api/health')return healthFailed?route.fulfill({status:503}):route.fulfill({json:{status:'ok',service:'MrNobody Incident Platform',deployment:{role,config_status:configStatus,lab_http_enabled:true,master_url_configured:false,transport_enabled:false}}});
-   if(url.pathname==='/api/master/agents'){requests++;return failed?route.fulfill({status:503,json:{message:'Registry unavailable'}}):route.fulfill({json:malformed?{agents:null}:{agents,initialized:agents.length>0}});}
+   if(url.pathname==='/api/master/agents'){requests++;return failed?route.fulfill({status:503,json:{message:'Registry unavailable'}}):route.fulfill({json:malformed?{agents:null}:{agents,initialized:agents.length>0,control_capabilities:capabilities}});}
    return route.fulfill({json:shared});
   });
   await page.goto('https://mrnobody.test/');
@@ -27,6 +28,17 @@ const shared={status:'idle',active:false,execution:null,phases:[],scenarios:[],s
   await page.waitForFunction(()=>document.getElementById('masterAgentsRuntime').textContent.includes('agent-1'));
   assert.ok(await page.locator('#masterAgentsRuntime').textContent().then(t=>t.includes('Online')));
   assert.equal(await page.locator('#masterAgentsPanel').isVisible(),true);
+  assert.match(await page.locator('#masterControlReadiness').textContent(), /Remote phase start: Not implemented/);
+  assert.match(await page.locator('#masterControlReadiness').textContent(), /Remote scenario stop: Not implemented/);
+  assert.match(await page.locator('#masterControlReadiness').textContent(), /Multi-agent campaigns: Not implemented/);
+  capabilities=undefined;
+  await page.getByRole('button',{name:'Refresh agents',exact:true}).click();
+  await page.waitForFunction(()=>document.getElementById('masterControlReadiness')?.textContent.includes('Remote phase start: Unverified'));
+  assert.doesNotMatch(await page.locator('#masterControlReadiness').textContent(), /Not implemented/);
+  capabilities={remote_phase_start:true};
+  await page.getByRole('button',{name:'Refresh agents',exact:true}).click();
+  await page.waitForFunction(()=>document.getElementById('masterControlReadiness')?.textContent.includes('Remote phase start: Unverified'));
+  assert.equal(await page.locator('#masterControlReadiness button').count(),0);
   assert.match(await page.locator('#masterAgentsRuntime').textContent(), /Last heartbeat/);
   assert.match(await page.locator('#masterAgentsRuntime').textContent(), /Name/);
   assert.equal(await page.locator('#masterAgentsRuntime img').count(),0);
