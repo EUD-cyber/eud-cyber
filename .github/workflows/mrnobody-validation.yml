@@ -92,6 +92,7 @@ jobs:
           python tests/mrnobody/p11_windows.py -v
           python tests/mrnobody/p11_conflicts.py -v
           python tests/mrnobody/p11_campaign.py -v
+          python tests/mrnobody/campaign_live_lab.py -v
       - name: Check routing, live output, incident IDs and historical compatibility with isolated fixtures
         run: |
           python tests/mrnobody/backend.py
