@@ -380,7 +380,8 @@ def default_configuration():
     defaults = read_defaults()
 
     return {
-        "incident_ip": determine_incident_ip(),
+        "incident_ip": DEPLOYMENT_CONFIG.destination_suggestions()["ipv4"],
+        "receiver_suggestions": DEPLOYMENT_CONFIG.destination_suggestions(),
 
         "web_ports": defaults.get(
             "NORDIC_DEFAULT_WEB_PORTS",

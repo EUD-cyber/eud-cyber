@@ -44,6 +44,7 @@ jobs:
           python tests/mrnobody/update_agent.py -v
           python tests/mrnobody/update_nginx.py -v
           python tests/mrnobody/deployment_settings.py -v
+          python tests/mrnobody/destination_defaults.py -v
       - name: Validate bootstrap WinRM venv and nginx/systemd configuration in isolation
         run: |
           sudo apt-get update -qq
@@ -136,6 +137,7 @@ jobs:
         run: |
           mkdir -p "$MRN_UI_ARTIFACTS"
           NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/ui_browser.cjs
+          NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/destination_defaults.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 import shlex
+from ipaddress import IPv4Address
+from urllib.parse import urlsplit
 
 
 DEPLOYMENT_FILE = Path("/etc/mrnobody/deployment.conf")
@@ -22,6 +24,18 @@ class DeploymentConfig:
     master_url: str = ""
     config_status: str = "default"
     lab_http: bool = False
+
+    def destination_suggestions(self):
+        """Editable receiver hints only; never execution or target defaults."""
+        empty = {"host": "", "ipv4": "", "url": ""}
+        if self.role != "agent" or self.config_status != "loaded" or not self.master_url:
+            return empty
+        host = urlsplit(self.master_url).hostname or ""
+        try:
+            ipv4 = str(IPv4Address(host))
+        except ValueError:
+            ipv4 = ""
+        return {"host": host, "ipv4": ipv4, "url": self.master_url}
 
     def public_status(self):
         """Report configuration only; never imply a Master connection exists."""

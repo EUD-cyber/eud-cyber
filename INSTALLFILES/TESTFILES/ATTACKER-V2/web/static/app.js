@@ -189,6 +189,16 @@ function hideMessage() {
 // CONFIGURATION
 // ==========================================================
 
+// Mark edits before the asynchronous config request, including an intentional clear.
+const exfilDestination = document.getElementById("incidentIp");
+exfilDestination?.addEventListener("input", () => { exfilDestination.dataset.edited = "true"; });
+
+function suggestReceiverDestination(input, value) {
+    if (input && !input.value && input.dataset.edited !== "true") {
+        input.value = typeof value === "string" ? value : "";
+    }
+}
+
 async function loadConfiguration() {
 
     try {
@@ -253,12 +263,7 @@ async function loadConfiguration() {
         // Populate general defaults
         // --------------------------------------------------
 
-        if (incidentIp) {
-
-            incidentIp.value =
-                config.incident_ip ||
-                "192.168.1.254";
-        }
+        suggestReceiverDestination(incidentIp, config.receiver_suggestions?.ipv4);
 
 
         if (webPorts) {
