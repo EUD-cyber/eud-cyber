@@ -362,7 +362,9 @@ async function main() {
         await checkStandalonePorts(page, catalogue);
         await checkP06(page, catalogue.phases.find(p => p.id === '06'));
         await checkP09(page, catalogue.phases.find(p => p.id === '09'));
-        const nav=page.locator('.sidebar-nav .nav-item');
+        const nav=page.locator('.sidebar-nav .nav-item:visible');
+        assert.equal(await page.locator('#masterAgentsTab').isVisible(), false);
+        assert.equal(await page.locator('#masterReceiverTab').isVisible(), false);
         assert.deepEqual(await nav.allTextContents().then(a=>a.map(x=>x.trim().replace(/^[^A-Za-z]+/,''))),['Dashboard','Attack Techniques','Scenarios','Scheduler','Reports','MITRE ATT&CK','Settings']);
         assert.equal(await page.locator('#dashboardPhaseCount').textContent(),String(catalogue.count));
         await page.locator('[data-page="phases"]').click();
