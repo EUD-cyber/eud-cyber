@@ -595,8 +595,9 @@ const MrnUI = (() => {
         };
         for (const [key, label] of Object.entries(labels)) {
             const value = masterControlCapabilities?.[key];
-            node(control, 'p', label + ': ' + (value === false ? 'Not implemented' : 'Unverified'));
+            node(control, 'p', label + ': ' + (key === 'execution_job_polling' && value === true ? 'Fixed synthetic P11 only; opt-in worker required' : value === false ? 'Not implemented' : 'Unverified'));
         }
+        if (masterControlCapabilities?.fixed_p11_live_lab_job === true) node(control, 'p', 'Sprint 1: local Master CLI can queue, inspect and stop one synthetic P11 beacon job. No remote campaign or general phase execution. Guide: docs/master-remote-sprint1.md');
         node(control, 'p', 'Remote campaign submission is unavailable in this version. Existing local runs and synchronized reports remain available.');
         const timestamp = value => Number.isFinite(value) && value > 0
             && !Number.isNaN(new Date(value * 1000).getTime())

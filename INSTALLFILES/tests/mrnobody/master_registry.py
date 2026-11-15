@@ -225,7 +225,7 @@ class API(unittest.TestCase):
         result,status=self.call("heartbeat")
         self.assertEqual(status,200)
         self.assertTrue(result["accepted"])
-        self.assertEqual(len(self.routes),9)
+        self.assertEqual(len(self.routes),10)
         self.assertEqual(self.methods["/api/master/agents/p11-beacon"],["POST"])
         self.assertEqual(self.methods["/api/master/agents/register"],["POST"])
         self.assertEqual(self.methods["/api/master/agents/heartbeat"],["POST"])
@@ -244,7 +244,7 @@ class API(unittest.TestCase):
             self.assertEqual(result["control_capabilities"], {
                 "remote_phase_start": False, "remote_phase_stop": False,
                 "remote_scenario_start": False, "remote_scenario_stop": False,
-                "execution_job_polling": False, "multi_agent_campaigns": False,
+                "execution_job_polling": True, "fixed_p11_live_lab_job": True, "multi_agent_campaigns": False,
             })
             request.is_secure=False
             self.config.lab_http=True
