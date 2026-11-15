@@ -50,8 +50,12 @@ const shared={status:'idle',active:false,execution:null,phases:[],scenarios:[],s
   next=null;events=[{...event,id:3,bytes:256,phase:'P06',verified:true,sha256:'a'.repeat(64),received_size:256}];
   await page.clock.runFor(30000);
   await page.waitForFunction(()=>document.getElementById('masterReceiverRuntime').textContent.includes('256'));
-  assert.match(await root.textContent(),/Phase.*P06.*Verified SHA-256.*a{64}.*Received file bytes.*256/s);
+  assert.match(await root.textContent(),/Phase.*P06.*Verification.*a{64}.*Received file bytes.*256/s);
   assert.equal(await page.locator('#masterReceiverOlder').isDisabled(),true);
+  events=[{...event,id:4,phase:'P11',sequence:2,verified:true,verification:'synthetic_beacon_received'}];
+  await page.locator('#masterReceiverRefresh').click();
+  await page.waitForFunction(()=>document.getElementById('masterReceiverRuntime').textContent.includes('synthetic_beacon_received'));
+  assert.match(await root.textContent(),/Phase.*P11.*Verification.*synthetic_beacon_received.*Beacon sequence.*2/s);
   events=[];await page.locator('#masterReceiverRefresh').click();
   await page.waitForFunction(()=>document.getElementById('masterReceiverRuntime').textContent.includes('No receiver events'));
   failed=true;await page.locator('#masterReceiverRefresh').click();

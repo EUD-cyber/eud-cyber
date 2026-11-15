@@ -713,7 +713,7 @@ const MrnUI = (() => {
                     ? new Date(event.received_at * 1000).toISOString() : 'Unavailable';
                 for (const [label, value] of [['Agent', event.agent_id], ['Campaign', event.campaign_id],
                         ['event_type', event.event_type], ['Event timestamp (UTC)', event.timestamp],
-                        ['received_at (UTC)', received], ['Declared synthetic bytes', event.bytes], ['Status', event.status], ['Phase', event.phase || 'Metadata event'], ['Verified SHA-256', event.sha256 || 'Not verified'], ['Received file bytes', event.received_size ?? 'Not verified']]) {
+                        ['received_at (UTC)', received], ['Declared synthetic bytes', event.bytes], ['Status', event.status], ['Phase', event.phase || 'Metadata event'], ['Verification', event.verification || event.sha256 || 'Not verified'], ['Beacon sequence', event.sequence ?? '—'], ['Received file bytes', event.received_size ?? 'Not verified']]) {
                     node(fields, 'dt', label); node(fields, 'dd', String(value ?? 'Unavailable'));
                 }
             }
@@ -1789,7 +1789,23 @@ function renderPhaseDetail(phase) {
     }
 
 
-    if (phase.id === "11") mountP11Standalone(form);
+    if (phase.id === "11") {
+        mountP11Standalone(form);
+        const box = document.createElement('div');
+        box.innerHTML = `<label><input type="checkbox" id="phase-11-live-lab"> Live Lab: after successful Create, send fixed HTTP(S) beacons from Slave Agent to configured Master</label>
+          <p>Simulated/default leaves HTTP beacons off. Existing target persistence and DNS remain unchanged. Stop ends HTTP traffic; use the same target/method/artifact with Cleanup for persistence.</p>`;
+        for (const [key, value, min, max] of [['interval',30,10,300],['duration',180,60,1800],['count',6,1,60]]) {
+            const label = document.createElement('label');
+            label.textContent = `Beacon ${key}${key === 'count' ? ' (maximum attempts)' : ' (seconds)'} `;
+            const input = document.createElement('input');
+            Object.assign(input, {type:'number', id:`phase-11-beacon-${key}`, value:String(value), min:String(min), max:String(max), disabled:true});
+            label.appendChild(input); box.appendChild(label);
+        }
+        box.querySelector('input[type=checkbox]').addEventListener('change', e => {
+            box.querySelectorAll('input[type=number]').forEach(input => input.disabled = !e.target.checked);
+        });
+        phaseDetail.appendChild(box);
+    }
     if (usesStandalonePort(phase)) mountStandalonePort(phase, form);
 
     const controls =
@@ -1970,6 +1986,16 @@ async function runStandalonePhase(
     }
 
     if (phase.id === "11") {
+        data.p11_live_lab = document.getElementById('phase-11-live-lab')?.checked === true;
+        if (data.p11_live_lab) {
+            if (data.action !== 'create') { feedback('Live Lab requires Create; Stop before Cleanup.', 'error'); return; }
+            for (const key of ['interval','duration','count']) {
+                const input = document.getElementById(`phase-11-beacon-${key}`);
+                if (!input.checkValidity() || !input.value) { feedback('Enter bounded beacon settings.', 'error'); return; }
+                data[`beacon_${key}`] = Number(input.value);
+            }
+            if (data.beacon_interval > data.beacon_duration) { feedback('Beacon interval must fit duration.', 'error'); return; }
+        }
         const error = prepareP11Standalone(data);
         if (error) { feedback(error, "error"); return; }
     }

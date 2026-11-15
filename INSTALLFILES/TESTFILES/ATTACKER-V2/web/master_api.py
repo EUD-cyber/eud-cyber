@@ -37,7 +37,7 @@ def _object(pairs):
 
 
 def install_master_api(app,deployment,registry_path=DATABASE):
-    def handle(register, reports=False, transfer=False, receiver=False, p06=False):
+    def handle(register, reports=False, transfer=False, receiver=False, p06=False, p11=False):
         config=deployment()
         if config.role!="master" or config.config_status!="loaded":
             return jsonify({"message":"Not found."}),404
@@ -45,7 +45,7 @@ def install_master_api(app,deployment,registry_path=DATABASE):
                                       and request.headers.get("X-Forwarded-Proto")=="https")
         if not secure and getattr(config,"lab_http",False) is not True:
             return jsonify({"message":"HTTPS required; lab HTTP is not enabled."}),403
-        if (transfer or receiver or p06) and not lab_peer():
+        if (transfer or receiver or p06 or p11) and not lab_peer():
             return jsonify({"message":"Lab access required."}),403
         authorization=request.headers.get("Authorization","")
         if not authorization.startswith("Bearer ") or len(authorization)!=50:
@@ -70,6 +70,8 @@ def install_master_api(app,deployment,registry_path=DATABASE):
                 fields.update(("report_id","content"))
             if p06:
                 fields.update(("campaign_id","phase","synthetic","size","sha256","content"))
+            if p11:
+                fields.update(('campaign_id','phase','synthetic','timestamp','sequence','marker'))
             if receiver:
                 fields.update(("campaign_id","event_type","timestamp","bytes","synthetic"))
             if not isinstance(data,dict) or set(data)!=fields or type(data["protocol_version"]) is not int or data["protocol_version"]!=1:
@@ -78,6 +80,7 @@ def install_master_api(app,deployment,registry_path=DATABASE):
             result=(store.register(data["agent_id"],token,data["name"],
                                    enroll=getattr(config,"lab_http",False) is True and lab_peer()) if register
                     else store.transfer_report(data["agent_id"],token,data["report_id"],data["content"]) if transfer
+                    else store.receive_p11(data,token) if p11
                     else store.receive_p06(data,token) if p06
                     else store.receive_event(data,token) if receiver
                     else store.sync_reports(data["agent_id"],token,data["reports"]) if reports
@@ -95,6 +98,10 @@ def install_master_api(app,deployment,registry_path=DATABASE):
     @app.route("/api/master/agents/register",methods=["POST"])
     def master_register():
         return handle(True)
+
+    @app.route("/api/master/agents/p11-beacon",methods=["POST"])
+    def master_receive_p11():
+        return handle(False,p11=True)
 
     @app.route("/api/master/agents/p06-file",methods=["POST"])
     def master_receive_p06():
