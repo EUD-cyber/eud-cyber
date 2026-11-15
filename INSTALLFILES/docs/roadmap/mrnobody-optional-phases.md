@@ -69,8 +69,11 @@ startup-konfiguration i `/etc/mrnobody/deployment.conf`.
 
 - P06: periodiske syntetiske overførsler til Master Receiver med korrekt
   protokol, autentifikation og evidens. Implementeres ikke i destinationssprintet.
-- P11: separat kontrolleret C2/beacon-integration, når et reelt destinationsfelt
-  og en kompatibel modtager findes. Brug aldrig Master som DNS-resolver implicit.
+- P11 Live Lab Sprint 1: opt-in HTTP(S)-beacons fra Slave-agenten til konfigureret
+  Master er implementeret i standalone P11 med fast ACK, grænser og Receiver-evidens.
+  Se [guide og afgrænsning](../mrnobody-p11-live-lab.md). DNS/persistence bevares.
+  Full Campaign Live Lab og fjernstart/stop fra Master er fortsat kommende arbejde.
+  Brug aldrig Master som DNS-resolver implicit.
 
 Krav der fortsat gælder for kommende destinationsfelter:
 
