@@ -1792,17 +1792,26 @@ function renderPhaseDetail(phase) {
     if (phase.id === "11") {
         mountP11Standalone(form);
         const box = document.createElement('div');
-        box.innerHTML = `<label><input type="checkbox" id="phase-11-live-lab"> Live Lab: after successful Create, send fixed HTTP(S) beacons from Slave Agent to configured Master</label>
-          <p>Simulated/default leaves HTTP beacons off. Existing target persistence and DNS remain unchanged. Stop ends HTTP traffic; use the same target/method/artifact with Cleanup for persistence.</p>`;
+        const liveLabel = document.createElement('label');
+        const live = document.createElement('input');
+        live.type = 'checkbox'; live.id = 'phase-11-live-lab';
+        const liveText = document.createElement('span');
+        liveText.textContent = ' Live Lab: after successful Create, send fixed HTTP(S) beacons from Slave Agent to configured Master';
+        liveLabel.appendChild(live); liveLabel.appendChild(liveText); box.appendChild(liveLabel);
+        const help = document.createElement('p');
+        help.textContent = 'Simulated/default leaves HTTP beacons off. Existing target persistence and DNS remain unchanged. Stop ends HTTP traffic; use the same target/method/artifact with Cleanup for persistence.';
+        box.appendChild(help);
+        const beaconInputs = [];
         for (const [key, value, min, max] of [['interval',30,10,300],['duration',180,60,1800],['count',6,1,60]]) {
             const label = document.createElement('label');
             label.textContent = `Beacon ${key}${key === 'count' ? ' (maximum attempts)' : ' (seconds)'} `;
             const input = document.createElement('input');
             Object.assign(input, {type:'number', id:`phase-11-beacon-${key}`, value:String(value), min:String(min), max:String(max), disabled:true});
             label.appendChild(input); box.appendChild(label);
+            beaconInputs.push(input);
         }
-        box.querySelector('input[type=checkbox]').addEventListener('change', e => {
-            box.querySelectorAll('input[type=number]').forEach(input => input.disabled = !e.target.checked);
+        live.addEventListener('change', () => {
+            beaconInputs.forEach(input => input.disabled = !live.checked);
         });
         phaseDetail.appendChild(box);
     }
