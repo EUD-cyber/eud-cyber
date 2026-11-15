@@ -36,7 +36,7 @@ def _object(pairs):
 
 
 def install_master_api(app,deployment,registry_path=DATABASE):
-    def handle(register, reports=False, transfer=False):
+    def handle(register, reports=False, transfer=False, receiver=False):
         config=deployment()
         if config.role!="master" or config.config_status!="loaded":
             return jsonify({"message":"Not found."}),404
@@ -44,7 +44,7 @@ def install_master_api(app,deployment,registry_path=DATABASE):
                                       and request.headers.get("X-Forwarded-Proto")=="https")
         if not secure and getattr(config,"lab_http",False) is not True:
             return jsonify({"message":"HTTPS required; lab HTTP is not enabled."}),403
-        if transfer and not lab_peer():
+        if (transfer or receiver) and not lab_peer():
             return jsonify({"message":"Lab access required."}),403
         authorization=request.headers.get("Authorization","")
         if not authorization.startswith("Bearer ") or len(authorization)!=50:
@@ -67,12 +67,15 @@ def install_master_api(app,deployment,registry_path=DATABASE):
                 fields.add("reports")
             if transfer:
                 fields.update(("report_id","content"))
+            if receiver:
+                fields.update(("campaign_id","event_type","timestamp","bytes","synthetic"))
             if not isinstance(data,dict) or set(data)!=fields or type(data["protocol_version"]) is not int or data["protocol_version"]!=1:
                 raise ValueError("Invalid protocol payload.")
             store=Registry(registry_path)
             result=(store.register(data["agent_id"],token,data["name"],
                                    enroll=getattr(config,"lab_http",False) is True and lab_peer()) if register
                     else store.transfer_report(data["agent_id"],token,data["report_id"],data["content"]) if transfer
+                    else store.receive_event(data,token) if receiver
                     else store.sync_reports(data["agent_id"],token,data["reports"]) if reports
                     else store.heartbeat(data["agent_id"],token))
             return jsonify(result),200
@@ -88,6 +91,10 @@ def install_master_api(app,deployment,registry_path=DATABASE):
     @app.route("/api/master/agents/register",methods=["POST"])
     def master_register():
         return handle(True)
+
+    @app.route("/api/master/receiver/events",methods=["POST"])
+    def master_receive_event():
+        return handle(False,receiver=True)
 
     @app.route("/api/master/agents/heartbeat",methods=["POST"])
     def master_heartbeat():

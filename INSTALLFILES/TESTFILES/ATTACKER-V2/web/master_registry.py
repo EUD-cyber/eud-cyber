@@ -1,5 +1,6 @@
 """Persistent agent identities, heartbeat and bounded report snapshots; no execution."""
 import argparse
+from datetime import datetime, timezone
 from contextlib import contextmanager
 import hashlib
 import hmac
@@ -188,6 +189,51 @@ class Registry:
                 if versions.get(cached["report_id"])!=cached["version"]:
                     db.execute("DELETE FROM report_content WHERE agent_id=? AND report_id=?",(agent_id,cached["report_id"]))
         return dict(agent_id=agent_id,accepted=True,protocol_version=1,server_time=now)
+
+    def receive_event(self,data,token):
+        """Append synthetic HTTP metadata only; never dispatch or update heartbeat."""
+        fields={"protocol_version","agent_id","campaign_id","event_type","timestamp","bytes","synthetic"}
+        if (not isinstance(data,dict) or set(data)!=fields
+                or type(data["protocol_version"]) is not int or data["protocol_version"]!=1
+                or data["synthetic"] is not True):
+            raise ValueError("Invalid synthetic event.")
+        validate_id(data["agent_id"])
+        campaign=data["campaign_id"]
+        if not isinstance(campaign,str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,100}",campaign):
+            raise ValueError("Invalid campaign ID.")
+        if data["event_type"] not in ("http_test","beacon","exfil"):
+            raise ValueError("Invalid event type.")
+        if type(data["bytes"]) is not int or not 0<=data["bytes"]<=2**31-1:
+            raise ValueError("Invalid synthetic byte count.")
+        stamp=data["timestamp"]
+        if not isinstance(stamp,str) or not re.fullmatch(
+                r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})",stamp):
+            raise ValueError("Invalid event timestamp.")
+        # Strict RFC3339 subset, normalized to UTC; keep receipt time separate.
+        if stamp[-6:-5] in ("+","-") and (int(stamp[-5:-3])>23 or int(stamp[-2:])>59):
+            raise ValueError("Invalid timestamp offset.")
+        try:
+            stamp=datetime.fromisoformat(stamp.replace("Z","+00:00")).astimezone(timezone.utc).isoformat()
+        except OverflowError as exc:
+            raise ValueError("Timestamp outside UTC range.") from exc
+        with self._db(write=True) as db:
+            row=self._authenticate(db,data["agent_id"],token)
+            if row["registered_at"] is None:
+                raise Conflict("Registration required.")
+            # Additive, lazy migration: existing identities and reports are untouched.
+            db.execute("""CREATE TABLE IF NOT EXISTS receiver_events (
+                id INTEGER PRIMARY KEY, agent_id TEXT NOT NULL, campaign_id TEXT NOT NULL,
+                event_type TEXT NOT NULL, timestamp TEXT NOT NULL, bytes INTEGER NOT NULL,
+                received_at INTEGER NOT NULL, status TEXT NOT NULL CHECK(status='received')
+            )""")
+            now=int(self.clock())
+            cursor=db.execute("""INSERT INTO receiver_events
+                (agent_id,campaign_id,event_type,timestamp,bytes,received_at,status)
+                VALUES(?,?,?,?,?,?,'received')""",
+                (data["agent_id"],campaign,data["event_type"],stamp,data["bytes"],now))
+            event_id=cursor.lastrowid
+        # Success is returned only after the transaction committed.
+        return dict(protocol_version=1,accepted=True,event_id=event_id,status="received",received_at=now)
 
     @staticmethod
     def _report_table(db):

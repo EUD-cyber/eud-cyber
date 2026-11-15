@@ -225,7 +225,7 @@ class API(unittest.TestCase):
         result,status=self.call("heartbeat")
         self.assertEqual(status,200)
         self.assertTrue(result["accepted"])
-        self.assertEqual(len(self.routes),6)
+        self.assertEqual(len(self.routes),7)
         self.assertEqual(self.methods["/api/master/agents/register"],["POST"])
         self.assertEqual(self.methods["/api/master/agents/heartbeat"],["POST"])
         self.assertEqual(self.methods["/api/master/agents"],["GET"])
