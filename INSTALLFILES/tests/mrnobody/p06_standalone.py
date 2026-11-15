@@ -234,6 +234,19 @@ class Session:
                             self.assertEqual(report['summary']['exfiltration'], 0)
                             if mode.endswith('mismatch'):
                                 self.assertNotEqual(evidence['attempts'][0]['received_sha256'], evidence['attempts'][0]['sha256'])
+            # A successful local transfer must still fail the job when explicit
+            # Live Lab cannot obtain its authenticated Master receipt.
+            with socket.socket() as sock:
+                sock.bind(('127.0.0.1', 0))
+                port = sock.getsockname()[1]
+            (root/'state/staged-data.json').unlink(missing_ok=True)
+            failed_live = subprocess.run(command[:-4], env=dict(env, FIXTURE_MODE='synthetic_success',
+                NORDIC_EXFIL_PORT=str(port), MRNOBODY_P06_LIVE_LAB='1'),
+                text=True,capture_output=True,timeout=25)
+            self.assertNotEqual(failed_live.returncode,0)
+            self.assertIn('P06 Live Lab receipt unavailable',failed_live.stderr)
+            self.assertIn('reason=live_lab_receipt_unavailable',
+                          (root/'logs/incident-ground-truth.log').read_text())
             for mode in ('campaign_success', 'campaign_wrong_incident', 'campaign_missing', 'campaign_no_digest'):
                 with self.subTest(mode=mode):
                     staging(root/'state/staged-data.json')
