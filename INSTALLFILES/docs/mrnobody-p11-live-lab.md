@@ -131,7 +131,8 @@ Tests use isolated fixtures; physical two-VM HTTPS, firewall and sensor verifica
 still require the classroom lab. Windows PowerShell/service runtime verification
 requires Windows CI or an authorized Windows lab host.
 
-Future work: explicit Full Campaign Live Lab configuration and Master-initiated
-start/stop of individual phases and scenarios via outbound agent polling. This
-sprint adds neither remote tasking nor a control channel; existing campaign behavior
-is retained. Live Lab is currently fixed-target standalone P11 only.
+Campaign integration now has a runtime-only API opt-in for Full Incident and
+valid custom scenarios. See [Campaign Live Lab](../TESTFILES/ATTACKER-V2/docs/campaign-live-lab.md)
+for verified scope, update instructions, Stop/cleanup and lab checks. The campaign
+UI and schedules retain their existing defaults. Master-initiated start/stop on
+one or multiple Slaves and P06 campaign Live Lab remain separate roadmap work.

@@ -79,6 +79,12 @@ def run(env, invoke):
         action = env.get('MRNOBODY_ACTION') or 'create'
         if action not in {'create', 'cleanup'}:
             raise ValueError('Campaign supports create or cleanup')
+        if env.get('MRNOBODY_P11_LIVE_CONFIG'):
+            from p11_live_lab import settings
+            from agent_client import load_agent_config
+            if action != 'create' or settings(json.loads(env['MRNOBODY_P11_LIVE_CONFIG'])) is None:
+                raise ValueError('Explicit Create Live Lab required')
+            load_agent_config()
         candidates = targets(env)
         for target in candidates:
             for method in LINUX if target['platform'] == 'linux' else WINDOWS:
@@ -116,6 +122,18 @@ def run(env, invoke):
     except Exception:
         outcomes.append('failed')
         emit(base, env, '11', 'PERSISTENCE_ACTION_FAILED', warning='invalid_or_missing_p03_campaign_configuration')
+    if env.get('MRNOBODY_P11_LIVE_CONFIG') and outcomes and set(outcomes) == {'success'}:
+        # One foreground loop per Slave/campaign, after all target methods succeed.
+        # The existing process group owns both the loop and its disposable HTTP child.
+        from p11_live_lab import run as live_run
+        try:
+            live_code = live_run(env)
+        except Exception:
+            live_code = 1
+        if live_code:
+            emit(base, env, '11', 'PHASE_FAILED', phase='11',
+                 reason='live_lab_receipt_unavailable', cleanup_required='true')
+            return 1
     if not outcomes or set(outcomes) == {'skipped'}:
         event, code = 'PHASE_SKIPPED', 78
     elif set(outcomes) == {'success'}:

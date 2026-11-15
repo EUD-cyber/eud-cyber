@@ -1356,6 +1356,9 @@ def api_start(scenario_id="full-incident"):
 
         try:
             execution_plan = planning.definition(scenario_id, data)
+            from p11_live_lab import campaign_selection
+            live_config = campaign_selection(data, execution_plan,
+                scenario['metadata'].get('SCENARIO_PHASES', '').split(','))
         except (ValueError, TypeError, KeyError) as exc:
             return jsonify({"status": "error", "message": str(exc)}), 400
         defaults = read_defaults()
@@ -1730,6 +1733,11 @@ def api_start(scenario_id="full-incident"):
         # ====================================================
 
         env = os.environ.copy()
+        # Each campaign requires a fresh request selection, never service env inheritance.
+        env.pop('MRNOBODY_P11_LIVE_CONFIG', None)
+        env.pop('MRNOBODY_P06_LIVE_LAB', None)
+        if live_config is not None:
+            env['MRNOBODY_P11_LIVE_CONFIG'] = json.dumps(live_config)
         powershell_enabled = str(data.get('powershell_enabled', '0')).lower() in {'1', 'true', 'yes', 'on'}
         env['MRN_POWERSHELL_ENABLED'] = '1' if powershell_enabled else '0'
         if (execution_plan and any(p['id'] == '10' for p in execution_plan['phases'])) or (execution_plan is None and powershell_enabled and '10' in scenario['metadata'].get('SCENARIO_PHASES', '').split(',')):

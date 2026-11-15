@@ -216,6 +216,8 @@ def phase_environment(pid, environ=None, sleep=time.sleep, clock=time.time):
         raise ValueError(unavailable_message(retired))
     staging_origin = env.get('MRNOBODY_STAGING_INCIDENT')
     phase = next(p for p in config['phases'] if p['id'] == pid)
+    if pid != '11':
+        env.pop('MRNOBODY_P11_LIVE_CONFIG', None)
     timing = phase.get('timing', {})
     offset = timing.get('start_offset', 0)
     sleep(max(0, float(env['MRN_STARTED']) + offset - clock()))
