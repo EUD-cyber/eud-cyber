@@ -335,6 +335,10 @@ write_files:
           "$INSTALL_DIR/docs/p11-full-campaign.md"
 
       download_file \
+          "docs/campaign-live-lab.md" \
+          "$INSTALL_DIR/docs/campaign-live-lab.md"
+
+      download_file \
           "web/scenario_model.py" \
           "$INSTALL_DIR/web/scenario_model.py"
 
