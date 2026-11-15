@@ -190,8 +190,19 @@ class Registry:
                     db.execute("DELETE FROM report_content WHERE agent_id=? AND report_id=?",(agent_id,cached["report_id"]))
         return dict(agent_id=agent_id,accepted=True,protocol_version=1,server_time=now)
 
-    def receive_event(self,data,token):
-        """Append synthetic HTTP metadata only; never dispatch or update heartbeat."""
+    def receive_p06(self,data,token):
+        from p06_live_lab import validate_payload
+        raw=validate_payload(data)
+        event=dict(protocol_version=1,agent_id=data['agent_id'],campaign_id=data['campaign_id'],
+                   event_type='exfil',timestamp=datetime.now(timezone.utc).isoformat(),
+                   bytes=len(raw),synthetic=True)
+        result=self.receive_event(event,token,p06=raw)
+        result.update(agent_id=data['agent_id'],campaign_id=data['campaign_id'],phase='P06',
+                      size=len(raw),sha256=hashlib.sha256(raw).hexdigest(),verified=True)
+        return result
+
+    def receive_event(self,data,token, *, p06=None):
+        """Append synthetic evidence; optionally commit a validated P06 fixture atomically."""
         fields={"protocol_version","agent_id","campaign_id","event_type","timestamp","bytes","synthetic"}
         if (not isinstance(data,dict) or set(data)!=fields
                 or type(data["protocol_version"]) is not int or data["protocol_version"]!=1
@@ -232,6 +243,11 @@ class Registry:
                 VALUES(?,?,?,?,?,?,'received')""",
                 (data["agent_id"],campaign,data["event_type"],stamp,data["bytes"],now))
             event_id=cursor.lastrowid
+            if p06 is not None:
+                db.execute("""CREATE TABLE IF NOT EXISTS p06_receipts (
+                    event_id INTEGER PRIMARY KEY, phase TEXT NOT NULL, sha256 TEXT NOT NULL, content BLOB NOT NULL)""")
+                db.execute("INSERT INTO p06_receipts VALUES(?,?,?,?)",
+                           (event_id,'P06',hashlib.sha256(p06).hexdigest(),p06))
         # Success is returned only after the transaction committed.
         return dict(protocol_version=1,accepted=True,event_id=event_id,status="received",received_at=now)
 
@@ -263,7 +279,13 @@ class Registry:
             where=" WHERE "+" AND ".join(clauses) if clauses else ""
             rows=db.execute("SELECT id,agent_id,campaign_id,event_type,timestamp,bytes,received_at,status "
                             "FROM receiver_events"+where+" ORDER BY id DESC LIMIT ?",values+[limit+1]).fetchall()
-            return dict(events=[dict(row) for row in rows[:limit]],
+            events=[dict(row) for row in rows[:limit]]
+            if db.execute("SELECT 1 FROM sqlite_master WHERE name='p06_receipts'").fetchone():
+                for event in events:
+                    receipt=db.execute("SELECT phase,sha256,length(content) AS received_size FROM p06_receipts WHERE event_id=?",(event['id'],)).fetchone()
+                    if receipt:
+                        event.update(dict(receipt),verified=True)
+            return dict(events=events,
                         next_before=rows[limit-1]["id"] if len(rows)>limit else None)
         finally:
             db.close()

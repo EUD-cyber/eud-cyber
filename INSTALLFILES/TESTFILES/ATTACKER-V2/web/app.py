@@ -730,11 +730,14 @@ def api_run_phase(phase_id):
     phase_env = os.environ.copy()
     if phase_id == '06':
         try:
+            from p06_live_lab import validate_selection
+            live_lab = validate_selection(data)
             from exfil_validation import validate
             validate(data, Path(os.environ.get('NORDIC_STAGING_STATE', STATE_DIR / 'staged-data.json')))
-        except ValueError as exc:
+        except (ValueError, OSError) as exc:
             app.logger.warning('P06 submission rejected: %s', exc)
             return jsonify({'status': 'error', 'message': str(exc)}), 400
+        phase_env['MRNOBODY_P06_LIVE_LAB'] = '1' if live_lab else '0'
         phase_env['MRNOBODY_STAGING_INCIDENT'] = data.get('staging_incident', '')
     phase_env["NORDIC_INCIDENT_ID"] = "MRN-" + time.strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:12]
     phase_env['MRNOBODY_PASSWORD'] = str(data.get('password', ''))
@@ -751,7 +754,7 @@ def api_run_phase(phase_id):
     if "profile" in data:
         try:
             from scenario_model import keys
-            keys(data, set(allowed_phase_fields(phase_id)) | {"profile", "timing", "target_mode", "password", "dry_run", "auto", "staging_incident", "powershell", "powershell_windows", "bash"}, "phase execution")
+            keys(data, set(allowed_phase_fields(phase_id)) | {"profile", "timing", "target_mode", "password", "dry_run", "auto", "staging_incident", "live_lab", "powershell", "powershell_windows", "bash"}, "phase execution")
             spec = {"type": "phase", "id": phase_id, "profile": data["profile"],
                     "parameters": {k: v for k, v in data.items() if k in allowed_phase_fields(phase_id)},
                     "timing": data.get("timing", {}), "target_mode": data.get("target_mode", "fixed")}

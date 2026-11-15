@@ -245,8 +245,8 @@ class AgentTransport:
                 raise FatalAgentError("Master requested a report outside the finalized inventory.")
             self.post("report-transfer",snapshot=(ident,read_report_snapshot(ident)))
 
-    def post(self,kind, reports=None, *, snapshot=None):
-        if kind not in {"register","heartbeat","reports","report-transfer"}:
+    def post(self,kind, reports=None, *, snapshot=None, p06=None):
+        if kind not in {"register","heartbeat","reports","report-transfer","p06-file"}:
             raise FatalAgentError("Unsupported agent operation.")
         data=dict(agent_id=self.config.agent_id,protocol_version=1)
         if kind=="register":
@@ -258,6 +258,10 @@ class AgentTransport:
             if ident is not None:
                 validate_snapshot(ident,content)
             data.update(report_id=ident,content=content)
+        if kind=="p06-file":
+            from p06_live_lab import validate_payload
+            data.update(p06 or {})
+            validate_payload(data)
         url=self.config.master_url.rstrip("/")+"/api/master/agents/"+kind
         request=urllib.request.Request(url,data=json.dumps(data).encode("utf-8"),method="POST",
                                       headers={"Content-Type":"application/json","Authorization":"Bearer "+self.config.token})
@@ -287,6 +291,18 @@ class AgentTransport:
             result=json.loads(body.decode("utf-8"))
         except (ValueError,UnicodeError,RecursionError):
             raise FatalAgentError("Invalid Master response.") from None
+        if kind=="p06-file":
+            expected={'protocol_version','accepted','event_id','status','received_at',
+                      'agent_id','campaign_id','phase','size','sha256','verified'}
+            if (not isinstance(result,dict) or set(result)!=expected
+                    or result['accepted'] is not True or result['verified'] is not True
+                    or type(result['protocol_version']) is not int or result['protocol_version']!=1
+                    or type(result['event_id']) is not int or result['event_id']<=0
+                    or type(result['received_at']) is not int or result['received_at']<0
+                    or result['status']!='received'
+                    or any(result[key]!=data[key] for key in ('agent_id','campaign_id','phase','size','sha256'))):
+                raise FatalAgentError('P06 Master receipt mismatch.')
+            return result
         expected={"agent_id","protocol_version","server_time"}
         expected |= {"registered","heartbeat_interval"} if kind=="register" else {"accepted"}
         if kind=="report-transfer":

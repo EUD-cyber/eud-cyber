@@ -713,7 +713,7 @@ const MrnUI = (() => {
                     ? new Date(event.received_at * 1000).toISOString() : 'Unavailable';
                 for (const [label, value] of [['Agent', event.agent_id], ['Campaign', event.campaign_id],
                         ['event_type', event.event_type], ['Event timestamp (UTC)', event.timestamp],
-                        ['received_at (UTC)', received], ['Declared synthetic bytes', event.bytes], ['Status', event.status]]) {
+                        ['received_at (UTC)', received], ['Declared synthetic bytes', event.bytes], ['Status', event.status], ['Phase', event.phase || 'Metadata event'], ['Verified SHA-256', event.sha256 || 'Not verified'], ['Received file bytes', event.received_size ?? 'Not verified']]) {
                     node(fields, 'dt', label); node(fields, 'dd', String(value ?? 'Unavailable'));
                 }
             }
@@ -1754,6 +1754,13 @@ function renderPhaseDetail(phase) {
         box.hidden = !p09Feedback.message; phaseDetail.appendChild(box);
     }
     if (phase.id === "06") {
+        const liveLabel = document.createElement('label');
+        const live = document.createElement('input');
+        live.type = 'checkbox'; live.id = 'phase-06-live-lab';
+        const liveText = document.createElement('span');
+        liveText.textContent = ' Live Lab: send the generated test file once from Slave to configured Master (registered Agent required)';
+        liveLabel.appendChild(live); liveLabel.appendChild(liveText);
+        phaseDetail.appendChild(liveLabel);
         const help = document.createElement("p");
         help.textContent = "Leave file and staging incident empty to create one corporate-secret-data.txt containing explicitly simulated company data on the target. P06 verifies received size and SHA256. To reuse P05 data, enter both its incident ID and exact registered synthetic file path. Existing user files and directories are never collected.";
         phaseDetail.appendChild(help);
@@ -1974,6 +1981,10 @@ async function runStandalonePhase(
 
 
     if (phase.id === "06") {
+        data.live_lab = document.getElementById('phase-06-live-lab')?.checked === true;
+        if (data.live_lab && (data.file || data.staging_incident)) {
+            feedback('Live Lab requires the generated P06 test file; leave file and staging incident empty.', 'error'); return;
+        }
         const required = ["target", "protocol", "username", "password"];
         const missing = required.filter(key => !data[key] || !data[key].trim());
         if (missing.length) {

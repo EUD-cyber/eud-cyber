@@ -47,9 +47,10 @@ const shared={status:'idle',active:false,execution:null,phases:[],scenarios:[],s
   await page.waitForFunction(()=>document.getElementById('masterReceiverOlder').disabled===false);
   assert.equal(requests.at(-1).searchParams.get('agent_id'),'agent-1');
   assert.equal(requests.at(-1).searchParams.get('campaign_id'),'MRN-test');
-  next=null;events=[{...event,id:3,bytes:256}];
+  next=null;events=[{...event,id:3,bytes:256,phase:'P06',verified:true,sha256:'a'.repeat(64),received_size:256}];
   await page.clock.runFor(30000);
   await page.waitForFunction(()=>document.getElementById('masterReceiverRuntime').textContent.includes('256'));
+  assert.match(await root.textContent(),/Phase.*P06.*Verified SHA-256.*a{64}.*Received file bytes.*256/s);
   assert.equal(await page.locator('#masterReceiverOlder').isDisabled(),true);
   events=[];await page.locator('#masterReceiverRefresh').click();
   await page.waitForFunction(()=>document.getElementById('masterReceiverRuntime').textContent.includes('No receiver events'));

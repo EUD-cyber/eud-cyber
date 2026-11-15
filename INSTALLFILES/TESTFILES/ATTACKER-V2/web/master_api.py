@@ -37,7 +37,7 @@ def _object(pairs):
 
 
 def install_master_api(app,deployment,registry_path=DATABASE):
-    def handle(register, reports=False, transfer=False, receiver=False):
+    def handle(register, reports=False, transfer=False, receiver=False, p06=False):
         config=deployment()
         if config.role!="master" or config.config_status!="loaded":
             return jsonify({"message":"Not found."}),404
@@ -45,7 +45,7 @@ def install_master_api(app,deployment,registry_path=DATABASE):
                                       and request.headers.get("X-Forwarded-Proto")=="https")
         if not secure and getattr(config,"lab_http",False) is not True:
             return jsonify({"message":"HTTPS required; lab HTTP is not enabled."}),403
-        if (transfer or receiver) and not lab_peer():
+        if (transfer or receiver or p06) and not lab_peer():
             return jsonify({"message":"Lab access required."}),403
         authorization=request.headers.get("Authorization","")
         if not authorization.startswith("Bearer ") or len(authorization)!=50:
@@ -55,7 +55,7 @@ def install_master_api(app,deployment,registry_path=DATABASE):
             return jsonify({"message":"Unauthorized."}),401
         if not request.is_json:
             return jsonify({"message":"JSON required."}),415
-        limit=MAX_REPORT_BYTES+4096 if transfer else 32768 if reports else MAX_BODY
+        limit=8192 if p06 else MAX_REPORT_BYTES+4096 if transfer else 32768 if reports else MAX_BODY
         if request.content_length is not None and request.content_length>limit:
             return jsonify({"message":"Request too large."}),413
         body=request.stream.read(limit+1)
@@ -68,6 +68,8 @@ def install_master_api(app,deployment,registry_path=DATABASE):
                 fields.add("reports")
             if transfer:
                 fields.update(("report_id","content"))
+            if p06:
+                fields.update(("campaign_id","phase","synthetic","size","sha256","content"))
             if receiver:
                 fields.update(("campaign_id","event_type","timestamp","bytes","synthetic"))
             if not isinstance(data,dict) or set(data)!=fields or type(data["protocol_version"]) is not int or data["protocol_version"]!=1:
@@ -76,6 +78,7 @@ def install_master_api(app,deployment,registry_path=DATABASE):
             result=(store.register(data["agent_id"],token,data["name"],
                                    enroll=getattr(config,"lab_http",False) is True and lab_peer()) if register
                     else store.transfer_report(data["agent_id"],token,data["report_id"],data["content"]) if transfer
+                    else store.receive_p06(data,token) if p06
                     else store.receive_event(data,token) if receiver
                     else store.sync_reports(data["agent_id"],token,data["reports"]) if reports
                     else store.heartbeat(data["agent_id"],token))
@@ -92,6 +95,10 @@ def install_master_api(app,deployment,registry_path=DATABASE):
     @app.route("/api/master/agents/register",methods=["POST"])
     def master_register():
         return handle(True)
+
+    @app.route("/api/master/agents/p06-file",methods=["POST"])
+    def master_receive_p06():
+        return handle(False,p06=True)
 
     @app.route("/api/master/receiver/events",methods=["POST"])
     def master_receive_event():

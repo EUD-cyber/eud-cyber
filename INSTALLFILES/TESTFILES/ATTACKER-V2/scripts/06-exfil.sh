@@ -81,6 +81,12 @@ if [[ "$RUN_MODE" == campaign ]]; then
     unset MRNOBODY_STAGING_INCIDENT MRNOBODY_REQUIRE_STAGING
 fi
 
+if [[ "${MRNOBODY_P06_LIVE_LAB:-0}" == 1 ]] &&
+   { [[ "$RUN_MODE" != standalone ]] || [[ -n "${MRNOBODY_FILE:-}" ]] || [[ -n "${MRNOBODY_STAGING_INCIDENT:-}" ]]; }; then
+    echo '[ERROR] P06 Live Lab requires standalone generated test data'
+    exit 1
+fi
+
 MANUAL_TARGET="${MRNOBODY_TARGET:-}"
 MANUAL_PORT="${MRNOBODY_PORT:-}"
 MANUAL_PROTOCOL="${MRNOBODY_PROTOCOL:-}"
@@ -1601,6 +1607,14 @@ echo
 if (( SUCCESS_COUNT == 0 || FAILED_COUNT > 0 || SKIPPED_COUNT > 0 )); then
     ground_truth "PHASE_FAILED transfers=$SUCCESS_COUNT failed=$FAILED_COUNT skipped=$SKIPPED_COUNT"
     exit 1
+fi
+
+if [[ "${MRNOBODY_P06_LIVE_LAB:-0}" == 1 ]]; then
+    NORDIC_INCIDENT_ID="$INCIDENT_ID" python3 "$BASE_DIR/web/p06_live_lab.py" "$EXFIL_STATE" "$NORDIC_UPLOAD_DIR" || {
+        ground_truth "PHASE_FAILED reason=live_lab_receipt_unavailable"
+        exit 1
+    }
+    ground_truth "P06_LIVE_LAB_RECEIVED verified=true"
 fi
 
 ground_truth \
