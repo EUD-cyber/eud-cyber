@@ -379,6 +379,22 @@ write_files:
           "$INSTALL_DIR/systemd/mrnobody-agent.service"
 
       download_file \
+          "web/master_jobs.py" \
+          "$INSTALL_DIR/web/master_jobs.py"
+
+      download_file \
+          "web/agent_jobs.py" \
+          "$INSTALL_DIR/web/agent_jobs.py"
+
+      download_file \
+          "systemd/mrnobody-agent-jobs.service" \
+          "$INSTALL_DIR/systemd/mrnobody-agent-jobs.service"
+
+      download_file \
+          "docs/master-remote-sprint1.md" \
+          "$INSTALL_DIR/docs/master-remote-sprint1.md"
+
+      download_file \
           "web/app.py" \
           "$INSTALL_DIR/web/app.py"
 
