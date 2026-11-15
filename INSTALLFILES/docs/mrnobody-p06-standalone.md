@@ -1,5 +1,7 @@
 # P06 standalone execution
 
+For the explicit one-shot Slave → Master option, see [P06 Live Lab Sprint 1](mrnobody-p06-live-lab.md).
+
 > Repository commands below are run from `INSTALLFILES/` (`cd INSTALLFILES` from the clone root).
 
 ## Independent simulated default

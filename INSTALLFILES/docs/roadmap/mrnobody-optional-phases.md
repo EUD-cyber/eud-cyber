@@ -1,5 +1,14 @@
 # MrNobody incremental roadmap
 
+## P06 Live Lab Sprint 1
+
+Implemented as an explicit standalone opt-in: one verified generated P06 fixture
+is forwarded outbound from Slave to configured Master using the existing Agent
+transport. Master stores actual bytes, SHA-256 and P06/Agent/Campaign receipt
+evidence atomically; Receiver shows verification. See [operation and tests](../mrnobody-p06-live-lab.md).
+Default P06, P05 reuse, Full Campaign, ZTD and heartbeat retain their existing flow.
+Periodic transfers, P11 beaconing and campaign integration remain future work.
+
 > Repository commands below are run from `INSTALLFILES/` (`cd INSTALLFILES` from the clone root).
 
 This is a descriptive backlog. Nothing here registers phases, installs scripts,
