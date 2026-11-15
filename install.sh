@@ -478,7 +478,10 @@ select_deployment() {
   mapfile -t menu_selection <<< "$selection"
   export SPEC="${menu_selection[0]}"
   export LABCOUNT="${menu_selection[1]}"
-  OPTIONAL_COMPONENTS=("${menu_selection[@]:2}")
+  export MRNOBODY_ROLE="${menu_selection[2]}"
+  # The new selection owns these settings; never reuse a previous Master.
+  export MRNOBODY_MASTER_URL=""
+  OPTIONAL_COMPONENTS=("${menu_selection[@]:3}")
 }
 
 ###############################################################################

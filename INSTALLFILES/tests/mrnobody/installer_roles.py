@@ -42,8 +42,7 @@ class MenuRoles(unittest.TestCase):
     def test_minimum_terminal_shows_role_and_single_vm_notice(self):
         screen = Screen()
         self.assertTrue(self.view.draw(screen))
-        self.assertIn("agent/slave", screen.lines[18])
-        self.assertIn("fremtidig Custom", screen.lines[18])
+        self.assertIn("Standalone eller Slave/Agent", screen.lines[18])
         self.assertIn("Single VM", screen.lines[19])
         self.assertIn("Big/Mini", screen.lines[19])
         self.assertIn("Op/ned: Big/Mini", screen.lines[21])
@@ -64,12 +63,13 @@ class MenuRoles(unittest.TestCase):
         self.view.handle(ord(" "))
         screen = Screen()
         self.assertTrue(self.view.draw(screen))
-        self.assertIn("MrNobody: agent/slave", screen.lines[20])
-        self.assertIn("fremtidig Single VM", screen.lines[20])
+        self.assertIn("Standalone eller Slave/Agent", screen.lines[20])
+        self.assertIsNone(self.view.handle(10))
+        self.assertEqual(self.view.stage, "lab-role")
         self.assertEqual(self.view.handle(10), "accept")
         selected = menu.validate_selection(dict(profile=self.view.profile, labs=self.view.labs,
                                                 components=list(self.view.selected)))
-        self.assertEqual(selected, dict(profile="Big", labs=1, components=["MRNOBODY"]))
+        self.assertEqual(selected, dict(profile="Big", labs=1, components=["MRNOBODY"], mrnobody_role="standalone"))
 
     def test_single_vm_list_shows_only_mrnobody_before_roles(self):
         self.view.profile, self.view.labs, self.view.selected = "Mini", 3, {"MRNOBODY"}

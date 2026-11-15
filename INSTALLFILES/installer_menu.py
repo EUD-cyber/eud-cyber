@@ -100,8 +100,37 @@ def validate_selection(value):
     selected = value.get("components")
     if not isinstance(selected, list) or any(not isinstance(c, str) or c not in OPTIONS for c in selected):
         raise ValueError("Ugyldigt VM-tilvalg fra menuen.")
-    return dict(profile=value["profile"], labs=labs,
-                components=[tag for tag in OPTIONS if tag in selected])
+    result = dict(profile=value["profile"], labs=labs,
+                  components=[tag for tag in OPTIONS if tag in selected])
+    if "MRNOBODY" in selected:
+        role = value.get("mrnobody_role", "standalone")
+        if role not in ("standalone", "agent"):
+            raise ValueError("MrNobody i Big/Mini skal være Standalone eller Slave/Agent.")
+        result["mrnobody_role"] = role
+    return result
+
+
+def master_url(value):
+    """Use the same URL grammar as the lab VM installer; bare hosts use HTTP."""
+    value = value.strip()
+    if "://" not in value:
+        value = "http://" + value
+    match = re.fullmatch(r"https?://[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?(?::([0-9]{1,5}))?(?:/[A-Za-z0-9._~%/+-]*)?", value)
+    if not match or (match[1] and not 1 <= int(match[1]) <= 65535):
+        raise ValueError("Angiv Master IP/værtsnavn eller HTTP/HTTPS-URL med gyldig port, uden login, query eller fragment.")
+    return value
+
+
+def ask_master_url(read=input, write=lambda text: print(text, file=sys.stderr)):
+    while True:
+        write("MrNobody Slave/Agent - Master IP/URL (Q annullerer):")
+        value = read().strip()
+        if value.lower() == "q":
+            raise ValueError("Installation annulleret.")
+        try:
+            return master_url(value)
+        except ValueError as exc:
+            write(str(exc))
 
 
 class Menu:
@@ -115,6 +144,7 @@ class Menu:
         self.single_cursor = 0
         self.vm_cursor = 0
         self.single_profile = "Big"
+        self.mrnobody_role = "standalone"
 
     def single_choice(self, role=None):
         return dict(kind="single-install", vm=VMS[self.vm_cursor][0],
@@ -150,9 +180,16 @@ class Menu:
             for index, row in enumerate(r for r in rows if r["base"]):
                 self.text(screen, 10 + index, f'{row["name"]:18} {row["cpu"]:6} {fmt(row["memory_mib"] / 1024):>10} {fmt(row["disk_gib"]):>11}')
             self.text(screen, 16, f'Minimum, {self.labs} lab(s): {summary(totals(rows, labs=self.labs, base_only=True))}')
-            self.text(screen, 18, "MrNobody i Big/Mini: agent/slave (også i fremtidig Custom).")
+            self.text(screen, 18, "MrNobody i Big/Mini: vælg Standalone eller Slave/Agent.")
             self.text(screen, 19, "S: Single VM - vælg VM, Big/Mini og labnummer [1].")
             self.text(screen, 21, "Op/ned: Big/Mini/Single VM | Enter: vælg | Q/Esc: annullér")
+        elif self.stage == "lab-role":
+            self.text(screen, 3, f"{self.profile} - MrNobody / {self.labs} lab(s)")
+            self.text(screen, 5, "Standalone - kør uden Master", self.mrnobody_role == "standalone")
+            self.text(screen, 6, "Slave/Agent - forbind til Master", self.mrnobody_role == "agent")
+            self.text(screen, 9, "Slave: Master IP/URL efter OPNsense- og GUACVM-IP-valg.")
+            self.text(screen, 10, "Samme Master-adresse bruges til alle valgte labs.")
+            self.text(screen, 21, "Op/ned: vælg | Enter: fortsæt | B: tilvalg | Q: stop")
         elif self.stage == "single":
             self.text(screen, 3, "Single VM")
             for index, vm in enumerate(VMS):
@@ -194,7 +231,7 @@ class Menu:
             self.text(screen, 16, "Tilvalg/lab: " + summary(extra))
             total = totals(rows, self.selected, self.labs)
             self.text(screen, 18, f'I alt, {total["vms"]} VM: {summary(total)}', True)
-            self.text(screen, 20, "MrNobody: agent/slave. Master kræver fremtidig Single VM.")
+            self.text(screen, 20, "MrNobody: næste trin vælger Standalone eller Slave/Agent.")
             self.text(screen, 21, "Op/ned: flyt | Space: vælg | B: tilbage | Enter: fortsæt | Q: stop")
         self.text(screen, 22, "vCPU=kerner x sockets | Disk=udvidelse | Ekskl. Proxmox/image")
         screen.refresh()
@@ -218,6 +255,13 @@ class Menu:
                 self.stage = "single"
             elif key in (10, 13, curses.KEY_ENTER):
                 self.stage = "single" if self.profile == "Single VM" else "options"
+        elif self.stage == "lab-role":
+            if key in (curses.KEY_UP, curses.KEY_DOWN, ord(" ")):
+                self.mrnobody_role = "agent" if self.mrnobody_role == "standalone" else "standalone"
+            elif key in (ord("b"), ord("B"), curses.KEY_LEFT):
+                self.stage = "options"
+            elif key in (10, 13, curses.KEY_ENTER):
+                return "accept"
         elif self.stage == "single":
             if key in (curses.KEY_UP, curses.KEY_DOWN):
                 self.vm_cursor = (self.vm_cursor + (-1 if key == curses.KEY_UP else 1)) % len(VMS)
@@ -253,7 +297,10 @@ class Menu:
             elif key in (ord("b"), ord("B"), curses.KEY_LEFT):
                 self.stage = "profile"
             elif key in (10, 13, curses.KEY_ENTER):
-                return "accept"
+                if "MRNOBODY" in self.selected:
+                    self.stage = "lab-role"
+                else:
+                    return "accept"
         return None
 
     def run(self, screen):
@@ -275,6 +322,7 @@ class Menu:
                 return action
             if action == "accept":
                 return validate_selection(dict(profile=self.profile, labs=self.labs,
+                                               mrnobody_role=self.mrnobody_role,
                                                components=[c for c in OPTIONS if c in self.selected]))
 
 
@@ -418,15 +466,20 @@ def main():
     preview.add_argument("--offline", action="store_true", help="Valider kun input uden værtskontrol")
     selection = commands.add_parser("selection")
     selection.add_argument("file", type=Path)
+    master = commands.add_parser("master-url")
+    master.add_argument("value", nargs="?")
     args = parser.parse_args()
     if args.command == "resources":
         print(json.dumps(hardware(args.root, args.profile)))
     elif args.command == "single-preview":
         from MRNOBODY.single_vm_plan import interactive_preview
         interactive_preview(default_bridge=os.environ.get("BRIDGE", ""), offline=args.offline)
+    elif args.command == "master-url":
+        print(master_url(args.value) if args.value is not None else ask_master_url())
     elif args.command == "selection":
         result = validate_selection(json.loads(args.file.read_text()))
-        print("\n".join([result["profile"], str(result["labs"]), *result["components"]]))
+        print("\n".join([result["profile"], str(result["labs"]),
+                         result.get("mrnobody_role", "standalone"), *result["components"]]))
     else:
         import curses
         profiles = {entry["profile"]: entry for entry in
@@ -462,7 +515,7 @@ def main():
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (ValueError, OSError, KeyError) as exc:
+    except (ValueError, OSError, KeyError, EOFError) as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         raise SystemExit(1)
     except KeyboardInterrupt:

@@ -37,8 +37,8 @@ esac
 [[ "$LABCOUNT" =~ ^([1-9]|1[0-6])$ ]] || die "Lab count must be between 1 and 16."
 export SPEC LABCOUNT
 
-# Lab profiles always install MrNobody as an agent; Master is Single VM only.
-export MRNOBODY_ROLE="agent"
+# Direct calls retain the historical agent default; the menu passes its choice.
+export MRNOBODY_ROLE="${MRNOBODY_ROLE:-agent}"
 # Pass an explicit empty value too, overriding stale tmux server settings.
 export MRNOBODY_MASTER_URL="${MRNOBODY_MASTER_URL:-}"
 
@@ -65,6 +65,20 @@ for component in "${@:3}"; do
     selected[$component]=1
 done
 
+# Reject invalid roles/addresses before any host setup. Master is Single VM only.
+if [[ -n "${selected[MRNOBODY]:-}" ]]; then
+    case "$MRNOBODY_ROLE" in
+        standalone) MRNOBODY_MASTER_URL="" ;;
+        agent)
+            if [[ -n "$MRNOBODY_MASTER_URL" ]]; then
+                MRNOBODY_MASTER_URL="$(python3 installer_menu.py master-url "$MRNOBODY_MASTER_URL")" ||
+                    die "Invalid MrNobody Master address."
+            fi
+            ;;
+        *) die "MRNOBODY_ROLE must be standalone or agent (Master is Single VM only)." ;;
+    esac
+fi
+
 # Validate per-VM hardware overrides before any configuration or host setup.
 # HDD retains each VM installer's existing resize semantics (+SIZE).
 RESOURCE_KEYS=(OPNSENSE GUACVM KALI01 KALI02 VULNSRV01 VULNSRV02
@@ -90,7 +104,7 @@ done
 
 # Validate the complete plan before writing logs/configuration or running setup.
 missing=()
-for script in repo.sh pre_req.sh open-vswitch-pre.sh open-vswitch.sh \
+for script in installer_menu.py repo.sh pre_req.sh open-vswitch-pre.sh open-vswitch.sh \
     open-vswitch-last.sh OPNSENSE/generate_config.sh "$GUAC_CONFIG" \
     "$OPNSENSE" "${VM_SCRIPTS[@]}"; do
     [[ -f "$script" && -s "$script" ]] || missing+=("$script")
@@ -145,6 +159,13 @@ for ((lab = 1; lab <= LABCOUNT; lab++)); do
     bash OPNSENSE/generate_config.sh "$lab"
     bash "$GUAC_CONFIG" "$lab"
 done
+
+# Collect the one shared Master address in the foreground, after all IP choices.
+# Nothing in the tmux worker may ask for an address.
+if [[ -n "${selected[MRNOBODY]:-}" && "$MRNOBODY_ROLE" == agent && -z "$MRNOBODY_MASTER_URL" ]]; then
+    MRNOBODY_MASTER_URL="$(python3 installer_menu.py master-url)" ||
+        die "MrNobody Slave/Agent requires a Master IP/URL before deployment."
+fi
 
 log "Preparing repository, packages and Open vSwitch."
 bash repo.sh

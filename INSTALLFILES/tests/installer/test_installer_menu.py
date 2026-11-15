@@ -90,12 +90,12 @@ class HardwareMenuTests(unittest.TestCase):
 
     def test_keyboard_flow_and_live_totals(self):
         # Mini, two labs, options, Wazuh and MrNobody, then accept.
-        keys = [258, ord("+"), 10, 258, 258, 258, 258, ord(" "), 258, 258, ord(" "), 10]
+        keys = [258, ord("+"), 10, 258, 258, 258, 258, ord(" "), 258, 258, ord(" "), 10, 10]
         screen = Screen(keys)
         with patch.dict(sys.modules, {"curses": FAKE_CURSES}):
             result = menu.Menu(self.profiles).run(screen)
-        self.assertEqual(result, dict(profile="Mini", labs=2, components=["WAZUH","MRNOBODY"]))
-        final = screen.frames[-1]
+        self.assertEqual(result, dict(profile="Mini", labs=2, components=["WAZUH","MRNOBODY"], mrnobody_role="standalone"))
+        final = screen.frames[-2]
         self.assertIn("Profil: Mini", final[3])
         self.assertNotIn("Big", " ".join(final.values()))
         self.assertIn("28 vCPU | 36 GiB RAM | +476 GiB disk", final[18])
