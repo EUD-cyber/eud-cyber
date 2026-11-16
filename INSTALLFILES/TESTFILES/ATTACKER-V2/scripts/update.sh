@@ -34,6 +34,9 @@ CLI_CHANGED=0
 AGENT_CHANGED=0
 AGENT_WAS_ACTIVE=0
 AGENT_UNIT_INSTALLED=0
+JOBS_UNIT_INSTALLED=0
+JOBS_WAS_ACTIVE=0
+JOBS_WAS_ENABLED=0
 
 UPDATE_STARTED=0
 
@@ -293,10 +296,61 @@ install_agent_unit() {
     fi
 }
 
+restore_jobs_unit() {
+    (( JOBS_UNIT_INSTALLED == 1 )) || return 0
+    systemctl stop mrnobody-agent-jobs.service >/dev/null 2>&1 || true
+    systemctl disable mrnobody-agent-jobs.service >/dev/null 2>&1 || true
+    rm -f /etc/systemd/system/mrnobody-agent-jobs.service
+    if [[ -f "$BACKUP_DIR/system/systemd/mrnobody-agent-jobs.service" ]]; then
+        cp -a "$BACKUP_DIR/system/systemd/mrnobody-agent-jobs.service" /etc/systemd/system/mrnobody-agent-jobs.service || return $?
+    fi
+    systemctl daemon-reload || return $?
+    (( JOBS_WAS_ENABLED == 0 )) || systemctl enable mrnobody-agent-jobs.service || return $?
+    (( JOBS_WAS_ACTIVE == 0 )) || systemctl start mrnobody-agent-jobs.service || return $?
+    JOBS_UNIT_INSTALLED=0
+}
+
+install_jobs_unit() {
+    python3 - "$INSTALL_DIR/web" <<'PY'
+import sys
+sys.path.insert(0, sys.argv[1])
+try:
+    from deployment_config import load_deployment_config
+    config = load_deployment_config()
+    valid = config.role == 'agent' and config.config_status == 'loaded' and getattr(config,'lab_mode',False)
+except (ImportError, OSError, ValueError):
+    valid = False
+raise SystemExit(0 if valid else 1)
+PY
+    local selected=$?
+    (( selected == 0 )) || return 0
+    [[ -f /etc/mrnobody/agent.json ]] || return 1
+    local source="$INSTALL_DIR/systemd/mrnobody-agent-jobs.service"
+    local target="/etc/systemd/system/mrnobody-agent-jobs.service"
+    [[ -f "$source" ]] || return 1
+    mkdir -p "$BACKUP_DIR/system/systemd" || return $?
+    if [[ -e "$target" || -L "$target" ]]; then
+        cp -a "$target" "$BACKUP_DIR/system/systemd/mrnobody-agent-jobs.service" || return $?
+    fi
+    systemctl is-active --quiet mrnobody-agent-jobs.service && JOBS_WAS_ACTIVE=1 || true
+    systemctl is-enabled --quiet mrnobody-agent-jobs.service && JOBS_WAS_ENABLED=1 || true
+    JOBS_UNIT_INSTALLED=1
+    if ! install -m 0644 "$source" "$target" || ! systemctl daemon-reload || ! systemctl enable --now mrnobody-agent-jobs.service; then
+        restore_jobs_unit || return $?
+        return 1
+    fi
+    log "Explicit Lab Mode: fixed P11 job polling enabled. No job was enqueued."
+}
+
 repair_nginx_config() {
     # Download hashes describe the runtime copy, not the active nginx copy.
     # Also reload equal files: an older updater may have missed activation.
     local source="$INSTALL_DIR/nginx/nordic-incident.conf"
+    if [[ -f "$INSTALL_DIR/web/lab_mode.py" ]]; then
+        mkdir -p "$BACKUP_DIR/system/nginx" || return $?
+        python3 "$INSTALL_DIR/web/lab_mode.py" nginx "$source" "$BACKUP_DIR/system/nginx/rendered.conf" || return $?
+        source="$BACKUP_DIR/system/nginx/rendered.conf"
+    fi
     local target="/etc/nginx/sites-available/nordic-incident.conf"
     local saved="$BACKUP_DIR/system/nginx/nordic-incident.conf.repair"
     local changed=0 existed=0
@@ -333,7 +387,17 @@ if (( NEW == 0 && CHANGED == 0 )); then
     log
     retire_old_code
     install_agent_unit || die "Agent service repair failed; backup: $BACKUP_DIR"
+    install_jobs_unit || die "Job worker repair failed; backup: $BACKUP_DIR"
     repair_nginx_config || die "nginx repair failed; backup: $BACKUP_DIR"
+    if [[ -f "$INSTALL_DIR/web/lab_mode.py" ]] && python3 - "$INSTALL_DIR/web" <<'PY'
+import sys
+sys.path.insert(0,sys.argv[1])
+from deployment_config import load_deployment_config
+raise SystemExit(0 if load_deployment_config().lab_mode else 1)
+PY
+    then
+        systemctl restart nordic-incident-web.service || die "Lab web configuration reload failed"
+    fi
     log "MrNobody is already up to date."
 
     exit 0
@@ -485,6 +549,9 @@ capture_agent_state() {
         if systemctl is-active --quiet mrnobody-agent.service; then
             AGENT_WAS_ACTIVE=1
         fi
+        if [[ -f "$INSTALL_DIR/systemd/mrnobody-agent-jobs.service" ]] && systemctl is-active --quiet mrnobody-agent-jobs.service; then
+            JOBS_WAS_ACTIVE=1
+        fi
     fi
 }
 
@@ -494,10 +561,14 @@ restart_updated_agent() {
         systemctl daemon-reload || return $?
         systemctl restart mrnobody-agent.service || return $?
         systemctl is-active --quiet mrnobody-agent.service || return $?
+        if (( ${JOBS_WAS_ACTIVE:-0} == 1 )); then
+            systemctl restart mrnobody-agent-jobs.service || return $?
+            systemctl is-active --quiet mrnobody-agent-jobs.service || return $?
+        fi
     fi
 }
 
-for agent_file in web/agent_client.py web/deployment_config.py web/master_registry.py systemd/mrnobody-agent.service; do
+for agent_file in web/agent_client.py web/agent_jobs.py web/lab_mode.py web/deployment_config.py web/master_registry.py systemd/mrnobody-agent.service systemd/mrnobody-agent-jobs.service; do
     if [[ -f "$DOWNLOAD_DIR/$agent_file" ]]; then
         AGENT_CHANGED=1
     fi
@@ -695,6 +766,8 @@ rollback() {
         fi
     fi
 
+    restore_jobs_unit >/dev/null 2>&1 || log "Job worker unit restore failed; inspect the backup."
+
     systemctl daemon-reload \
         >/dev/null 2>&1 || true
 
@@ -812,9 +885,15 @@ if (( NGINX_CHANGED == 1 )); then
     log
     log "Installing nginx configuration..."
 
+    ACTIVE_NGINX_SOURCE="${INSTALL_DIR}/nginx/nordic-incident.conf"
+    if [[ -f "$INSTALL_DIR/web/lab_mode.py" ]]; then
+        python3 "$INSTALL_DIR/web/lab_mode.py" nginx "$ACTIVE_NGINX_SOURCE" "$TMP_DIR/nginx-active.conf" || rollback $?
+        ACTIVE_NGINX_SOURCE="$TMP_DIR/nginx-active.conf"
+    fi
+
     install \
         -m 0644 \
-        "${INSTALL_DIR}/nginx/nordic-incident.conf" \
+        "$ACTIVE_NGINX_SOURCE" \
         /etc/nginx/sites-available/nordic-incident.conf \
         || rollback $?
 
@@ -877,6 +956,7 @@ fi
 # ============================================================
 
 install_agent_unit || rollback $?
+install_jobs_unit || rollback $?
 restart_updated_agent || rollback $?
 if (( NGINX_CHANGED == 0 )); then
     repair_nginx_config || rollback $?

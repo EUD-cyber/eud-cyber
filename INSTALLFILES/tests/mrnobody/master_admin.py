@@ -130,8 +130,9 @@ class AdminTests(unittest.TestCase):
     def test_role_and_configuration_gate(self):
         for role, status in (('slave', 'loaded'), ('master', 'invalid')):
             self.config.role, self.config.config_status = role, status
-            self.assertEqual(self.login().status_code, 404)
-            self.assertEqual(self.client.get('/master/admin').status_code, 404)
+            expected = 503 if status == 'invalid' else 404
+            self.assertEqual(self.login().status_code, expected)
+            self.assertEqual(self.client.get('/master/admin').status_code, expected)
 
     def test_no_generic_job_routes_even_after_administrator_login(self):
         self.login()

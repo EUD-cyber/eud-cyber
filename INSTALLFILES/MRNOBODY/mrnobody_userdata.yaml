@@ -387,6 +387,14 @@ write_files:
           "$INSTALL_DIR/web/master_admin.py"
 
       download_file \
+          "web/lab_mode.py" \
+          "$INSTALL_DIR/web/lab_mode.py"
+
+      download_file \
+          "docs/lab-mode-ztd.md" \
+          "$INSTALL_DIR/docs/lab-mode-ztd.md"
+
+      download_file \
           "web/detection_validation.py" \
           "$INSTALL_DIR/web/detection_validation.py"
 
@@ -465,8 +473,10 @@ write_files:
         "nginx/nordic-incident.conf" \
         "$INSTALL_DIR/nginx/nordic-incident.conf"
 
+      mkdir -p "$INSTALL_DIR/state"
+      python3 "$INSTALL_DIR/web/lab_mode.py" nginx "$INSTALL_DIR/nginx/nordic-incident.conf" "$INSTALL_DIR/state/nginx-active.conf"
       install -m 0644 \
-        "$INSTALL_DIR/nginx/nordic-incident.conf" \
+        "$INSTALL_DIR/state/nginx-active.conf" \
         /etc/nginx/sites-available/nordic-incident.conf
 
 
@@ -497,6 +507,17 @@ write_files:
         systemctl daemon-reload
         if python3 "$INSTALL_DIR/web/agent_client.py" --bootstrap; then
           systemctl enable --now mrnobody-agent.service
+          if python3 - "$INSTALL_DIR/web" <<'PY'
+      import sys
+      sys.path.insert(0, sys.argv[1])
+      from deployment_config import load_deployment_config
+      raise SystemExit(0 if load_deployment_config().lab_mode else 1)
+      PY
+          then
+            install -m 0644 "$INSTALL_DIR/systemd/mrnobody-agent-jobs.service" /etc/systemd/system/mrnobody-agent-jobs.service
+            systemctl daemon-reload
+            systemctl enable --now mrnobody-agent-jobs.service
+          fi
           log "Agent enabled; automatic lab registration retries if Master is offline."
         else
           log "Agent configuration required; see docs/mrnobody-agent-client.md."

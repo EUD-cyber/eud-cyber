@@ -105,8 +105,12 @@
             const body = await api('/api/master/admin/session', method === 'GET' ? {} :
                 {method, body:JSON.stringify(method === 'POST' ? {credential} : {})});
             if (body.authenticated === true && typeof body.csrf === 'string') {
-                csrf = body.csrf; form.hidden = true; logout.hidden = false; control.hidden = false;
-                message.textContent = 'Administrator authenticated. Only the fixed P11 job is remotely supported.';
+                csrf = body.csrf; form.hidden = true; logout.hidden = body.lab_mode === true; control.hidden = false;
+                if (body.lab_mode === true) {
+                    byId('adminAccessHint').textContent = 'Lab Mode trusts clients on the configured private networks. No administrator credential is required. Plain HTTP exposes lab traffic and Agent credentials on that network.';
+                    byId('jobWorkerHint').textContent = 'Lab Mode automatically enables the fixed P11 job worker on configured Slaves. Online still proves heartbeat contact only. A queued job expires after 180 seconds.';
+                }
+                message.textContent = body.lab_mode === true ? 'Lab Mode: access is trusted on the configured private networks. Only the fixed P11 job is remotely supported.' : 'Administrator authenticated. Only the fixed P11 job is remotely supported.';
                 await load();
             } else signedOut('Logged out.');
         } catch (error) { signedOut(error.status === 503 ? 'Administrator authentication is not configured or unavailable. Provision it locally on Master.' : error.message); }
@@ -120,7 +124,8 @@
         if (start.disabled || working) return;
         working = true; buttons(); renderJobs();
         const firstAttempt = !pending;
-        if (!pending) savePending({agent_id:select.value, request_key:'web-' + crypto.randomUUID()});
+        if (!pending) savePending({agent_id:select.value, request_key:'web-' + Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2,'0')).join('')
+            .replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5')});
         try {
             const body = await api('/api/master/admin/jobs', {method:'POST', body:JSON.stringify(pending)});
             if (!body.job || typeof body.job.job_id !== 'string') throw new Error('Start response was not verified; retry the same request.');

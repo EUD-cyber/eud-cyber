@@ -100,6 +100,7 @@
         <nav class="sidebar-nav" aria-label="Main navigation">
 <button class="nav-item nav-active" type="button" data-page="dashboard"><span class="nav-icon" aria-hidden="true">⌂</span><span>Dashboard</span></button>
 <button class="nav-item" type="button" data-page="agents" id="masterAgentsTab" hidden><span class="nav-icon" aria-hidden="true">◉</span><span>Agents</span></button>
+{% if master_control_available %}<a class="nav-item" href="/master/admin">Master P11 control</a>{% endif %}
 <button class="nav-item" type="button" data-page="receiver" id="masterReceiverTab" hidden><span class="nav-icon" aria-hidden="true">◉</span><span>Receiver</span></button>
 <button class="nav-item" type="button" data-page="phases"><span class="nav-icon" aria-hidden="true">◆</span><span>Attack Techniques</span></button>
 <button class="nav-item" type="button" data-page="scenarios"><span class="nav-icon" aria-hidden="true">⬡</span><span>Scenarios</span></button>

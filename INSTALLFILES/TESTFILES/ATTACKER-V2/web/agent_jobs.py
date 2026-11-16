@@ -15,7 +15,8 @@ STATE = Path('/var/lib/mrnobody/agent-jobs/journal.sqlite3')
 
 class Worker:
     def __init__(self, config, path=STATE, *, sender=None, run=run_loop, stop=None):
-        if not config.master_url.startswith('https://'):
+        from lab_mode import http_master_allowed
+        if not (config.master_url.startswith('https://') or http_master_allowed(config)):
             raise FatalAgentError('Remote jobs require verified HTTPS.')
         self.config=config
         self.sender=sender if sender is not None else AgentTransport(config)
