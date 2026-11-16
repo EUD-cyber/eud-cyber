@@ -1,4 +1,4 @@
-"""Opt-in administrator authentication prerequisite. Grants no job authority yet.
+"""Root-provisioned Master operator boundary and fixed synthetic P11 controls.
 
 Root provisions a separate high-entropy credential; Agent/enrollment tokens are
 never accepted. No default credential, request-supplied origin or proxy identity.
@@ -17,9 +17,10 @@ import time
 from urllib.parse import urlsplit
 
 from flask import jsonify, request, render_template
+from master_registry import DATABASE, Registry, Conflict, Unavailable
 
 CREDENTIAL = Path('/etc/mrnobody/web-admin/credential.json')
-COOKIE = '__Secure-mrn-admin'
+COOKIE = '__Host-mrn-admin'
 PREFIX = '/api/master/admin'
 TOKEN = re.compile(r'[A-Za-z0-9_-]{43}')
 TTL = 900
@@ -81,7 +82,8 @@ def provision(value, path=CREDENTIAL):
     return secret
 
 
-def install_admin_auth(app, deployment, credential_path=CREDENTIAL, clock=time.monotonic):
+def install_admin_auth(app, deployment, credential_path=CREDENTIAL, clock=time.monotonic,
+                       registry_path=DATABASE):
     sessions = {}
     # One global limit is deliberately independent of spoofable client IPs.
     buckets = {}
@@ -104,6 +106,128 @@ def install_admin_auth(app, deployment, credential_path=CREDENTIAL, clock=time.m
         result.headers['X-Content-Type-Options'] = 'nosniff'
         result.headers['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'none'"
         return result
+
+    # Agent protocol endpoints keep their own bound-token, TLS and schema checks.
+    agent_posts = frozenset('/api/master/' + suffix for suffix in (
+        'agents/register', 'agents/heartbeat', 'agents/reports', 'agents/report-transfer',
+        'agents/job-poll', 'agents/p11-beacon', 'agents/p06-file', 'receiver/events'))
+
+    @app.before_request
+    def master_operator_boundary():
+        config = deployment()
+        if config.role != 'master':
+            return None
+        if (request.path in {'/master/admin', PREFIX + '/session'}
+                or request.endpoint == 'static'
+                or (request.path == '/api/health' and request.method == 'GET')
+                or (request.path in agent_posts and request.method == 'POST')):
+            return None
+        if config.config_status != 'loaded':
+            return response({'message': 'Master configuration unavailable.'}, 503)
+        secure = request.is_secure or (request.remote_addr in {'127.0.0.1', '::1'}
+                and request.headers.get('X-Forwarded-Proto') == 'https')
+        if not secure:
+            return response({'message': 'HTTPS required.'}, 403)
+        if limited('operator_requests', 600):
+            result = response({'message': 'Try later.'}, 429)
+            result.headers['Retry-After'] = '60'
+            return result
+        try:
+            credential = load_credential(credential_path)
+        except (OSError, ValueError, TypeError, KeyError):
+            with lock:
+                sessions.clear()
+            return response({'message': 'Provision the web administrator locally on Master first.'}, 503)
+        if 'https://' + request.host != credential['origin']:
+            return response({'message': 'Origin rejected.'}, 403)
+        ident = request.cookies.get(COOKIE)
+        with lock:
+            session = sessions.get(ident)
+            if not session or session[0] <= clock() or session[2] != credential['sha256']:
+                sessions.pop(ident, None)
+                if request.path == '/' and request.method == 'GET':
+                    result = response({'message': 'Administrator login required.'}, 302)
+                    result.headers['Location'] = '/master/admin'
+                    return result
+                return response({'message': 'Administrator login required.'}, 401)
+        if request.method not in {'GET', 'HEAD', 'OPTIONS'}:
+            csrf = request.headers.get('X-CSRF-Token', '')
+            if (request.headers.get('Origin') != credential['origin'] or not TOKEN.fullmatch(csrf)
+                    or not hmac.compare_digest(csrf, session[1])):
+                return response({'message': 'CSRF rejected.'}, 403)
+            if request.content_length is None or request.content_length > 8 * 1024 * 1024:
+                return response({'message': 'Bounded request required (maximum 8 MiB).'}, 413)
+            if limited('operator_writes', 30):
+                result = response({'message': 'Try later.'}, 429)
+                result.headers['Retry-After'] = '60'
+                return result
+
+    @app.after_request
+    def master_headers(result):
+        if deployment().role == 'master' and request.endpoint != 'static':
+            result.headers['Cache-Control'] = 'no-store'
+            result.headers['Referrer-Policy'] = 'no-referrer'
+            result.headers['X-Content-Type-Options'] = 'nosniff'
+            # Existing report exports have their own stricter script-free sandbox.
+            if 'Content-Security-Policy' not in result.headers:
+                result.headers['Content-Security-Policy'] = ("default-src 'self'; script-src 'self'; "
+                    "style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; "
+                    "form-action 'self'; object-src 'none'; base-uri 'none'")
+        return result
+
+    def job_body(fields):
+        if request.args:
+            raise ValueError('No query parameters.')
+        if request.mimetype != 'application/json' or request.content_length is None or request.content_length > 1024:
+            raise ValueError('Bounded JSON required.')
+        from master_api import _object
+        raw = request.stream.read(1025)
+        if len(raw) > 1024:
+            raise ValueError('Request too large.')
+        data = json.loads(raw, object_pairs_hook=_object)
+        if not isinstance(data, dict) or set(data) != fields:
+            raise ValueError('Invalid job request.')
+        return data
+
+    @app.route(PREFIX + '/jobs', methods=['GET', 'POST'])
+    @app.route(PREFIX + '/jobs/<job_id>', methods=['GET'])
+    @app.route(PREFIX + '/jobs/<job_id>/stop', methods=['POST'])
+    def admin_jobs(job_id=None):
+        config = deployment()
+        if config.role != 'master' or config.config_status != 'loaded':
+            return response({'message': 'Not found.'}, 404)
+        # All these routes pass the global operator boundary before dispatch.
+        from master_jobs import Jobs
+        import sqlite3
+        try:
+            store = Jobs(registry_path)
+            if request.args:
+                raise ValueError('No query parameters.')
+            if request.method == 'GET':
+                return response({'job': store.inspect(job_id)} if job_id else {'jobs': store.history()})
+            if request.mimetype != 'application/json':
+                return response({'message': 'JSON required.'}, 415)
+            if request.content_length is None or request.content_length > 1024:
+                return response({'message': 'Request too large.'}, 413)
+            if limited('job_writes', 6):
+                result = response({'message': 'Try later.'}, 429)
+                result.headers['Retry-After'] = '60'
+                return result
+            if job_id:
+                data = job_body({'confirm_job_id'})
+                if data['confirm_job_id'] != job_id:
+                    raise ValueError('Explicit job confirmation required.')
+                job = store.inspect(job_id, stop=True)
+            else:
+                data = job_body({'agent_id', 'request_key'})
+                job = store.enqueue(data['agent_id'], data['request_key'])
+            return response({'job': job})
+        except Conflict as error:
+            return response({'message': str(error)}, 409)
+        except (ValueError, TypeError, UnicodeError, RecursionError):
+            return response({'message': 'Invalid job request or unknown job.'}, 400)
+        except (Unavailable, OSError, sqlite3.Error):
+            return response({'message': 'Job storage unavailable.'}, 503)
 
     @app.route('/master/admin', methods=['GET'])
     def admin_page():
@@ -182,9 +306,9 @@ def install_admin_auth(app, deployment, credential_path=CREDENTIAL, clock=time.m
                 if len(sessions) >= 16:
                     return response({'message': 'Session capacity reached.'}, 503)
                 sessions[ident] = now + TTL, csrf, credential['sha256']
-            result = response({'authenticated': True, 'csrf': csrf, 'web_job_control': False})
+            result = response({'authenticated': True, 'csrf': csrf, 'web_job_control': True})
             result.set_cookie(COOKIE, ident, secure=True, httponly=True, samesite='Strict',
-                              path=PREFIX, max_age=TTL)
+                              path='/', max_age=TTL)
             return result
         ident = request.cookies.get(COOKIE)
         with lock:
@@ -198,14 +322,14 @@ def install_admin_auth(app, deployment, credential_path=CREDENTIAL, clock=time.m
                     return response({'message': 'CSRF rejected.'}, 403)
                 del sessions[ident]
         if request.method == 'DELETE':
-            result = response({'authenticated': False, 'web_job_control': False})
-            result.delete_cookie(COOKIE, path=PREFIX, secure=True, httponly=True, samesite='Strict')
+            result = response({'authenticated': False, 'web_job_control': True})
+            result.delete_cookie(COOKIE, path='/', secure=True, httponly=True, samesite='Strict')
             return result
-        return response({'authenticated': True, 'csrf': session[1], 'web_job_control': False})
+        return response({'authenticated': True, 'csrf': session[1], 'web_job_control': True})
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Provision separate web administrator authentication; no web job authority.')
+    parser = argparse.ArgumentParser(description='Provision Master web administrator authority locally as root.')
     parser.add_argument('command', choices=['provision'])
     parser.add_argument('--origin', required=True)
     args = parser.parse_args()

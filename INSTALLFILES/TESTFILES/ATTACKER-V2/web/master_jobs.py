@@ -1,6 +1,6 @@
 """Local Master administration and one fixed synthetic P11 operation.
 
-No remote operator API, target parameters, scripts or generic execution adapter.
+No target parameters, scripts or generic execution adapter.
 Delivery is at-most-once: an expired delivery is failed, never requeued.
 """
 import argparse
@@ -90,6 +90,16 @@ class Jobs(Registry):
                               WHERE job_id=?""", (job_id,))
                 row = db.execute('SELECT * FROM execution_jobs WHERE job_id=?', (job_id,)).fetchone()
             return dict(self._public(row), reason=row['reason'], deadline=row['deadline'])
+
+    def history(self):
+        """Newest 50 fixed jobs only; never expose request keys or token hashes."""
+        if not self.path.exists() and not self.path.is_symlink():
+            return []
+        with self._db(write=True) as db:
+            self._table(db)
+            rows = db.execute('SELECT * FROM execution_jobs ORDER BY created_at DESC, rowid DESC LIMIT 50').fetchall()
+            return [dict(self._public(row), reason=row['reason'], deadline=row['deadline'],
+                         created_at=row['created_at']) for row in rows]
 
     def exchange(self, agent_id, token, report):
         if report is not None and (not isinstance(report, dict) or set(report) != {'job_id', 'status'}

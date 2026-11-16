@@ -448,7 +448,7 @@ def default_configuration():
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", master_admin_required=DEPLOYMENT_CONFIG.role == 'master')
 
 
 # ============================================================

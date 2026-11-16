@@ -22,7 +22,7 @@
 </head>
 
 
-<body>
+<body data-master-admin="{{ 'true' if master_admin_required else 'false' }}">
 <a class="skip-link" href="#mainContent">Skip to content</a>
 
 <!-- ========================================================
@@ -1221,7 +1221,7 @@
             <h2>
                 Incident Reports
             </h2>
-            <button type="button" onclick="refreshReports()">Refresh reports</button>
+            <button type="button" id="refreshReportsButton">Refresh reports</button>
 
             <span class="panel-tag">
                 History

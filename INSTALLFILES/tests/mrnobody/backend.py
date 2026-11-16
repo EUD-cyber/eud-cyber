@@ -16,6 +16,13 @@ class FakeFlask:
     def errorhandler(self, code):
         return lambda function: function
 
+    # Real middleware behavior is exercised with Flask in master_admin.py.
+    def before_request(self, function):
+        return function
+
+    def after_request(self, function):
+        return function
+
     def route(self, url, **options):
         def register(function):
             routes[url] = (function, options)

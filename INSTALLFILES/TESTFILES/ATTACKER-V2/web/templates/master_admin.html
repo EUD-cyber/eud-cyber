@@ -3,23 +3,36 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Master administrator prerequisite</title>
+  <title>Master P11 job control</title>
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/master_admin.js" defer></script>
 </head>
 <body>
-  <main>
-    <h1>Master administrator prerequisite</h1>
-    <p>Web job control is blocked. Start and stop remain available through the local Master CLI only.</p>
-    <p>This opt-in login validates a separate root-provisioned administrator credential. It grants no job authority in this version. Agent and enrollment tokens are not administrator credentials.</p>
+  <main class="main-container">
+    <h1>Master P11 job control</h1>
+    <p>One registered online Agent. One fixed synthetic P11 job: 3 beacons, 30 seconds apart, to the configured Master Receiver. No target or scenario parameters.</p>
+    <p>Administrator login authorizes the Master webinterface, including existing local administration. Agent and enrollment tokens are not administrator credentials.</p>
     <form id="adminLogin">
       <label for="adminCredential">Administrator credential</label>
       <input id="adminCredential" type="password" autocomplete="off" required maxlength="43" minlength="43">
-      <button type="submit">Validate administrator login</button>
+      <button class="button" type="submit">Log in as administrator</button>
     </form>
-    <button id="adminLogout" type="button" hidden>Log out</button>
+    <button class="button" id="adminLogout" type="button" hidden>Log out</button>
     <p id="adminMessage" role="status" aria-live="polite">Checking session…</p>
-    <p>Sessions expire after 15 minutes. Revoke the credential locally to invalidate all sessions. Complete the deployment security checks in docs/master-admin-prerequisite.md before adding job routes.</p>
+    <section class="panel" id="jobControl" hidden>
+      <h2>Start fixed P11 job</h2>
+      <p>Online means heartbeat contact only. The opt-in HTTPS job worker must also be running. A queued job expires after 180 seconds.</p>
+      <label for="jobAgent">Registered Agent</label>
+      <select id="jobAgent"><option value="">Select one online Agent</option></select>
+      <button class="button button-start" id="jobStart" type="button" disabled>Start fixed P11 job</button>
+      <button class="button" id="jobRefresh" type="button">Refresh Agents and jobs</button>
+      <p id="jobMessage" role="status" aria-live="polite"></p>
+      <p id="jobRefreshStatus">Auto-refresh every 5 seconds while this page is visible.</p>
+      <h2>Recent jobs</h2>
+      <p>Newest 50 jobs. Stop is a request until the status is terminal. Receiver events show the actual received traffic. Fixed jobs do not create a normal campaign report.</p>
+      <div id="jobList"></div>
+    </section>
+    <p>Sessions expire after 15 minutes. Revoke the root-provisioned credential locally to invalidate all sessions. See docs/master-admin-prerequisite.md for the update and lab guide.</p>
     <a href="/">Return to Master dashboard</a>
   </main>
 </body>

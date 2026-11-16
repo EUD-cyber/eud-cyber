@@ -3,6 +3,7 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+import hashlib
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -24,8 +25,19 @@ class DestinationDefaults(unittest.TestCase):
                     expected_ip = '10.20.30.40' if expected_url and '10.20.30.40' in url else ''
                     with patch.object(module, 'DEPLOYMENT_CONFIG', config), \
                          patch.object(module, 'determine_incident_ip', side_effect=AssertionError('no local fallback')), \
-                         patch.object(module, 'launch', side_effect=AssertionError('no execution')):
-                        response = module.app.test_client().get('/api/config')
+                         patch.object(module, 'launch', side_effect=AssertionError('no execution')), \
+                         patch('master_admin.load_credential', return_value={
+                             'version':1, 'origin':'https://master.lab',
+                             'sha256':hashlib.sha256(('a' * 43).encode()).hexdigest()}):
+                        client = module.app.test_client()
+                        if role == 'master':
+                            self.assertEqual(client.get('/api/config', base_url='https://master.lab').status_code, 401)
+                            login = client.post('/api/master/admin/session', base_url='https://master.lab',
+                                headers={'Origin':'https://master.lab'}, json={'credential':'a' * 43})
+                            self.assertEqual(login.status_code, 200)
+                            response = client.get('/api/config', base_url='https://master.lab')
+                        else:
+                            response = client.get('/api/config')
                     self.assertEqual(response.status_code, 200)
                     data = response.get_json()
                     self.assertEqual(data['incident_ip'], expected_ip)
