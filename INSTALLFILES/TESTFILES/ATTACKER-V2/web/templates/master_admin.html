@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Master administrator prerequisite</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/master_admin.js" defer></script>
+</head>
+<body>
+  <main>
+    <h1>Master administrator prerequisite</h1>
+    <p>Web job control is blocked. Start and stop remain available through the local Master CLI only.</p>
+    <p>This opt-in login validates a separate root-provisioned administrator credential. It grants no job authority in this version. Agent and enrollment tokens are not administrator credentials.</p>
+    <form id="adminLogin">
+      <label for="adminCredential">Administrator credential</label>
+      <input id="adminCredential" type="password" autocomplete="off" required maxlength="43" minlength="43">
+      <button type="submit">Validate administrator login</button>
+    </form>
+    <button id="adminLogout" type="button" hidden>Log out</button>
+    <p id="adminMessage" role="status" aria-live="polite">Checking session…</p>
+    <p>Sessions expire after 15 minutes. Revoke the credential locally to invalidate all sessions. Complete the deployment security checks in docs/master-admin-prerequisite.md before adding job routes.</p>
+    <a href="/">Return to Master dashboard</a>
+  </main>
+</body>
+</html>

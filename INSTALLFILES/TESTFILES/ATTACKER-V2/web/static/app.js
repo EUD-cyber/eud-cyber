@@ -599,6 +599,9 @@ const MrnUI = (() => {
         }
         if (masterControlCapabilities?.fixed_p11_live_lab_job === true) node(control, 'p', 'Sprint 1: local Master CLI can queue, inspect and stop one synthetic P11 beacon job. No remote campaign or general phase execution. Guide: docs/master-remote-sprint1.md');
         node(control, 'p', 'Remote campaign submission is unavailable in this version. Existing local runs and synchronized reports remain available.');
+        node(control, 'p', 'Web P11 start/stop is blocked pending administrator authentication deployment validation. Local Master CLI only.');
+        const adminLink = node(control, 'a', 'Validate administrator login prerequisite');
+        adminLink.href = '/master/admin';
         const timestamp = value => Number.isFinite(value) && value > 0
             && !Number.isNaN(new Date(value * 1000).getTime())
             ? new Date(value * 1000).toLocaleString() : 'Never';
