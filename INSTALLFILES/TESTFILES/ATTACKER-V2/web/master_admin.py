@@ -115,6 +115,11 @@ def install_admin_auth(app, deployment, credential_path=CREDENTIAL, clock=time.m
     @app.before_request
     def master_operator_boundary():
         config = deployment()
+        if config.config_status == 'invalid' and request.endpoint != 'static' and request.path != '/api/health':
+            return response({'message': 'Deployment configuration invalid.'}, 503)
+        if getattr(config, 'lab_mode', False):
+            from lab_mode import boundary
+            return boundary(config, sessions, lock, clock, limited, response, agent_posts)
         if config.role != 'master':
             return None
         if (request.path in {'/master/admin', PREFIX + '/session'}
@@ -164,7 +169,8 @@ def install_admin_auth(app, deployment, credential_path=CREDENTIAL, clock=time.m
 
     @app.after_request
     def master_headers(result):
-        if deployment().role == 'master' and request.endpoint != 'static':
+        config = deployment()
+        if (config.role == 'master' or getattr(config,'lab_mode',False)) and request.endpoint != 'static':
             result.headers['Cache-Control'] = 'no-store'
             result.headers['Referrer-Policy'] = 'no-referrer'
             result.headers['X-Content-Type-Options'] = 'nosniff'
@@ -275,7 +281,8 @@ def install_admin_auth(app, deployment, credential_path=CREDENTIAL, clock=time.m
         config = deployment()
         if config.role != 'master' or config.config_status != 'loaded':
             return response({'message': 'Not found.'}, 404)
-        if not (request.is_secure or (request.remote_addr in {'127.0.0.1', '::1'}
+        from lab_mode import lab_request
+        if not (lab_request(config) or request.is_secure or (request.remote_addr in {'127.0.0.1', '::1'}
                 and request.headers.get('X-Forwarded-Proto') == 'https')):
             return response({'message': 'HTTPS required.'}, 403)
         page = app.make_response(render_template('master_admin.html'))

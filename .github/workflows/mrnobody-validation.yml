@@ -42,6 +42,7 @@ jobs:
           python tests/mrnobody/master_jobs.py -v
           python tests/mrnobody/master_admin.py -v
           python tests/mrnobody/detection_validation.py -v
+          sudo "$(command -v python)" tests/mrnobody/lab_mode.py -v
           python tests/mrnobody/master_receiver.py -v
           python tests/mrnobody/master_reports.py -v
           python tests/mrnobody/update_agent.py -v
@@ -72,6 +73,13 @@ jobs:
               site = site.replace('/etc/nordic-incident/tls/', str(base) + '/').replace('/var/log/nginx/', str(base) + '/')
               (base / 'site.conf').write_text(site)
               (base / 'nginx.conf').write_text('pid ' + str(base / 'nginx.pid') + ';\nerror_log ' + str(base / 'error.log') + ';\nevents {}\nhttp { include ' + str(base / 'site.conf') + '; }\n')
+              subprocess.run(['sudo', 'nginx', '-t', '-c', str(base / 'nginx.conf')], check=True)
+              import sys
+              sys.path.insert(0, str(root / 'TESTFILES/ATTACKER-V2/web'))
+              from lab_mode import nginx_content
+              from deployment_config import DeploymentConfig
+              lab = DeploymentConfig('master', '', 'loaded', True, True, ('192.168.50.0/24',))
+              (base / 'site.conf').write_text(nginx_content(site, lab))
               subprocess.run(['sudo', 'nginx', '-t', '-c', str(base / 'nginx.conf')], check=True)
           subprocess.run(['systemd-analyze', 'verify', str(root / 'TESTFILES/ATTACKER-V2/systemd/nordic-incident-web.service')], check=True)
           print('Bootstrap dependency imports, nginx TLS configuration and systemd unit verification passed; no MrNobody service or campaign started.')
@@ -150,6 +158,7 @@ jobs:
           NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/receiver_dashboard.cjs
           NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/master_admin.cjs
           NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/detection_validation.cjs
+          NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/lab_mode.cjs
           NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/campaign_live_lab.cjs
       - uses: actions/upload-artifact@v4
         if: always()

@@ -42,6 +42,23 @@ def render_userdata(template, plan, *, source_ref=None, instance_id=None):
         if template.count(anchor) != 1:
             raise ValueError("Cloud-init mangler Master-URL til lab HTTP.")
         template = template.replace(anchor, anchor + '      MRNOBODY_LAB_HTTP="1"' + newline)
+        # Only controlled private IP deployments opt into credential-free Lab Mode.
+        import ipaddress
+        from urllib.parse import urlsplit
+        networks = [str(ipaddress.ip_interface(plan['ipv4']).network)]
+        if plan.get('lab'):
+            defaults = lab_network_defaults(plan['lab'])
+            networks += [str(ipaddress.ip_interface(defaults[key]).network) for key in ('ipv4_1','ipv4_2')]
+        try:
+            host = ipaddress.ip_address(urlsplit(plan['master_url']).hostname) if plan['master_url'] else None
+        except ValueError:
+            host = None
+        private = tuple(ipaddress.ip_network(net) for net in ('10.0.0.0/8','172.16.0.0/12','192.168.0.0/16'))
+        if host and host.version == 4 and any(host in net for net in private):
+            networks.append(str(host)+'/32')
+        if all(any(ipaddress.ip_network(net).subnet_of(parent) for parent in private) for net in networks) and (plan['role']=='master' or (host and host.version == 4 and any(host in net for net in private))):
+            template = template.replace(anchor, anchor + '      MRNOBODY_LAB_MODE="1"' + newline
+                + '      MRNOBODY_LAB_NETWORKS=' + shlex.quote(','.join(sorted(set(networks)))) + newline)
     if instance_id is not None:
         if not re.fullmatch(r"[0-9a-f]{16}", instance_id):
             raise ValueError("Ugyldigt Single VM-instance-ID.")

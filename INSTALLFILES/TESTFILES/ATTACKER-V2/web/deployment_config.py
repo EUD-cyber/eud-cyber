@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 import shlex
-from ipaddress import IPv4Address
+from ipaddress import IPv4Address, ip_network
 from urllib.parse import urlsplit
 
 
@@ -24,6 +24,8 @@ class DeploymentConfig:
     master_url: str = ""
     config_status: str = "default"
     lab_http: bool = False
+    lab_mode: bool = False
+    lab_networks: tuple = ()
 
     def destination_suggestions(self):
         """Editable receiver hints only; never execution or target defaults."""
@@ -45,6 +47,7 @@ class DeploymentConfig:
             "master_url_configured": bool(self.master_url),
             "transport_enabled": None if self.role == "agent" and self.config_status == "loaded" and self.master_url else False,
             "lab_http_enabled": self.lab_http,
+            "lab_mode_enabled": self.lab_mode,
             "master_scheme": "https" if self.master_url.startswith("https://") else "http" if self.master_url.startswith("http://") else None,
         }
 
@@ -57,7 +60,7 @@ def _parse(text):
             continue
         key, separator, value = line.partition("=")
         key = key.strip()
-        if not separator or key not in {"MRNOBODY_ROLE", "MRNOBODY_MASTER_URL", "MRNOBODY_LAB_HTTP"} or key in values:
+        if not separator or key not in {"MRNOBODY_ROLE", "MRNOBODY_MASTER_URL", "MRNOBODY_LAB_HTTP", "MRNOBODY_LAB_MODE", "MRNOBODY_LAB_NETWORKS"} or key in values:
             raise ValueError("Unknown, duplicate or malformed deployment setting")
         # Parse quoting only. No shell sourcing, variable expansion or commands.
         parts = shlex.split(value, comments=False, posix=True)
@@ -78,7 +81,20 @@ def _parse(text):
         match = (LAB_MASTER_URL if lab_http else MASTER_URL).fullmatch(master_url)
         if not match or not 1 <= int(match.group(3) or "443") <= 65535:
             raise ValueError("Invalid HTTPS Master URL")
-    return DeploymentConfig(role, master_url, "loaded", lab_http)
+    mode = values.get('MRNOBODY_LAB_MODE', '0')
+    if mode not in {'0', '1'}:
+        raise ValueError('Invalid lab mode flag')
+    networks = tuple(values.get('MRNOBODY_LAB_NETWORKS', '').split(',')) if values.get('MRNOBODY_LAB_NETWORKS') else ()
+    private = tuple(ip_network(cidr) for cidr in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'))
+    if len(networks) > 16:
+        raise ValueError('Too many lab networks')
+    for value in networks:
+        network = ip_network(value, strict=True)
+        if network.version != 4 or not any(network.subnet_of(parent) for parent in private):
+            raise ValueError('Lab networks must be explicit RFC1918 IPv4 CIDRs')
+    if mode == '1' and (role not in {'master', 'agent'} or not lab_http or not networks):
+        raise ValueError('Lab mode requires explicit Master/agent, lab HTTP and private networks')
+    return DeploymentConfig(role, master_url, "loaded", lab_http, mode == '1', networks)
 
 
 def load_deployment_config(path=DEPLOYMENT_FILE):
@@ -94,6 +110,15 @@ def load_deployment_config(path=DEPLOYMENT_FILE):
     except (OSError, UnicodeError):
         return DeploymentConfig(config_status="invalid")
     try:
-        return _parse(text)
-    except ValueError:
+        config = _parse(text)
+        if config.lab_mode:
+            import os
+            import stat
+            info = Path(path).lstat()
+            if Path(path).is_symlink() or not stat.S_ISREG(info.st_mode) or info.st_nlink != 1 or info.st_size > 8192:
+                raise ValueError('Unsafe Lab Mode configuration')
+            if os.name == 'posix' and (info.st_uid != 0 or info.st_mode & 0o022):
+                raise ValueError('Lab Mode requires root-owned non-writable configuration')
+        return config
+    except (OSError, ValueError):
         return DeploymentConfig(config_status="invalid")

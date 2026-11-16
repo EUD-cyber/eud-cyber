@@ -5,6 +5,11 @@ set -euo pipefail
 BASE_DIR="${NORDIC_BASE_DIR:-/opt/nordic-attack}"
 
 UPDATE_SCRIPT="${BASE_DIR}/scripts/update.sh"
+if [[ "${1:-}" == "lab-mode" && "${2:-}" == "enable" ]]; then
+    shift 2
+    python3 "$BASE_DIR/web/lab_mode.py" enable "$@"
+    exec "$UPDATE_SCRIPT"
+fi
 RUNNER_SCRIPT="${BASE_DIR}/scripts/run-phase.sh"
 
 
@@ -18,6 +23,7 @@ MrNobody CLI
 
 Usage:
   mrnobody update
+  mrnobody lab-mode enable [--network <private-CIDR>]
   mrnobody status
   mrnobody phases
   mrnobody run all

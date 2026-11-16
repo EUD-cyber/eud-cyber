@@ -43,6 +43,10 @@ class AgentConfig:
     token: str=field(repr=False)
     ca_file: str | None=None
     lab_http: bool=False
+    lab_mode: bool=False
+    lab_networks: tuple=()
+    role: str='agent'
+    config_status: str='loaded'
 
 
 def _credential_object(pairs):
@@ -84,7 +88,8 @@ def load_agent_config(path=CREDENTIALS, deployment=None):
     ca_file=data.get("ca_file")
     if ca_file is not None and (not isinstance(ca_file,str) or not Path(ca_file).is_absolute() or not Path(ca_file).is_file()):
         raise FatalAgentError("CA file must be an existing absolute path.")
-    return AgentConfig(deployment.master_url,agent_id,name,token,ca_file,deployment.lab_http)
+    return AgentConfig(deployment.master_url,agent_id,name,token,ca_file,deployment.lab_http,
+                       getattr(deployment,'lab_mode',False),getattr(deployment,'lab_networks',()))
 
 
 def pair_agent(source, *, destination=CREDENTIALS, ca_file=None, deployment=None, transport=None):
@@ -226,6 +231,9 @@ class AgentTransport:
         if not match or not 1<=int(match.group(3) or "443")<=65535:
             raise FatalAgentError("Use HTTPS, or explicitly enable lab HTTP on the agent.")
         self.config=config
+        from lab_mode import http_master_allowed
+        if config.lab_mode and config.master_url.startswith('http://') and not http_master_allowed(config):
+            raise FatalAgentError('Lab HTTP requires a numeric Master IP in configured private networks.')
         try:
             self.context=ssl.create_default_context(cafile=config.ca_file)
         except (OSError,ssl.SSLError) as exc:
@@ -250,7 +258,8 @@ class AgentTransport:
             raise FatalAgentError("Unsupported agent operation.")
         data=dict(agent_id=self.config.agent_id,protocol_version=1)
         if kind=="job-poll":
-            if not self.config.master_url.startswith('https://'):
+            from lab_mode import http_master_allowed
+            if not (self.config.master_url.startswith('https://') or http_master_allowed(self.config)):
                 raise FatalAgentError('Job polling requires verified HTTPS.')
             data['report']=job_report
         if kind=="register":
