@@ -58,6 +58,8 @@
             const link = node(card, 'a', 'View Receiver events for this job');
             link.href = '/api/master/receiver/events?' + new URLSearchParams({agent_id:job.agent_id, campaign_id:job.job_id});
             link.target = '_blank'; link.rel = 'noopener noreferrer';
+            const validation = node(card, 'a', 'Compare imported sensor evidence for this job');
+            validation.href = '/master/validation?' + new URLSearchParams({agent_id:job.agent_id, campaign_id:job.job_id});
             const stop = node(card, 'button', 'Stop this job', 'button button-stop'); stop.type = 'button';
             stop.disabled = working || terminal.has(job.status) || job.stop_requested;
             stop.addEventListener('click', async () => {
