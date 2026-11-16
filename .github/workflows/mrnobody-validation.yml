@@ -40,6 +40,7 @@ jobs:
           python tests/mrnobody/agent_client.py -v
           python tests/mrnobody/master_registry.py -v
           python tests/mrnobody/master_jobs.py -v
+          python tests/mrnobody/master_admin.py -v
           python tests/mrnobody/master_receiver.py -v
           python tests/mrnobody/master_reports.py -v
           python tests/mrnobody/update_agent.py -v
@@ -145,6 +146,7 @@ jobs:
           NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/p11_live_lab.cjs
           NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/p06_live_lab.cjs
           NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/receiver_dashboard.cjs
+          NODE_PATH="$RUNNER_TEMP/mrn-ui/node_modules" node tests/mrnobody/master_admin.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

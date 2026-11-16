@@ -383,6 +383,22 @@ write_files:
           "$INSTALL_DIR/web/master_jobs.py"
 
       download_file \
+          "web/master_admin.py" \
+          "$INSTALL_DIR/web/master_admin.py"
+
+      download_file \
+          "web/templates/master_admin.html" \
+          "$INSTALL_DIR/web/templates/master_admin.html"
+
+      download_file \
+          "web/static/master_admin.js" \
+          "$INSTALL_DIR/web/static/master_admin.js"
+
+      download_file \
+          "docs/master-admin-prerequisite.md" \
+          "$INSTALL_DIR/docs/master-admin-prerequisite.md"
+
+      download_file \
           "web/agent_jobs.py" \
           "$INSTALL_DIR/web/agent_jobs.py"
 

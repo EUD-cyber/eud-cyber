@@ -242,6 +242,7 @@ class API(unittest.TestCase):
             self.assertNotIn("token_hash",json.dumps(result))
             self.assertEqual(result["agents"][0]["status"],"online")
             self.assertEqual(result["control_capabilities"], {
+                "web_job_control": False,
                 "remote_phase_start": False, "remote_phase_stop": False,
                 "remote_scenario_start": False, "remote_scenario_stop": False,
                 "execution_job_polling": True, "fixed_p11_live_lab_job": True, "multi_agent_campaigns": False,
