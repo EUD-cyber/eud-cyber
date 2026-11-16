@@ -109,7 +109,7 @@ class CampaignLiveLab(unittest.TestCase):
 
     def test_selection_validation_and_phase_scope(self):
         for change in ({'p11_live_lab':'true'}, {'p11_live_lab':True, 'beacon_count':99},
-                       {'p11_live_lab':True, 'action':'cleanup'}, {'live_lab':True}, {'p06_live_lab':True}):
+                       {'p11_live_lab':True, 'action':'cleanup'}, {'live_lab':True}, {'p06_live_lab':'true'}):
             response, env = self.start(change)
             self.assertEqual(response.status_code, 400, response.json); self.assertIsNone(env)
         definition = dict(phases=[{'id':'03'}, {'id':'11'}])

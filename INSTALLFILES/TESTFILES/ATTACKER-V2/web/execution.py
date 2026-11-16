@@ -218,6 +218,9 @@ def phase_environment(pid, environ=None, sleep=time.sleep, clock=time.time):
     phase = next(p for p in config['phases'] if p['id'] == pid)
     if pid != '11':
         env.pop('MRNOBODY_P11_LIVE_CONFIG', None)
+    if pid != '06':
+        env.pop('MRNOBODY_P06_LIVE_LAB', None)
+        env.pop('MRNOBODY_P06_CAMPAIGN_LIVE_LAB', None)
     timing = phase.get('timing', {})
     offset = timing.get('start_offset', 0)
     sleep(max(0, float(env['MRN_STARTED']) + offset - clock()))
@@ -230,7 +233,10 @@ def phase_environment(pid, environ=None, sleep=time.sleep, clock=time.time):
         env['MRNOBODY_RUN_MODE'] = 'campaign'
     for key, value in phase.get('parameters', {}).items():
         env['MRNOBODY_' + key.upper()] = str(value)
-    needs_p05 = pid == '06' and any(p['id'] == '05' for p in config['phases'])
+    campaign_live = pid == '06' and env.get('MRNOBODY_P06_CAMPAIGN_LIVE_LAB') == '1'
+    if campaign_live and any(phase.get('parameters', {}).get(key) for key in ('file', 'staging_incident')):
+        raise ValueError('Campaign P06 Live Lab accepts only the generated fixture')
+    needs_p05 = pid == '06' and not campaign_live and any(p['id'] == '05' for p in config['phases'])
     if pid == '06' and not needs_p05 and phase.get('parameters', {}).get('file') and staging_origin:
         env['MRNOBODY_STAGING_INCIDENT'] = staging_origin
     if needs_p05:
@@ -251,6 +257,9 @@ def phase_environment(pid, environ=None, sleep=time.sleep, clock=time.time):
     env['MRNOBODY_PASSWORD'] = env.get('NORDIC_RDP_PASSWORD' if protocol.startswith(('winrm', 'rdp')) else 'NORDIC_SSH_PASSWORD', '')
     env['MRN_TIMING'] = json.dumps(timing)
     env['MRN_PHASE_STARTED'] = str(clock())
+    if campaign_live:
+        from p06_live_lab import campaign_environment
+        env = campaign_environment(env)
     return env
 
 

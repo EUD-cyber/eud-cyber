@@ -148,7 +148,7 @@ class Planning:
 
     def definition(self, sid, data):
         definition = self.custom(sid) or self.preset(sid)
-        if definition is None and ('profile' in data or 'persistence' in data):
+        if definition is None and ('profile' in data or 'persistence' in data or data.get('p06_live_lab') is True):
             scenario = self.m.find_scenario(sid)
             if sid != 'full-incident':
                 raise ValueError('This campaign has no structured timing adapter')

@@ -81,6 +81,49 @@ let logTimer = null;
 
 let campaignWasRunning = false;
 let selectedScenario = null;
+let campaignLiveReady = false;
+
+function configureCampaignLiveLab(deployment, reset = false) {
+    if (deployment !== undefined) campaignLiveReady = deployment?.role === 'agent'
+        && deployment.config_status === 'loaded' && deployment.master_url_configured === true;
+    const full = !selectedScenario || selectedScenario.id === 'full-incident';
+    const section = document.getElementById('campaignLiveLabFields');
+    if (!section) return;
+    section.hidden = !full;
+    for (const id of ['campaignP06LiveLab', 'campaignP11LiveLab']) {
+        const field = document.getElementById(id);
+        if (reset || !full || !campaignLiveReady) field.checked = false;
+        field.disabled = !full || !campaignLiveReady;
+    }
+    for (const [id, value] of [['campaignBeaconInterval',30], ['campaignBeaconDuration',180], ['campaignBeaconCount',6]]) {
+        const field = document.getElementById(id);
+        if (reset) field.value = value;
+        field.disabled = !full || !campaignLiveReady || !document.getElementById('campaignP11LiveLab').checked;
+    }
+    document.getElementById('campaignLiveLabStatus').textContent = campaignLiveReady
+        ? 'Paired Agent configuration is present; Master connectivity and identity are verified at execution. Runtime-only choices, never saved in a scenario or schedule.'
+        : 'Run this on a configured paired Slave Agent. Master/standalone or unavailable configuration cannot enable campaign Live Lab.';
+}
+
+function campaignLiveSelection() {
+    const full = !selectedScenario || selectedScenario.id === 'full-incident';
+    const result = {p06_live_lab: full && document.getElementById('campaignP06LiveLab')?.checked === true,
+                    p11_live_lab: full && document.getElementById('campaignP11LiveLab')?.checked === true};
+    if ((result.p06_live_lab || result.p11_live_lab) && !campaignLiveReady) throw new Error('A configured paired Slave Agent is required for Live Lab.');
+    if (result.p11_live_lab) {
+        for (const [key,id,min,max] of [['beacon_interval','campaignBeaconInterval',10,300],
+                ['beacon_duration','campaignBeaconDuration',60,1800], ['beacon_count','campaignBeaconCount',1,60]]) {
+            const value = Number(document.getElementById(id).value);
+            if (!Number.isInteger(value) || value < min || value > max) throw new Error(key + ' must be ' + min + '–' + max + '.');
+            result[key] = value;
+        }
+        if (result.beacon_interval > result.beacon_duration) throw new Error('Beacon interval must fit its duration.');
+    }
+    return result;
+}
+for (const id of ['campaignP06LiveLab', 'campaignP11LiveLab']) {
+    document.getElementById(id)?.addEventListener('change', () => configureCampaignLiveLab());
+}
 
 
 // ==========================================================
@@ -833,8 +876,9 @@ const MrnUI = (() => {
                     renderDeploymentStatus(health.deployment);
                     configureMasterAgents(health.deployment);
                     configureMasterReceiver(health.deployment);
+                    configureCampaignLiveLab(health.deployment);
                     const root=byId('settingsRuntime');if(root){root.replaceChildren();const dl=node(root,'dl',undefined,'overview-fields');for(const [label,value] of [['Service',health.service],['Version',health.version],['API health',health.status],['Transport',window.location?.protocol === 'https:' ? 'HTTPS (current browser connection)' : 'HTTP (current browser connection)']]){node(dl,'dt',label);node(dl,'dd',value || 'Unavailable');}}
-                }).catch(()=>{configureMasterAgents(null);configureMasterReceiver(null);setText('dashboardHealth','Unavailable');setText('settingsRuntime','Application health unavailable. Retry by opening Settings again.');setText('deploymentRuntime','Deployment status unavailable. Retry by opening Settings again.');}),
+                }).catch(()=>{configureMasterAgents(null);configureMasterReceiver(null);configureCampaignLiveLab(null);setText('dashboardHealth','Unavailable');setText('settingsRuntime','Application health unavailable. Retry by opening Settings again.');setText('deploymentRuntime','Deployment status unavailable. Retry by opening Settings again.');}),
                 get('/api/scenarios').then(data=>setText('dashboardScenarioCount',data.scenarios.length)).catch(()=>setText('dashboardScenarioCount','Unavailable')),
                 get('/api/schedules').then(data=>{setText('dashboardScheduleCount',data.schedules.length);setText('dashboardScheduleEnabled',`${data.schedules.filter(x=>x.enabled).length} enabled`);}).catch(()=>{setText('dashboardScheduleCount','Unavailable');setText('dashboardScheduleEnabled','Schedule status unavailable');}),
                 get('/api/reports').then(data=>{
@@ -1184,12 +1228,14 @@ function renderScenarioDetail(
 
 
 function configureScenario(scenario) {
+    configureCampaignLiveLab(undefined, true);
     if (scenario?.runnable === false) {showMessage(scenario.readiness || "Scenario unavailable.", "error"); return;}
     if (scenario?.custom && window.MrnPlanning && !scenario.phases?.includes("08")) {
         window.MrnPlanning.runCustom(scenario.id).catch(error => showMessage(error.message, "error"));
         return;
     }
     selectedScenario = scenario;
+    configureCampaignLiveLab();
 
     if (startButton) {
         startButton.textContent = scenario
@@ -2471,6 +2517,9 @@ async function startCampaign() {
 
     // Keep the selected scenario stable throughout this submission.
     const scenario = selectedScenario;
+    let liveSelection;
+    try { liveSelection = campaignLiveSelection(); }
+    catch (error) { showMessage(error.message, 'error'); return; }
     const powershell = document.getElementById("campaignPowershell")?.value || "";
     const bash = document.getElementById("campaignBash")?.value || "";
     const powershellEnabled = !!document.getElementById("powershellEnabled")?.checked;
@@ -2778,6 +2827,8 @@ async function startCampaign() {
         "Linux targets will use SSH credentials.\n" +
         "Windows targets will use RDP credentials.\n" +
         campaignP10Summary(powershellEnabled ? powershell : "", powershellEnabled ? bash : "") + "\n" +
+        (liveSelection.p06_live_lab ? 'P06 Live Lab: one generated file on one verified P03 host; one Master receipt.\n' : 'P06 Live Lab: disabled; existing staging flow.\n') +
+        (liveSelection.p11_live_lab ? `P11 Live Lab: up to ${liveSelection.beacon_count} Slave-origin attempts, ${liveSelection.beacon_interval}s interval, ${liveSelection.beacon_duration}s limit.\n` : 'P11 Live Lab: disabled.\n') +
         (
             wordlistEnabled
                 ? "Wordlist authentication is ENABLED."
@@ -2807,6 +2858,7 @@ async function startCampaign() {
 
         const formData =
         new FormData();
+        for (const [key, value] of Object.entries(liveSelection)) formData.append(key, String(value));
 
 
         // --------------------------------------------------

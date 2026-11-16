@@ -133,6 +133,8 @@ requires Windows CI or an authorized Windows lab host.
 
 Campaign integration now has a runtime-only API opt-in for Full Incident and
 valid custom scenarios. See [Campaign Live Lab](../TESTFILES/ATTACKER-V2/docs/campaign-live-lab.md)
-for verified scope, update instructions, Stop/cleanup and lab checks. The campaign
-UI and schedules retain their existing defaults. Master-initiated start/stop on
-one or multiple Slaves and P06 campaign Live Lab remain separate roadmap work.
+for verified scope, update instructions, Stop/cleanup and lab checks. Full Incident
+now has explicit runtime-only P06/P11 UI selections; omission remains disabled and
+schedules are unchanged. P06 uses one generated fixture on one verified P03 host.
+Remote full-campaign start/stop and multi-agent campaigns remain roadmap work;
+Master's separate fixed P11 job control is described in the administrator guide.

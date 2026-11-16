@@ -5,6 +5,12 @@ som standard og nulstilles, når formularen åbnes igen. Normal standalone P06,
 ZTD, heartbeat, P11 og Full Campaign beholder deres eksisterende funktion.
 Der er ingen nye periodiske overførsler, automatisk retry eller C2-kommandoer.
 
+Full Incident har nu et særskilt runtime-only P06/P11 Live Lab-valg. P06 vælger
+én verificeret P03-kilde til en genereret fixture; standardkørsel bruger fortsat
+P05-staging. Master-forsøget har en samlet 10-sekunders DNS/TLS/responsgrænse og
+Stop-håndtering. Se [Campaign Live Lab](../TESTFILES/ATTACKER-V2/docs/campaign-live-lab.md)
+for afgrænsning, Master-first/Slave-second opdatering og labacceptance.
+
 ## Forløb og afgrænsning
 
 1. P06 opretter sin faste `corporate-secret-data.txt` på det valgte lab-target
