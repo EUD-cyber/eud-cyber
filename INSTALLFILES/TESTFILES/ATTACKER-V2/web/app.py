@@ -732,6 +732,7 @@ def api_run_phase(phase_id):
     phase_env = os.environ.copy()
     # A previous process environment must never opt another submission in.
     phase_env.pop('MRNOBODY_P11_LIVE_CONFIG', None)
+    phase_env.pop('MRNOBODY_P06_CAMPAIGN_LIVE_LAB', None)
     if phase_id == '11':
         from agent_client import FatalAgentError
         try:
@@ -1356,11 +1357,20 @@ def api_start(scenario_id="full-incident"):
 
             data = request.form.to_dict()
 
+            # Multipart booleans are explicit strings; JSON keeps strict booleans.
+            for live_field in ('p06_live_lab', 'p11_live_lab'):
+                if live_field in data:
+                    if len(request.form.getlist(live_field)) != 1 or data[live_field] not in {'true', 'false'}:
+                        return jsonify(status='error', message='Live Lab selection must be true or false.'), 400
+                    data[live_field] = data[live_field] == 'true'
+
         try:
             execution_plan = planning.definition(scenario_id, data)
             from p11_live_lab import campaign_selection
             live_config = campaign_selection(data, execution_plan,
                 scenario['metadata'].get('SCENARIO_PHASES', '').split(','))
+            from p06_live_lab import campaign_selection as p06_selection
+            p06_live = p06_selection(data, execution_plan, scenario_id)
         except (ValueError, TypeError, KeyError) as exc:
             return jsonify({"status": "error", "message": str(exc)}), 400
         defaults = read_defaults()
@@ -1738,6 +1748,9 @@ def api_start(scenario_id="full-incident"):
         # Each campaign requires a fresh request selection, never service env inheritance.
         env.pop('MRNOBODY_P11_LIVE_CONFIG', None)
         env.pop('MRNOBODY_P06_LIVE_LAB', None)
+        env.pop('MRNOBODY_P06_CAMPAIGN_LIVE_LAB', None)
+        if p06_live:
+            env['MRNOBODY_P06_CAMPAIGN_LIVE_LAB'] = '1'
         if live_config is not None:
             env['MRNOBODY_P11_LIVE_CONFIG'] = json.dumps(live_config)
         powershell_enabled = str(data.get('powershell_enabled', '0')).lower() in {'1', 'true', 'yes', 'on'}

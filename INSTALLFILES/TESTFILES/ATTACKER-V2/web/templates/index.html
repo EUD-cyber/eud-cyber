@@ -387,7 +387,7 @@
 
                     <div class="field-help">
                         Editable Master suggestion on configured Agents. Confirm the receiver before running.
-                        Existing P06 requires its local IncidentVM upload receiver; Master Receiver integration is pending.
+                        Default P06 uses the local IncidentVM upload receiver. Full Incident Live Lab additionally forwards its verified fixed fixture to the paired Master.
                     </div>
 
                 </div>
@@ -604,6 +604,21 @@
                 <input id="campaignP11Interval" data-campaign-p11="persistence_interval" type="number" min="10" max="3600" value="60">
                 <label for="campaignP11Duration">P11 activity lifetime (seconds; manual artifact cleanup)</label>
                 <input id="campaignP11Duration" data-campaign-p11="persistence_duration" type="number" min="60" max="14400" value="3600">
+            </section>
+            <section class="config-section form-group form-group-wide campaign-action-section" id="campaignLiveLabFields" aria-labelledby="campaignLiveLabHeading">
+                <h3 class="config-section-title" id="campaignLiveLabHeading">Full Incident – P06/P11 Live Lab</h3>
+                <p class="field-help" id="campaignLiveLabStatus">A configured paired Slave Agent is required. These choices apply only to this manual run and reset on scenario change.</p>
+                <label class="checkbox-label" for="campaignP06LiveLab"><input id="campaignP06LiveLab" type="checkbox" disabled> P06: generated fixture to Master Receiver</label>
+                <p class="field-help">Opt-in replaces P06 staged-file selection with one generated simulated file on the first eligible verified P03 host. It uses the Slave's route-selected local receiver, then forwards the verified file once to the configured Master. The general destination IP is not used for this P06 mode. No custom file paths. P05 still runs normally.</p>
+                <label class="checkbox-label" for="campaignP11LiveLab"><input id="campaignP11LiveLab" type="checkbox" disabled> P11: Slave-origin synthetic beacons to Master Receiver</label>
+                <p class="field-help">Starts only after successful P11 target actions. HTTP beacons originate on the Slave; target persistence and DNS are separate. Stop halts the foreground loop, not remote artifacts; use the existing Cleanup afterwards.</p>
+                <label for="campaignBeaconInterval">HTTP beacon interval (seconds)</label>
+                <input id="campaignBeaconInterval" type="number" min="10" max="300" value="30" disabled>
+                <label for="campaignBeaconDuration">HTTP beacon duration limit (seconds)</label>
+                <input id="campaignBeaconDuration" type="number" min="60" max="1800" value="180" disabled>
+                <label for="campaignBeaconCount">HTTP beacon attempt limit</label>
+                <input id="campaignBeaconCount" type="number" min="1" max="60" value="6" disabled>
+                <p class="field-help">Receiver receipts prove delivery, not SIEM detection. No remote campaign start or multi-agent control is added.</p>
             </section>
         <!-- ==================================================
             WORDLIST AUTHENTICATION

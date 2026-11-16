@@ -54,8 +54,8 @@ def validate_payload(data):
 
 def campaign_selection(data, definition, phase_ids):
     """Runtime-only opt-in; never save live traffic in a scenario or schedule."""
-    if data.get('live_lab') or data.get('p06_live_lab'):
-        raise ValueError('P06 Live Lab campaign integration is not available yet')
+    if data.get('live_lab'):
+        raise ValueError('Use explicit p06_live_lab/p11_live_lab campaign selections')
     options = settings(data)
     if options is None:
         return None

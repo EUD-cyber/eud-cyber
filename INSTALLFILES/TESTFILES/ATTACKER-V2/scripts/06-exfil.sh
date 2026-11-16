@@ -1549,7 +1549,11 @@ trap - EXIT
 
 echo
 echo "============================================================"
-echo " PHASE 06 COMPLETED"
+if [[ "${MRNOBODY_P06_LIVE_LAB:-0}" == 1 ]]; then
+    echo " PHASE 06 LOCAL TRANSFER SUMMARY — MASTER RECEIPT PENDING"
+else
+    echo " PHASE 06 COMPLETED"
+fi
 echo "============================================================"
 echo
 
