@@ -15,7 +15,8 @@ CONTROL_CAPABILITIES = {
     "remote_phase_stop": False,
     "remote_scenario_start": False,
     "remote_scenario_stop": False,
-    "execution_job_polling": False,
+    "execution_job_polling": True,
+    "fixed_p11_live_lab_job": True,
     "multi_agent_campaigns": False,
 }
 
@@ -48,7 +49,7 @@ def _object(pairs):
 
 
 def install_master_api(app,deployment,registry_path=DATABASE):
-    def handle(register, reports=False, transfer=False, receiver=False, p06=False, p11=False):
+    def handle(register, reports=False, transfer=False, receiver=False, p06=False, p11=False, jobs=False):
         config=deployment()
         if config.role!="master" or config.config_status!="loaded":
             return jsonify({"message":"Not found."}),404
@@ -56,6 +57,8 @@ def install_master_api(app,deployment,registry_path=DATABASE):
                                       and request.headers.get("X-Forwarded-Proto")=="https")
         if not secure and getattr(config,"lab_http",False) is not True:
             return jsonify({"message":"HTTPS required; lab HTTP is not enabled."}),403
+        if jobs and not secure:
+            return jsonify({"message":"Job polling requires HTTPS."}),403
         if (transfer or receiver or p06 or p11) and not lab_peer():
             return jsonify({"message":"Lab access required."}),403
         authorization=request.headers.get("Authorization","")
@@ -77,6 +80,8 @@ def install_master_api(app,deployment,registry_path=DATABASE):
             fields={"agent_id","protocol_version","name"} if register else {"agent_id","protocol_version"}
             if reports:
                 fields.add("reports")
+            if jobs:
+                fields.add("report")
             if transfer:
                 fields.update(("report_id","content"))
             if p06:
@@ -88,6 +93,11 @@ def install_master_api(app,deployment,registry_path=DATABASE):
             if not isinstance(data,dict) or set(data)!=fields or type(data["protocol_version"]) is not int or data["protocol_version"]!=1:
                 raise ValueError("Invalid protocol payload.")
             store=Registry(registry_path)
+            if jobs:
+                from master_jobs import Jobs
+                response=jsonify(Jobs(registry_path).exchange(data['agent_id'],token,data['report']))
+                response.headers['Cache-Control']='no-store'
+                return response,200
             result=(store.register(data["agent_id"],token,data["name"],
                                    enroll=getattr(config,"lab_http",False) is True and lab_peer()) if register
                     else store.transfer_report(data["agent_id"],token,data["report_id"],data["content"]) if transfer
@@ -109,6 +119,10 @@ def install_master_api(app,deployment,registry_path=DATABASE):
     @app.route("/api/master/agents/register",methods=["POST"])
     def master_register():
         return handle(True)
+
+    @app.route("/api/master/agents/job-poll",methods=["POST"])
+    def master_job_poll():
+        return handle(False,jobs=True)
 
     @app.route("/api/master/agents/p11-beacon",methods=["POST"])
     def master_receive_p11():

@@ -245,10 +245,14 @@ class AgentTransport:
                 raise FatalAgentError("Master requested a report outside the finalized inventory.")
             self.post("report-transfer",snapshot=(ident,read_report_snapshot(ident)))
 
-    def post(self,kind, reports=None, *, snapshot=None, p06=None, p11=None):
-        if kind not in {"register","heartbeat","reports","report-transfer","p06-file","p11-beacon"}:
+    def post(self,kind, reports=None, *, snapshot=None, p06=None, p11=None, job_report=None):
+        if kind not in {"register","heartbeat","reports","report-transfer","p06-file","p11-beacon","job-poll"}:
             raise FatalAgentError("Unsupported agent operation.")
         data=dict(agent_id=self.config.agent_id,protocol_version=1)
+        if kind=="job-poll":
+            if not self.config.master_url.startswith('https://'):
+                raise FatalAgentError('Job polling requires verified HTTPS.')
+            data['report']=job_report
         if kind=="register":
             data["name"]=self.config.name
         if kind=="reports":
@@ -295,6 +299,20 @@ class AgentTransport:
             result=json.loads(body.decode("utf-8"))
         except (ValueError,UnicodeError,RecursionError):
             raise FatalAgentError("Invalid Master response.") from None
+        if kind=="job-poll":
+            from master_jobs import validate_job
+            try:
+                if (not isinstance(result,dict) or set(result)!={'agent_id','protocol_version','job'}
+                        or result['agent_id']!=self.config.agent_id
+                        or type(result['protocol_version']) is not int or result['protocol_version']!=1):
+                    raise ValueError('Invalid job response.')
+                if result['job'] is not None:
+                    validate_job(result['job'],self.config.agent_id)
+                if job_report is not None and (result['job'] is None or result['job']['job_id']!=job_report['job_id']):
+                    raise ValueError('Job report acknowledgement mismatch.')
+            except (ValueError,TypeError,KeyError):
+                raise FatalAgentError('Master job response mismatch.') from None
+            return result
         if kind=="p11-beacon":
             expected={'protocol_version','accepted','event_id','status','received_at',
                       'agent_id','campaign_id','phase','sequence','verified','ack'}

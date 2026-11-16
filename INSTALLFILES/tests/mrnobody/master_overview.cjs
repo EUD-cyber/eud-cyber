@@ -31,6 +31,11 @@ const shared={status:'idle',active:false,execution:null,phases:[],scenarios:[],s
   assert.match(await page.locator('#masterControlReadiness').textContent(), /Remote phase start: Not implemented/);
   assert.match(await page.locator('#masterControlReadiness').textContent(), /Remote scenario stop: Not implemented/);
   assert.match(await page.locator('#masterControlReadiness').textContent(), /Multi-agent campaigns: Not implemented/);
+  capabilities={...capabilities,execution_job_polling:true,fixed_p11_live_lab_job:true};
+  await page.getByRole('button',{name:'Refresh agents',exact:true}).click();
+  await page.waitForFunction(()=>document.getElementById('masterControlReadiness')?.textContent.includes('Fixed synthetic P11 only'));
+  assert.match(await page.locator('#masterControlReadiness').textContent(), /local Master CLI/);
+  assert.match(await page.locator('#masterControlReadiness').textContent(), /Remote phase start: Not implemented/);
   capabilities=undefined;
   await page.getByRole('button',{name:'Refresh agents',exact:true}).click();
   await page.waitForFunction(()=>document.getElementById('masterControlReadiness')?.textContent.includes('Remote phase start: Unverified'));

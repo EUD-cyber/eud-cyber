@@ -1,0 +1,29 @@
+[Unit]
+Description=MrNobody opt-in synthetic P11 job polling
+After=network-online.target mrnobody-agent.service
+Wants=network-online.target
+ConditionPathExists=/etc/mrnobody/agent.json
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/nordic-attack/web
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/python3 /opt/nordic-attack/web/agent_jobs.py
+StateDirectory=mrnobody/agent-jobs
+StateDirectoryMode=0700
+Restart=on-failure
+RestartPreventExitStatus=2
+RestartSec=15
+TimeoutStopSec=30
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target
