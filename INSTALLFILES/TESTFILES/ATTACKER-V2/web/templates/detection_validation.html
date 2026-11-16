@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Detection Validation — imported evidence</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/detection_validation.js" defer></script>
+</head>
+<body>
+<main class="main-container">
+  <h1>Detection Validation</h1>
+  <p>Passive import preview for verified P06 fixture and P11 HTTP receipts. Source files and observer bindings are operator-supplied, not authenticated SIEM evidence.</p>
+  <p>Receiver ACKs prove receipt. Phase MITRE mappings are reference metadata. Neither proves a detection. Empty or incomplete exports never mean “not detected”.</p>
+  <form id="validationForm" class="panel">
+    <label for="validationAgent">Registered MrNobody Agent (online or offline)</label>
+    <select id="validationAgent" required><option value="">Loading Agents…</option></select>
+    <label for="validationCampaign">Campaign / fixed P11 job ID</label>
+    <input id="validationCampaign" required maxlength="104" placeholder="MRN-… or H3-…">
+    <label for="validationWindow">Tolerance around Master receipt time (seconds, 0–300)</label>
+    <input id="validationWindow" type="number" min="0" max="300" value="120" required>
+    <h2>Wazuh</h2>
+    <label for="validationWazuhId">Observer's Wazuh Agent ID (different namespace from MrNobody)</label>
+    <input id="validationWazuhId" maxlength="8" inputmode="numeric" placeholder="001">
+    <label for="validationWazuh">Filtered alerts.json NDJSON slice</label>
+    <input id="validationWazuh" type="file" accept=".json,.jsonl,.ndjson,application/json">
+    <h2>Suricata</h2>
+    <p>Declare the exact observed packet direction. NAT can change these addresses. IP/time alone gives candidates, not confirmed attribution. HTTPS normally hides campaign/sequence markers.</p>
+    <label for="validationSource">Observed source IP</label><input id="validationSource" placeholder="192.168.1.20">
+    <label for="validationDestination">Observed destination IP</label><input id="validationDestination" placeholder="192.168.1.10">
+    <label for="validationSuricata">Filtered eve.json NDJSON slice</label>
+    <input id="validationSuricata" type="file" accept=".json,.jsonl,.ndjson,application/json">
+    <p>Combined files: at most 512 KiB / 2000 records. Timezone-aware timestamps required. Do not include secrets or unrelated logs. Raw content is processed in memory, not stored or echoed. The downloaded summary includes file hashes and allowlisted correlation metadata only.</p>
+    <button class="button" id="validationRun" type="submit">Compare imported evidence</button>
+    <button class="button" id="validationClear" type="button">Clear imported files and result</button>
+  </form>
+  <p id="validationMessage" role="status" aria-live="polite"></p>
+  <button class="button" id="validationDownload" type="button" disabled>Download sanitized summary JSON</button>
+  <section id="validationResult" aria-label="Validation preview"></section>
+  <p>No rules, sensor settings, jobs, reports or Receiver records are changed. Persistence, DNS and other phases are outside this first slice. See docs/detection-validation.md for matching rules and lab acceptance.</p>
+  <a href="/master/admin">Administrator login / fixed P11 jobs</a> · <a href="/">Master dashboard</a>
+</main>
+</body>
+</html>

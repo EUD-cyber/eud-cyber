@@ -387,6 +387,22 @@ write_files:
           "$INSTALL_DIR/web/master_admin.py"
 
       download_file \
+          "web/detection_validation.py" \
+          "$INSTALL_DIR/web/detection_validation.py"
+
+      download_file \
+          "web/templates/detection_validation.html" \
+          "$INSTALL_DIR/web/templates/detection_validation.html"
+
+      download_file \
+          "web/static/detection_validation.js" \
+          "$INSTALL_DIR/web/static/detection_validation.js"
+
+      download_file \
+          "docs/detection-validation.md" \
+          "$INSTALL_DIR/docs/detection-validation.md"
+
+      download_file \
           "web/templates/master_admin.html" \
           "$INSTALL_DIR/web/templates/master_admin.html"
 

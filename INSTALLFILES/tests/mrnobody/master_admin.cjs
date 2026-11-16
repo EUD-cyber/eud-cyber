@@ -79,7 +79,7 @@ const web = path.resolve(__dirname, '../../TESTFILES/ATTACKER-V2/web');
         assert.deepEqual(starts[0], starts[2]);
         assert.equal(await page.evaluate(() => sessionStorage.length + localStorage.length), 0);
         await page.waitForFunction(() => document.querySelectorAll('#jobList article').length === 1);
-        const link = await page.locator('#jobList a').getAttribute('href');
+        const link = await page.locator('#jobList a').first().getAttribute('href');
         assert.ok(link.includes('campaign_id=' + id));
         assert.equal(await page.locator('#jobStart').isDisabled(), true);
         page.once('dialog', dialog => dialog.dismiss());

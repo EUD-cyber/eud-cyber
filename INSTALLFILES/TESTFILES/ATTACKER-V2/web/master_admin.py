@@ -145,7 +145,7 @@ def install_admin_auth(app, deployment, credential_path=CREDENTIAL, clock=time.m
             session = sessions.get(ident)
             if not session or session[0] <= clock() or session[2] != credential['sha256']:
                 sessions.pop(ident, None)
-                if request.path == '/' and request.method == 'GET':
+                if request.path in {'/', '/master/validation'} and request.method == 'GET':
                     result = response({'message': 'Administrator login required.'}, 302)
                     result.headers['Location'] = '/master/admin'
                     return result
@@ -228,6 +228,47 @@ def install_admin_auth(app, deployment, credential_path=CREDENTIAL, clock=time.m
             return response({'message': 'Invalid job request or unknown job.'}, 400)
         except (Unavailable, OSError, sqlite3.Error):
             return response({'message': 'Job storage unavailable.'}, 503)
+
+    @app.route('/master/validation', methods=['GET'])
+    def validation_page():
+        config = deployment()
+        if config.role != 'master' or config.config_status != 'loaded':
+            return response({'message': 'Not found.'}, 404)
+        return render_template('detection_validation.html')
+
+    @app.route(PREFIX + '/validation', methods=['POST'])
+    def validation_preview():
+        config = deployment()
+        if config.role != 'master' or config.config_status != 'loaded':
+            return response({'message': 'Not found.'}, 404)
+        from master_api import lab_peer
+        if not lab_peer():
+            return response({'message': 'Lab HTTPS access required.'}, 403)
+        if request.args:
+            return response({'message': 'Query parameters are not accepted.'}, 400)
+        if request.mimetype != 'application/json':
+            return response({'message': 'JSON required.'}, 415)
+        maximum = 1024 * 1024
+        if request.content_length is None or request.content_length > maximum:
+            return response({'message': 'Preview request exceeds 1 MiB.'}, 413)
+        if limited('validation_previews', 3):
+            result = response({'message': 'Try later.'}, 429)
+            result.headers['Retry-After'] = '60'
+            return result
+        import sqlite3
+        from detection_validation import correlate, pairs, ValidationError
+        try:
+            raw = request.stream.read(maximum + 1)
+            if len(raw) > maximum:
+                return response({'message': 'Preview request exceeds 1 MiB.'}, 413)
+            data = json.loads(raw, object_pairs_hook=pairs)
+            return response(correlate(Registry(registry_path), data))
+        except ValidationError as error:
+            return response({'message': str(error)}, 400)
+        except (ValueError, TypeError, UnicodeError, RecursionError, OverflowError):
+            return response({'message': 'Invalid validation request.'}, 400)
+        except (Unavailable, OSError, sqlite3.Error):
+            return response({'message': 'Reference storage unavailable; no verdict produced.'}, 503)
 
     @app.route('/master/admin', methods=['GET'])
     def admin_page():
