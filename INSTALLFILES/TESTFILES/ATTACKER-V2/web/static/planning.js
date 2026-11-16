@@ -220,7 +220,7 @@
     }
     function message(text) { byId("planningMessage").textContent = text; }
     async function api(url, method = "GET", data) {
-        const response = await fetch(url, {method, headers: {"Content-Type": "application/json"}, body: data === undefined ? undefined : JSON.stringify(data)});
+        const response = await (window.mrnFetch || fetch)(url, {method, headers: {"Content-Type": "application/json"}, body: data === undefined ? undefined : JSON.stringify(data)});
         const value = await response.json();
         if (!response.ok) throw new Error(value.message || value.status || "Request failed");
         return value;
@@ -388,7 +388,7 @@
                 data.append("wordlist_enabled", "1"); data.append("wordlist_users", wordlist.users);
                 if (wordlist.file) data.append("wordlist_file", wordlist.file);
                 if (wordlist.path) data.append("wordlist_path", wordlist.path);
-                const response = await fetch(`/api/scenario/${saved.id}/start`, {method: "POST", body: data});
+                const response = await (window.mrnFetch || fetch)(`/api/scenario/${saved.id}/start`, {method: "POST", body: data});
                 result = await response.json(); if (!response.ok) throw new Error(result.message || result.status);
             } else result = await api("/api/executions/run", "POST", {execution, credentials: secret});
             message(result.status); await refresh();
@@ -500,7 +500,7 @@
             const file = upload.files?.[0];
             if (!file) throw new Error("Choose a scenario JSON file first.");
             if (file.size > maxScenarioBytes) throw new Error("Scenario JSON exceeds the 128 KiB limit.");
-            const response = await fetch("/api/custom-scenarios/import", {method: "POST", headers: {"Content-Type": "application/json"}, body: await file.text()});
+            const response = await (window.mrnFetch || fetch)("/api/custom-scenarios/import", {method: "POST", headers: {"Content-Type": "application/json"}, body: await file.text()});
             const result = await response.json();
             if (!response.ok) throw new Error(result.message || "Scenario import failed. Nothing was saved.");
             await refresh();

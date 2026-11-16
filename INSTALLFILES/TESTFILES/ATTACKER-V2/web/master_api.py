@@ -11,7 +11,7 @@ from master_registry import DATABASE, Registry, Unauthorized, Conflict, Unavaila
 # Installed implementation capabilities, never inferred from heartbeat/online state.
 # This is intentionally separate from the strict agent protocol v1 responses.
 CONTROL_CAPABILITIES = {
-    "web_job_control": False,
+    "web_job_control": True,
     "remote_phase_start": False,
     "remote_phase_stop": False,
     "remote_scenario_start": False,

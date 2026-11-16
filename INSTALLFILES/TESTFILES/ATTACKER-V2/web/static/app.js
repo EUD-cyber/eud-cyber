@@ -1,4 +1,21 @@
 "use strict";
+document.getElementById('refreshReportsButton')?.addEventListener('click', () => refreshReports());
+// Existing local Master mutations share the same administrator/CSRF boundary.
+window.mrnFetch = async (url, options = {}) => {
+    if (document.body.dataset.masterAdmin !== 'true') return fetch(url, options);
+    const target = new URL(url, location.href);
+    if (target.origin !== location.origin) throw new Error('Same-origin requests only.');
+    const headers = new Headers(options.headers || {});
+    const method = (options.method || 'GET').toUpperCase();
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+        const result = await fetch('/api/master/admin/session', {cache:'no-store', credentials:'same-origin', redirect:'error'});
+        if (!result.ok) throw new Error('Administrator login required at /master/admin.');
+        const session = await result.json();
+        if (!session.authenticated || typeof session.csrf !== 'string') throw new Error('Administrator session unavailable.');
+        headers.set('X-CSRF-Token', session.csrf);
+    }
+    return fetch(url, {...options, headers, credentials:'same-origin', redirect:'error'});
+};
 
 /*
 ============================================================
@@ -92,7 +109,7 @@ async function apiGet(url) {
 
 async function apiPost(url, data = {}, timeoutMs = 0) {
 
-    const response = await fetch(
+    const response = await (window.mrnFetch || fetch)(
         url,
         {
             method: "POST",
@@ -125,7 +142,7 @@ async function apiPost(url, data = {}, timeoutMs = 0) {
 
 async function apiPostForm(url, formData) {
 
-    const response = await fetch(
+    const response = await (window.mrnFetch || fetch)(
         url,
         {
             method: "POST",
@@ -599,8 +616,8 @@ const MrnUI = (() => {
         }
         if (masterControlCapabilities?.fixed_p11_live_lab_job === true) node(control, 'p', 'Sprint 1: local Master CLI can queue, inspect and stop one synthetic P11 beacon job. No remote campaign or general phase execution. Guide: docs/master-remote-sprint1.md');
         node(control, 'p', 'Remote campaign submission is unavailable in this version. Existing local runs and synchronized reports remain available.');
-        node(control, 'p', 'Web P11 start/stop is blocked pending administrator authentication deployment validation. Local Master CLI only.');
-        const adminLink = node(control, 'a', 'Validate administrator login prerequisite');
+        node(control, 'p', 'Authenticated Master control supports the fixed P11 job on one Agent. Heartbeat does not confirm that the opt-in job worker is running.');
+        const adminLink = node(control, 'a', 'Open fixed P11 job control');
         adminLink.href = '/master/admin';
         const timestamp = value => Number.isFinite(value) && value > 0
             && !Number.isNaN(new Date(value * 1000).getTime())
