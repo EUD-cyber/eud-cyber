@@ -102,7 +102,12 @@ def boundary(config, sessions, lock, clock, limited, response, agent_posts):
         result = response({'message': 'Try later.'}, 429); result.headers['Retry-After'] = '60'
         return result
     origin = request_origin()
-    if request.headers.get('Sec-Fetch-Site') not in {None, 'same-origin', 'none'}:
+    # A link from another site is a normal entry into the UI. Exempt only
+    # top-level read navigation, never iframe loads, API fetches or mutations.
+    navigation = (request.method in {'GET', 'HEAD'}
+                  and request.headers.get('Sec-Fetch-Mode') == 'navigate'
+                  and request.headers.get('Sec-Fetch-Dest') == 'document')
+    if not navigation and request.headers.get('Sec-Fetch-Site') not in {None, 'same-origin', 'none'}:
         return response({'message': 'Cross-site request rejected.'}, 403)
     if request.headers.get('Origin') not in {None, origin}:
         return response({'message': 'Origin rejected.'}, 403)

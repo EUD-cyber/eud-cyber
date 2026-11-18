@@ -210,6 +210,42 @@ class Boundary(unittest.TestCase):
         result=self.client.get('/api/master/admin/session',base_url=BASE,environ_overrides={'REMOTE_ADDR':'127.0.0.1'})
         self.assertEqual(result.status_code,200);self.assertFalse(result.json['web_job_control'])
 
+    def test_cross_site_links_and_redirects_can_enter_master_and_slave_ui(self):
+        for role in ('master','agent'):
+            self.config=replace(self.config,role=role)
+            for host in (BASE,'http://slave.lab'):
+                for site in ('cross-site','same-site'):
+                    for method in ('GET','HEAD'):
+                        headers={'Sec-Fetch-Site':site,'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'}
+                        result=self.client.open('/',method=method,base_url=host,headers=headers,
+                            environ_overrides={'REMOTE_ADDR':'8.8.8.8'})
+                        self.assertEqual(result.status_code,200,(role,host,headers,result.data))
+                        self.assertIn("frame-ancestors 'none'",result.headers['Content-Security-Policy'])
+            self.assertEqual(self.get('/api/master/admin/session',headers={
+                'Sec-Fetch-Site':'same-origin','Sec-Fetch-Mode':'cors','Sec-Fetch-Dest':'empty'}).status_code,200)
+
+    def test_navigation_exception_never_allows_cross_site_fetch_iframe_or_writes(self):
+        jobs,_=self.seed();csrf=self.session()
+        for role in ('master','agent'):
+            self.config=replace(self.config,role=role)
+            for mode,dest in (('cors','empty'),('no-cors','image'),('navigate','iframe'),('navigate','frame'),('navigate',None),(None,'document')):
+                headers={'Sec-Fetch-Site':'cross-site'}
+                if mode:headers['Sec-Fetch-Mode']=mode
+                if dest:headers['Sec-Fetch-Dest']=dest
+                for path in ('/','/api/master/admin/session'):
+                    self.assertEqual(self.get(path,headers=headers).status_code,403,(role,headers))
+            for method in ('POST','PUT','PATCH','DELETE'):
+                # Even forged navigation metadata, a trusted source and a valid
+                # same-Origin CSRF session cannot bypass cross-site write denial.
+                result=self.client.open('/api/master/admin/jobs',method=method,base_url=BASE,
+                    environ_overrides=self.peer,json=dict(agent_id='agent-1',request_key='cross-site'),
+                    headers={'Origin':BASE,'X-CSRF-Token':csrf,'Sec-Fetch-Site':'cross-site',
+                             'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'})
+                self.assertEqual(result.status_code,403)
+            self.assertEqual(self.get('/',headers={'Origin':'http://portal.lab','Sec-Fetch-Site':'cross-site',
+                'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'}).status_code,403)
+        self.assertEqual(jobs.history(),[])
+
     def test_dns_control_requires_root_approved_origin_trusted_peer_and_csrf(self):
         self.seed();host='http://master.lab:8080';body=dict(agent_id='agent-1',request_key='dns-start')
         def get_session():
@@ -329,4 +365,22 @@ class Boundary(unittest.TestCase):
         self.assertFalse((self.root/'rejected.sqlite3').exists())
 
 
-if __name__=='__main__':unittest.main()
+if __name__=='__main__':
+    if sys.argv[1:] == ['--navigation-server']:
+        # Real browser/middleware fixture; no campaign runtime or processes.
+        import threading
+        from werkzeug.serving import make_server
+        fixtures=[];servers=[]
+        try:
+            for role in ('master','agent'):
+                fixture=Boundary();fixture.setUp();fixtures.append(fixture)
+                fixture.config=replace(fixture.config,role=role)
+                server=make_server('127.0.0.1',0,fixture.app);servers.append(server)
+                threading.Thread(target=server.serve_forever,daemon=True).start()
+            print(json.dumps([server.server_port for server in servers]),flush=True)
+            sys.stdin.read()  # Closing stdin terminates the fixture cleanly.
+        finally:
+            for server in servers:server.shutdown();server.server_close()
+            for fixture in fixtures:fixture.doCleanups()
+    else:
+        unittest.main()
