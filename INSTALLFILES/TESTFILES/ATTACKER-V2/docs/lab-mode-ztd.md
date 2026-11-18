@@ -1,6 +1,6 @@
 # Sprint 6 — Lab Mode & Zero-Touch Deployment
 
-Lab Mode is a separate, explicit network-trust mode for isolated CyberLabs. It
+Lab Mode is a separate, explicit opt-in mode for controlled CyberLabs. It
 removes manual web administrator provisioning and permits HTTP for the existing
 fixed synthetic P11 job. It does not add remote P01–P11, scenario or multi-Agent
 execution. The existing single active job, fixed operation, idempotency key,
@@ -21,7 +21,7 @@ Networks are an explicit comma-separated allowlist of RFC1918 IPv4 CIDRs (maximu
 slice. Lab Mode config must be a regular, unlinked root-owned file, not writable
 by group/others. Invalid deployment settings block dynamic web access.
 
-**Every client in the configured networks is trusted to administer Master**,
+**Every client in the configured networks using an approved control Host is trusted to administer Master and Slave**,
 including local campaign/configuration functions already available to an operator.
 Use isolated teaching networks with firewall boundaries; do not include an
 untrusted/shared network. HTTP exposes Agent tokens, lab sessions, logs and
@@ -29,19 +29,67 @@ content to that network. This is not a secure substitute for protected mode.
 Agent identity/token binding, strict job schemas, request/rate bounds and
 same-origin/CSRF checks remain enabled to prevent mistakes and browser attacks.
 
-Master checks both the actual client IP and a numeric private Host against the
-configured allowlist. Only local loopback nginx may provide X-Real-IP and scheme;
-its config overwrites those headers. Public clients, other private networks,
-DNS-based Host names and cross-origin browser requests are refused. Use the
-Master's literal private IPv4 URL. For NAT, allow the source address/subnet that
-Master actually observes, plus the subnet containing Master itself. Do not widen
-to all private networks just to make a test pass.
+### TEST-001: UI access and mutation authority are separate
 
-The dashboard opens directly on an allowed network. `/master/admin` automatically
+Both Master and Slave UI reads work from **all source networks**, via IP or DNS,
+including NAT, routed networks and VPN. The client does not have to be in
+`MRNOBODY_LAB_NETWORKS`; a numeric private Host is not required for web reads.
+HTTP and automatic sessions remain restricted to explicit, valid Lab Mode.
+Protected/Standalone defaults are unchanged. The existing installer opt-in also
+applies to existing Lab Mode installations after updating; no new global bypass
+is enabled for other installations.
+
+**All unsafe web methods (POST/PUT/PATCH/DELETE, including start, stop, update,
+configuration and campaign changes) are separately denied** unless the observed
+source is in `MRNOBODY_LAB_NETWORKS` and the Host is either a numeric private
+address in those networks or an exact root-provisioned control origin. The
+session endpoint reports `web_job_control=false` on read-only connections; the
+Master control page disables start and stop there. A session/CSRF token alone
+does not grant authority: the source/Host boundary is rechecked on every write.
+Exact same-Origin, opaque session, CSRF, rate and request-size limits still apply.
+
+Optional DNS control (add to root-owned `/etc/mrnobody/deployment.conf` on each
+VM where needed, then update/restart):
+
+```ini
+MRNOBODY_LAB_CONTROL_ORIGINS=http://master.lab,http://slave.lab
+```
+
+Use only origins owned by the lab; include the exact scheme and non-default port
+when used, with no slash/path/wildcard. This setting permits DNS control from
+trusted sources, **never from an arbitrary source network**. Without it, DNS
+access is read-only. Numeric private lab control retains the Sprint 6 behavior.
+Unapproved DNS origins cannot mutate even from a trusted source (DNS rebinding).
+
+For remote administration, connect through a trusted VPN whose observed private
+source subnet is explicitly listed. Another option is a dedicated reverse proxy
+that authenticates/authorizes operators **before forwarding**, connects from a
+listed private source, and uses an approved backend Host. Never put an
+unauthenticated public forwarder in a trusted source network: the backend would
+trust all its users. Only local loopback nginx may supply X-Real-IP and scheme;
+the supplied nginx template overwrites both headers. Do not trust arbitrary
+forwarded headers, widen to all networks, or add public CIDRs to enable writes.
+
+**Public read access is still dangerous**: reports, inventory, logs and lab
+configuration can contain sensitive information. HTTP exposes sessions and data
+to observers. Lab Mode is for deliberate controlled labs only, not internet
+publication. Use a firewall/VPN for confidentiality and protected HTTPS mode for
+untrusted environments. UI read access does not make public deployment safe.
+
+### Agent job transport is unchanged
+
+`MRNOBODY_LAB_NETWORKS` still scopes private plaintext Agent transport, including
+its numeric private Master Host requirement. DNS browser access does not permit
+DNS HTTP job transport. Agent-ID/token binding, job allowlist/idempotency,
+Receiver schemas/protocol checks, heartbeat/ZTD and outbound NAT-friendly polling
+remain intact. Keep the Master private numeric URL for HTTP Agents, or use the
+existing verified HTTPS transport. No inbound Slave job port is added.
+
+The dashboard opens directly from any network. `/master/admin` automatically
 obtains an opaque HttpOnly/SameSite=Strict 15-minute lab session for CSRF and shows
-fixed P11 control without login. No administrator or Agent token is placed in the
+fixed P11 control or a read-only notice without login. No administrator or Agent token is placed in the
 page, URL or browser storage. The HTTP cookie cannot have Secure; HTTPS lab access
-uses Secure. Lab access is network-based, so there is no meaningful administrator
+uses Secure. Mutation authority is network-based, so there is no meaningful administrator
 logout in this mode. Root configuration and a service reload control the mode.
 
 HTTPS remains available and Agent certificate/hostname verification remains
@@ -70,7 +118,7 @@ Master/Standalone do not activate either Agent worker.
 
 nginx's distributed template retains protected HTTP redirects. Installation and
 update render the HTTP reverse proxy only for explicit Lab Mode, with backend
-network/Host/CSRF enforcement. TLS configuration and the existing Agent-specific
+separate mutation/transport network/Host enforcement and CSRF. TLS configuration and the existing Agent-specific
 body limits remain. The generated active config is not an update-manifest entry;
 the template and renderer are SHA256-verified distributed files.
 
@@ -79,16 +127,20 @@ the template and renderer are SHA256-verified distributed files.
 Existing installations do not silently lose administrator protection on update.
 After this PR is merged into the configured update branch:
 
-1. Run `sudo mrnobody update` on Master. Existing authentication stays in place.
+1. Run `sudo mrnobody update` on Master. Existing protected-mode authentication stays in place.
+   An already-enabled Lab Mode installation immediately receives all-network UI
+   reads with separately protected mutations; keep its existing networks.
 2. To explicitly migrate that isolated Master, run
    `sudo mrnobody lab-mode enable`. It discovers only RFC1918 subnets on local
    global IPv4 interfaces, validates and atomically writes the opt-in settings,
-   then runs the updater to activate nginx/services. For routed clients use
+   then runs the updater to activate nginx/services. For trusted routed/VPN operators use
    `sudo mrnobody lab-mode enable --network 192.168.50.0/24 --network 10.134.71.0/24`
-   with the actual Master/client networks. Supplying networks replaces discovery.
+   with the actual Master/trusted-source networks. UI readers need no added subnet.
+   Supplying networks replaces discovery.
    The command never overwrites an Agent identity or administrator credential.
-3. Open `http://<Master-private-IPv4>/` and **Master P11 control**. Verify the Lab
-   Mode notice and absence of a login form. An off-allowlist client must fail.
+3. Open `http://<Master-IP-or-DNS>/` and **Master P11 control** from another
+   subnet, NAT and VPN. Verify no login or numeric-Host JSON error. An off-list
+   client must read successfully but show read-only control and fail mutations.
 4. On Slave run `sudo mrnobody update`, then explicitly opt into the same mode
    with `sudo mrnobody lab-mode enable`. Its configured numeric Master IP is
    added as /32. No manual systemd configuration or pairing is needed for an
@@ -121,7 +173,7 @@ logs, expected result and actual result for each item:
 | Area | Actual lab acceptance required | Initial state |
 |---|---|---|
 | Install/ZTD | Big, Mini, Custom, Single Master/Slave; correct role/IP/services | Not tested |
-| Network trust | Allowed UI; disallowed private/public peer; cross-origin rejection | Not tested |
+| UI/control boundary | All-source IP/DNS reads; off-list writes denied; trusted control; cross-origin rejection | Not tested |
 | Agent lifecycle | Offline Master retry, heartbeat, stable ID/token after reboot/update | Not tested |
 | Fixed P11 queue | Start/status/Stop/deadline, worker reboot, no duplicate effects | Not tested |
 | P01–P11 | Each locally supported phase, prerequisites, actual evidence and cleanup | Not tested |

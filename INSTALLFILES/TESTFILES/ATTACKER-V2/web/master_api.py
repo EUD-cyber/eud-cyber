@@ -1,4 +1,4 @@
-from lab_mode import lab_request
+from lab_mode import lab_request, transport_request, control_request
 """Master-only authenticated endpoints; HTTPS by default, explicit lab HTTP."""
 import json
 import ipaddress
@@ -59,9 +59,9 @@ def install_master_api(app,deployment,registry_path=DATABASE):
                                       and request.headers.get("X-Forwarded-Proto")=="https")
         if not secure and getattr(config,"lab_http",False) is not True:
             return jsonify({"message":"HTTPS required; lab HTTP is not enabled."}),403
-        if getattr(config,"lab_mode",False) and not lab_request(config):
+        if getattr(config,"lab_mode",False) and not transport_request(config):
             return jsonify({"message":"Configured lab network required."}),403
-        if jobs and not (secure or lab_request(config)):
+        if jobs and not (secure or transport_request(config)):
             return jsonify({"message":"Job polling requires HTTPS."}),403
         if (transfer or receiver or p06 or p11) and not lab_peer():
             return jsonify({"message":"Lab access required."}),403
@@ -147,7 +147,7 @@ def install_master_api(app,deployment,registry_path=DATABASE):
             return jsonify({"message":"Not found."}),404
         secure=request.is_secure or (request.remote_addr in {"127.0.0.1","::1"}
                                      and request.headers.get("X-Forwarded-Proto")=="https")
-        if not (secure or lab_request(config)) or not lab_peer():
+        if not (lab_request(config) or (secure and lab_peer())):
             return jsonify({"message":"Lab HTTPS access required."}),403
         try:
             allowed={"limit","before","agent_id","campaign_id"}
@@ -190,7 +190,7 @@ def install_master_api(app,deployment,registry_path=DATABASE):
             return jsonify({"message":"Not found."}),404
         secure=request.is_secure or (request.remote_addr in {"127.0.0.1","::1"}
                                      and request.headers.get("X-Forwarded-Proto")=="https")
-        if not (secure or lab_request(config)) or not lab_peer():
+        if not (lab_request(config) or (secure and lab_peer())):
             return jsonify({"message":"Lab HTTPS access required."}),403
         try:
             cached=Registry(registry_path).read_report(agent_id,report_id)
@@ -214,8 +214,7 @@ def install_master_api(app,deployment,registry_path=DATABASE):
 
     @app.route("/api/master/agents",methods=["GET"])
     def master_agents():
-        # Administration follows the existing UI's lab-network access boundary.
-        # Lab HTTP opt-in applies only to registration and heartbeat.
+        # UI reads do not grant mutation authority or change Agent transport.
         config=deployment()
         if config.role!="master" or config.config_status!="loaded":
             return jsonify({"message":"Not found."}),404
@@ -223,13 +222,16 @@ def install_master_api(app,deployment,registry_path=DATABASE):
                                       and request.headers.get("X-Forwarded-Proto")=="https")
         if not (secure or lab_request(config)):
             return jsonify({"message":"HTTPS required."}),403
+        capabilities = dict(CONTROL_CAPABILITIES)
+        if getattr(config, 'lab_mode', False):
+            capabilities['web_job_control'] = control_request(config)
         try:
             path=Path(registry_path)
             if not path.exists() and not path.is_symlink():
-                return jsonify({"agents":[],"initialized":False,"control_capabilities":dict(CONTROL_CAPABILITIES)}),200
+                return jsonify({"agents":[],"initialized":False,"control_capabilities":capabilities}),200
             rows=Registry(registry_path).list_agents()
             fields=("agent_id","name","status","last_seen_at","registered_at","reports","reports_synced_at","available_reports")
             return jsonify({"agents":[{key:row[key] for key in fields} for row in rows],
-                            "initialized":True,"control_capabilities":dict(CONTROL_CAPABILITIES)}),200
+                            "initialized":True,"control_capabilities":capabilities}),200
         except (Unavailable,OSError,sqlite3.Error,ValueError):
             return jsonify({"message":"Registry unavailable."}),503
