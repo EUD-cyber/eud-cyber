@@ -391,6 +391,10 @@ write_files:
           "$INSTALL_DIR/web/lab_mode.py"
 
       download_file \
+          "web/lab_access.py" \
+          "$INSTALL_DIR/web/lab_access.py"
+
+      download_file \
           "docs/lab-mode-ztd.md" \
           "$INSTALL_DIR/docs/lab-mode-ztd.md"
 

@@ -9,7 +9,9 @@ const {chromium}=require('playwright');
 const web=path.resolve(__dirname,'../../TESTFILES/ATTACKER-V2/web');
 
 async function checkNavigation(browser){
-    const fixture=spawn(process.env.MRN_PYTHON||'python',[path.join(__dirname,'lab_mode.py'),'--navigation-server'],
+    const command=process.env.MRN_FIXTURE_COMMAND ? JSON.parse(process.env.MRN_FIXTURE_COMMAND)
+        : [process.env.MRN_PYTHON||'python',path.join(__dirname,'lab_mode.py')];
+    const fixture=spawn(command[0],[...command.slice(1),'--navigation-server'],
         {stdio:['pipe','pipe','pipe']});
     const lines=readline.createInterface({input:fixture.stdout});
     let target,portal,page,diagnostics='';
@@ -20,7 +22,7 @@ async function checkNavigation(browser){
             once(fixture,'exit').then(()=>{throw new Error('Navigation fixture exited: '+diagnostics);}),
             new Promise((_,reject)=>{const timer=setTimeout(()=>reject(new Error('Navigation fixture timeout: '+diagnostics)),15000);timer.unref();})
         ]);
-        const ports=JSON.parse(ready[0]);
+        const {ports,handoff}=JSON.parse(ready[0]);
         portal=http.createServer((req,res)=>{
             if(req.url==='/redirect'){res.writeHead(302,{Location:target});res.end();}
             else{res.setHeader('Content-Type','text/html');res.end('<a href="'+target+'">Open lab</a><a href="/redirect">Redirect to lab</a>');}
@@ -49,6 +51,26 @@ async function checkNavigation(browser){
                 }
             }
         }
+        if(handoff){
+            for(let index=0;index<ports.length;index++){
+                const origin='http://127.0.0.1:'+ports[index];
+                const next=once(lines,'line');
+                fixture.stdin.write(JSON.stringify({index,origin})+'\n');
+                const {link}=JSON.parse((await next)[0]);
+                await page.goto(link);
+                await page.locator('#labMessage').filter({hasText:'Changes authorized'}).waitFor();
+                assert.equal(new URL(page.url()).hash,'');
+                assert.equal(await page.evaluate(()=>sessionStorage.length+localStorage.length),0);
+                await page.reload();
+                await page.locator('#labMessage').filter({hasText:'Changes authorized'}).waitFor();
+                await page.locator('#labLogout').click();
+                await page.locator('#labMessage').filter({hasText:'Read-only access'}).waitFor();
+                await page.goto(link);
+                await page.locator('#labMessage').filter({hasText:'Unauthorized'}).waitFor();
+                assert.equal(new URL(page.url()).hash,'');
+            }
+            console.log('PASS real Linux/browser: root-issued Master/Slave handoff, fragment removal, HttpOnly session reload, logout and replay rejection.');
+        }
         console.log('PASS real Flask/browser: cross-site links and redirects into Master/Slave via IP and DNS; same-origin session reads remain available and read-only.');
     }finally{
         if(page)await page.close();
@@ -73,7 +95,7 @@ async function checkNavigation(browser){
             if(url.pathname==='/lab/control')return route.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(web,'templates/lab_control.html'),'utf8')});
             if(url.pathname.startsWith('/static/'))return route.fulfill({contentType:url.pathname.endsWith('.js')?'text/javascript':'text/css',body:fs.readFileSync(path.join(web,url.pathname.slice(1)),'utf8')});
             if(url.pathname.endsWith('/session')){
-                if(req.method()==='POST'){assert.deepEqual(req.postDataJSON(),{credential:'s'.repeat(43)});readOnly=false;}
+                if(req.method()==='POST'){assert.deepEqual(req.postDataJSON(),{handoff:'s'.repeat(43)});readOnly=false;}
                 if(req.method()==='DELETE'){assert.equal(req.headers()['x-csrf-token'],'c'.repeat(43));readOnly=true;}
                 return route.fulfill({json:{authenticated:true,lab_mode:true,web_job_control:!readOnly,csrf:'c'.repeat(43)}});
             }
@@ -93,10 +115,13 @@ async function checkNavigation(browser){
         });
         await page.goto('http://192.168.50.3/master/admin');
         await page.getByRole('status').filter({hasText:'Lab Mode: read-only'}).waitFor();
-        assert.equal(await page.locator('#adminLogin').isVisible(),true);
+        assert.equal(await page.locator('#adminLogin').isVisible(),false);
         assert.equal(await page.locator('#jobStart').isDisabled(),true);
-        await page.locator('#adminCredential').fill('s'.repeat(43));
-        await page.locator('#adminLogin button').click();
+        await page.goto('http://192.168.50.3/lab/control#handoff='+'s'.repeat(43));
+        await page.locator('#labMessage').filter({hasText:'Changes authorized'}).waitFor();
+        assert.equal(new URL(page.url()).hash,'');
+        assert.equal(await page.locator('input[type=password]').count(),0);
+        await page.goto('http://192.168.50.3/master/admin');
         await page.getByRole('status').filter({hasText:'Lab Mode: administrator authenticated'}).waitFor();
         assert.equal(await page.locator('#adminLogin').isVisible(),false);
         assert.equal(await page.locator('#adminLogout').isVisible(),true);
@@ -118,7 +143,7 @@ async function checkNavigation(browser){
         await page.goto('http://master.lab/master/admin');
         await page.getByRole('status').filter({hasText:'Lab Mode: read-only'}).waitFor();
         await page.waitForFunction(()=>document.querySelectorAll('#jobList article').length===1);
-        assert.equal(await page.locator('#adminLogin').isVisible(),true);
+        assert.equal(await page.locator('#adminLogin').isVisible(),false);
         assert.equal(await page.locator('#jobStart').isDisabled(),true);
         assert.equal(await page.getByRole('button',{name:'Stop this job'}).isDisabled(),true);
         assert.equal(starts.length,2);assert.equal(stops,1);
@@ -127,15 +152,15 @@ async function checkNavigation(browser){
         }
         await page.goto('http://slave.lab/lab/control');
         await page.locator('#labMessage').filter({hasText:'Read-only access'}).waitFor();
-        await page.locator('#labKey').fill('s'.repeat(43));
-        await page.locator('#labLogin button').click();
+        await page.goto('http://slave.lab/lab/control#handoff='+'s'.repeat(43));
         await page.locator('#labMessage').filter({hasText:'Changes authorized'}).waitFor();
-        assert.equal(await page.locator('#labKey').inputValue(),'');
+        assert.equal(new URL(page.url()).hash,'');
+        assert.equal(await page.locator('input[type=password]').count(),0);
         assert.equal(await page.evaluate(()=>sessionStorage.length+localStorage.length),0);
         await page.locator('#labLogout').click();
         await page.locator('#labMessage').filter({hasText:'Read-only access'}).waitFor();
-        assert.equal(await page.locator('#labLogin').isVisible(),true);
+        assert.match(await page.locator('#labCommand').innerText(), /sudo mrnobody lab-open http:\/\/slave.lab/);
         assert.deepEqual(errors,[]);
-        console.log('PASS HTTP Lab Mode UI: IP/DNS credential login, anonymous start/stop disabled, no automatic job, reload retry, CSRF, confirmed Stop, 3 widths.');
+        console.log('PASS HTTP Lab Mode UI: IP/DNS one-time handoff, anonymous start/stop disabled, no automatic job, reload retry, CSRF, confirmed Stop, 3 widths.');
     }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

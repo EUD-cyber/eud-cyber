@@ -7,9 +7,10 @@ import secrets
 from urllib.parse import urlsplit
 
 from flask import request
+from lab_access import SESSION_TTL
 
 COOKIE = 'mrn-lab-session'
-TTL = 900
+TTL = 900  # Anonymous read sessions retain their short capacity lifetime.
 PRIVATE = tuple(ipaddress.ip_network(net) for net in ('10.0.0.0/8','172.16.0.0/12','192.168.0.0/16'))
 
 
@@ -149,7 +150,7 @@ def boundary(config, sessions, lock, clock, limited, response, agent_posts):
         digest = control_digest()
     except (OSError, ValueError, UnicodeError):
         digest = ''  # Reads remain available; control fails closed.
-    fingerprint = hashlib.sha256(json.dumps([origin, digest]).encode()).hexdigest()
+    fingerprint = hashlib.sha256(json.dumps([origin, digest, config.role]).encode()).hexdigest()
     login = request.path == '/api/master/admin/session' and request.method == 'POST'
     if login and limited('lab_login', 5):
         result = response({'message': 'Try later.'}, 429)
@@ -167,6 +168,8 @@ def boundary(config, sessions, lock, clock, limited, response, agent_posts):
         g.lab_control = bool(session and len(session) == 4 and session[3] and digest)
         can_control = control_request(config)
         if login:
+            if len(sessions) >= 64 and not session:
+                return response({'message': 'Session capacity reached.'}, 503)
             if (request.args or request.headers.get('Origin') != origin
                     or request.mimetype != 'application/json' or request.content_length is None
                     or request.content_length > 1024):
@@ -174,11 +177,9 @@ def boundary(config, sessions, lock, clock, limited, response, agent_posts):
             from master_api import _object
             try:
                 body = json.loads(request.stream.read(1025), object_pairs_hook=_object)
-                token = body.get('credential') if isinstance(body, dict) else None
-                from master_admin import TOKEN
-                valid = (isinstance(body, dict) and set(body) == {'credential'}
-                         and isinstance(token, str) and TOKEN.fullmatch(token) and digest
-                         and hmac.compare_digest(hashlib.sha256(token.encode()).hexdigest(), digest))
+                from lab_access import consume
+                valid = (isinstance(body, dict) and set(body) == {'handoff'}
+                         and consume(body['handoff'], config, origin, digest))
             except (ValueError, UnicodeError, RecursionError):
                 valid = False
             if not valid:
@@ -191,14 +192,14 @@ def boundary(config, sessions, lock, clock, limited, response, agent_posts):
                 if len(sessions) >= 64:
                     return response({'message': 'Session capacity reached.'}, 503)
                 ident, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
-                session = (now + TTL, csrf, fingerprint, can_control); sessions[ident] = session
+                session = (now + (SESSION_TTL if can_control else TTL), csrf, fingerprint, can_control); sessions[ident] = session
             result = response({'authenticated': True, 'csrf': session[1], 'lab_mode': True, 'web_job_control': can_control})
             result.set_cookie(COOKIE, ident, secure=origin.startswith('https://'), httponly=True,
                               samesite='Strict', path='/', max_age=max(1, int(session[0]-now)))
             return result
         if request.method not in {'GET', 'HEAD', 'OPTIONS'}:
             if not can_control:
-                return response({'message': 'Administrator control key required.'}, 403)
+                return response({'message': 'Local VM browser handoff required. Open /lab/control for instructions.'}, 403)
             csrf = request.headers.get('X-CSRF-Token', '')
             if (request.headers.get('Origin') != origin or not session or len(csrf) != 43
                     or not hmac.compare_digest(csrf, session[1])):
@@ -283,6 +284,8 @@ if __name__ == '__main__':
     sub = parser.add_subparsers(dest='command', required=True)
     render = sub.add_parser('nginx');render.add_argument('source');render.add_argument('destination')
     sub.add_parser('provision-control')
+    access = sub.add_parser('open')
+    access.add_argument('origin', help='Exact browser HTTP/HTTPS origin, including port if needed')
     enable = sub.add_parser('enable');enable.add_argument('--network', action='append', default=[])
     args = parser.parse_args()
     try:
@@ -290,6 +293,9 @@ if __name__ == '__main__':
             Path(args.destination).write_text(nginx_content(Path(args.source).read_text(),load_deployment_config()))
         elif args.command == 'provision-control':
             ensure_control(load_deployment_config())
+        elif args.command == 'open':
+            from lab_access import issue
+            print(issue(load_deployment_config(), args.origin))
         else:
             configure(DEPLOYMENT_FILE,args.network)
             print('Lab Mode configured. Run sudo mrnobody update to provision control access and repair services/nginx.')
