@@ -162,6 +162,7 @@ def boundary(config, sessions, lock, clock, limited, response, agent_posts):
                 del sessions[key]
         session = sessions.get(ident)
         if session and session[2] != fingerprint:
+            sessions.pop(ident, None)
             session = None
         g.lab_control = bool(session and len(session) == 4 and session[3] and digest)
         can_control = control_request(config)

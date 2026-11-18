@@ -380,6 +380,7 @@ class Boundary(unittest.TestCase):
         self.digest='0'*64
         self.assertEqual(self.post('/api/master/admin/jobs',body,csrf).status_code,403)
         self.digest=hashlib.sha256(self.secret.encode()).hexdigest()
+        self.assertEqual(self.post('/api/master/admin/jobs',body,csrf).status_code,403)
         self.now+=901
         self.assertEqual(self.post('/api/master/admin/jobs',body,csrf).status_code,403)
         self.digest=''
