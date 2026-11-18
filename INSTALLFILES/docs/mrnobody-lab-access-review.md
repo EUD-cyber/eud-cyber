@@ -1,3 +1,5 @@
+> Historical report, superseded by the selected open Lab Mode policy. See [current access model](../TESTFILES/ATTACKER-V2/docs/lab-access-preinstall.md). Earlier login/portal prerequisites and test counts do not describe the current implementation.
+
 # Lab Mode access review — 2026-11-18
 
 Historical PR #117 review. Current preinstall status and enrollment policy:

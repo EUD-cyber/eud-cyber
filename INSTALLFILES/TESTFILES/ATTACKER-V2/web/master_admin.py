@@ -215,7 +215,7 @@ def install_admin_auth(app, deployment, credential_path=CREDENTIAL, clock=time.m
                 return response({'message': 'JSON required.'}, 415)
             if request.content_length is None or request.content_length > 1024:
                 return response({'message': 'Request too large.'}, 413)
-            if limited('job_writes', 6):
+            if limited('job_writes', 120 if getattr(config, 'lab_mode', False) else 6):
                 result = response({'message': 'Try later.'}, 429)
                 result.headers['Retry-After'] = '60'
                 return result
@@ -285,7 +285,7 @@ def install_admin_auth(app, deployment, credential_path=CREDENTIAL, clock=time.m
         if not (lab_request(config) or request.is_secure or (request.remote_addr in {'127.0.0.1', '::1'}
                 and request.headers.get('X-Forwarded-Proto') == 'https')):
             return response({'message': 'HTTPS required.'}, 403)
-        page = app.make_response(render_template('master_admin.html'))
+        page = app.make_response(render_template('master_admin.html', lab_mode_enabled=getattr(config, 'lab_mode', False)))
         page.headers['Cache-Control'] = 'no-store'
         page.headers['Referrer-Policy'] = 'no-referrer'
         page.headers['X-Content-Type-Options'] = 'nosniff'
@@ -298,12 +298,8 @@ def install_admin_auth(app, deployment, credential_path=CREDENTIAL, clock=time.m
         from lab_mode import lab_request
         if not lab_request(deployment()):
             return response({'message': 'Not found.'}, 404)
-        page = app.make_response(render_template('lab_control.html'))
-        page.headers['Cache-Control'] = 'no-store'
-        page.headers['Referrer-Policy'] = 'no-referrer'
-        page.headers['Content-Security-Policy'] = ("default-src 'none'; script-src 'self'; "
-                "style-src 'self'; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'")
-        return page
+        from flask import redirect
+        return redirect('/', code=302)  # Old bookmarks no longer activate access.
 
     @app.route(PREFIX + '/session', methods=['GET', 'POST', 'DELETE'])
     def admin_session():

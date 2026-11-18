@@ -343,9 +343,7 @@ PY
 }
 
 provision_lab_control() {
-    if [[ -f "$INSTALL_DIR/web/lab_mode.py" ]]; then
-        python3 "$INSTALL_DIR/web/lab_mode.py" provision-control || return $?
-    fi
+    return 0  # Compatibility: open Lab Mode has no control key to provision.
 }
 
 repair_nginx_config() {
@@ -575,7 +573,7 @@ restart_updated_agent() {
     fi
 }
 
-for agent_file in web/agent_client.py web/agent_jobs.py web/lab_mode.py web/lab_access.py web/deployment_config.py web/master_registry.py systemd/mrnobody-agent.service systemd/mrnobody-agent-jobs.service; do
+for agent_file in web/agent_client.py web/agent_jobs.py web/lab_mode.py web/deployment_config.py web/master_registry.py systemd/mrnobody-agent.service systemd/mrnobody-agent-jobs.service; do
     if [[ -f "$DOWNLOAD_DIR/$agent_file" ]]; then
         AGENT_CHANGED=1
     fi

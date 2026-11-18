@@ -1,4 +1,4 @@
-// Browser authority and transport are separate even with a valid read-session cookie.
+// Automatic browser controls still fail closed when the control service is unavailable.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -37,13 +37,13 @@ const html = fs.readFileSync(path.join(web,'templates/index.html'),'utf8')
             },url);
         }
         await page.goto('http://slave.lab/');
-        await page.locator('#labAccessStatus').filter({hasText:'read-only for this browser'}).waitFor();
-        assert.match(await attempt(),/read-only/);
+        await page.locator('#labAccessStatus').filter({hasText:'controls are unavailable'}).waitFor();
+        assert.match(await attempt(),/temporarily unavailable/);
         assert.equal(writes.length,0);
         assert.equal(await page.locator('a[href="/lab/control"]').count(),0);
         authorized = true;
         await page.reload();
-        await page.locator('#labAccessStatus').filter({hasText:'this browser is authorized'}).waitFor();
+        await page.locator('#labAccessStatus').filter({hasText:'controls are ready'}).waitFor();
         assert.equal(await attempt(),'sent');
         assert.equal(writes.length,1);
         assert.equal(writes[0]['x-csrf-token'],'c'.repeat(43));
@@ -54,6 +54,6 @@ const html = fs.readFileSync(path.join(web,'templates/index.html'),'utf8')
         assert.notEqual(await attempt(),'sent');
         assert.equal(writes.length,1);
         assert.deepEqual(errors,[]);
-        console.log('PASS browser access status: read session cannot mutate, explicit authority sends CSRF, cross-origin and unavailable authority fail closed; no handoff link in normal GUI.');
+        console.log('PASS browser access status: unavailable service cannot mutate, automatic controls send CSRF, cross-origin and unavailable authority fail closed; no handoff link in normal GUI.');
     } finally { await browser.close(); }
 })().catch(error => {console.error(error);process.exitCode=1;});

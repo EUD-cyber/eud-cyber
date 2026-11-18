@@ -1,73 +1,56 @@
-# Preinstall access gate — 2026-11-18
+# Fresh-install Lab access — 2026-11-18
 
-**Do not reinstall expecting zero-interaction web control. That requirement is blocked.**
+The selected Lab Mode model is open: every visitor who can reach this Master
+can control all Slaves registered on it. There is no teacher/student
+authorization split on a Master and no portal identity dependency. Each
+separate Master installation has its own registry. A Slave exposes its own
+local controls but does not expose the Master API.
 
-Inspected main: `2fe2ed9cd6c7f39dc1862018d13ad3463c36197d` (merged PR #117).
-Run `mrnobody lab-status` for a non-secret JSON readiness report. Exit 2 means
-the requested zero-interaction authorization is unavailable; this is separate
-from service health and from Agent connectivity.
+## No manual authentication or pairing
 
-## Concrete architecture blockers
+Open the normal Master/Slave web address by IP or DNS, including a NAT port.
+No key, password, lab-open, handoff link, /lab/control activation or expiring
+login session is needed. Old /lab/control bookmarks redirect home.
 
-`INSTALLFILES/GUACVM/nginx/nginx.conf` injects the constant
-`X-Remote-User "guacadmin"`. `GUACVM_userdata.yaml` configures that header for
-Guacamole authentication. The portal's static lab links do not provide a
-verified user, lab assignment, or teacher/student role to MrNobody. NAT, DNS,
-source addresses, an Agent bearer token, and arbitrary identity headers cannot
-substitute for those facts. There is no implemented broker-to-VM trust path.
+The GUI obtains a CSRF token automatically. It prevents cross-site browser
+requests; it is not an operator login or permission grant. It is recreated
+automatically after a browser restart, without server login state or an
+absolute timeout. The optional mrnobody lab-status diagnostic reports
+open-lab and exits 0 for a loaded explicit Lab Mode installation.
 
-The old all-network Lab registration also accepted a new self-selected
-Agent-ID/token. Persistence proves continuity, not permission to join this
-Master. The API now requires an identity already issued by this Master.
-This deliberately blocks unprovisioned fresh Slaves instead of claiming
-secure zero-touch pairing. Existing valid registry/credential pairs keep working.
+## Automatic Master–Slave binding
 
-## Delivered safe scope
+The installer writes the selected role and reachable Master URL. A Slave
+creates one random persistent Agent-ID/token in /etc/mrnobody/agent.json.
+Its first registration automatically binds that ID/token on the configured
+Lab Mode Master. Later registration, heartbeat, report transfer, polling,
+P06/P11 and Receiver traffic must match the stored ID/token. Retries cannot
+replace a binding or undo revocation. Master stores the token hash only.
 
-- Registration cannot enroll unknown identities, including from private nets,
-  loopback proxies, or requests claiming `guacadmin`/teacher/lab headers.
-- Master-issued tokens remain bound to their Agent-ID for registration,
-  heartbeat, job polling, P06/P11 and Receiver. Revocation remains enforced.
-- Automatic read access remains independent of subnet, IP or DNS origin.
-  The GUI explains read-only authority without directing normal use into an
-  activation-link workflow. Anonymous Master job Start/Stop remain denied.
-- Session responses expose `lab_access` readiness, separately from the opaque
-  read session and its CSRF token. Install/update provisioning prints a blocker
-  warning; `lab-status` reports it without reading/exporting credentials.
-- The existing privileged `lab-open` fallback, `/lab/control`, internal key and
-  expiring operator sessions remain for compatibility. They are **not** a
-  fulfillment of the requested removal. No automatic privileged browser,
-  source-IP authorization, or anonymous global mutation was added.
+First binding is intentionally automatic lab enrollment, not verified ownership
+by a portal user. Any reachable new agent may enroll on a Lab Mode Master.
+Web visitors may control every agent on that Master. No user/lab/teacher
+identity is inferred from IP or headers. Separate Masters keep separate
+registries, but a visitor who can reach another Master can also control it.
+Normal updates and restarts preserve identity. Each new Slave must have a
+unique identity; do not clone an already bootstrapped Slave identity.
 
-## Required before the requested fresh install
+## Install/update and acceptance
 
-1. Establish distinct authenticated portal users and server-side assignments
-   for each of up to 16 labs; separate teacher Master rights from student rights.
-   Restrict privileged VM consoles to their assigned users. Shared `guacadmin`
-   access must not be used as evidence of isolation.
-2. Implement authenticated provisioning that issues each Agent credential on
-   its intended Master and securely installs it only on its assigned Slave.
-   The existing `master_registry.py issue <agent-id>` and
-   `agent_client.py --pair <private-json>` support explicit pairing; they are
-   not an automated provisioning channel. Provisioning must supply the paired
-   identity before automatic bootstrap creates its local, unapproved identity;
-   `--pair` deliberately refuses to overwrite an existing identity. The current
-   installer does not coordinate this ordering. Never clone live identity/key files.
-3. Implement and verify a broker assertion or tightly scoped controller path:
-   authenticated transport, pinned issuer, installation/lab audience, subject,
-   role/capability scope, anti-replay, expiry, revocation and server-side
-   target authorization. Student scope must never become Master-wide access.
-   Existing browser portal authentication can then supply access without a
-   second manual login. Do not trust raw `X-Remote-User` or source IP.
-4. Use verified TLS end-to-end. HTTP Lab compatibility sends bearer tokens and
-   session cookies in plaintext and is unsuitable on untrusted student networks.
-5. Validate two clean real VMs, then all 16 lab assignments: installation,
-   updater identity preservation, DNS/IP/NAT access, P01–P11/Full Campaign,
-   Master P11 Start/Stop, Receiver and denial of unissued, revoked, cross-lab
-   and student-to-Master mutations. Automated request simulations do not prove
-   hypervisor, real NAT, Guacamole permissions or real clean installation.
+Main-based fresh installs/updaters receive these changes after merge.
+No manual auth file edits are required. Existing control-key files are no
+longer read or provisioned; old handoff state is ignored. Protected/non-Lab
+authentication remains separate; Standalone has no Master connection.
 
-Until those prerequisites are implemented, there is no secure way for the
-current public web interface to distinguish an authorized operator from an
-arbitrary visitor with zero interaction. This patch is a pairing safety fix
-and an explicit readiness gate, not a completed ZTD access redesign.
+Routing/DNS/NAT must already make the configured Master address reachable.
+This change does not create routes or infer a Master address across networks.
+The fixed remote P11 protocol is preserved: Start/Stop, idempotent retry,
+bounded duration and Receiver receipts. Local P01–P11 and Full Campaign keep
+their existing inputs and execution behavior.
+
+For real deployment acceptance: install fresh Master and Slave, confirm
+automatic registration and heartbeat, try IP/DNS from two subnets and NAT,
+exercise P06/P11, Full Campaign and Master P11 Start/Stop, restart/update and
+compare identities, then check distinct identities for all 16 Slaves.
+Automated tests simulate network/registry behavior; actual VM provisioning
+and real routing still require deployment validation.

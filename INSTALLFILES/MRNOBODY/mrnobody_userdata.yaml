@@ -490,7 +490,6 @@ write_files:
         "$INSTALL_DIR/nginx/nordic-incident.conf"
 
       mkdir -p "$INSTALL_DIR/state"
-      python3 "$INSTALL_DIR/web/lab_mode.py" provision-control
       python3 "$INSTALL_DIR/web/lab_mode.py" nginx "$INSTALL_DIR/nginx/nordic-incident.conf" "$INSTALL_DIR/state/nginx-active.conf"
       install -m 0644 \
         "$INSTALL_DIR/state/nginx-active.conf" \

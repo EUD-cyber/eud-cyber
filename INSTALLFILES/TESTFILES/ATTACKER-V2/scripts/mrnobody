@@ -10,8 +10,8 @@ if [[ "${1:-}" == "lab-status" ]]; then
     exec python3 "$BASE_DIR/web/lab_mode.py" status "$@"
 fi
 if [[ "${1:-}" == "lab-open" ]]; then
-    shift
-    exec python3 "$BASE_DIR/web/lab_mode.py" open "$@"
+    echo "Lab Mode needs no activation link. Open the Master or Slave web address directly."
+    exit 0
 fi
 if [[ "${1:-}" == "lab-mode" && "${2:-}" == "enable" ]]; then
     shift 2
@@ -33,7 +33,6 @@ Usage:
   mrnobody update
   mrnobody lab-status
   mrnobody lab-mode enable [--network <private-CIDR>]
-  sudo mrnobody lab-open <http-or-https-origin>
   mrnobody status
   mrnobody phases
   mrnobody run all

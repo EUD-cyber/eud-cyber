@@ -395,17 +395,17 @@ class MasterRoundtrip(unittest.TestCase):
                     outer.routes[url]=fn
                     return fn
                 return register
-        self.api.install_master_api(App(),lambda:DeploymentConfig("master","","loaded",self.master_http),self.path)
+        self.api.install_master_api(App(),lambda:DeploymentConfig("master","","loaded",self.master_http,self.master_http),self.path)
 
     def opener(self,remote="198.51.100.8"):
         outer=self
         class Opener:
             def open(self,request,timeout):
                 parsed=urlsplit(request.full_url)
-                incoming=types.SimpleNamespace(is_secure=parsed.scheme=="https",remote_addr=remote,
+                incoming=types.SimpleNamespace(is_secure=parsed.scheme=="https",remote_addr=remote,scheme=parsed.scheme,host=parsed.netloc,
                     headers={"Authorization":request.get_header("Authorization")},is_json=True,
                     content_length=len(request.data),stream=io.BytesIO(request.data))
-                with patch.object(outer.api,"request",incoming):
+                with patch.object(outer.api,"request",incoming), patch('lab_mode.request',incoming):
                     body,status=outer.routes[parsed.path]()
                 raw=json.dumps(body).encode()
                 if status!=200:
@@ -473,19 +473,13 @@ class MasterRoundtrip(unittest.TestCase):
         self.assertNotIn("MRN-symlink",[item["id"] for item in inventory])
         self.assertNotIn("MRN-pipe",[item["id"] for item in inventory])
 
-    def test_provisioned_pairing_register_retry_restart_with_two_agents_behind_nat(self):
+    def test_ztd_bootstrap_register_retry_and_restart_with_two_agents_behind_nat(self):
         deployment=DeploymentConfig("agent","http://10.134.71.3","loaded",True)
         self.master_http=True
         ids=[]
         for number in range(2):
             path=self.root/(str(number)+".json")
             config=agent.bootstrap_agent(path,deployment)
-            # Trusted provisioning must install a Master-issued credential;
-            # offline UUID generation alone is no longer enrollment authority.
-            data=json.loads(path.read_text())
-            data['token']=self.store.issue(config.agent_id)
-            path.write_text(json.dumps(data));path.chmod(0o600)
-            config=agent.load_agent_config(path,deployment)
             original=path.read_bytes()
             sender=agent.AgentTransport(config,self.opener(remote="10.134.71.2"))
             real_post=sender.post
