@@ -6,7 +6,7 @@
     const start = byId('jobStart'), refresh = byId('jobRefresh'), list = byId('jobList'), info = byId('jobMessage');
     const terminal = new Set(['succeeded', 'failed', 'stopped']);
     const pendingKey = 'mrn-fixed-p11-pending'; // Request identity only, never an administrator/Agent token.
-    let csrf = null, busy = false, loading = false, working = false, agents = [], jobs = [], pending = null;
+    let csrf = null, canControl = true, busy = false, loading = false, working = false, agents = [], jobs = [], pending = null;
     try {
         const value = JSON.parse(sessionStorage.getItem(pendingKey));
         if (value && /^[a-z0-9][a-z0-9_-]{0,63}$/.test(value.agent_id)
@@ -22,7 +22,7 @@
     }
     function buttons() {
         const online = agents.some(agent => agent.agent_id === select.value && agent.status === 'online');
-        start.disabled = !csrf || working || loading || (!pending && (!online || jobs.some(job => !terminal.has(job.status))));
+        start.disabled = !canControl || !csrf || working || loading || (!pending && (!online || jobs.some(job => !terminal.has(job.status))));
         start.textContent = pending ? 'Retry the same start request' : 'Start fixed P11 job';
         select.disabled = working || Boolean(pending);
         refresh.disabled = working || loading;
@@ -61,9 +61,9 @@
             const validation = node(card, 'a', 'Compare imported sensor evidence for this job');
             validation.href = '/master/validation?' + new URLSearchParams({agent_id:job.agent_id, campaign_id:job.job_id});
             const stop = node(card, 'button', 'Stop this job', 'button button-stop'); stop.type = 'button';
-            stop.disabled = working || terminal.has(job.status) || job.stop_requested;
+            stop.disabled = !canControl || working || terminal.has(job.status) || job.stop_requested;
             stop.addEventListener('click', async () => {
-                if (working || !confirm('Stop the fixed P11 job ' + job.job_id + ' on ' + job.agent_id + '?')) return;
+                if (!canControl || working || !confirm('Stop the fixed P11 job ' + job.job_id + ' on ' + job.agent_id + '?')) return;
                 working = true; buttons(); renderJobs();
                 try {
                     const body = await api('/api/master/admin/jobs/' + encodeURIComponent(job.job_id) + '/stop',
@@ -105,12 +105,16 @@
             const body = await api('/api/master/admin/session', method === 'GET' ? {} :
                 {method, body:JSON.stringify(method === 'POST' ? {credential} : {})});
             if (body.authenticated === true && typeof body.csrf === 'string') {
+                canControl = body.web_job_control !== false;
                 csrf = body.csrf; form.hidden = true; logout.hidden = body.lab_mode === true; control.hidden = false;
                 if (body.lab_mode === true) {
-                    byId('adminAccessHint').textContent = 'Lab Mode trusts clients on the configured private networks. No administrator credential is required. Plain HTTP exposes lab traffic and Agent credentials on that network.';
+                    byId('adminAccessHint').textContent = 'Lab Mode UI is readable from all networks via IP or DNS. Mutations require a trusted lab/VPN source and an approved control Host. No administrator credential is required. Plain HTTP exposes lab traffic and Agent credentials on that network.';
                     byId('jobWorkerHint').textContent = 'Lab Mode automatically enables the fixed P11 job worker on configured Slaves. Online still proves heartbeat contact only. A queued job expires after 180 seconds.';
                 }
-                message.textContent = body.lab_mode === true ? 'Lab Mode: access is trusted on the configured private networks. Only the fixed P11 job is remotely supported.' : 'Administrator authenticated. Only the fixed P11 job is remotely supported.';
+                message.textContent = body.lab_mode === true ? (canControl
+                    ? 'Lab Mode: access permits control from this trusted lab connection. Only the fixed P11 job is remotely supported.'
+                    : 'Lab Mode: read-only access. Use the trusted lab/VPN path and an approved control Host for start, stop and other changes.')
+                    : 'Administrator authenticated. Only the fixed P11 job is remotely supported.';
                 await load();
             } else signedOut('Logged out.');
         } catch (error) { signedOut(error.status === 503 ? 'Administrator authentication is not configured or unavailable. Provision it locally on Master.' : error.message); }

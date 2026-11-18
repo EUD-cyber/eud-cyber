@@ -26,6 +26,7 @@ class DeploymentConfig:
     lab_http: bool = False
     lab_mode: bool = False
     lab_networks: tuple = ()
+    lab_control_origins: tuple = ()
 
     def destination_suggestions(self):
         """Editable receiver hints only; never execution or target defaults."""
@@ -60,7 +61,7 @@ def _parse(text):
             continue
         key, separator, value = line.partition("=")
         key = key.strip()
-        if not separator or key not in {"MRNOBODY_ROLE", "MRNOBODY_MASTER_URL", "MRNOBODY_LAB_HTTP", "MRNOBODY_LAB_MODE", "MRNOBODY_LAB_NETWORKS"} or key in values:
+        if not separator or key not in {"MRNOBODY_ROLE", "MRNOBODY_MASTER_URL", "MRNOBODY_LAB_HTTP", "MRNOBODY_LAB_MODE", "MRNOBODY_LAB_NETWORKS", "MRNOBODY_LAB_CONTROL_ORIGINS"} or key in values:
             raise ValueError("Unknown, duplicate or malformed deployment setting")
         # Parse quoting only. No shell sourcing, variable expansion or commands.
         parts = shlex.split(value, comments=False, posix=True)
@@ -94,7 +95,15 @@ def _parse(text):
             raise ValueError('Lab networks must be explicit RFC1918 IPv4 CIDRs')
     if mode == '1' and (role not in {'master', 'agent'} or not lab_http or not networks):
         raise ValueError('Lab mode requires explicit Master/agent, lab HTTP and private networks')
-    return DeploymentConfig(role, master_url, "loaded", lab_http, mode == '1', networks)
+    control_origins = tuple(values.get('MRNOBODY_LAB_CONTROL_ORIGINS', '').split(',')) if values.get('MRNOBODY_LAB_CONTROL_ORIGINS') else ()
+    if len(control_origins) > 16:
+        raise ValueError('Too many lab control origins')
+    for value in control_origins:
+        url = urlsplit(value)
+        if (len(value) > 255 or not LAB_MASTER_URL.fullmatch(value) or url.path
+                or url.port == 0):
+            raise ValueError('Lab control origins must be exact HTTP(S) origins without paths')
+    return DeploymentConfig(role, master_url, "loaded", lab_http, mode == '1', networks, control_origins)
 
 
 def load_deployment_config(path=DEPLOYMENT_FILE):

@@ -43,6 +43,15 @@ class Configuration(unittest.TestCase):
         for bad in (base.replace('master','standalone'),base.replace('LAB_HTTP=1','LAB_HTTP=0'),base.replace('LAB_MODE=1','LAB_MODE=true')):
             with self.assertRaises(ValueError):_parse(bad+'MRNOBODY_LAB_NETWORKS=192.168.50.0/24')
 
+    def test_control_origins_are_separate_explicit_exact_origins(self):
+        base='MRNOBODY_ROLE=master\nMRNOBODY_LAB_HTTP=1\nMRNOBODY_LAB_MODE=1\nMRNOBODY_LAB_NETWORKS=192.168.50.0/24\n'
+        self.assertEqual(_parse(base).lab_control_origins, ())
+        self.assertEqual(_parse(base+'MRNOBODY_LAB_CONTROL_ORIGINS=http://master.lab,https://slave.lab:8443').lab_control_origins,
+                         ('http://master.lab','https://slave.lab:8443'))
+        for bad in ('*','http://*.lab','http://master.lab/','http://user@master.lab','http://master.lab:0',
+                    'http://master.lab:65536','http://master.lab?x=1','https://master.lab#x',','.join(['http://a.lab']*17)):
+            with self.assertRaises(ValueError):_parse(base+'MRNOBODY_LAB_CONTROL_ORIGINS='+bad)
+
     def test_nginx_switches_only_explicit_mode_and_keeps_tls_agent_routes(self):
         text=(WEB.parent/'nginx/nordic-incident.conf').read_text()
         old=DeploymentConfig('master','', 'loaded',True)
@@ -174,10 +183,23 @@ class Boundary(unittest.TestCase):
         self.assertNotIn('Secure;',cookie);self.assertEqual(result.headers['Cache-Control'],'no-store')
         self.assertEqual(self.session(),result.json['csrf'])
 
-    def test_public_out_of_scope_peers_hosts_rebinding_and_spoofed_headers_denied(self):
-        for peer,host in (('8.8.8.8',BASE),('192.168.51.2',BASE),('192.168.50.2','http://evil.test'),('192.168.50.2','http://8.8.8.8')):
-            result=self.client.get('/',base_url=host,environ_overrides={'REMOTE_ADDR':peer},headers={'X-Real-IP':'192.168.50.2','X-Forwarded-Proto':'https'})
-            self.assertEqual(result.status_code,403)
+    def test_all_networks_ip_dns_and_ipv6_can_read_without_control_authority(self):
+        for role in ('master','agent'):
+            self.config=replace(self.config,role=role)
+            for peer,host in (('8.8.8.8',BASE),('192.168.51.2',BASE),('2001:db8::2','http://master.lab'),
+                              ('192.168.50.2','http://unapproved.test'),('8.8.8.8','http://203.0.113.3:8080')):
+                with self.subTest(role=role,peer=peer,host=host):
+                    result=self.client.get('/',base_url=host,environ_overrides={'REMOTE_ADDR':peer})
+                    self.assertEqual(result.status_code,200)
+                    result=self.client.get('/api/master/admin/session',base_url=host,environ_overrides={'REMOTE_ADDR':peer},headers={'Origin':host})
+                    self.assertEqual(result.status_code,200)
+                    self.assertFalse(result.json['web_job_control'])
+                    csrf=result.json['csrf']
+                    for path in ('/api/master/admin/jobs','/api/execute','/api/update','/api/config','/api/scenarios'):
+                        for method in ('POST','PUT','PATCH','DELETE'):
+                            result=self.client.open(path,method=method,base_url=host,json={},environ_overrides={'REMOTE_ADDR':peer},
+                                headers={'Origin':host,'X-CSRF-Token':csrf,'X-Real-IP':'192.168.50.2','X-Forwarded-Proto':'https'})
+                            self.assertEqual(result.status_code,403)
         self.assertEqual(self.get('/api/master/admin/session',headers={'Origin':'https://evil.test'}).status_code,403)
         self.assertEqual(self.get('/',headers={'Sec-Fetch-Site':'cross-site'}).status_code,403)
 
@@ -185,7 +207,53 @@ class Boundary(unittest.TestCase):
         result=self.client.get('/api/master/admin/session',base_url='http://192.168.50.3',
             environ_overrides={'REMOTE_ADDR':'127.0.0.1'},headers={'X-Real-IP':'192.168.50.2','X-Forwarded-Proto':'https'})
         self.assertEqual(result.status_code,200);self.assertIn('Secure;',result.headers['Set-Cookie'])
-        self.assertEqual(self.client.get('/',base_url=BASE,environ_overrides={'REMOTE_ADDR':'127.0.0.1'}).status_code,403)
+        result=self.client.get('/api/master/admin/session',base_url=BASE,environ_overrides={'REMOTE_ADDR':'127.0.0.1'})
+        self.assertEqual(result.status_code,200);self.assertFalse(result.json['web_job_control'])
+
+    def test_dns_control_requires_root_approved_origin_trusted_peer_and_csrf(self):
+        self.seed();host='http://master.lab:8080';body=dict(agent_id='agent-1',request_key='dns-start')
+        def get_session():
+            return self.client.get('/api/master/admin/session',base_url=host,environ_overrides=self.peer).json
+        def post(csrf,peer=None,origin=host):
+            return self.client.post('/api/master/admin/jobs',base_url=host,json=body,environ_overrides=peer or self.peer,
+                headers={'Origin':origin,'X-CSRF-Token':csrf,'X-Real-IP':'192.168.50.2'})
+        first=get_session();self.assertFalse(first['web_job_control'])
+        self.assertEqual(post(first['csrf']).status_code,403)
+        self.config=replace(self.config,lab_control_origins=(host,))
+        session=get_session();self.assertTrue(session['web_job_control'])
+        self.assertEqual(post(first['csrf']).status_code,403)  # Configuration revokes prior sessions.
+        self.assertEqual(post(session['csrf'],origin='http://evil.test').status_code,403)
+        self.assertEqual(post(session['csrf'],peer={'REMOTE_ADDR':'8.8.8.8'}).status_code,403)
+        self.assertEqual(post(session['csrf']).status_code,200)
+        self.assertEqual(self.client.post('/api/master/agents/job-poll',base_url=host,json={},environ_overrides=self.peer).status_code,403)
+
+    def test_public_session_and_stolen_trusted_session_cannot_start_or_stop_jobs(self):
+        jobs,_=self.seed();csrf=self.session()
+        first=self.post('/api/master/admin/jobs',dict(agent_id='agent-1',request_key='trusted-start'),csrf)
+        ident=first.json['job']['job_id'];stop='/api/master/admin/jobs/'+ident+'/stop'
+        for peer in ('8.8.8.8','192.168.51.2'):
+            self.peer={'REMOTE_ADDR':peer}
+            public_csrf=self.session()
+            self.assertFalse(self.get('/api/master/admin/session').json['web_job_control'])
+            self.assertFalse(self.get('/api/master/agents').json['control_capabilities']['web_job_control'])
+            for token in (public_csrf,csrf):
+                self.assertEqual(self.post('/api/master/admin/jobs',dict(agent_id='agent-1',request_key='public-start'),token).status_code,403)
+                self.assertEqual(self.post(stop,{'confirm_job_id':ident},token).status_code,403)
+        self.assertEqual(len(jobs.history()),1)
+        self.assertEqual(jobs.inspect(ident)['status'],'queued')
+
+    def test_public_master_reads_and_local_nginx_preserve_real_peer_boundary(self):
+        self.seed()
+        for path in ('/master/admin','/master/validation','/api/master/agents',
+                     '/api/master/admin/jobs','/api/master/receiver/events'):
+            result=self.client.get(path,base_url='http://master.lab',environ_overrides={'REMOTE_ADDR':'8.8.8.8'})
+            self.assertEqual(result.status_code,200,(path,result.data))
+        result=self.client.get('/api/master/admin/session',base_url=BASE,environ_overrides={'REMOTE_ADDR':'127.0.0.1'},
+            headers={'X-Real-IP':'8.8.8.8','X-Forwarded-Proto':'http'})
+        self.assertFalse(result.json['web_job_control'])
+        result=self.client.post('/api/master/admin/jobs',base_url=BASE,json=dict(agent_id='agent-1',request_key='proxy'),
+            environ_overrides={'REMOTE_ADDR':'127.0.0.1'},headers={'X-Real-IP':'8.8.8.8','Origin':BASE,'X-CSRF-Token':result.json['csrf']})
+        self.assertEqual(result.status_code,403)
 
     def test_csrf_origin_session_expiry_and_idempotent_start_stop(self):
         jobs,_=self.seed();body=dict(agent_id='agent-1',request_key='lab-start')
@@ -221,7 +289,7 @@ class Boundary(unittest.TestCase):
         self.assertEqual(self.get('/').status_code,200)
         self.assertEqual(self.get('/master/admin').status_code,404)
         self.assertEqual(self.get('/api/master/agents').status_code,404)
-        self.assertEqual(self.client.get('/',base_url=BASE,environ_overrides={'REMOTE_ADDR':'8.8.8.8'}).status_code,403)
+        self.assertEqual(self.client.get('/',base_url=BASE,environ_overrides={'REMOTE_ADDR':'8.8.8.8'}).status_code,200)
         self.assertEqual(len(self.session()),43)
         self.config=DeploymentConfig(config_status='invalid')
         self.assertEqual(self.get('/').status_code,503)

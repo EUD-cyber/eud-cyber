@@ -1,4 +1,4 @@
-"""Explicit private-network Lab Mode. No administrator credential bypass outside it."""
+"""Explicit Lab Mode: unrestricted UI reads, separately network-trusted writes."""
 import hashlib
 import hmac
 import ipaddress
@@ -45,6 +45,17 @@ def request_origin():
 
 
 def lab_request(config):
+    """UI access is independent of client subnet and numeric versus DNS Host."""
+    if not enabled(config):
+        return False
+    try:
+        url = urlsplit(request_origin())
+        return bool(url.hostname) and not (url.username or url.password) and url.port != 0
+    except (ValueError, TypeError):
+        return False
+
+
+def transport_request(config):
     """Numeric private Host prevents DNS rebinding. Only local nginx may forward IPs."""
     if not enabled(config):
         return False
@@ -53,6 +64,17 @@ def lab_request(config):
         return peer_allowed(config) and contains(config, url.hostname) and 1 <= (url.port or 80) <= 65535
     except (ValueError, TypeError):
         return False
+
+
+def control_request(config):
+    """Separate mutation authority; never infer authority from a public UI session.
+
+    Preserve numeric private lab control. DNS control requires an exact origin
+    explicitly provisioned by root, as well as a trusted private source network.
+    Forwarded client identity is accepted only from local, header-overwriting nginx.
+    """
+    return lab_request(config) and peer_allowed(config) and (
+        transport_request(config) or request_origin() in getattr(config, 'lab_control_origins', ()))
 
 
 def http_master_allowed(config):
@@ -64,13 +86,18 @@ def http_master_allowed(config):
 
 
 def boundary(config, sessions, lock, clock, limited, response, agent_posts):
-    """Network-trusted reads, automatic opaque session, exact-origin CSRF writes."""
+    """All-network reads, automatic opaque session, separately authorized CSRF writes."""
     if request.endpoint == 'static' or (request.path == '/api/health' and request.method == 'GET'):
         return None
     if not lab_request(config):
-        return response({'message': 'Configured private lab network and numeric lab Host required.'}, 403)
+        return response({'message': 'Valid Lab Mode web origin required.'}, 403)
     if request.path in agent_posts and request.method == 'POST':
+        if not transport_request(config):
+            return response({'message': 'Configured private lab transport network and numeric Host required.'}, 403)
         return None  # Individual bearer token and strict schema remain mandatory.
+    can_control = control_request(config)
+    if request.method not in {'GET', 'HEAD', 'OPTIONS'} and not can_control:
+        return response({'message': 'Lab UI is read-only here. Mutations require a trusted lab/VPN source and numeric lab Host or root-configured control origin.'}, 403)
     if limited('operator_requests', 600):
         result = response({'message': 'Try later.'}, 429); result.headers['Retry-After'] = '60'
         return result
@@ -82,7 +109,7 @@ def boundary(config, sessions, lock, clock, limited, response, agent_posts):
     if request.method not in {'GET', 'HEAD', 'OPTIONS'} and limited('operator_writes', 30):
         result = response({'message': 'Try later.'}, 429); result.headers['Retry-After'] = '60'
         return result
-    fingerprint = hashlib.sha256(json.dumps([config.lab_networks, origin]).encode()).hexdigest()
+    fingerprint = hashlib.sha256(json.dumps([config.lab_networks, getattr(config, 'lab_control_origins', ()), origin]).encode()).hexdigest()
     now = clock(); ident = request.cookies.get(COOKIE)
     with lock:
         for key in list(sessions):
@@ -97,7 +124,7 @@ def boundary(config, sessions, lock, clock, limited, response, agent_posts):
                     return response({'message': 'Session capacity reached.'}, 503)
                 ident, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
                 session = (now + TTL, csrf, fingerprint); sessions[ident] = session
-            result = response({'authenticated': True, 'csrf': session[1], 'lab_mode': True, 'web_job_control': True})
+            result = response({'authenticated': True, 'csrf': session[1], 'lab_mode': True, 'web_job_control': can_control})
             result.set_cookie(COOKIE, ident, secure=origin.startswith('https://'), httponly=True,
                               samesite='Strict', path='/', max_age=max(1, int(session[0]-now)))
             return result
@@ -109,7 +136,7 @@ def boundary(config, sessions, lock, clock, limited, response, agent_posts):
             if request.content_length is None or request.content_length > 8 * 1024 * 1024:
                 return response({'message': 'Bounded request required (maximum 8 MiB).'}, 413)
     if request.path == '/api/master/admin/session':
-        return response({'message': 'Lab access is controlled by the configured network, not an administrator login.'}, 405)
+        return response({'message': 'Lab Mode has no administrator login; mutation access is separately network-controlled.'}, 405)
     return None
 
 
@@ -119,7 +146,7 @@ def nginx_content(text, config):
     anchor = '    location / { return 301 https://$host$request_uri; }'
     if text.count(anchor) != 1:
         raise ValueError('Missing unique HTTP redirect in nginx template')
-    return text.replace(anchor, '''    # Explicit Lab Mode; backend enforces configured networks, Host and CSRF.
+    return text.replace(anchor, '''    # Explicit Lab Mode: all-network UI; backend separately authorizes mutations/transport.
     location / {
         proxy_pass http://127.0.0.1:8082;
         proxy_set_header Host $http_host;
