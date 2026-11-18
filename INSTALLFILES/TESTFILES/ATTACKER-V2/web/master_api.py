@@ -63,7 +63,7 @@ def install_master_api(app,deployment,registry_path=DATABASE):
             return jsonify({"message":"Configured lab network required."}),403
         if jobs and not (secure or transport_request(config)):
             return jsonify({"message":"Job polling requires HTTPS."}),403
-        if (transfer or receiver or p06 or p11) and not lab_peer():
+        if (transfer or receiver or p06 or p11) and not (secure or transport_request(config) or lab_peer()):
             return jsonify({"message":"Lab access required."}),403
         authorization=request.headers.get("Authorization","")
         if not authorization.startswith("Bearer ") or len(authorization)!=50:
@@ -103,7 +103,8 @@ def install_master_api(app,deployment,registry_path=DATABASE):
                 response.headers['Cache-Control']='no-store'
                 return response,200
             result=(store.register(data["agent_id"],token,data["name"],
-                                   enroll=getattr(config,"lab_http",False) is True and lab_peer()) if register
+                                   enroll=getattr(config,"lab_http",False) is True
+                                   and (lab_request(config) or lab_peer())) if register
                     else store.transfer_report(data["agent_id"],token,data["report_id"],data["content"]) if transfer
                     else store.receive_p11(data,token) if p11
                     else store.receive_p06(data,token) if p06

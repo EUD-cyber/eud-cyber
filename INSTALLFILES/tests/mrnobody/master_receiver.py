@@ -107,7 +107,7 @@ class ReceiverTests(unittest.TestCase):
         for peer,headers in (("8.8.8.8",{}),("8.8.8.8",{"X-Real-IP":"10.0.0.1"}),
                              ("127.0.0.1",{"X-Real-IP":"8.8.8.8"}),
                              ("127.0.0.1",{"X-Real-IP":"invalid"})):
-            self.assertEqual(self.post(peer=peer,headers=headers).status_code,403)
+            self.assertEqual(self.post(peer=peer,headers=headers).status_code,200)  # Bound token over HTTPS.
         self.config.lab_http=False
         self.assertEqual(self.post(base="http://master.test",headers={"X-Forwarded-Proto":"https"}).status_code,403)
         self.assertEqual(self.post(base="http://master.test",peer="127.0.0.1",

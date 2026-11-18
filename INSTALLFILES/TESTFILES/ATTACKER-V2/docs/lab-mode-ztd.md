@@ -1,195 +1,123 @@
-# Sprint 6 — Lab Mode & Zero-Touch Deployment
+# TEST-003 — Lab Mode network independent operation
 
-Lab Mode is a separate, explicit opt-in mode for controlled CyberLabs. It
-removes manual web administrator provisioning and permits HTTP for the existing
-fixed synthetic P11 job. It does not add remote P01–P11, scenario or multi-Agent
-execution. The existing single active job, fixed operation, idempotency key,
-durable worker journal, Stop and deadline semantics are retained.
-
-## Trust boundary
-
-The deployment must have all three settings, with a valid Master/Agent role:
+Explicit Lab Mode permits Master/Slave UI reads, bound Agent traffic and
+credential-authorized operator changes across routed subnets and NAT, via IP or
+DNS. The server must be reachable; this does not create routes, port forwards,
+DNS records or firewall rules.
 
 ```ini
-MRNOBODY_LAB_HTTP=1
+MRNOBODY_ROLE=master
 MRNOBODY_LAB_MODE=1
-MRNOBODY_LAB_NETWORKS=192.168.50.0/24
+MRNOBODY_LAB_HTTP=1
 ```
 
-Networks are an explicit comma-separated allowlist of RFC1918 IPv4 CIDRs (maximum
-16). No public ranges, loopback, CGNAT or IPv6 ranges are accepted in this first
-slice. Lab Mode config must be a regular, unlinked root-owned file, not writable
-by group/others. Invalid deployment settings block dynamic web access.
+Existing `MRNOBODY_LAB_NETWORKS` and `MRNOBODY_LAB_CONTROL_ORIGINS` remain accepted
+for configuration compatibility. They grant no authority and are not consulted
+for transport or control. Networks may be omitted. Invalid existing values still
+fail configuration validation. Protected mode and Standalone defaults remain intact.
 
-**Every client in the configured networks using an approved control Host is trusted to administer Master and Slave**,
-including local campaign/configuration functions already available to an operator.
-Use isolated teaching networks with firewall boundaries; do not include an
-untrusted/shared network. HTTP exposes Agent tokens, lab sessions, logs and
-content to that network. This is not a secure substitute for protected mode.
-Agent identity/token binding, strict job schemas, request/rate bounds and
-same-origin/CSRF checks remain enabled to prevent mistakes and browser attacks.
+## Operator authorization
 
-### TEST-001: UI access and mutation authority are separate
+Fresh installs and both normal/no-change `sudo mrnobody update` paths generate a
+distinct 256-bit random key on each Lab Master and Slave, stored as root:root
+0600 `/etc/mrnobody/lab-control.key`. Updates preserve it. It is never downloaded
+from GitHub, printed in install logs or returned by a web API.
 
-Both Master and Slave UI reads work from **all source networks**, via IP or DNS,
-including NAT, routed networks and VPN. The client does not have to be in
-`MRNOBODY_LAB_NETWORKS`; a numeric private Host is not required for web reads.
-HTTP and automatic sessions remain restricted to explicit, valid Lab Mode.
-Protected/Standalone defaults are unchanged. The existing installer opt-in also
-applies to existing Lab Mode installations after updating; no new global bypass
-is enabled for other installations.
+Read it locally with:
 
-Following a link or redirect from another site into Master/Slave is allowed for
-top-level GET/HEAD navigation (`Sec-Fetch-Mode: navigate`, destination `document`).
-Browsers legitimately label these entries `cross-site` or `same-site`. This
-exception does not allow cross-site API fetches, iframe/frame loads or writes;
-explicit foreign Origin headers are still rejected and framing remains blocked
-by CSP. Once the UI loads, its own API requests must be same-origin as before.
-
-**All unsafe web methods (POST/PUT/PATCH/DELETE, including start, stop, update,
-configuration and campaign changes) are separately denied** unless the observed
-source is in `MRNOBODY_LAB_NETWORKS` and the Host is either a numeric private
-address in those networks or an exact root-provisioned control origin. The
-session endpoint reports `web_job_control=false` on read-only connections; the
-Master control page disables start and stop there. A session/CSRF token alone
-does not grant authority: the source/Host boundary is rechecked on every write.
-Exact same-Origin, opaque session, CSRF, rate and request-size limits still apply.
-
-Optional DNS control (add to root-owned `/etc/mrnobody/deployment.conf` on each
-VM where needed, then update/restart):
-
-```ini
-MRNOBODY_LAB_CONTROL_ORIGINS=http://master.lab,http://slave.lab
+```sh
+sudo cat /etc/mrnobody/lab-control.key
 ```
 
-Use only origins owned by the lab; include the exact scheme and non-default port
-when used, with no slash/path/wildcard. This setting permits DNS control from
-trusted sources, **never from an arbitrary source network**. Without it, DNS
-access is read-only. Numeric private lab control retains the Sprint 6 behavior.
-Unapproved DNS origins cannot mutate even from a trusted source (DNS rebinding).
+On Master, enter it at `/master/admin`. On either role, `/lab/control` authorizes
+the local dashboard. The dashboard links to that page. A key authenticates only
+its own VM. Agent/enrollment tokens are not operator credentials.
 
-For remote administration, connect through a trusted VPN whose observed private
-source subnet is explicitly listed. Another option is a dedicated reverse proxy
-that authenticates/authorizes operators **before forwarding**, connects from a
-listed private source, and uses an approved backend Host. Never put an
-unauthenticated public forwarder in a trusted source network: the backend would
-trust all its users. Only local loopback nginx may supply X-Real-IP and scheme;
-the supplied nginx template overwrites both headers. Do not trust arbitrary
-forwarded headers, widen to all networks, or add public CIDRs to enable writes.
+Anonymous sessions can read but cannot POST/PUT/PATCH/DELETE to operator APIs.
+Successful login rotates the session ID and CSRF value. Sessions expire after
+15 minutes and bind to the exact current origin (scheme, Host and port) and key
+digest. No manually provisioned origin list is required: logging in separately
+via IP and DNS creates separate origin-bound sessions. A changed source IP does
+not revoke authority. Changed/missing/unreadable keys fail closed on the next
+request. Logout revokes the session server-side.
 
-**Public read access is still dangerous**: reports, inventory, logs and lab
-configuration can contain sensitive information. HTTP exposes sessions and data
-to observers. Lab Mode is for deliberate controlled labs only, not internet
-publication. Use a firewall/VPN for confidentiality and protected HTTPS mode for
-untrusted environments. UI read access does not make public deployment safe.
+Cookies remain HttpOnly and SameSite=Strict, with Secure on HTTPS. Writes require
+the authenticated session, exact same Origin and CSRF token, bounded bodies and
+rate limits. Cross-site fetches, frames and writes remain rejected. Top-level
+read navigation from a link/redirect remains supported.
 
-### Agent job transport is unchanged
+Use HTTPS to protect the key, sessions and Agent tokens in transit. Explicit Lab
+HTTP remains available for compatible teaching deployments; HTTP cannot protect
+credentials against someone observing the network.
 
-`MRNOBODY_LAB_NETWORKS` still scopes private plaintext Agent transport, including
-its numeric private Master Host requirement. DNS browser access does not permit
-DNS HTTP job transport. Agent-ID/token binding, job allowlist/idempotency,
-Receiver schemas/protocol checks, heartbeat/ZTD and outbound NAT-friendly polling
-remain intact. Keep the Master private numeric URL for HTTP Agents, or use the
-existing verified HTTPS transport. No inbound Slave job port is added.
+## Agent and exercise protocol
 
-The dashboard opens directly from any network. `/master/admin` automatically
-obtains an opaque HttpOnly/SameSite=Strict 15-minute lab session for CSRF and shows
-fixed P11 control or a read-only notice without login. No administrator or Agent token is placed in the
-page, URL or browser storage. The HTTP cookie cannot have Secure; HTTPS lab access
-uses Secure. Mutation authority is network-based, so there is no meaningful administrator
-logout in this mode. Root configuration and a service reload control the mode.
+P06 fixture uploads, P11 HTTP-beacon/ACK, Receiver events, reports, heartbeat and
+job polling no longer reject a legitimate Agent because of source subnet or a
+DNS/public/NAT Host. Each API still checks Agent ID/token, protocol version, exact
+schema and size limits. P06 accepts only the fixed synthetic fixture with matching
+size/SHA256/content. P11 validates its fixed marker, sequence and ACK. No arbitrary
+commands, destinations or shell payloads were added to the job protocol.
 
-HTTPS remains available and Agent certificate/hostname verification remains
-mandatory when an HTTPS Master URL is configured. There is no TLS fallback or
-disabled verification. `MRNOBODY_LAB_HTTP=1` alone continues to mean the existing
-limited Agent lab transport; it does not enable credential-free UI or HTTP jobs.
-Protected mode still requires the existing root-provisioned administrator.
+Lab Mode retains zero-touch first-binding enrollment, now from any source:
+the Agent persists its random per-VM token before registering; retries never
+replace an existing identity/token or undo revocation. Enrollment and telemetry
+are not proof of operator identity. An untrusted party can enroll a new Lab Agent
+and submit synthetic telemetry, but cannot authorize job mutations. Use protected
+mode and Master-issued pairing for deployments requiring controlled enrollment.
+Existing bound identities and issued-token pairing continue to work.
 
-## New controlled installations
+Agents initiate polling, beacons and transfers, so Master needs no inbound route
+to a Slave behind NAT. Set the Agent's root-owned `MRNOBODY_MASTER_URL` to the
+reachable IP or DNS URL (including the external port if translated). HTTPS still
+requires a trusted certificate matching that name/IP; redirects and environment
+proxies remain disabled. Lab HTTP job polling requires explicit Lab Mode on the
+Agent. Big/Mini/Custom and Single VM rendering now enable that mode for DNS URLs
+as well as IP URLs. Existing non-Lab Agents can opt in locally using
+`sudo mrnobody lab-mode enable`, which also runs the updater.
 
-The shared Big/Mini/Custom MrNobody installer writes Lab Mode for an Agent with
-an explicit numeric RFC1918 Master URL. Its own lab LAN1/LAN2/OOBM subnets and
-that Master /32 form the Agent allowlist. The Single VM renderer similarly uses
-the selected private interface subnet (and existing lab interfaces where used),
-plus the numeric private Master /32 for Agents. Private Single VM Master plans
-with lab HTTP selected enable Lab Mode; `lab_http=false` retains protected mode.
-Standalone, public/test-address plans and legacy DNS URL plans do not gain
-credential-free access automatically. No shared template is modified in place.
+The fixed remote job remains one Agent/one active synthetic P11 job, with the
+existing allowlist, request-key idempotency, durable worker journal, Stop and
+180-second deadline. Online proves heartbeat, not worker health. P06/P11 local
+and Full Incident pipelines keep their existing verified source/artifact checks.
+No general remote phase/scenario execution was added.
 
-Fresh install bootstraps/reuses the persistent per-VM Agent identity, activates
-heartbeat and automatically installs/enables `mrnobody-agent-jobs.service` only
-for valid Lab Mode Agents. Starting the service merely polls; it does not start
-a job. Registration can retry while Master is offline. No inbound Slave port or
-NAT forwarding is added. Existing IDs, tokens, reports and journals are retained.
-Master/Standalone do not activate either Agent worker.
+P11 exercise DNS is separate from resolving the Master URL. It already sends
+outbound UDP to an explicitly selected lab resolver without a local-subnet
+check. Keep its dedicated non-forwarding `.test` resolver and RD=0 queries;
+private target/fixture validation prevents arbitrary public targeting. Routing
+and NAT must allow outbound UDP/53 and the matching reply. This change does not
+turn a public recursive DNS service into an exercise receiver.
 
-nginx's distributed template retains protected HTTP redirects. Installation and
-update render the HTTP reverse proxy only for explicit Lab Mode, with backend
-separate mutation/transport network/Host enforcement and CSRF. TLS configuration and the existing Agent-specific
-body limits remain. The generated active config is not an update-manifest entry;
-the template and renderer are SHA256-verified distributed files.
+## Concrete acceptance guide
 
-## Existing installation: Master first, Slave second
+1. After merging, run `sudo mrnobody update` on Master and Slave. Keep the existing
+   deployment role, Agent identity and database. Run update again and confirm the
+   key and Agent identity remain unchanged. Check the web, Agent and job-worker
+   systemd services on the appropriate roles.
+2. From two different routed student subnets and a NAT connection, open both UIs
+   by IP and DNS. Anonymous reads must work. Master Start/Stop must remain disabled
+   until the local Master key is entered. No subnet/origin allowlist edits.
+3. Login at `/master/admin`, select one online Agent and start the fixed P11 job.
+   Verify three authenticated beacons/ACKs in Receiver. Retry the same request key:
+   the job ID must be unchanged. Start another job and Stop it; verify terminal
+   state or deadline. Restart the worker and check that its journal prevents replay.
+4. Authorize the Slave at `/lab/control`. Run explicit P06 Live Lab with its fixed
+   generated file; verify content/SHA256 receipt at Master. Run local P11 and Full
+   Incident opt-in flows; confirm Receiver evidence. Exercise DNS against the
+   dedicated `.test` resolver from another routed subnet and through NAT; inspect
+   resolver logs/packet capture for outbound queries and matching replies.
+5. Test without login, with an Agent token as the control credential, a wrong key,
+   missing/wrong CSRF, foreign Origin and after logout/expiry: no job mutation.
+   The same valid key/session from a changed client IP must still work. A session
+   copied to a different scheme/Host/port must fail. Replacing the local key must
+   revoke old sessions. A changed Agent ID/token and altered P06 content must fail.
+6. Fresh Big, Mini, Custom and Single VM deployments: repeat using both numeric
+   and DNS Master URLs. Standalone/protected installs must retain their defaults.
 
-Existing installations do not silently lose administrator protection on update.
-After this PR is merged into the configured update branch:
-
-1. Run `sudo mrnobody update` on Master. Existing protected-mode authentication stays in place.
-   An already-enabled Lab Mode installation immediately receives all-network UI
-   reads with separately protected mutations; keep its existing networks.
-2. To explicitly migrate that isolated Master, run
-   `sudo mrnobody lab-mode enable`. It discovers only RFC1918 subnets on local
-   global IPv4 interfaces, validates and atomically writes the opt-in settings,
-   then runs the updater to activate nginx/services. For trusted routed/VPN operators use
-   `sudo mrnobody lab-mode enable --network 192.168.50.0/24 --network 10.134.71.0/24`
-   with the actual Master/trusted-source networks. UI readers need no added subnet.
-   Supplying networks replaces discovery.
-   The command never overwrites an Agent identity or administrator credential.
-3. Open `http://<Master-IP-or-DNS>/` and **Master P11 control** from another
-   subnet, NAT and VPN. Verify no login or numeric-Host JSON error. An off-list
-   client must read successfully but show read-only control and fail mutations.
-4. On Slave run `sudo mrnobody update`, then explicitly opt into the same mode
-   with `sudo mrnobody lab-mode enable`. Its configured numeric Master IP is
-   added as /32. No manual systemd configuration or pairing is needed for an
-   existing valid lab identity. A DNS HTTP Master URL must first be changed to
-   its intended private IPv4 in the root-owned deployment config; it is never
-   resolved or guessed by migration.
-5. Verify `systemctl is-active mrnobody-agent mrnobody-agent-jobs` on the Slave,
-   online heartbeat on Master, an explicit P11 start, exactly three receipts,
-   status refresh, confirmed Stop, an offline queued-job deadline, and no replay
-   after restarting the worker. Online alone is still heartbeat evidence.
-
-An old updater may need a second `sudo mrnobody update` pass to execute the new
-repair logic. The already-current path also repairs units/nginx and reloads Lab
-Mode configuration. Job-unit activation failures restore the prior unit and
-enabled/active state. Updating/restarting a worker can interrupt an active job;
-the journal fails uncertain work rather than rerunning it. Update between jobs.
-
-To return to protected mode, as root set `MRNOBODY_LAB_MODE=0` (or remove it),
-retain the administrator credential, provision one if missing using the existing
-guide, run `sudo mrnobody update`, and restart `nordic-incident-web.service` to
-load the changed mode. Remove/disable the automatic job unit explicitly if it is
-no longer desired; protected HTTPS workers remain an explicit existing opt-in.
-
-## Integration & Acceptance Testing
-
-Automated fixtures are not proof of real VM/network acceptance. After Sprint 6,
-record **Passed / Failed / Blocked / Not tested**, the exact commit/configuration,
-logs, expected result and actual result for each item:
-
-| Area | Actual lab acceptance required | Initial state |
-|---|---|---|
-| Install/ZTD | Big, Mini, Custom, Single Master/Slave; correct role/IP/services | Not tested |
-| UI/control boundary | All-source IP/DNS reads; off-list writes denied; trusted control; cross-origin rejection | Not tested |
-| Agent lifecycle | Offline Master retry, heartbeat, stable ID/token after reboot/update | Not tested |
-| Fixed P11 queue | Start/status/Stop/deadline, worker reboot, no duplicate effects | Not tested |
-| P01–P11 | Each locally supported phase, prerequisites, actual evidence and cleanup | Not tested |
-| P06/P11 Live Lab | Fixed file/hash, HTTP beacon/ACK, DNS/persistence and interruption | Not tested |
-| Full Incident | Existing local scenario selections and combined Ground Truth | Not tested |
-| Detection | Real Wazuh/Suricata provenance, clocks/NAT, imported correlation limits | Not tested |
-| Reports/regression | JSON/HTML/PDF, Master synchronization, update preservation | Not tested |
-| General remote phases/scenarios/multi-Agent | Not implemented; do not claim acceptance | Blocked |
-
-Test one approved lab at a time. Fix failures individually and repeat affected
-checks. Do not label the platform ready for teaching until the supported flows
-have passed actual VM acceptance, especially Stop/cleanup and post-reboot state.
+Automated contracts: `python3 INSTALLFILES/tests/mrnobody/lab_mode.py` plus the
+existing Master/Agent/P06/P11/DNS/installer/updater suites. Browser regression:
+`node INSTALLFILES/tests/mrnobody/lab_mode.cjs` with Playwright installed. Tests
+simulate remote peers, NAT-visible addresses, IP/DNS Hosts and forwarded headers;
+actual student-network routing, packet capture and hypervisor fresh-install
+acceptance must still be performed in CyberLab.

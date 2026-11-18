@@ -106,14 +106,14 @@
                 {method, body:JSON.stringify(method === 'POST' ? {credential} : {})});
             if (body.authenticated === true && typeof body.csrf === 'string') {
                 canControl = body.web_job_control !== false;
-                csrf = body.csrf; form.hidden = true; logout.hidden = body.lab_mode === true; control.hidden = false;
+                csrf = body.csrf; form.hidden = canControl; logout.hidden = !canControl; control.hidden = false;
                 if (body.lab_mode === true) {
-                    byId('adminAccessHint').textContent = 'Lab Mode UI is readable from all networks via IP or DNS. Mutations require a trusted lab/VPN source and an approved control Host. No administrator credential is required. Plain HTTP exposes lab traffic and Agent credentials on that network.';
+                    byId('adminAccessHint').textContent = 'Lab Mode works across subnets and NAT via IP or DNS. Enter this Master\'s control key to authorize changes. Retrieve it locally with sudo cat /etc/mrnobody/lab-control.key. Use HTTPS to protect credentials in transit.';
                     byId('jobWorkerHint').textContent = 'Lab Mode automatically enables the fixed P11 job worker on configured Slaves. Online still proves heartbeat contact only. A queued job expires after 180 seconds.';
                 }
                 message.textContent = body.lab_mode === true ? (canControl
-                    ? 'Lab Mode: access permits control from this trusted lab connection. Only the fixed P11 job is remotely supported.'
-                    : 'Lab Mode: read-only access. Use the trusted lab/VPN path and an approved control Host for start, stop and other changes.')
+                    ? 'Lab Mode: administrator authenticated for this origin. Only the fixed P11 job is remotely supported.'
+                    : 'Lab Mode: read-only. Enter the Master control key to enable start, stop and other changes.')
                     : 'Administrator authenticated. Only the fixed P11 job is remotely supported.';
                 await load();
             } else signedOut('Logged out.');

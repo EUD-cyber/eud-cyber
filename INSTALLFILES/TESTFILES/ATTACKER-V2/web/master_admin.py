@@ -248,7 +248,7 @@ def install_admin_auth(app, deployment, credential_path=CREDENTIAL, clock=time.m
         if config.role != 'master' or config.config_status != 'loaded':
             return response({'message': 'Not found.'}, 404)
         from master_api import lab_peer
-        if not lab_peer():
+        if not (getattr(config, "lab_mode", False) or lab_peer()):
             return response({'message': 'Lab HTTPS access required.'}, 403)
         if request.args:
             return response({'message': 'Query parameters are not accepted.'}, 400)
@@ -289,6 +289,18 @@ def install_admin_auth(app, deployment, credential_path=CREDENTIAL, clock=time.m
         page.headers['Cache-Control'] = 'no-store'
         page.headers['Referrer-Policy'] = 'no-referrer'
         page.headers['X-Content-Type-Options'] = 'nosniff'
+        page.headers['Content-Security-Policy'] = ("default-src 'none'; script-src 'self'; "
+                "style-src 'self'; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'")
+        return page
+
+    @app.route('/lab/control', methods=['GET'])
+    def lab_control_page():
+        from lab_mode import lab_request
+        if not lab_request(deployment()):
+            return response({'message': 'Not found.'}, 404)
+        page = app.make_response(render_template('lab_control.html'))
+        page.headers['Cache-Control'] = 'no-store'
+        page.headers['Referrer-Policy'] = 'no-referrer'
         page.headers['Content-Security-Policy'] = ("default-src 'none'; script-src 'self'; "
                 "style-src 'self'; connect-src 'self'; form-action 'none'; frame-ancestors 'none'; base-uri 'none'")
         return page

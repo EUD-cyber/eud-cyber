@@ -448,7 +448,7 @@ def default_configuration():
 
 @app.route("/")
 def index():
-    return render_template("index.html", master_admin_required=DEPLOYMENT_CONFIG.role == 'master' or getattr(DEPLOYMENT_CONFIG,'lab_mode',False),
+    return render_template("index.html", lab_mode_enabled=getattr(DEPLOYMENT_CONFIG,"lab_mode",False), master_admin_required=DEPLOYMENT_CONFIG.role == 'master' or getattr(DEPLOYMENT_CONFIG,'lab_mode',False),
                            master_control_available=DEPLOYMENT_CONFIG.role == 'master')
 
 

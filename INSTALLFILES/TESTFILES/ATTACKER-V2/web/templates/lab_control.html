@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lab operator access</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/lab_control.js" defer></script>
+</head>
+<body><main class="main-container">
+  <h1>Lab operator access</h1>
+  <p>Read access works from all networks. Authorize changes with this VM's control key.
+     Retrieve it locally with sudo cat /etc/mrnobody/lab-control.key. Use HTTPS to protect credentials in transit.</p>
+  <form id="labLogin">
+    <label for="labKey">Control key</label>
+    <input id="labKey" type="password" autocomplete="off" minlength="43" maxlength="43" required>
+    <button type="submit" class="button">Authorize changes</button>
+  </form>
+  <button id="labLogout" class="button" type="button" hidden>Log out</button>
+  <p id="labMessage" role="status"></p>
+  <p>Sessions expire after 15 minutes and apply only to the current IP or DNS origin.</p>
+  <a href="/">Return to dashboard</a>
+</main></body>
+</html>
