@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "TESTFILES/ATTACKER-V2/web"))
 from MRNOBODY import single_vm_create as creator, single_vm_plan as planner
-from deployment_config import load_deployment_config
+from deployment_config import load_deployment_config, _parse
 
 
 class CreateSingleVM(unittest.TestCase):
@@ -75,7 +75,8 @@ class CreateSingleVM(unittest.TestCase):
         self.assertIn('MRNOBODY_LAB_HTTP="1"',rendered)
         config=self.root/"master.conf"
         config.write_text("\n".join(line.strip() for line in rendered.splitlines() if line.strip().startswith("MRNOBODY_")))
-        loaded=load_deployment_config(config)
+        # Rendered content is not yet a root-installed deployment file.
+        loaded=_parse(config.read_text())
         self.assertEqual((loaded.role,loaded.config_status,loaded.lab_http),("master","loaded",True))
         self.assertNotIn("MRNOBODY_LAB_HTTP",self.template)
 
@@ -93,7 +94,7 @@ class CreateSingleVM(unittest.TestCase):
             content=next(item["content"] for item in data["write_files"] if item["path"]=="/etc/mrnobody/deployment.conf")
             config=self.root/"lab.conf"
             config.write_text(content)
-            loaded=load_deployment_config(config)
+            loaded=_parse(config.read_text())
             self.assertEqual((loaded.role,loaded.master_url,loaded.config_status),(role,url,"loaded"))
             self.assertEqual(loaded.lab_http,role=="agent")
         self.assertEqual(template.read_bytes(),original)
