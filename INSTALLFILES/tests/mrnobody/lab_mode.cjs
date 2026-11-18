@@ -65,14 +65,17 @@ async function checkNavigation(browser){
     try{
         await checkNavigation(browser);
         const page=await browser.newPage({viewport:{width:1280,height:1000}});
-        const starts=[],errors=[];let lost=true,job=null,stops=0,readOnly=false;
+        const starts=[],errors=[];let lost=true,job=null,stops=0,readOnly=true;
         page.on('pageerror',e=>errors.push(String(e)));
         await page.route('**/*',route=>{
             const req=route.request(),url=new URL(req.url());assert.equal(url.protocol,'http:');
             if(url.pathname==='/master/admin')return route.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(web,'templates/master_admin.html'),'utf8')});
+            if(url.pathname==='/lab/control')return route.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(web,'templates/lab_control.html'),'utf8')});
             if(url.pathname.startsWith('/static/'))return route.fulfill({contentType:url.pathname.endsWith('.js')?'text/javascript':'text/css',body:fs.readFileSync(path.join(web,url.pathname.slice(1)),'utf8')});
             if(url.pathname.endsWith('/session')){
-                assert.equal(req.method(),'GET');return route.fulfill({json:{authenticated:true,lab_mode:true,web_job_control:!readOnly,csrf:'c'.repeat(43)}});
+                if(req.method()==='POST'){assert.deepEqual(req.postDataJSON(),{credential:'s'.repeat(43)});readOnly=false;}
+                if(req.method()==='DELETE'){assert.equal(req.headers()['x-csrf-token'],'c'.repeat(43));readOnly=true;}
+                return route.fulfill({json:{authenticated:true,lab_mode:true,web_job_control:!readOnly,csrf:'c'.repeat(43)}});
             }
             if(url.pathname==='/api/master/agents')return route.fulfill({json:{agents:[{agent_id:'agent-1',status:'online',name:'Slave'}]}});
             if(url.pathname.endsWith('/jobs')&&req.method()==='POST'){
@@ -89,10 +92,15 @@ async function checkNavigation(browser){
             throw new Error('Unexpected route '+url.pathname);
         });
         await page.goto('http://192.168.50.3/master/admin');
-        await page.getByRole('status').filter({hasText:'Lab Mode: access'}).waitFor();
+        await page.getByRole('status').filter({hasText:'Lab Mode: read-only'}).waitFor();
+        assert.equal(await page.locator('#adminLogin').isVisible(),true);
+        assert.equal(await page.locator('#jobStart').isDisabled(),true);
+        await page.locator('#adminCredential').fill('s'.repeat(43));
+        await page.locator('#adminLogin button').click();
+        await page.getByRole('status').filter({hasText:'Lab Mode: administrator authenticated'}).waitFor();
         assert.equal(await page.locator('#adminLogin').isVisible(),false);
-        assert.equal(await page.locator('#adminLogout').isVisible(),false);
-        assert.match(await page.locator('#adminAccessHint').innerText(),/HTTP exposes/);
+        assert.equal(await page.locator('#adminLogout').isVisible(),true);
+        assert.match(await page.locator('#adminAccessHint').innerText(),/HTTPS to protect/);
         assert.equal(starts.length,0);
         await page.selectOption('#jobAgent','agent-1');await page.locator('#jobStart').click();
         await page.waitForFunction(()=>document.querySelector('#jobStart').textContent.includes('Retry'));
@@ -108,16 +116,26 @@ async function checkNavigation(browser){
         assert.equal(stops,1);
         readOnly=true;job.status='running';job.stop_requested=false;
         await page.goto('http://master.lab/master/admin');
-        await page.getByRole('status').filter({hasText:'read-only access'}).waitFor();
+        await page.getByRole('status').filter({hasText:'Lab Mode: read-only'}).waitFor();
         await page.waitForFunction(()=>document.querySelectorAll('#jobList article').length===1);
-        assert.equal(await page.locator('#adminLogin').isVisible(),false);
+        assert.equal(await page.locator('#adminLogin').isVisible(),true);
         assert.equal(await page.locator('#jobStart').isDisabled(),true);
         assert.equal(await page.getByRole('button',{name:'Stop this job'}).isDisabled(),true);
         assert.equal(starts.length,2);assert.equal(stops,1);
         for(const width of [1280,768,390]){
             await page.setViewportSize({width,height:1000});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
         }
+        await page.goto('http://slave.lab/lab/control');
+        await page.locator('#labMessage').filter({hasText:'Read-only access'}).waitFor();
+        await page.locator('#labKey').fill('s'.repeat(43));
+        await page.locator('#labLogin button').click();
+        await page.locator('#labMessage').filter({hasText:'Changes authorized'}).waitFor();
+        assert.equal(await page.locator('#labKey').inputValue(),'');
+        assert.equal(await page.evaluate(()=>sessionStorage.length+localStorage.length),0);
+        await page.locator('#labLogout').click();
+        await page.locator('#labMessage').filter({hasText:'Read-only access'}).waitFor();
+        assert.equal(await page.locator('#labLogin').isVisible(),true);
         assert.deepEqual(errors,[]);
-        console.log('PASS HTTP Lab Mode UI: IP/DNS without login, read-only start/stop disabled, no automatic job, reload retry, CSRF, confirmed Stop, 3 widths.');
+        console.log('PASS HTTP Lab Mode UI: IP/DNS credential login, anonymous start/stop disabled, no automatic job, reload retry, CSRF, confirmed Stop, 3 widths.');
     }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

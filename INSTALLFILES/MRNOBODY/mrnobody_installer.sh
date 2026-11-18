@@ -118,17 +118,7 @@ if role == "agent":
         raise SystemExit("Ambiguous lab HTTP setting")
     anchor = f"      MRNOBODY_MASTER_URL={shlex.quote(master_url)}{newline}"
     rendered = rendered.replace(anchor, anchor + '      MRNOBODY_LAB_HTTP="1"' + newline)
-    import ipaddress
-    from urllib.parse import urlsplit
-    try:
-        master = ipaddress.IPv4Address(urlsplit(master_url).hostname)
-        private = tuple(ipaddress.ip_network(net) for net in ('10.0.0.0/8','172.16.0.0/12','192.168.0.0/16'))
-        if any(master in net for net in private):
-            networks = '192.168.1.0/24,192.168.2.0/24,172.20.0.0/24,' + str(master) + '/32'
-            rendered = rendered.replace(anchor, anchor + '      MRNOBODY_LAB_MODE="1"' + newline
-                + '      MRNOBODY_LAB_NETWORKS=' + shlex.quote(networks) + newline)
-    except ValueError:
-        pass  # Legacy DNS URLs keep heartbeat transport; no automatic HTTP jobs.
+    rendered = rendered.replace(anchor, anchor + '      MRNOBODY_LAB_MODE="1"' + newline)
 
 # A unique file prevents stale settings and preserves snippets used by other VMs.
 fd, destination = tempfile.mkstemp(

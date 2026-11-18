@@ -93,8 +93,8 @@ def _parse(text):
         network = ip_network(value, strict=True)
         if network.version != 4 or not any(network.subnet_of(parent) for parent in private):
             raise ValueError('Lab networks must be explicit RFC1918 IPv4 CIDRs')
-    if mode == '1' and (role not in {'master', 'agent'} or not lab_http or not networks):
-        raise ValueError('Lab mode requires explicit Master/agent, lab HTTP and private networks')
+    if mode == '1' and (role not in {'master', 'agent'} or not lab_http):
+        raise ValueError('Lab mode requires explicit Master/agent and lab HTTP')
     control_origins = tuple(values.get('MRNOBODY_LAB_CONTROL_ORIGINS', '').split(',')) if values.get('MRNOBODY_LAB_CONTROL_ORIGINS') else ()
     if len(control_origins) > 16:
         raise ValueError('Too many lab control origins')

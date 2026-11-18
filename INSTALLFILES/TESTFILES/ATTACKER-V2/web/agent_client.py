@@ -233,7 +233,7 @@ class AgentTransport:
         self.config=config
         from lab_mode import http_master_allowed
         if config.lab_mode and config.master_url.startswith('http://') and not http_master_allowed(config):
-            raise FatalAgentError('Lab HTTP requires a numeric Master IP in configured private networks.')
+            raise FatalAgentError('Lab HTTP requires explicit Lab Mode and a configured Master URL.')
         try:
             self.context=ssl.create_default_context(cafile=config.ca_file)
         except (OSError,ssl.SSLError) as exc:

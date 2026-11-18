@@ -342,7 +342,14 @@ PY
     log "Explicit Lab Mode: fixed P11 job polling enabled. No job was enqueued."
 }
 
+provision_lab_control() {
+    if [[ -f "$INSTALL_DIR/web/lab_mode.py" ]]; then
+        python3 "$INSTALL_DIR/web/lab_mode.py" provision-control || return $?
+    fi
+}
+
 repair_nginx_config() {
+    provision_lab_control || return $?
     # Download hashes describe the runtime copy, not the active nginx copy.
     # Also reload equal files: an older updater may have missed activation.
     local source="$INSTALL_DIR/nginx/nordic-incident.conf"
@@ -955,6 +962,7 @@ fi
 # COMPLETE
 # ============================================================
 
+provision_lab_control || rollback $?
 install_agent_unit || rollback $?
 install_jobs_unit || rollback $?
 restart_updated_agent || rollback $?

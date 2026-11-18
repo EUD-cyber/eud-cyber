@@ -411,6 +411,14 @@ write_files:
           "$INSTALL_DIR/docs/detection-validation.md"
 
       download_file \
+          "web/templates/lab_control.html" \
+          "$INSTALL_DIR/web/templates/lab_control.html"
+
+      download_file \
+          "web/static/lab_control.js" \
+          "$INSTALL_DIR/web/static/lab_control.js"
+
+      download_file \
           "web/templates/master_admin.html" \
           "$INSTALL_DIR/web/templates/master_admin.html"
 
@@ -474,6 +482,7 @@ write_files:
         "$INSTALL_DIR/nginx/nordic-incident.conf"
 
       mkdir -p "$INSTALL_DIR/state"
+      python3 "$INSTALL_DIR/web/lab_mode.py" provision-control
       python3 "$INSTALL_DIR/web/lab_mode.py" nginx "$INSTALL_DIR/nginx/nordic-incident.conf" "$INSTALL_DIR/state/nginx-active.conf"
       install -m 0644 \
         "$INSTALL_DIR/state/nginx-active.conf" \

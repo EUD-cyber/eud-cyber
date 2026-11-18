@@ -11,6 +11,7 @@ window.mrnFetch = async (url, options = {}) => {
         const result = await fetch('/api/master/admin/session', {cache:'no-store', credentials:'same-origin', redirect:'error'});
         if (!result.ok) throw new Error('Administrator login required at /master/admin.');
         const session = await result.json();
+        if (session.lab_mode && !session.web_job_control) throw new Error('Authorize changes at /lab/control using this VM\'s control key.');
         if (!session.authenticated || typeof session.csrf !== 'string') throw new Error('Administrator session unavailable.');
         headers.set('X-CSRF-Token', session.csrf);
     }

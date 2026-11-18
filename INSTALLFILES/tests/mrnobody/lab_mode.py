@@ -1,6 +1,7 @@
 """Isolated private Lab Mode, CSRF, transport and zero-touch contracts."""
 from dataclasses import replace
 import io
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,7 +18,7 @@ WEB=ROOT/'TESTFILES/ATTACKER-V2/web'
 sys.path.insert(0,str(WEB))
 sys.path.insert(1,str(ROOT))
 from deployment_config import DeploymentConfig, _parse, load_deployment_config
-from lab_mode import contains, configure, nginx_content
+from lab_mode import contains, configure, nginx_content, ensure_control, control_digest
 from master_admin import install_admin_auth
 from master_api import install_master_api
 from master_jobs import Jobs
@@ -30,6 +31,26 @@ NETWORKS=('192.168.50.0/24',)
 
 
 class Configuration(unittest.TestCase):
+    @unittest.skipUnless(os.name=='posix' and os.geteuid()==0,'Root-owned key fixture on Linux')
+    def test_control_key_install_update_preserve_and_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            key=Path(tmp)/'control.key'
+            config=DeploymentConfig('master','', 'loaded',True,True)
+            ensure_control(config,key);first=key.read_bytes()
+            self.assertEqual(key.stat().st_mode & 0o777,0o600)
+            self.assertEqual(len(first),44)
+            self.assertEqual(control_digest(key),hashlib.sha256(first.strip()).hexdigest())
+            ensure_control(config,key);self.assertEqual(key.read_bytes(),first)
+            key.chmod(0o644)
+            with self.assertRaises(OSError):ensure_control(config,key)
+            key.unlink();key.symlink_to(Path(tmp)/'missing')
+            with self.assertRaises(OSError):ensure_control(config,key)
+            key.unlink()
+            ensure_control(replace(config,role='standalone',lab_mode=False),key)
+            self.assertFalse(key.exists())
+            ensure_control(replace(config,role='agent'),key)
+            self.assertEqual(len(key.read_bytes()),44)
+
     def test_old_lab_http_never_implies_lab_mode(self):
         config=_parse('MRNOBODY_ROLE=master\nMRNOBODY_LAB_HTTP=1\n')
         self.assertFalse(config.lab_mode)
@@ -38,7 +59,7 @@ class Configuration(unittest.TestCase):
     def test_explicit_private_cidrs_and_fail_closed_inputs(self):
         base='MRNOBODY_ROLE=master\nMRNOBODY_LAB_HTTP=1\nMRNOBODY_LAB_MODE=1\n'
         self.assertTrue(_parse(base+'MRNOBODY_LAB_NETWORKS=192.168.50.0/24').lab_mode)
-        for net in ('','0.0.0.0/0','8.8.8.0/24','127.0.0.0/8','100.64.0.0/10','::/0','192.168.50.1/24'):
+        for net in ('0.0.0.0/0','8.8.8.0/24','127.0.0.0/8','100.64.0.0/10','::/0','192.168.50.1/24'):
             with self.assertRaises(ValueError):_parse(base+'MRNOBODY_LAB_NETWORKS='+net)
         for bad in (base.replace('master','standalone'),base.replace('LAB_HTTP=1','LAB_HTTP=0'),base.replace('LAB_MODE=1','LAB_MODE=true')):
             with self.assertRaises(ValueError):_parse(bad+'MRNOBODY_LAB_NETWORKS=192.168.50.0/24')
@@ -72,23 +93,27 @@ class Configuration(unittest.TestCase):
             content=next(item['content'] for item in rendered['write_files'] if item['path']=='/etc/mrnobody/deployment.conf')
             config=_parse(content)
             self.assertEqual(config.lab_mode,role!='standalone')
-            if role=='agent':self.assertTrue(contains(config,'192.168.50.3'))
-            if role=='master':self.assertEqual(config.lab_networks,('192.168.1.0/24',))
+            if role=='agent':self.assertTrue(config.lab_mode)
+            if role=='master':self.assertEqual(config.lab_networks,())
         self.assertNotIn('MRNOBODY_LAB_MODE=',template)
+        for url in ('http://master.lab:8080','http://203.0.113.3'):
+            rendered=yaml.safe_load(render_userdata(template,dict(role='agent',master_url=url,lab_http=True)))
+            config=_parse(next(item['content'] for item in rendered['write_files'] if item['path']=='/etc/mrnobody/deployment.conf'))
+            self.assertTrue(config.lab_mode);self.assertEqual(config.master_url,url)
 
-    def test_shared_big_mini_custom_renderer_keeps_template_and_scopes_numeric_master(self):
+    def test_shared_big_mini_custom_renderer_keeps_template_and_supports_ip_dns(self):
         import subprocess
         import yaml
         source=(ROOT/'MRNOBODY/mrnobody_installer.sh').read_text()
         code=source.split("<<'PY'\n",1)[1].split('\nPY\n',1)[0]
         template=ROOT/'MRNOBODY/mrnobody_userdata.yaml';before=template.read_bytes()
         with tempfile.TemporaryDirectory() as tmp:
-            for url,expected in ((BASE,True),('http://master.test',False)):
+            for url,expected in ((BASE,True),('http://master.test',True)):
                 result=subprocess.run([sys.executable,'-c',code,str(template),tmp,'3','agent',url],check=True,capture_output=True,text=True)
                 data=yaml.safe_load((Path(tmp)/result.stdout.strip()).read_text())
                 config=_parse(next(item['content'] for item in data['write_files'] if item['path']=='/etc/mrnobody/deployment.conf'))
                 self.assertEqual(config.lab_mode,expected)
-                if expected:self.assertEqual(set(config.lab_networks),{'192.168.1.0/24','192.168.2.0/24','172.20.0.0/24','192.168.50.3/32'})
+                if expected:self.assertEqual(config.lab_networks,())
         self.assertEqual(template.read_bytes(),before)
 
     @unittest.skipUnless(os.name=='posix' and os.geteuid()==0,'Root-owned isolated shell lifecycle on Linux')
@@ -136,7 +161,7 @@ systemctl() {
             path.write_text('MRNOBODY_ROLE=agent\nMRNOBODY_MASTER_URL='+BASE+'\nMRNOBODY_LAB_HTTP=1\n')
             discovery=lambda:[{'addr_info':[{'local':'192.168.1.254','prefixlen':24},{'local':'8.8.8.8','prefixlen':24}]}]
             configure(path,[],discover=discovery);config=load_deployment_config(path)
-            self.assertTrue(config.lab_mode);self.assertTrue(contains(config,'192.168.50.3'))
+            self.assertTrue(config.lab_mode);self.assertEqual(config.master_url,BASE)
             self.assertFalse(contains(config,'8.8.8.8'))
             first=path.read_bytes();configure(path,[],discover=discovery)
             self.assertEqual(path.read_bytes(),first);self.assertEqual(identity.read_bytes(),b'private identity sentinel')
@@ -149,6 +174,10 @@ class Boundary(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name);self.path=self.root/'master/registry.sqlite3'
         self.config=DeploymentConfig('master','', 'loaded',True,True,NETWORKS)
+        self.secret='s'*43
+        self.digest=hashlib.sha256(self.secret.encode()).hexdigest()
+        self.key_patch=patch('lab_mode.control_digest', side_effect=lambda: self.digest)
+        self.key_patch.start();self.addCleanup(self.key_patch.stop)
         self.now=1000
         self.app=Flask('lab-mode',template_folder=str(WEB/'templates'))
         self.app.add_url_rule('/',view_func=lambda:'dashboard')
@@ -172,7 +201,52 @@ class Boundary(unittest.TestCase):
         jobs=Jobs(self.path);token=jobs.issue('agent-1');jobs.register('agent-1',token,'Slave')
         return jobs,token
 
-    def test_dashboard_and_controls_need_no_credential_but_session_is_opaque(self):
+    def test_bound_agent_protocol_across_nat_ip_dns_and_different_subnets(self):
+        import base64
+        from p06_synthetic import fixture
+        jobs,token=self.seed()
+        other=jobs.issue('other');jobs.register('other',other,'Other-Slave')
+        for index,(host,peer) in enumerate(((BASE,'192.168.99.2'),('http://master.lab:8080','198.51.100.2'),
+                                          ('https://master.lab','2001:db8::7'))):
+            common=dict(agent_id='agent-1',protocol_version=1)
+            campaign='MRN-network-protocol-'+str(index);raw=fixture(campaign)
+            payloads={
+                'agents/register':dict(common,name='Slave'),
+                'agents/heartbeat':common,
+                'agents/reports':dict(common,reports=[]),
+                'agents/report-transfer':dict(common,report_id=None,content=None),
+                'agents/job-poll':dict(common,report=None),
+                'agents/p06-file':dict(common,campaign_id=campaign,phase='P06',synthetic=True,size=len(raw),
+                    sha256=hashlib.sha256(raw).hexdigest(),content=base64.b64encode(raw).decode()),
+                'agents/p11-beacon':dict(common,campaign_id=campaign,phase='P11',synthetic=True,
+                    timestamp='2026-11-18T10:00:00+00:00',sequence=1,marker='MRN-EXERCISE-ONLY'),
+                'receiver/events':dict(common,campaign_id=campaign,event_type='http_test',synthetic=True,
+                    timestamp='2026-11-18T10:00:00Z',bytes=32)}
+            def post(suffix,body,credential=token):
+                return self.client.post('/api/master/'+suffix,base_url=host,environ_overrides={'REMOTE_ADDR':peer},
+                    json=body,headers={'Authorization':'Bearer '+credential})
+            for suffix,body in payloads.items():
+                with self.subTest(host=host,peer=peer,endpoint=suffix):
+                    self.assertEqual(post(suffix,body,'x'*43).status_code,401)
+                    self.assertEqual(post(suffix,dict(body,agent_id='other')).status_code,401)
+                    result=post(suffix,body)
+                    self.assertEqual(result.status_code,200,result.data)
+                    if suffix in {'agents/p06-file','agents/p11-beacon'}:
+                        self.assertTrue(result.json['verified'])
+                        self.assertEqual(post(suffix,dict(body,synthetic=False)).status_code,400)
+        self.assertEqual(len(jobs.list_receiver_events()['events']),9)
+
+    def test_zero_touch_first_binding_works_through_public_nat_but_never_controls_jobs(self):
+        self.peer={'REMOTE_ADDR':'198.51.100.20'}
+        body=dict(agent_id='nat-agent',protocol_version=1,name='NAT-Slave')
+        for token,expected in (('t'*43,200),('t'*43,200),('u'*43,401)):
+            result=self.post('/api/master/agents/register',body,headers={'Authorization':'Bearer '+token})
+            self.assertEqual(result.status_code,expected,result.data)
+        self.assertEqual(self.login(secret='t'*43).status_code,401)
+        self.assertEqual(self.post('/api/master/admin/jobs',dict(agent_id='nat-agent',request_key='unauthorized'),
+            self.session(),headers={'Authorization':'Bearer '+'t'*43}).status_code,403)
+
+    def test_dashboard_reads_need_no_credential_but_session_is_opaque(self):
         with patch('master_admin.load_credential',side_effect=AssertionError('No provisioning in Lab Mode')):
             self.assertEqual(self.get('/').status_code,200)
             self.assertEqual(self.get('/master/admin').status_code,200)
@@ -195,6 +269,7 @@ class Boundary(unittest.TestCase):
                     self.assertEqual(result.status_code,200)
                     self.assertFalse(result.json['web_job_control'])
                     csrf=result.json['csrf']
+                    self.now+=61  # Keep each negative-case group below the global write limit.
                     for path in ('/api/master/admin/jobs','/api/execute','/api/update','/api/config','/api/scenarios'):
                         for method in ('POST','PUT','PATCH','DELETE'):
                             result=self.client.open(path,method=method,base_url=host,json={},environ_overrides={'REMOTE_ADDR':peer},
@@ -246,37 +321,80 @@ class Boundary(unittest.TestCase):
                 'Sec-Fetch-Mode':'navigate','Sec-Fetch-Dest':'document'}).status_code,403)
         self.assertEqual(jobs.history(),[])
 
-    def test_dns_control_requires_root_approved_origin_trusted_peer_and_csrf(self):
-        self.seed();host='http://master.lab:8080';body=dict(agent_id='agent-1',request_key='dns-start')
-        def get_session():
-            return self.client.get('/api/master/admin/session',base_url=host,environ_overrides=self.peer).json
-        def post(csrf,peer=None,origin=host):
-            return self.client.post('/api/master/admin/jobs',base_url=host,json=body,environ_overrides=peer or self.peer,
-                headers={'Origin':origin,'X-CSRF-Token':csrf,'X-Real-IP':'192.168.50.2'})
-        first=get_session();self.assertFalse(first['web_job_control'])
-        self.assertEqual(post(first['csrf']).status_code,403)
-        self.config=replace(self.config,lab_control_origins=(host,))
-        session=get_session();self.assertTrue(session['web_job_control'])
-        self.assertEqual(post(first['csrf']).status_code,403)  # Configuration revokes prior sessions.
-        self.assertEqual(post(session['csrf'],origin='http://evil.test').status_code,403)
-        self.assertEqual(post(session['csrf'],peer={'REMOTE_ADDR':'8.8.8.8'}).status_code,403)
-        self.assertEqual(post(session['csrf']).status_code,200)
-        self.assertEqual(self.client.post('/api/master/agents/job-poll',base_url=host,json={},environ_overrides=self.peer).status_code,403)
+    def login(self, host=BASE, peer=None, secret=None):
+        return self.client.post('/api/master/admin/session', base_url=host,
+            environ_overrides=peer or self.peer, json={'credential': secret or self.secret}, headers={'Origin':host})
 
-    def test_public_session_and_stolen_trusted_session_cannot_start_or_stop_jobs(self):
-        jobs,_=self.seed();csrf=self.session()
-        first=self.post('/api/master/admin/jobs',dict(agent_id='agent-1',request_key='trusted-start'),csrf)
-        ident=first.json['job']['job_id'];stop='/api/master/admin/jobs/'+ident+'/stop'
-        for peer in ('8.8.8.8','192.168.51.2'):
+    def authorized(self):
+        result=self.login()
+        self.assertEqual(result.status_code,200,result.data)
+        return result.json['csrf']
+
+    def test_control_across_subnets_nat_ip_dns_and_ipv6(self):
+        jobs,token=self.seed()
+        for index,(host,peer) in enumerate(((BASE,'192.168.51.2'),('http://master.lab:8080','198.51.100.2'),
+                                          ('https://203.0.113.8','2001:db8::2'))):
+            self.now+=61
             self.peer={'REMOTE_ADDR':peer}
-            public_csrf=self.session()
-            self.assertFalse(self.get('/api/master/admin/session').json['web_job_control'])
-            self.assertFalse(self.get('/api/master/agents').json['control_capabilities']['web_job_control'])
-            for token in (public_csrf,csrf):
-                self.assertEqual(self.post('/api/master/admin/jobs',dict(agent_id='agent-1',request_key='public-start'),token).status_code,403)
-                self.assertEqual(self.post(stop,{'confirm_job_id':ident},token).status_code,403)
-        self.assertEqual(len(jobs.history()),1)
-        self.assertEqual(jobs.inspect(ident)['status'],'queued')
+            anonymous=self.client.get('/api/master/admin/session',base_url=host,environ_overrides=self.peer)
+            self.assertFalse(anonymous.json['web_job_control'])
+            result=self.login(host)
+            self.assertTrue(result.json['web_job_control'])
+            self.assertNotEqual(result.json['csrf'],anonymous.json['csrf'])
+            csrf=result.json['csrf']; headers={'Origin':host,'X-CSRF-Token':csrf}
+            body=dict(agent_id='agent-1',request_key='network-'+str(index))
+            def start(data=body):
+                return self.client.post('/api/master/admin/jobs',base_url=host,environ_overrides=self.peer,json=data,headers=headers)
+            first=start();self.assertEqual(first.status_code,200,first.data)
+            ident=first.json['job']['job_id']
+            self.assertEqual(start().json['job']['job_id'],ident)
+            self.assertEqual(start(dict(body,command='id')).status_code,400)
+            stopped=self.client.post('/api/master/admin/jobs/'+ident+'/stop',base_url=host,environ_overrides=self.peer,
+                json={'confirm_job_id':ident},headers=headers)
+            self.assertEqual(stopped.status_code,200)
+            self.assertEqual(stopped.json['job']['status'],'stopped')
+            self.assertTrue(self.client.get('/api/master/agents',base_url=host,environ_overrides=self.peer).json['control_capabilities']['web_job_control'])
+            result=self.client.delete('/api/master/admin/session',base_url=host,environ_overrides=self.peer,json={},headers=headers)
+            self.assertEqual(result.status_code,200)
+            self.assertEqual(start().status_code,403)
+        self.assertEqual(len(jobs.history()),3)
+
+    def test_key_csrf_origin_expiry_rotation_and_agent_tokens(self):
+        jobs,token=self.seed();body=dict(agent_id='agent-1',request_key='denied')
+        anonymous=self.session()
+        self.assertEqual(self.post('/api/master/admin/jobs',body,anonymous).status_code,403)
+        self.assertEqual(self.login(secret=token).status_code,401)
+        self.assertEqual(self.login(secret='x'*43).status_code,401)
+        self.assertEqual(self.client.post('/api/master/admin/session',base_url=BASE,json={'credential':self.secret},
+            headers={'Origin':'http://evil.test'}).status_code,403)
+        csrf=self.authorized()
+        self.peer={'REMOTE_ADDR':'198.51.100.99'}
+        self.assertTrue(self.get('/api/master/agents').json['control_capabilities']['web_job_control'])
+        self.assertEqual(self.post('/api/master/admin/jobs',body).status_code,403)
+        self.assertEqual(self.post('/api/master/admin/jobs',body,anonymous).status_code,403)
+        self.assertEqual(self.post('/api/master/admin/jobs',body,csrf,headers={'Origin':'http://evil.test'}).status_code,403)
+        self.assertEqual(self.post('/api/master/admin/jobs',body,csrf,headers={'Sec-Fetch-Site':'cross-site'}).status_code,403)
+        # A changed IP is valid; a changed browser origin is not.
+        self.assertEqual(self.client.post('/api/master/admin/jobs',base_url='http://192.168.50.3:8080',json=body,
+            headers={'Origin':'http://192.168.50.3:8080','X-CSRF-Token':csrf}).status_code,403)
+        self.digest='0'*64
+        self.assertEqual(self.post('/api/master/admin/jobs',body,csrf).status_code,403)
+        self.digest=hashlib.sha256(self.secret.encode()).hexdigest()
+        self.now+=901
+        self.assertEqual(self.post('/api/master/admin/jobs',body,csrf).status_code,403)
+        self.digest=''
+        self.assertEqual(self.login().status_code,401)
+        self.assertEqual(jobs.history(),[])
+
+    def test_slave_control_uses_its_own_key_and_cannot_expose_master_jobs(self):
+        self.config=replace(self.config,role='agent')
+        self.app.add_url_rule('/api/config',endpoint='save_config',view_func=lambda:{'saved':True},methods=['POST'])
+        self.peer={'REMOTE_ADDR':'198.51.100.7'}
+        self.assertEqual(self.get('/lab/control').status_code,200)
+        self.assertEqual(self.post('/api/config',{},self.session()).status_code,403)
+        csrf=self.authorized()
+        self.assertEqual(self.post('/api/config',{},csrf).status_code,200)
+        self.assertEqual(self.post('/api/master/admin/jobs',{},csrf).status_code,404)
 
     def test_public_master_reads_and_local_nginx_preserve_real_peer_boundary(self):
         self.seed()
@@ -294,7 +412,7 @@ class Boundary(unittest.TestCase):
     def test_csrf_origin_session_expiry_and_idempotent_start_stop(self):
         jobs,_=self.seed();body=dict(agent_id='agent-1',request_key='lab-start')
         self.assertEqual(self.post('/api/master/admin/jobs',body).status_code,403)
-        csrf=self.session()
+        csrf=self.authorized()
         self.assertEqual(self.post('/api/master/admin/jobs',body,csrf,headers={'Origin':'https://evil.test'}).status_code,403)
         first=self.post('/api/master/admin/jobs',body,csrf);self.assertEqual(first.status_code,200,first.data)
         self.assertEqual(self.post('/api/master/admin/jobs',body,csrf).json,first.json)
@@ -311,7 +429,7 @@ class Boundary(unittest.TestCase):
         self.assertEqual(self.post('/api/master/agents/job-poll',body).status_code,401)
         self.assertEqual(self.post('/api/master/agents/job-poll',body,headers={'Authorization':'Bearer '+token}).status_code,200)
         self.assertEqual(self.post('/api/master/agents/job-poll',dict(body,agent_id='other'),headers={'Authorization':'Bearer '+token}).status_code,401)
-        self.assertEqual(self.post('/api/master/agents/job-poll',body,headers={'Authorization':'Bearer '+token},environ_overrides={'REMOTE_ADDR':'8.8.8.8'}).status_code,403)
+        self.assertEqual(self.post('/api/master/agents/job-poll',body,headers={'Authorization':'Bearer '+token},environ_overrides={'REMOTE_ADDR':'8.8.8.8'}).status_code,200)
 
     def test_protected_mode_never_gets_automatic_authority(self):
         self.config=replace(self.config,lab_mode=False)
@@ -331,7 +449,7 @@ class Boundary(unittest.TestCase):
         self.assertEqual(self.get('/').status_code,503)
 
     def test_actual_transport_worker_receipts_and_restart_do_not_replay(self):
-        jobs,token=self.seed();csrf=self.session()
+        jobs,token=self.seed();csrf=self.authorized()
         job=self.post('/api/master/admin/jobs',dict(agent_id='agent-1',request_key='roundtrip'),csrf).json['job']
         cfg=AgentConfig(BASE,'agent-1','Slave',token,lab_http=True,lab_mode=True,lab_networks=NETWORKS)
         class Response(io.BytesIO):status=200
@@ -357,12 +475,12 @@ class Boundary(unittest.TestCase):
         Worker(cfg,self.root/'journal.sqlite3',sender=sender,run=run).step()
         self.assertEqual(calls,[job['job_id']])
 
-    def test_plaintext_worker_requires_both_mode_and_declared_numeric_private_master(self):
+    def test_plaintext_worker_requires_explicit_mode_but_not_subnet_or_numeric_host(self):
         cfg=AgentConfig(BASE,'agent-1','Slave','a'*43,lab_http=True,lab_mode=True,lab_networks=NETWORKS)
-        for change in ({'lab_mode':False},{'lab_http':False},{'master_url':'http://evil.test'},
-                {'master_url':'http://8.8.8.8'},{'lab_networks':('192.168.51.0/24',)}):
+        for change in ({'lab_mode':False},{'lab_http':False}):
             with self.assertRaises(FatalAgentError):Worker(replace(cfg,**change),self.root/'rejected.sqlite3')
-        self.assertFalse((self.root/'rejected.sqlite3').exists())
+        for index,url in enumerate(('http://master.lab','http://203.0.113.3:8080')):
+            Worker(replace(cfg,master_url=url,lab_networks=()),self.root/('accepted-'+str(index)+'.sqlite3'))
 
 
 if __name__=='__main__':
