@@ -23,7 +23,7 @@
 
 
 <body data-master-admin="{{ 'true' if master_admin_required else 'false' }}">
-{% if lab_mode_enabled %}<a href="/lab/control">Authorize Lab changes</a>{% endif %}
+{% if lab_mode_enabled %}<p id="labAccessStatus" role="status">Lab Mode: controls open automatically. No login or activation is required.</p>{% endif %}
 <a class="skip-link" href="#mainContent">Skip to content</a>
 
 <!-- ========================================================

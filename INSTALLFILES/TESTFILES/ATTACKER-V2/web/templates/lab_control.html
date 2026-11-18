@@ -1,23 +1,2 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Lab operator access</title>
-  <link rel="stylesheet" href="/static/style.css">
-  <script src="/static/lab_control.js" defer></script>
-</head>
-<body><main class="main-container">
-  <h1>Lab operator access</h1>
-  <p>From an authorized terminal on this VM, run:</p>
-  <pre id="labCommand">sudo mrnobody lab-open &lt;browser-origin&gt;</pre>
-  <p>Open the generated link within two minutes. It works once, only for this VM and origin.
-     No control key is entered here. Master access requires a trusted administrator's terminal on Master.
-     Student terminal access must be confined to their own Slave.</p>
-  <p>Use HTTPS to protect sessions in transit. HTTP Lab Mode cannot protect against network interception.</p>
-  <button id="labLogout" class="button" type="button" hidden>Log out</button>
-  <p id="labMessage" role="status"></p>
-  <p>Sessions expire after eight hours, logout or web-service restart. Portal single sign-on is not configured.</p>
-  <a href="/">Return to dashboard</a>
-</main></body>
-</html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Lab access</title></head>
+<body><p>Lab Mode needs no login or activation link. <a href="/">Open dashboard</a>.</p></body></html>

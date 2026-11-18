@@ -11,12 +11,26 @@ window.mrnFetch = async (url, options = {}) => {
         const result = await fetch('/api/master/admin/session', {cache:'no-store', credentials:'same-origin', redirect:'error'});
         if (!result.ok) throw new Error('Administrator login required at /master/admin.');
         const session = await result.json();
-        if (session.lab_mode && !session.web_job_control) throw new Error('Authorize changes at /lab/control with a locally generated one-time link.');
+        if (session.lab_mode && !session.web_job_control) throw new Error('Lab controls are temporarily unavailable. Refresh and retry.');
         if (!session.authenticated || typeof session.csrf !== 'string') throw new Error('Administrator session unavailable.');
         headers.set('X-CSRF-Token', session.csrf);
     }
     return fetch(url, {...options, headers, credentials:'same-origin', redirect:'error'});
 };
+
+// Explicit Lab Mode opens controls automatically; no login or activation step.
+if (document.getElementById('labAccessStatus')) {
+    fetch('/api/master/admin/session', {cache:'no-store', credentials:'same-origin', redirect:'error'})
+        .then(async result => {
+            if (!result.ok) throw new Error('Access status unavailable');
+            const access = await result.json();
+            document.getElementById('labAccessStatus').textContent = access.web_job_control === true
+                ? 'Lab Mode: controls are ready. No login or activation is required.'
+                : 'Lab Mode: controls are unavailable. Refresh and retry.';
+        }).catch(() => {
+            document.getElementById('labAccessStatus').textContent = 'Lab Mode: access status unavailable. Refresh and retry.';
+        });
+}
 
 /*
 ============================================================

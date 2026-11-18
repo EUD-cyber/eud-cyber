@@ -1,5 +1,4 @@
-"""Subnet-independent Lab UI, authenticated operator control and bound Agent transport."""
-import hashlib
+"""Subnet-independent Lab UI, open operator control and bound Agent transport."""
 import hmac
 import ipaddress
 import json
@@ -7,10 +6,8 @@ import secrets
 from urllib.parse import urlsplit
 
 from flask import request
-from lab_access import SESSION_TTL
 
-COOKIE = 'mrn-lab-session'
-TTL = 900  # Anonymous read sessions retain their short capacity lifetime.
+COOKIE = 'mrn-lab-csrf'  # Automatic CSRF state only; never a login credential.
 PRIVATE = tuple(ipaddress.ip_network(net) for net in ('10.0.0.0/8','172.16.0.0/12','192.168.0.0/16'))
 
 
@@ -61,9 +58,16 @@ def transport_request(config):
 
 
 def control_request(config):
-    """Only the credential-authenticated, origin-bound session grants mutations."""
-    from flask import g
-    return lab_request(config) and getattr(g, 'lab_control', False)
+    """Explicit Lab Mode grants every visitor control of this installation."""
+    return lab_request(config)
+
+
+def access_status(config):
+    active = enabled(config)
+    return dict(lab_mode=active, role=config.role, zero_interaction_ready=active,
+                operator_authorized=active, pairing='automatic-first-binding',
+                access_model='open-lab' if active else 'protected',
+                blocker=None if active else 'explicit-lab-mode-required')
 
 
 def http_master_allowed(config):
@@ -78,64 +82,23 @@ def http_master_allowed(config):
         return False
 
 
-CONTROL_KEY = '/etc/mrnobody/lab-control.key'
-
-
-def control_digest(path=CONTROL_KEY):
-    """Read only a private, root-owned, unlinked local capability."""
-    import os
-    import stat
-    from pathlib import Path
-    if os.name != 'posix':
-        raise OSError('Linux ownership verification required')
-    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-    with os.fdopen(fd, 'rb') as stream:
-        info = os.fstat(stream.fileno())
-        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
-                or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1):
-            raise OSError('Private root-owned control key required')
-        raw = stream.read(45)
-    from master_admin import TOKEN
-    key = raw.decode('ascii').rstrip('\n')
-    if not TOKEN.fullmatch(key):
-        raise ValueError('Invalid control key')
-    return hashlib.sha256(key.encode()).hexdigest()
-
-
-def ensure_control(config, path=CONTROL_KEY):
-    """Idempotent install/update step; never print the key in installer logs."""
-    import os
-    from pathlib import Path
-    if not enabled(config):
-        return
-    if os.geteuid() != 0:
-        raise OSError('Run locally as root')
-    if Path(path).exists() or Path(path).is_symlink():
-        control_digest(path)
-        return
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-    with os.fdopen(fd, 'w') as stream:
-        stream.write(secrets.token_urlsafe(32) + '\n')
-        stream.flush(); os.fsync(stream.fileno())
-
-
 def boundary(config, sessions, lock, clock, limited, response, agent_posts):
-    """All-network reads, automatic opaque session, separately authorized CSRF writes."""
-    from flask import g
+    """Open Lab UI with automatic CSRF; Agent transport keeps ID/token checks.
+
+    No operator credentials, tickets, server-side login sessions or expiry.
+    Protected/non-Lab deployments retain their separate authentication.
+    """
     if request.endpoint == 'static' or (request.path == '/api/health' and request.method == 'GET'):
         return None
     if not lab_request(config):
         return response({'message': 'Valid Lab Mode web origin required.'}, 403)
     if request.path in agent_posts and request.method == 'POST':
-        if not transport_request(config):
-            return response({'message': 'Valid Lab Mode transport origin required.'}, 403)
-        return None  # Individual bearer token and strict schema remain mandatory.
-    if limited('operator_requests', 600):
-        result = response({'message': 'Try later.'}, 429); result.headers['Retry-After'] = '60'
+        return None  # Registration binds ID/token; all other transport authenticates it.
+    if limited('operator_requests', 6000):
+        result = response({'message': 'Try later.'}, 429)
+        result.headers['Retry-After'] = '60'
         return result
     origin = request_origin()
-    # A link from another site is a normal entry into the UI. Exempt only
-    # top-level read navigation, never iframe loads, API fetches or mutations.
     navigation = (request.method in {'GET', 'HEAD'}
                   and request.headers.get('Sec-Fetch-Mode') == 'navigate'
                   and request.headers.get('Sec-Fetch-Dest') == 'document')
@@ -143,75 +106,37 @@ def boundary(config, sessions, lock, clock, limited, response, agent_posts):
         return response({'message': 'Cross-site request rejected.'}, 403)
     if request.headers.get('Origin') not in {None, origin}:
         return response({'message': 'Origin rejected.'}, 403)
-    if request.method not in {'GET', 'HEAD', 'OPTIONS'} and limited('operator_writes', 30):
-        result = response({'message': 'Try later.'}, 429); result.headers['Retry-After'] = '60'
-        return result
-    try:
-        digest = control_digest()
-    except (OSError, ValueError, UnicodeError):
-        digest = ''  # Reads remain available; control fails closed.
-    fingerprint = hashlib.sha256(json.dumps([origin, digest, config.role]).encode()).hexdigest()
-    login = request.path == '/api/master/admin/session' and request.method == 'POST'
-    if login and limited('lab_login', 5):
-        result = response({'message': 'Try later.'}, 429)
-        result.headers['Retry-After'] = '60'
-        return result
-    now = clock(); ident = request.cookies.get(COOKIE)
-    with lock:
-        for key in list(sessions):
-            if sessions[key][0] <= now:
-                del sessions[key]
-        session = sessions.get(ident)
-        if session and session[2] != fingerprint:
-            sessions.pop(ident, None)
-            session = None
-        g.lab_control = bool(session and len(session) == 4 and session[3] and digest)
-        can_control = control_request(config)
-        if login:
-            if len(sessions) >= 64 and not session:
-                return response({'message': 'Session capacity reached.'}, 503)
-            if (request.args or request.headers.get('Origin') != origin
-                    or request.mimetype != 'application/json' or request.content_length is None
-                    or request.content_length > 1024):
-                return response({'message': 'Bounded same-origin JSON login required.'}, 403)
-            from master_api import _object
-            try:
-                body = json.loads(request.stream.read(1025), object_pairs_hook=_object)
-                from lab_access import consume
-                valid = (isinstance(body, dict) and set(body) == {'handoff'}
-                         and consume(body['handoff'], config, origin, digest))
-            except (ValueError, UnicodeError, RecursionError):
-                valid = False
-            if not valid:
-                return response({'message': 'Unauthorized.'}, 401)
-            sessions.pop(ident, None)  # Rotate the anonymous session on authentication.
-            session = None
-            g.lab_control = can_control = True
-        if request.path == '/api/master/admin/session' and request.method in {'GET', 'POST'}:
-            if not session:
-                if len(sessions) >= 64:
-                    return response({'message': 'Session capacity reached.'}, 503)
-                ident, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
-                session = (now + (SESSION_TTL if can_control else TTL), csrf, fingerprint, can_control); sessions[ident] = session
-            result = response({'authenticated': True, 'csrf': session[1], 'lab_mode': True, 'web_job_control': can_control})
-            result.set_cookie(COOKIE, ident, secure=origin.startswith('https://'), httponly=True,
-                              samesite='Strict', path='/', max_age=max(1, int(session[0]-now)))
+    from master_admin import TOKEN
+    csrf = request.cookies.get(COOKIE, '')
+    if request.path == '/api/master/admin/session':
+        if request.method == 'POST':
+            return response({'message': 'Lab Mode has no login or browser activation. Open the dashboard.'}, 410)
+        if request.method == 'GET':
+            if not TOKEN.fullmatch(csrf):
+                csrf = secrets.token_urlsafe(32)
+            result = response({'authenticated': True, 'csrf': csrf, 'lab_mode': True,
+                               'web_job_control': True, 'lab_access': access_status(config)})
+            # Browser-session CSRF cookie. It is recreated automatically, including
+            # after browser/service restart. No authorization or absolute TTL.
+            result.set_cookie(COOKIE, csrf, secure=origin.startswith('https://'),
+                              httponly=True, samesite='Strict', path='/')
             return result
-        if request.method not in {'GET', 'HEAD', 'OPTIONS'}:
-            if not can_control:
-                return response({'message': 'Local VM browser handoff required. Open /lab/control for instructions.'}, 403)
-            csrf = request.headers.get('X-CSRF-Token', '')
-            if (request.headers.get('Origin') != origin or not session or len(csrf) != 43
-                    or not hmac.compare_digest(csrf, session[1])):
-                return response({'message': 'Lab session and same-origin CSRF token required.'}, 403)
-            if request.content_length is None or request.content_length > 8 * 1024 * 1024:
-                return response({'message': 'Bounded request required (maximum 8 MiB).'}, 413)
+    if request.method not in {'GET', 'HEAD', 'OPTIONS'}:
+        supplied = request.headers.get('X-CSRF-Token', '')
+        if (request.headers.get('Origin') != origin or not TOKEN.fullmatch(csrf)
+                or not TOKEN.fullmatch(supplied) or not hmac.compare_digest(csrf, supplied)):
+            return response({'message': 'Same-origin CSRF token required; refresh the page to retry.'}, 403)
+        if request.content_length is None or request.content_length > 8 * 1024 * 1024:
+            return response({'message': 'Bounded request required (maximum 8 MiB).'}, 413)
+        if limited('operator_writes', 600):
+            result = response({'message': 'Try later.'}, 429)
+            result.headers['Retry-After'] = '60'
+            return result
     if request.path == '/api/master/admin/session' and request.method == 'DELETE':
-        with lock:
-            sessions.pop(ident, None)
-        result = response({'authenticated': False})
-        result.delete_cookie(COOKIE, path='/', secure=origin.startswith('https://'), httponly=True, samesite='Strict')
-        return result
+        result = response({'authenticated': True, 'lab_mode': True, 'web_job_control': True})
+        result.delete_cookie(COOKIE, path='/', secure=origin.startswith('https://'),
+                             httponly=True, samesite='Strict')
+        return result  # Compatibility only: Lab Mode cannot be logged out.
     return None
 
 
@@ -221,7 +146,7 @@ def nginx_content(text, config):
     anchor = '    location / { return 301 https://$host$request_uri; }'
     if text.count(anchor) != 1:
         raise ValueError('Missing unique HTTP redirect in nginx template')
-    return text.replace(anchor, '''    # Explicit Lab Mode: all-network UI; backend separately authorizes mutations/transport.
+    return text.replace(anchor, '''    # Explicit Lab Mode: open all-network UI; Agent transport retains ID/token checks.
     location / {
         proxy_pass http://127.0.0.1:8082;
         proxy_set_header Host $http_host;
@@ -284,20 +209,20 @@ if __name__ == '__main__':
     sub = parser.add_subparsers(dest='command', required=True)
     render = sub.add_parser('nginx');render.add_argument('source');render.add_argument('destination')
     sub.add_parser('provision-control')
-    access = sub.add_parser('open')
-    access.add_argument('origin', help='Exact browser HTTP/HTTPS origin, including port if needed')
+    sub.add_parser('status')
     enable = sub.add_parser('enable');enable.add_argument('--network', action='append', default=[])
     args = parser.parse_args()
     try:
         if args.command == 'nginx':
             Path(args.destination).write_text(nginx_content(Path(args.source).read_text(),load_deployment_config()))
         elif args.command == 'provision-control':
-            ensure_control(load_deployment_config())
-        elif args.command == 'open':
-            from lab_access import issue
-            print(issue(load_deployment_config(), args.origin))
+            pass  # Compatibility with old updaters; Lab Mode needs no control key.
+        elif args.command == 'status':
+            config = load_deployment_config()
+            print(json.dumps(access_status(config), sort_keys=True))
+            raise SystemExit(0 if enabled(config) else 2)
         else:
             configure(DEPLOYMENT_FILE,args.network)
-            print('Lab Mode configured. Run sudo mrnobody update to provision control access and repair services/nginx.')
+            print('Lab Mode configured. Run sudo mrnobody update to repair services/nginx.')
     except (OSError, ValueError) as error:
         parser.exit(1,str(error)+'\n')

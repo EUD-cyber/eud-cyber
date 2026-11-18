@@ -22,7 +22,7 @@ async function checkNavigation(browser){
             once(fixture,'exit').then(()=>{throw new Error('Navigation fixture exited: '+diagnostics);}),
             new Promise((_,reject)=>{const timer=setTimeout(()=>reject(new Error('Navigation fixture timeout: '+diagnostics)),15000);timer.unref();})
         ]);
-        const {ports,handoff}=JSON.parse(ready[0]);
+        const {ports}=JSON.parse(ready[0]);
         portal=http.createServer((req,res)=>{
             if(req.url==='/redirect'){res.writeHead(302,{Location:target});res.end();}
             else{res.setHeader('Content-Type','text/html');res.end('<a href="'+target+'">Open lab</a><a href="/redirect">Redirect to lab</a>');}
@@ -47,31 +47,16 @@ async function checkNavigation(browser){
                         const result=await fetch('/api/master/admin/session');return {status:result.status,body:await result.json()};
                     });
                     assert.equal(session.status,200);assert.equal(session.body.authenticated,true);
-                    assert.equal(session.body.web_job_control,false);
+                    assert.equal(session.body.web_job_control,true);
+                    const saved=await page.evaluate(async csrf=>{
+                        const result=await fetch('/api/config',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:'{}'});
+                        return {status:result.status,body:await result.json()};
+                    },session.body.csrf);
+                    assert.equal(saved.status,200);assert.equal(saved.body.saved,true);
                 }
             }
         }
-        if(handoff){
-            for(let index=0;index<ports.length;index++){
-                const origin='http://127.0.0.1:'+ports[index];
-                const next=once(lines,'line');
-                fixture.stdin.write(JSON.stringify({index,origin})+'\n');
-                const {link}=JSON.parse((await next)[0]);
-                await page.goto(link);
-                await page.locator('#labMessage').filter({hasText:'Changes authorized'}).waitFor();
-                assert.equal(new URL(page.url()).hash,'');
-                assert.equal(await page.evaluate(()=>sessionStorage.length+localStorage.length),0);
-                await page.reload();
-                await page.locator('#labMessage').filter({hasText:'Changes authorized'}).waitFor();
-                await page.locator('#labLogout').click();
-                await page.locator('#labMessage').filter({hasText:'Read-only access'}).waitFor();
-                await page.goto(link);
-                await page.locator('#labMessage').filter({hasText:'Unauthorized'}).waitFor();
-                assert.equal(new URL(page.url()).hash,'');
-            }
-            console.log('PASS real Linux/browser: root-issued Master/Slave handoff, fragment removal, HttpOnly session reload, logout and replay rejection.');
-        }
-        console.log('PASS real Flask/browser: cross-site links and redirects into Master/Slave via IP and DNS; same-origin session reads remain available and read-only.');
+        console.log('PASS real Flask/browser: portal links/redirects into Master/Slave via IP/DNS, automatic CSRF and immediate GUI writes without activation.');
     }finally{
         if(page)await page.close();
         if(portal)await new Promise(resolve=>portal.close(resolve));
@@ -87,7 +72,7 @@ async function checkNavigation(browser){
     try{
         await checkNavigation(browser);
         const page=await browser.newPage({viewport:{width:1280,height:1000}});
-        const starts=[],errors=[];let lost=true,job=null,stops=0,readOnly=true;
+        const starts=[],errors=[];let lost=true,job=null,stops=0;
         page.on('pageerror',e=>errors.push(String(e)));
         await page.route('**/*',route=>{
             const req=route.request(),url=new URL(req.url());assert.equal(url.protocol,'http:');
@@ -95,9 +80,8 @@ async function checkNavigation(browser){
             if(url.pathname==='/lab/control')return route.fulfill({contentType:'text/html',body:fs.readFileSync(path.join(web,'templates/lab_control.html'),'utf8')});
             if(url.pathname.startsWith('/static/'))return route.fulfill({contentType:url.pathname.endsWith('.js')?'text/javascript':'text/css',body:fs.readFileSync(path.join(web,url.pathname.slice(1)),'utf8')});
             if(url.pathname.endsWith('/session')){
-                if(req.method()==='POST'){assert.deepEqual(req.postDataJSON(),{handoff:'s'.repeat(43)});readOnly=false;}
-                if(req.method()==='DELETE'){assert.equal(req.headers()['x-csrf-token'],'c'.repeat(43));readOnly=true;}
-                return route.fulfill({json:{authenticated:true,lab_mode:true,web_job_control:!readOnly,csrf:'c'.repeat(43)}});
+                assert.equal(req.method(),'GET'); // Never activate or log in from the GUI.
+                return route.fulfill({json:{authenticated:true,lab_mode:true,web_job_control:true,csrf:'c'.repeat(43)}});
             }
             if(url.pathname==='/api/master/agents')return route.fulfill({json:{agents:[{agent_id:'agent-1',status:'online',name:'Slave'}]}});
             if(url.pathname.endsWith('/jobs')&&req.method()==='POST'){
@@ -114,18 +98,10 @@ async function checkNavigation(browser){
             throw new Error('Unexpected route '+url.pathname);
         });
         await page.goto('http://192.168.50.3/master/admin');
-        await page.getByRole('status').filter({hasText:'Lab Mode: read-only'}).waitFor();
+        await page.getByRole('status').filter({hasText:'Lab Mode: controls ready'}).waitFor();
         assert.equal(await page.locator('#adminLogin').isVisible(),false);
-        assert.equal(await page.locator('#jobStart').isDisabled(),true);
-        await page.goto('http://192.168.50.3/lab/control#handoff='+'s'.repeat(43));
-        await page.locator('#labMessage').filter({hasText:'Changes authorized'}).waitFor();
-        assert.equal(new URL(page.url()).hash,'');
-        assert.equal(await page.locator('input[type=password]').count(),0);
-        await page.goto('http://192.168.50.3/master/admin');
-        await page.getByRole('status').filter({hasText:'Lab Mode: administrator authenticated'}).waitFor();
-        assert.equal(await page.locator('#adminLogin').isVisible(),false);
-        assert.equal(await page.locator('#adminLogout').isVisible(),true);
-        assert.match(await page.locator('#adminAccessHint').innerText(),/HTTPS to protect/);
+        assert.equal(await page.locator('#adminLogout').isVisible(),false);
+        assert.match(await page.locator('#adminAccessHint').innerText(),/available automatically/);
         assert.equal(starts.length,0);
         await page.selectOption('#jobAgent','agent-1');await page.locator('#jobStart').click();
         await page.waitForFunction(()=>document.querySelector('#jobStart').textContent.includes('Retry'));
@@ -139,28 +115,15 @@ async function checkNavigation(browser){
         page.once('dialog',d=>d.accept());await page.getByRole('button',{name:'Stop this job'}).click();
         await page.waitForFunction(()=>document.querySelector('#jobList').textContent.includes('Status: stopped'));
         assert.equal(stops,1);
-        readOnly=true;job.status='running';job.stop_requested=false;
         await page.goto('http://master.lab/master/admin');
-        await page.getByRole('status').filter({hasText:'Lab Mode: read-only'}).waitFor();
-        await page.waitForFunction(()=>document.querySelectorAll('#jobList article').length===1);
+        await page.getByRole('status').filter({hasText:'Lab Mode: controls ready'}).waitFor();
         assert.equal(await page.locator('#adminLogin').isVisible(),false);
-        assert.equal(await page.locator('#jobStart').isDisabled(),true);
-        assert.equal(await page.getByRole('button',{name:'Stop this job'}).isDisabled(),true);
+        assert.equal(await page.locator('#adminLogout').isVisible(),false);
         assert.equal(starts.length,2);assert.equal(stops,1);
         for(const width of [1280,768,390]){
             await page.setViewportSize({width,height:1000});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2));
         }
-        await page.goto('http://slave.lab/lab/control');
-        await page.locator('#labMessage').filter({hasText:'Read-only access'}).waitFor();
-        await page.goto('http://slave.lab/lab/control#handoff='+'s'.repeat(43));
-        await page.locator('#labMessage').filter({hasText:'Changes authorized'}).waitFor();
-        assert.equal(new URL(page.url()).hash,'');
-        assert.equal(await page.locator('input[type=password]').count(),0);
-        assert.equal(await page.evaluate(()=>sessionStorage.length+localStorage.length),0);
-        await page.locator('#labLogout').click();
-        await page.locator('#labMessage').filter({hasText:'Read-only access'}).waitFor();
-        assert.match(await page.locator('#labCommand').innerText(), /sudo mrnobody lab-open http:\/\/slave.lab/);
         assert.deepEqual(errors,[]);
-        console.log('PASS HTTP Lab Mode UI: IP/DNS one-time handoff, anonymous start/stop disabled, no automatic job, reload retry, CSRF, confirmed Stop, 3 widths.');
+        console.log('PASS open Lab Mode UI: IP/DNS, no login/logout, automatic controls, no automatic job, reload retry, CSRF, confirmed Stop, 3 widths.');
     }finally{await browser.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

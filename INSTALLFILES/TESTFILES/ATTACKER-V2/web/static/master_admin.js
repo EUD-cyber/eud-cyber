@@ -109,17 +109,15 @@
                 canControl = body.web_job_control !== false;
                 csrf = body.csrf; form.hidden = canControl; logout.hidden = !canControl; control.hidden = false;
                 if (body.lab_mode === true) {
-                    form.hidden = true;
-                    byId('adminSessionHint').textContent = 'Lab Mode control sessions expire after eight hours, logout or web-service restart. Portal single sign-on is not configured. See docs/lab-mode-ztd.md.';
+                    form.hidden = true; logout.hidden = true;
+                    byId('adminSessionHint').textContent = 'Lab Mode has no login session or activation step. All visitors to this Master can control its registered Slaves.';
                     const hint = byId('adminAccessHint');
-                    hint.textContent = 'Lab Mode: use local VM browser access. Use HTTPS to protect sessions in transit. ';
-                    const access = document.createElement('a'); access.href = '/lab/control';
-                    access.textContent = 'Open access instructions'; hint.append(access);
+                    hint.textContent = 'Lab Mode controls are available automatically. Select a registered online Slave and start or stop its fixed P11 job.';
                     byId('jobWorkerHint').textContent = 'Lab Mode automatically enables the fixed P11 job worker on configured Slaves. Online still proves heartbeat contact only. A queued job expires after 180 seconds.';
                 }
                 message.textContent = body.lab_mode === true ? (canControl
-                    ? 'Lab Mode: administrator authenticated for this origin. Only the fixed P11 job is remotely supported.'
-                    : 'Lab Mode: read-only. Open access instructions; Master requires a trusted local administrator.')
+                    ? 'Lab Mode: controls ready. No login or activation required. Only the fixed P11 job is remotely supported.'
+                    : 'Lab Mode: control service unavailable. Refresh and retry.')
                     : 'Administrator authenticated. Only the fixed P11 job is remotely supported.';
                 await load();
             } else signedOut('Logged out.');

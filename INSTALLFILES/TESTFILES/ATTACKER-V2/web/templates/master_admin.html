@@ -12,13 +12,13 @@
     <h1>Master P11 job control</h1>
     <p>One registered online Agent. One fixed synthetic P11 job: 3 beacons, 30 seconds apart, to the configured Master Receiver. No target or scenario parameters.</p>
     <p id="adminAccessHint">Administrator login authorizes the Master webinterface, including existing local administration. Agent and enrollment tokens are not administrator credentials.</p>
-    <form id="adminLogin">
+    <form id="adminLogin"{% if lab_mode_enabled %} hidden{% endif %}>
       <label for="adminCredential">Administrator credential</label>
       <input id="adminCredential" type="password" autocomplete="off" required maxlength="43" minlength="43">
       <button class="button" type="submit">Log in as administrator</button>
     </form>
     <button class="button" id="adminLogout" type="button" hidden>Log out</button>
-    <p id="adminMessage" role="status" aria-live="polite">Checking session…</p>
+    <p id="adminMessage" role="status" aria-live="polite">Checking controls…</p>
     <section class="panel" id="jobControl" hidden>
       <h2>Start fixed P11 job</h2>
       <p id="jobWorkerHint">Online means heartbeat contact only. The opt-in HTTPS job worker must also be running. A queued job expires after 180 seconds.</p>

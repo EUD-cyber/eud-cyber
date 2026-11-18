@@ -1,118 +1,35 @@
-# MrNobody lab ZTD: Master og Slave
+# MrNobody Lab Mode: automatisk Master og Slave
 
-Single VM -> MrNobody -> Slave kræver kun Master-adressen ud over de almindelige
-VM-valg. Nye Master/Slave-installationer bruger lab HTTP. Big/Mini/Custom beholder
-deres agentrolle og bruger samme bootstrap, når en Master-URL er konfigureret.
-Standalone har ingen Master-forbindelse. Master/Standalone installerer eller
-aktiverer aldrig agentservicen gennem dette flow; unitens ExecCondition afviser
-også en gammel agent-unit, hvis rollen senere ændres.
+Lab Mode kræver ingen manuel nøgle, tokenoverførsel, parringskommando,
+aktiveringslink eller web-login. Alle, der kan åbne en Master, kan styre dens
+registrerede Slaves. Der er ingen elev-/læreropdeling på den enkelte Master.
+Se [installations- og adgangsmodellen](../TESTFILES/ATTACKER-V2/docs/lab-access-preinstall.md).
 
-## Automatisk installation
+Installationsflowet skriver den valgte rolle og Master-URL. Slave opretter
+/etc/mrnobody/agent.json atomisk med mode 0600, et tilfældigt UUID-baseret
+Agent-ID og et individuelt token. Første kontakt til en eksplicit Lab Mode
+Master binder automatisk ID/token. Gentagen registrering kan ikke ændre en
+eksisterende binding eller genaktivere en spærret identitet. Master gemmer
+tokenets hash. Heartbeat, jobpolling, P06/P11 og Receiver kontrollerer bindingen.
 
-Cloud-init opretter `/etc/mrnobody/agent.json` lokalt med mode 600, et tilfældigt
-UUID-baseret Agent-ID og et individuelt tilfældigt 256-bit token. Der er ingen
-fælles statisk nøgle, manuel parring eller krav om forbindelse til Master under
-bootstrap. Identiteten publiceres atomisk før første netværkskontakt. Gentagen
-bootstrap, genstart og update genbruger filen; en ugyldig eksisterende fil
-overskrives aldrig. Klon ikke en allerede bootstrappet Slave som en ny agent.
+Kilde-IP bruges ikke som agentidentitet. Flere Slaves bag samme NAT har hver
+deres identitet. Slaven kontakter den konfigurerede Master udad. IP/DNS og
+oversatte porte understøttes. Master-adressen skal være kendt af deployment-
+flowet og kunne nås; der indføres ikke discovery på tværs af NAT.
 
-Installationen aktiverer og starter `mrnobody-agent.service`. Agenten forbinder
-udad gennem NAT og registrerer sig via `/api/master/agents/register`. Master
-gemmer kun tokenets hash og bruger Agent-ID som nøgle, aldrig kilde-IP. Flere
-Slaves bag samme NAT bliver derfor individuelle agenter. Et mistet svar kan
-trygt gentages med samme ID/token; et eksisterende ID med et andet token eller
-en spærret identitet bliver afvist.
+Genstart, bootstrap og update genbruger den eksisterende private identitetsfil.
+En ugyldig fil overskrives ikke automatisk. Nye Slaves skal have deres egen
+identitet; kloning af en allerede startet Slave kopierer ellers identiteten.
 
-Automatisk enrollment kræver `MRNOBODY_LAB_HTTP="1"` på Master og en kildeadresse
-inden for RFC1918, IPv6 ULA eller loopback. Kun den lokale nginx må levere
-X-Real-IP, som nginx overskriver med forbindelsens faktiske kildeadresse.
-Offentlige adresser kan ikke automatisk enrolles; behold labbet isoleret og
-uden internet-portforwarding. Dette er lab-adgang, ikke et internet-login.
-Allerede udstedte credentials kan fortsat bruge det eksisterende autentificerede
-registreringsflow. HTTPS-konfiguration beholder certifikatvalidering.
+mrnobody-agent.service håndterer registrering og heartbeat. Lab Mode aktiverer
+også den afgrænsede P11 job-worker. Online betyder heartbeatkontakt; Receiver
+viser modtaget øvelsestrafik. Master/Standalone aktiverer ikke agentservicen.
+Protected mode bevarer eksplicit Master-udstedt parring og HTTPS-validering.
 
-Agenten sender heartbeat cirka hvert 30. sekund. Netværksfejl og midlertidige
-serverfejl giver retry med jitter og eksponentiel ventetid, højst 60 sekunder.
-Efter genforbindelse registrerer den sig igen. Forkerte/spærrede credentials og
-certifikatfejl stopper klienten med en forklaring i journalen. Der udføres ingen
-jobs eller filoverførsel, og agenten åbner ingen lytteport.
+Valgfrie fejlsøgningskommandoer, ikke manuelle installationstrin:
 
-## Eksisterende installationer
+    mrnobody lab-status
+    systemctl status mrnobody-agent mrnobody-agent-jobs
+    sudo python3 /opt/nordic-attack/web/agent_client.py --check
 
-Kør `sudo mrnobody update` på Master og Slave. Kør den igen på Slave, hvis første
-kørsel hentede selve den nye updater. Den nye updater reparerer også en manglende
-eller disabled unit, når alle kodehashes allerede matcher. Den bevarer
-`deployment.conf`, `agent.json` og `/var/lib/mrnobody/master/registry.sqlite3`.
-En allerede aktiv agent genstartes ved agentkodeændringer.
-
-Master-konfiguration i `/etc/mrnobody/deployment.conf`:
-
-```sh
-MRNOBODY_ROLE="master"
-MRNOBODY_MASTER_URL=""
-MRNOBODY_LAB_HTTP="1"
-```
-
-Slave-konfiguration (tilpas Master-adressen):
-
-```sh
-MRNOBODY_ROLE="agent"
-MRNOBODY_MASTER_URL="http://10.134.71.3"
-MRNOBODY_LAB_HTTP="1"
-```
-
-Bevar øvrige indstillinger og undgå dublerede linjer. Genstart
-`nordic-incident-web` på Master efter konfigurationsændringer. Ved manuel
-reparation på Slave kan `sudo python3 /opt/nordic-attack/web/agent_client.py
---bootstrap` køres uden netværk, efterfulgt af
-`sudo systemctl enable --now mrnobody-agent.service`.
-
-## Kort testguide i CyberLab
-
-1. Installer eller opdater Master og Slave med ovenstående roller og lab-flag.
-2. På Slave: `systemctl is-enabled mrnobody-agent` og
-   `systemctl is-active mrnobody-agent` skal vise `enabled` og `active`.
-   `sudo python3 /opt/nordic-attack/web/agent_client.py --check` viser ID,
-   Master-URL og transport uden at afsløre token.
-3. På Master: `curl -sk https://127.0.0.1/api/master/agents` skal vise Slave som
-   `online`. Vent mindst 30 sekunder og kontrollér, at `last_seen_at` flytter sig.
-4. Stop Master-webservicen, og genstart Slave. Den skal fortsat være aktiv og
-   logge retry. Start Master igen; Slave skal blive online uden manuel handling.
-5. Gem lokalt på Slave: `sudo sha256sum /etc/mrnobody/agent.json`. Genstart og
-   kør `sudo mrnobody update`; kontrollér samme hash og samme Agent-ID bagefter.
-   Del ikke filens indhold. Installer en anden Slave bag samme NAT og kontrollér
-   to forskellige ID'er i Master-listen.
-6. På Master/Standalone må agentservicen ikke være aktiv.
-
-Fejlsøg med `journalctl -u mrnobody-agent -n 50 --no-pager`. Registry-listen og
-websiden bruger fortsat HTTPS; de eksakte register/heartbeat/reports-stier tillader lab HTTP. Settings viser konfiguration, mens registry-listen viser faktisk kontakt.
-
-## Valgfri manuel HTTPS-parring
-
-Uden lab-mode kræves fortsat Master-udstedte credentials:
-`sudo python3 /opt/nordic-attack/web/master_registry.py issue AGENT_ID` på Master.
-Overfør JSON privat til Slave, sæt mode 600, og brug
-`sudo python3 /opt/nordic-attack/web/agent_client.py --pair PRIVATE_JSON --ca-file CA_PEM`.
-Aktiver derefter agentservicen. Behold Masterens private TLS-nøgle på Master.
-En eksisterende identitet erstattes aldrig. Spærring udføres på Master med
-`sudo python3 /opt/nordic-attack/web/master_registry.py revoke AGENT_ID`.
-
-## Rapportmetadata i Master V2
-
-Opdater først Master og derefter Slave med `sudo mrnobody update`.
-En aktiv Agent-service genstartes af updateren; privat identitet og indstillinger
-bevares. Efter næste kontakt sender Slaven en afgrænset metadataoversigt fra
-eksisterende `/opt/nordic-attack/reports/*.json`. Masterens Agents → View agent
-viser posterne og tidspunktet for seneste modtagelse. Genindlæs browseren helt.
-
-Metadata sendes særskilt fra heartbeat, via samme udgående forbindelse og nøgle.
-Fejl stopper ikke heartbeat. Gamle Slaves virker fortsat uden metadata; en ny
-Slave kan fortsat holde kontakt med en gammel Master. Se
-[registry-guiden](mrnobody-master-registry.md#rapportmetadata-gennem-udgående-forbindelse)
-for felter, grænser og manuel kontrol. Afsluttede rapporter overføres nu én ad
-gangen med Agent-initieret polling og upload af navngivne JSON-snapshots.
-Master viser View report og Download JSON efter modtagelse. Eksisterende filtrering
-af følsomme rapportdata genbruges; højst 2 MiB pr. rapport. Visning og download
-kræver lab HTTPS. Identitet, ZTD og heartbeat er bevaret. Fjernstart af phases og
-scenarier er endnu ikke implementeret. Se
-[rapportguiden](mrnobody-master-registry.md#rapportvisning-og-download).
+Opdatering bevarer deployment.conf, agent.json, registry og jobjournal.

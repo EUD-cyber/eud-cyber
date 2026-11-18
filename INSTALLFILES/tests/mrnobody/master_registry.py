@@ -287,7 +287,7 @@ class API(unittest.TestCase):
         self.config.role="agent"
         self.assertEqual(self.call(secure=False)[1],404)
 
-    def test_lab_auto_enrollment_handles_nat_and_rejects_public_or_spoofed_peers(self):
+    def test_lab_registration_requires_pairing_even_from_private_or_proxy_peers(self):
         data=dict(agent_id="new-agent",name="Slave",protocol_version=1)
         self.assertEqual(self.call(data=data,remote="10.134.71.2")[1],401)
         self.config.lab_http=True
@@ -296,8 +296,9 @@ class API(unittest.TestCase):
             self.assertEqual(self.call(data=data,remote=remote,real_ip=real_ip,secure=False)[1],401)
         for number in range(2):
             data["agent_id"]="nat-agent-"+str(number)
-            self.assertEqual(self.call(data=data,remote="127.0.0.1",real_ip="10.134.71.2",secure=False)[1],200)
-            self.assertEqual(self.call(data=data,remote="10.134.71.2",secure=False)[1],200)
+            self.assertEqual(self.call(data=data,remote="127.0.0.1",real_ip="10.134.71.2",secure=False)[1],401)
+            token=self.store.issue(data['agent_id'])
+            self.assertEqual(self.call(data=data,token=token,remote="10.134.71.2",secure=False)[1],200)
         agents=self.store.list_agents()
         self.assertEqual(sum(row["status"]=="online" for row in agents),2)
 

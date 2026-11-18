@@ -40,14 +40,13 @@ idempotent og bevarer det oprindelige registreringstidspunkt. Svaret angiver
 90 sekunder uden kontakt. Tidsstempler er serverens Unix-tid, ikke agentens ur.
 
 Kun disse JSON-felter accepteres; request-body er begrænset til 4096 bytes.
-API'et returnerer aldrig agentnøgler eller nøglehashes. Uden lab-mode accepteres
-kun operatørudstedte nøgler. Med eksplicit lab-mode kan private labadresser
-automatisk registrere et nyt ID med en individuel persistent nøgle; se
-[lab ZTD-guiden](mrnobody-agent-client.md). Eksisterende eller spærrede identiteter
-kan ikke overskrives gennem automatisk registrering.
+API'et returnerer aldrig agentnøgler eller nøglehashes. Eksplicit Lab Mode
+binder automatisk en ny persistent ID/token-kombination ved første kontakt.
+Protected mode kræver fortsat en Master-udstedt nøgle. Kildeadresse og
+identitetsheaders bruges ikke som agentidentitet.
 
-En manglende database giver 503 uden lab-enrollment; gyldig lab-registrering
-initialiserer databasen automatisk.
+En manglende database oprettes ved første Lab Mode-registrering; ellers giver
+den 503. Eksisterende eller spærrede identiteter overskrives aldrig.
 Andre roller og ugyldig deployment-konfiguration giver 404.
 
 ## HTTPS og afgrænsning
