@@ -18,6 +18,7 @@ WEB=ROOT/'TESTFILES/ATTACKER-V2/web'
 sys.path.insert(0,str(WEB))
 sys.path.insert(1,str(ROOT))
 from deployment_config import DeploymentConfig, _parse, load_deployment_config
+from lab_access import issue, consume, SESSION_TTL
 from lab_mode import contains, configure, nginx_content, ensure_control, control_digest
 from master_admin import install_admin_auth
 from master_api import install_master_api
@@ -169,6 +170,7 @@ systemctl() {
             with self.assertRaises(ValueError):configure(path,NETWORKS)
 
 
+@unittest.skipUnless(os.name=='posix' and os.geteuid()==0, 'Local handoff requires Linux root-owned fixtures')
 class Boundary(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
@@ -179,7 +181,12 @@ class Boundary(unittest.TestCase):
         self.key_patch=patch('lab_mode.control_digest', side_effect=lambda: self.digest)
         self.key_patch.start();self.addCleanup(self.key_patch.stop)
         self.now=1000
-        self.app=Flask('lab-mode',template_folder=str(WEB/'templates'))
+        self.access=self.root/'access'
+        real_consume=consume
+        self.access_patch=patch('lab_access.consume', side_effect=lambda token,config,origin,digest:
+            real_consume(token,config,origin,digest,directory=self.access,clock=lambda:self.now))
+        self.access_patch.start();self.addCleanup(self.access_patch.stop)
+        self.app=Flask('lab-mode',template_folder=str(WEB/'templates'),static_folder=str(WEB/'static'))
         self.app.add_url_rule('/',view_func=lambda:'dashboard')
         install_master_api(self.app,lambda:self.config,self.path)
         install_admin_auth(self.app,lambda:self.config,clock=lambda:self.now,registry_path=self.path)
@@ -322,13 +329,102 @@ class Boundary(unittest.TestCase):
         self.assertEqual(jobs.history(),[])
 
     def login(self, host=BASE, peer=None, secret=None):
+        if secret is None:
+            secret=issue(self.config,host,directory=self.access,clock=lambda:self.now).split('#handoff=')[1]
         return self.client.post('/api/master/admin/session', base_url=host,
-            environ_overrides=peer or self.peer, json={'credential': secret or self.secret}, headers={'Origin':host})
+            environ_overrides=peer or self.peer, json={'handoff': secret}, headers={'Origin':host})
 
     def authorized(self):
         result=self.login()
         self.assertEqual(result.status_code,200,result.data)
         return result.json['csrf']
+
+    def test_handoff_single_use_expiry_origin_role_key_and_sixteen_labs(self):
+        from concurrent.futures import ThreadPoolExecutor
+        ticket=issue(self.config,BASE,directory=self.access,clock=lambda:self.now).split('#handoff=')[1]
+        check=lambda token=ticket,config=self.config,origin=BASE,digest=self.digest: consume(
+            token,config,origin,digest,directory=self.access,clock=lambda:self.now)
+        self.assertFalse(check(config=replace(self.config,role='agent')))
+        self.assertFalse(check(origin='http://other.lab'))
+        self.assertFalse(check(digest='0'*64))
+        with ThreadPoolExecutor(8) as pool:
+            self.assertEqual(sum(pool.map(lambda _:check(),range(8))),1)
+        self.assertFalse(check())
+        # Separate worker processes must also share one-use state.
+        import subprocess
+        token=issue(self.config,BASE,directory=self.access,clock=lambda:self.now).split('#handoff=')[1]
+        code = ("import sys; from pathlib import Path; sys.path.insert(0,sys.argv[1]); "
+                "from lab_access import consume; from deployment_config import DeploymentConfig; "
+                "c=DeploymentConfig(role='master',config_status='loaded',lab_http=True,lab_mode=True); "
+                "print(int(consume(sys.argv[2],c,sys.argv[3],sys.argv[4],directory=Path(sys.argv[5]),clock=lambda:float(sys.argv[6]))))")
+        processes=[subprocess.Popen([sys.executable,'-c',code,str(WEB),token,BASE,self.digest,
+                                     str(self.access),str(self.now)],stdout=subprocess.PIPE,text=True) for _ in range(4)]
+        self.assertEqual(sum(int(process.communicate(timeout=10)[0]) for process in processes),1)
+        ticket=issue(self.config,BASE,directory=self.access,clock=lambda:self.now).split('#handoff=')[1]
+        self.now+=121
+        self.assertFalse(check(token=ticket))
+        # Unique root-provisioned identities even where all labs use the same IP/origin.
+        for index in range(16):
+            directory=self.root/('lab-'+str(index))
+            digest=hashlib.sha256(str(index).encode()).hexdigest()
+            with patch('lab_mode.control_digest',return_value=digest):
+                token=issue(replace(self.config,role='agent'),BASE,directory=directory,clock=lambda:self.now).split('#handoff=')[1]
+            self.assertFalse(consume(token,self.config,BASE,digest,directory=directory,clock=lambda:self.now))
+            self.assertFalse(consume(token,replace(self.config,role='agent'),BASE,self.digest,directory=directory,clock=lambda:self.now))
+            self.assertFalse(consume(token,self.config,BASE,self.digest,directory=self.access,clock=lambda:self.now))
+            self.assertTrue(consume(token,replace(self.config,role='agent'),BASE,digest,directory=directory,clock=lambda:self.now))
+
+    def test_manual_key_login_removed_and_role_change_revokes_session(self):
+        self.assertEqual(self.login(secret=self.secret).status_code,401)
+        self.assertEqual(self.post('/api/master/admin/session',{'credential':self.secret}).status_code,401)
+        csrf=self.authorized()
+        self.now+=901
+        self.assertTrue(self.get('/api/master/admin/session').json['web_job_control'])
+        self.config=replace(self.config,role='agent')
+        self.assertEqual(self.post('/api/config',{},csrf).status_code,403)
+
+    def test_handoff_permissions_reissue_and_no_portal_header_identity(self):
+        first=issue(self.config,BASE,directory=self.access,clock=lambda:self.now).split('#handoff=')[1]
+        second=issue(self.config,BASE,directory=self.access,clock=lambda:self.now).split('#handoff=')[1]
+        self.assertEqual(self.login(secret=first).status_code,401)
+        self.assertEqual(self.login(secret=second).status_code,200)
+        self.assertEqual(self.login(secret=second).status_code,401)
+        self.access.chmod(0o755)
+        with self.assertRaises(OSError):issue(self.config,BASE,directory=self.access)
+        self.access.chmod(0o700)
+        self.client=self.app.test_client()
+        self.assertFalse(self.get('/api/master/admin/session',headers={
+            'X-Remote-User':'guacadmin','X-Lab-ID':'1','X-Role':'master'}).json['web_job_control'])
+
+    def test_cross_lab_http_ticket_and_cookie_rejected_even_at_same_private_origin(self):
+        other=Flask('other-lab')
+        other.add_url_rule('/api/config',view_func=lambda:{'saved':True},methods=['POST'])
+        install_admin_auth(other,lambda:self.config,clock=lambda:self.now,registry_path=self.root/'other.sqlite3')
+        client=other.test_client()
+        ticket=issue(self.config,BASE,directory=self.access,clock=lambda:self.now).split('#handoff=')[1]
+        # A different installation binding cannot redeem A's outstanding ticket.
+        with patch('lab_mode.control_digest',return_value='0'*64):
+            self.assertEqual(client.post('/api/master/admin/session',base_url=BASE,
+                json={'handoff':ticket},headers={'Origin':BASE}).status_code,401)
+        result=self.login(secret=ticket);self.assertEqual(result.status_code,200)
+        from lab_mode import COOKIE
+        client.set_cookie(COOKIE,self.client.get_cookie(COOKIE,domain=urlsplit(BASE).hostname).value,
+                          domain=urlsplit(BASE).hostname)
+        self.assertEqual(client.post('/api/config',base_url=BASE,json={},
+            headers={'Origin':BASE,'X-CSRF-Token':result.json['csrf']}).status_code,403)
+
+    def test_handoff_private_files_and_unprivileged_issuance(self):
+        with patch('os.geteuid',return_value=1000):
+            with self.assertRaises(OSError):issue(self.config,BASE,directory=self.access)
+        with self.assertRaises(ValueError):issue(replace(self.config,lab_mode=False),BASE,directory=self.access)
+        for value in ('http://master.lab/','http://user@master.lab','http://master.lab:65536','http://master.lab#x'):
+            with self.assertRaises(ValueError):issue(self.config,value,directory=self.access)
+        token=issue(self.config,BASE,directory=self.access,clock=lambda:self.now).split('#handoff=')[1]
+        target=self.access/'ticket'
+        target.chmod(0o644)
+        self.assertFalse(consume(token,self.config,BASE,self.digest,directory=self.access,clock=lambda:self.now))
+        target.unlink();target.symlink_to(self.root/'missing')
+        with self.assertRaises(OSError):issue(self.config,BASE,directory=self.access)
 
     def test_control_across_subnets_nat_ip_dns_and_ipv6(self):
         jobs,token=self.seed()
@@ -381,7 +477,7 @@ class Boundary(unittest.TestCase):
         self.assertEqual(self.post('/api/master/admin/jobs',body,csrf).status_code,403)
         self.digest=hashlib.sha256(self.secret.encode()).hexdigest()
         self.assertEqual(self.post('/api/master/admin/jobs',body,csrf).status_code,403)
-        self.now+=901
+        self.now+=SESSION_TTL+1
         self.assertEqual(self.post('/api/master/admin/jobs',body,csrf).status_code,403)
         self.digest=''
         self.assertEqual(self.login().status_code,401)
@@ -420,7 +516,7 @@ class Boundary(unittest.TestCase):
         ident=first.json['job']['job_id'];stop='/api/master/admin/jobs/'+ident+'/stop'
         self.assertEqual(self.post(stop,{'confirm_job_id':'wrong'},csrf).status_code,400)
         result=self.post(stop,{'confirm_job_id':ident},csrf);self.assertEqual(result.json['job']['status'],'stopped')
-        self.now+=901
+        self.now+=SESSION_TTL+1
         self.assertEqual(self.post(stop,{'confirm_job_id':ident},csrf).status_code,403)
         self.assertNotEqual(self.session(),csrf)
         self.assertEqual(jobs.inspect(ident)['status'],'stopped')
@@ -496,8 +592,16 @@ if __name__=='__main__':
                 fixture.config=replace(fixture.config,role=role)
                 server=make_server('127.0.0.1',0,fixture.app);servers.append(server)
                 threading.Thread(target=server.serve_forever,daemon=True).start()
-            print(json.dumps([server.server_port for server in servers]),flush=True)
-            sys.stdin.read()  # Closing stdin terminates the fixture cleanly.
+            print(json.dumps({'ports':[server.server_port for server in servers],
+                              'handoff':os.name=='posix' and os.geteuid()==0}),flush=True)
+            # Test-only stdin channel models the authorized local terminal.
+            # No HTTP issuance endpoint is added, even in the fixture.
+            for line in sys.stdin:
+                command=json.loads(line)
+                fixture=fixtures[command['index']]
+                link=issue(fixture.config,command['origin'],directory=fixtures[-1].access,
+                           clock=lambda:fixtures[-1].now)
+                print(json.dumps({'link':link}),flush=True)
         finally:
             for server in servers:server.shutdown();server.server_close()
             for fixture in fixtures:fixture.doCleanups()

@@ -9,16 +9,15 @@
 </head>
 <body><main class="main-container">
   <h1>Lab operator access</h1>
-  <p>Read access works from all networks. Authorize changes with this VM's control key.
-     Retrieve it locally with sudo cat /etc/mrnobody/lab-control.key. Use HTTPS to protect credentials in transit.</p>
-  <form id="labLogin">
-    <label for="labKey">Control key</label>
-    <input id="labKey" type="password" autocomplete="off" minlength="43" maxlength="43" required>
-    <button type="submit" class="button">Authorize changes</button>
-  </form>
+  <p>From an authorized terminal on this VM, run:</p>
+  <pre id="labCommand">sudo mrnobody lab-open &lt;browser-origin&gt;</pre>
+  <p>Open the generated link within two minutes. It works once, only for this VM and origin.
+     No control key is entered here. Master access requires a trusted administrator's terminal on Master.
+     Student terminal access must be confined to their own Slave.</p>
+  <p>Use HTTPS to protect sessions in transit. HTTP Lab Mode cannot protect against network interception.</p>
   <button id="labLogout" class="button" type="button" hidden>Log out</button>
   <p id="labMessage" role="status"></p>
-  <p>Sessions expire after 15 minutes and apply only to the current IP or DNS origin.</p>
+  <p>Sessions expire after eight hours, logout or web-service restart. Portal single sign-on is not configured.</p>
   <a href="/">Return to dashboard</a>
 </main></body>
 </html>

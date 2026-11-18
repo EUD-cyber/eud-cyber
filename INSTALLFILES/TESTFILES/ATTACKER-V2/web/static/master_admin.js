@@ -6,7 +6,7 @@
     const start = byId('jobStart'), refresh = byId('jobRefresh'), list = byId('jobList'), info = byId('jobMessage');
     const terminal = new Set(['succeeded', 'failed', 'stopped']);
     const pendingKey = 'mrn-fixed-p11-pending'; // Request identity only, never an administrator/Agent token.
-    let csrf = null, canControl = true, busy = false, loading = false, working = false, agents = [], jobs = [], pending = null;
+    let csrf = null, canControl = true, labMode = false, busy = false, loading = false, working = false, agents = [], jobs = [], pending = null;
     try {
         const value = JSON.parse(sessionStorage.getItem(pendingKey));
         if (value && /^[a-z0-9][a-z0-9_-]{0,63}$/.test(value.agent_id)
@@ -17,7 +17,7 @@
         try { if (value) sessionStorage.setItem(pendingKey, JSON.stringify(value)); else sessionStorage.removeItem(pendingKey); } catch {}
     }
     function signedOut(text) {
-        csrf = null; control.hidden = true; form.hidden = false; logout.hidden = true;
+        csrf = null; control.hidden = true; form.hidden = labMode; logout.hidden = true;
         list.replaceChildren(); agents = []; jobs = []; message.textContent = text;
     }
     function buttons() {
@@ -105,15 +105,21 @@
             const body = await api('/api/master/admin/session', method === 'GET' ? {} :
                 {method, body:JSON.stringify(method === 'POST' ? {credential} : {})});
             if (body.authenticated === true && typeof body.csrf === 'string') {
+                labMode = body.lab_mode === true;
                 canControl = body.web_job_control !== false;
                 csrf = body.csrf; form.hidden = canControl; logout.hidden = !canControl; control.hidden = false;
                 if (body.lab_mode === true) {
-                    byId('adminAccessHint').textContent = 'Lab Mode works across subnets and NAT via IP or DNS. Enter this Master\'s control key to authorize changes. Retrieve it locally with sudo cat /etc/mrnobody/lab-control.key. Use HTTPS to protect credentials in transit.';
+                    form.hidden = true;
+                    byId('adminSessionHint').textContent = 'Lab Mode control sessions expire after eight hours, logout or web-service restart. Portal single sign-on is not configured. See docs/lab-mode-ztd.md.';
+                    const hint = byId('adminAccessHint');
+                    hint.textContent = 'Lab Mode: use local VM browser access. Use HTTPS to protect sessions in transit. ';
+                    const access = document.createElement('a'); access.href = '/lab/control';
+                    access.textContent = 'Open access instructions'; hint.append(access);
                     byId('jobWorkerHint').textContent = 'Lab Mode automatically enables the fixed P11 job worker on configured Slaves. Online still proves heartbeat contact only. A queued job expires after 180 seconds.';
                 }
                 message.textContent = body.lab_mode === true ? (canControl
                     ? 'Lab Mode: administrator authenticated for this origin. Only the fixed P11 job is remotely supported.'
-                    : 'Lab Mode: read-only. Enter the Master control key to enable start, stop and other changes.')
+                    : 'Lab Mode: read-only. Open access instructions; Master requires a trusted local administrator.')
                     : 'Administrator authenticated. Only the fixed P11 job is remotely supported.';
                 await load();
             } else signedOut('Logged out.');
