@@ -125,7 +125,7 @@ async function checkNavigation(browser){
         await page.getByRole('status').filter({hasText:'Lab Mode: administrator authenticated'}).waitFor();
         assert.equal(await page.locator('#adminLogin').isVisible(),false);
         assert.equal(await page.locator('#adminLogout').isVisible(),true);
-        assert.match(await page.locator('#adminAccessHint').innerText(),/HTTPS to protect/);
+        assert.match(await page.locator('#adminAccessHint').innerText(),/pairing does not authorize this browser/);
         assert.equal(starts.length,0);
         await page.selectOption('#jobAgent','agent-1');await page.locator('#jobStart').click();
         await page.waitForFunction(()=>document.querySelector('#jobStart').textContent.includes('Retry'));

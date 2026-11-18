@@ -1,5 +1,11 @@
 # MrNobody lab ZTD: Master og Slave
 
+**Installationsblokering:** Nye Slaves kræver nu en Master-udstedt parring.
+Installeren opretter fortsat en lokal identitet, men har endnu ingen betroet
+kanal til automatisk at udstede/installere parringsoplysninger. Geninstaller
+ikke med forventning om fuld ZTD eller webadgang uden login. Se
+[krav før geninstallation](../TESTFILES/ATTACKER-V2/docs/lab-access-preinstall.md).
+
 Single VM -> MrNobody -> Slave kræver kun Master-adressen ud over de almindelige
 VM-valg. Nye Master/Slave-installationer bruger lab HTTP. Big/Mini/Custom beholder
 deres agentrolle og bruger samme bootstrap, når en Master-URL er konfigureret.
@@ -11,25 +17,23 @@ også en gammel agent-unit, hvis rollen senere ændres.
 
 Cloud-init opretter `/etc/mrnobody/agent.json` lokalt med mode 600, et tilfældigt
 UUID-baseret Agent-ID og et individuelt tilfældigt 256-bit token. Der er ingen
-fælles statisk nøgle, manuel parring eller krav om forbindelse til Master under
+fælles statisk nøgle eller krav om forbindelse til Master under
 bootstrap. Identiteten publiceres atomisk før første netværkskontakt. Gentagen
 bootstrap, genstart og update genbruger filen; en ugyldig eksisterende fil
 overskrives aldrig. Klon ikke en allerede bootstrappet Slave som en ny agent.
 
 Installationen aktiverer og starter `mrnobody-agent.service`. Agenten forbinder
-udad gennem NAT og registrerer sig via `/api/master/agents/register`. Master
+udad gennem NAT og forsøger registrering via `/api/master/agents/register`.
+Det kræver en forudgående Master-udstedt parring; bootstrap alene er ikke nok. Master
 gemmer kun tokenets hash og bruger Agent-ID som nøgle, aldrig kilde-IP. Flere
 Slaves bag samme NAT bliver derfor individuelle agenter. Et mistet svar kan
 trygt gentages med samme ID/token; et eksisterende ID med et andet token eller
 en spærret identitet bliver afvist.
 
-Automatisk enrollment kræver `MRNOBODY_LAB_HTTP="1"` på Master og en kildeadresse
-inden for RFC1918, IPv6 ULA eller loopback. Kun den lokale nginx må levere
-X-Real-IP, som nginx overskriver med forbindelsens faktiske kildeadresse.
-Offentlige adresser kan ikke automatisk enrolles; behold labbet isoleret og
-uden internet-portforwarding. Dette er lab-adgang, ikke et internet-login.
-Allerede udstedte credentials kan fortsat bruge det eksisterende autentificerede
-registreringsflow. HTTPS-konfiguration beholder certifikatvalidering.
+Automatisk enrollment med selvvalgt token er afvist. Hverken lab-flag,
+kildeadresse, NAT eller identitetsheaders giver tilladelse til at oprette en
+agent i Master-registret. Allerede udstedte credentials bruger det eksisterende
+autentificerede registreringsflow. HTTPS beholder certifikatvalidering.
 
 Agenten sender heartbeat cirka hvert 30. sekund. Netværksfejl og midlertidige
 serverfejl giver retry med jitter og eksponentiel ventetid, højst 60 sekunder.
@@ -69,7 +73,9 @@ reparation på Slave kan `sudo python3 /opt/nordic-attack/web/agent_client.py
 
 ## Kort testguide i CyberLab
 
-1. Installer eller opdater Master og Slave med ovenstående roller og lab-flag.
+1. Afklar installationsblokeringen ovenfor, og provisionér en gyldig parring
+   via en betroet kanal før denne testguide. Opdater eksisterende parrede
+   installationer med ovenstående roller og lab-flag.
 2. På Slave: `systemctl is-enabled mrnobody-agent` og
    `systemctl is-active mrnobody-agent` skal vise `enabled` og `active`.
    `sudo python3 /opt/nordic-attack/web/agent_client.py --check` viser ID,

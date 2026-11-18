@@ -433,7 +433,7 @@ def main():
             return 0
         if args.bootstrap:
             bootstrap_agent(args.credentials)
-            print("Persistent agent identity ready.")
+            print("Persistent agent identity ready. Master-issued pairing is required before first registration; offline identity creation is not enrollment approval.")
             return 0
         config=load_agent_config(args.credentials)
         sender=AgentTransport(config)

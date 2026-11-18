@@ -102,9 +102,10 @@ def install_master_api(app,deployment,registry_path=DATABASE):
                 response=jsonify(Jobs(registry_path).exchange(data['agent_id'],token,data['report']))
                 response.headers['Cache-Control']='no-store'
                 return response,200
-            result=(store.register(data["agent_id"],token,data["name"],
-                                   enroll=getattr(config,"lab_http",False) is True
-                                   and (lab_request(config) or lab_peer())) if register
+            # Registration proves possession of a Master-issued pairing credential.
+            # Neither Lab Mode, a reachable origin nor a private peer authorizes
+            # enrollment. Self-selected tokens must never populate the registry.
+            result=(store.register(data["agent_id"],token,data["name"]) if register
                     else store.transfer_report(data["agent_id"],token,data["report_id"],data["content"]) if transfer
                     else store.receive_p11(data,token) if p11
                     else store.receive_p06(data,token) if p06

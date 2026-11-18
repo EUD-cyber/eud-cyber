@@ -11,12 +11,27 @@ window.mrnFetch = async (url, options = {}) => {
         const result = await fetch('/api/master/admin/session', {cache:'no-store', credentials:'same-origin', redirect:'error'});
         if (!result.ok) throw new Error('Administrator login required at /master/admin.');
         const session = await result.json();
-        if (session.lab_mode && !session.web_job_control) throw new Error('Authorize changes at /lab/control with a locally generated one-time link.');
+        if (session.lab_mode && !session.web_job_control) throw new Error('Lab Mode is read-only for this browser. Verified operator authorization is required; portal lab/role identity is not available.');
         if (!session.authenticated || typeof session.csrf !== 'string') throw new Error('Administrator session unavailable.');
         headers.set('X-CSRF-Token', session.csrf);
     }
     return fetch(url, {...options, headers, credentials:'same-origin', redirect:'error'});
 };
+
+// Read access has no login step. Show the actual authority before an operator
+// attempts a mutation; never mistake a read-session CSRF token for permission.
+if (document.getElementById('labAccessStatus')) {
+    fetch('/api/master/admin/session', {cache:'no-store', credentials:'same-origin', redirect:'error'})
+        .then(async result => {
+            if (!result.ok) throw new Error('Access status unavailable');
+            const access = await result.json();
+            document.getElementById('labAccessStatus').textContent = access.web_job_control === true
+                ? 'Lab Mode: this browser is authorized. Portal access without login is not available.'
+                : 'Lab Mode: read-only for this browser. Portal identity cannot verify your lab or teacher/student role. Agent pairing does not grant web control.';
+        }).catch(() => {
+            document.getElementById('labAccessStatus').textContent = 'Lab Mode: access status unavailable. Control authorization has not been verified.';
+        });
+}
 
 /*
 ============================================================

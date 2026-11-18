@@ -66,6 +66,17 @@ def control_request(config):
     return lab_request(config) and getattr(g, 'lab_control', False)
 
 
+def access_status(config, can_control=False):
+    """Report implemented trust, never infer an operator from Agent pairing."""
+    active = enabled(config)
+    return dict(lab_mode=active, role=config.role,
+                zero_interaction_ready=False,
+                operator_authorized=active and bool(can_control),
+                pairing='master-issued',
+                blocker='verified-portal-lab-role-identity-unavailable' if active
+                else 'explicit-lab-mode-required')
+
+
 def http_master_allowed(config):
     # URL is root-provisioned configuration, never a request-selected destination.
     try:
@@ -193,13 +204,16 @@ def boundary(config, sessions, lock, clock, limited, response, agent_posts):
                     return response({'message': 'Session capacity reached.'}, 503)
                 ident, csrf = secrets.token_urlsafe(32), secrets.token_urlsafe(32)
                 session = (now + (SESSION_TTL if can_control else TTL), csrf, fingerprint, can_control); sessions[ident] = session
-            result = response({'authenticated': True, 'csrf': session[1], 'lab_mode': True, 'web_job_control': can_control})
+            result = response({'authenticated': True, 'csrf': session[1], 'lab_mode': True,
+                               'web_job_control': can_control,
+                               'lab_access': access_status(config, can_control)})
             result.set_cookie(COOKIE, ident, secure=origin.startswith('https://'), httponly=True,
                               samesite='Strict', path='/', max_age=max(1, int(session[0]-now)))
             return result
         if request.method not in {'GET', 'HEAD', 'OPTIONS'}:
             if not can_control:
-                return response({'message': 'Local VM browser handoff required. Open /lab/control for instructions.'}, 403)
+                return response({'message': 'Lab Mode is read-only for this browser. Verified operator authorization is required; Agent pairing does not grant web control.',
+                                 'code': 'lab_operator_authorization_required'}, 403)
             csrf = request.headers.get('X-CSRF-Token', '')
             if (request.headers.get('Origin') != origin or not session or len(csrf) != 43
                     or not hmac.compare_digest(csrf, session[1])):
@@ -284,6 +298,7 @@ if __name__ == '__main__':
     sub = parser.add_subparsers(dest='command', required=True)
     render = sub.add_parser('nginx');render.add_argument('source');render.add_argument('destination')
     sub.add_parser('provision-control')
+    sub.add_parser('status')
     access = sub.add_parser('open')
     access.add_argument('origin', help='Exact browser HTTP/HTTPS origin, including port if needed')
     enable = sub.add_parser('enable');enable.add_argument('--network', action='append', default=[])
@@ -292,7 +307,15 @@ if __name__ == '__main__':
         if args.command == 'nginx':
             Path(args.destination).write_text(nginx_content(Path(args.source).read_text(),load_deployment_config()))
         elif args.command == 'provision-control':
-            ensure_control(load_deployment_config())
+            config = load_deployment_config()
+            ensure_control(config)
+            if enabled(config):
+                import sys
+                print('Lab access: zero-interaction web control is BLOCKED: no verified portal lab/role identity. '
+                      'Unknown agents require Master-issued pairing. See docs/lab-access-preinstall.md.', file=sys.stderr)
+        elif args.command == 'status':
+            print(json.dumps(access_status(load_deployment_config()), sort_keys=True))
+            raise SystemExit(2)  # No implemented zero-interaction authorization path.
         elif args.command == 'open':
             from lab_access import issue
             print(issue(load_deployment_config(), args.origin))

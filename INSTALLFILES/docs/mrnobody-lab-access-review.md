@@ -1,5 +1,9 @@
 # Lab Mode access review — 2026-11-18
 
+Historical PR #117 review. Current preinstall status and enrollment policy:
+[lab-access-preinstall.md](../TESTFILES/ATTACKER-V2/docs/lab-access-preinstall.md).
+The verification counts below describe PR #117, not the later safety patch.
+
 Base main: `6cfdb872b7576c7098be7c964d007d9d519e8ac3`.
 
 ## Delivered scope

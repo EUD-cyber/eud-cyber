@@ -398,6 +398,10 @@ write_files:
           "docs/lab-mode-ztd.md" \
           "$INSTALL_DIR/docs/lab-mode-ztd.md"
 
+        download_file \
+          "docs/lab-access-preinstall.md" \
+          "$INSTALL_DIR/docs/lab-access-preinstall.md"
+
       download_file \
           "web/detection_validation.py" \
           "$INSTALL_DIR/web/detection_validation.py"

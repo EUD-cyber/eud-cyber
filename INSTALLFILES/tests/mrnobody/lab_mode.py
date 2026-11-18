@@ -32,6 +32,18 @@ NETWORKS=('192.168.50.0/24',)
 
 
 class Configuration(unittest.TestCase):
+    def test_status_command_exits_blocked_and_exports_no_credentials(self):
+        import subprocess
+        result=subprocess.run([sys.executable,str(WEB/'lab_mode.py'),'status'],
+                              capture_output=True,text=True,timeout=5)
+        self.assertEqual(result.returncode,2,result.stderr)
+        data=json.loads(result.stdout)
+        self.assertEqual(set(data),{'lab_mode','role','zero_interaction_ready',
+                                   'operator_authorized','pairing','blocker'})
+        self.assertFalse(data['zero_interaction_ready'])
+        self.assertFalse(data['operator_authorized'])
+        self.assertEqual(data['pairing'],'master-issued')
+
     @unittest.skipUnless(os.name=='posix' and os.geteuid()==0,'Root-owned key fixture on Linux')
     def test_control_key_install_update_preserve_and_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -243,15 +255,37 @@ class Boundary(unittest.TestCase):
                         self.assertEqual(post(suffix,dict(body,synthetic=False)).status_code,400)
         self.assertEqual(len(jobs.list_receiver_events()['events']),9)
 
-    def test_zero_touch_first_binding_works_through_public_nat_but_never_controls_jobs(self):
+    def test_master_pairing_required_through_nat_and_never_grants_browser_control(self):
         self.peer={'REMOTE_ADDR':'198.51.100.20'}
+        jobs,_=self.seed()
         body=dict(agent_id='nat-agent',protocol_version=1,name='NAT-Slave')
-        for token,expected in (('t'*43,200),('t'*43,200),('u'*43,401)):
+        self.assertEqual(self.post('/api/master/agents/register',body,
+            headers={'Authorization':'Bearer '+'t'*43,'X-Remote-User':'guacadmin'}).status_code,401)
+        token=jobs.issue('nat-agent')
+        for token,expected in ((token,200),(token,200),('u'*43,401)):
             result=self.post('/api/master/agents/register',body,headers={'Authorization':'Bearer '+token})
             self.assertEqual(result.status_code,expected,result.data)
         self.assertEqual(self.login(secret='t'*43).status_code,401)
         self.assertEqual(self.post('/api/master/admin/jobs',dict(agent_id='nat-agent',request_key='unauthorized'),
             self.session(),headers={'Authorization':'Bearer '+'t'*43}).status_code,403)
+
+    def test_unissued_identities_for_sixteen_labs_cannot_self_pair(self):
+        jobs,token=self.seed()
+        for number in range(16):
+            result=self.post('/api/master/agents/register',
+                dict(agent_id='lab-'+str(number),protocol_version=1,name='Untrusted'),
+                headers={'Authorization':'Bearer '+token,'X-Remote-User':'teacher',
+                         'X-Lab-ID':str(number),'X-Real-IP':'127.0.0.1'})
+            self.assertEqual(result.status_code,401)
+        self.assertEqual([item['agent_id'] for item in jobs.list_agents()],['agent-1'])
+
+    def test_access_status_never_claims_pairing_or_read_cookie_is_operator_identity(self):
+        self.seed()
+        status=self.get('/api/master/admin/session').json['lab_access']
+        self.assertFalse(status['zero_interaction_ready'])
+        self.assertFalse(status['operator_authorized'])
+        self.assertEqual(status['pairing'],'master-issued')
+        self.assertEqual(status['blocker'],'verified-portal-lab-role-identity-unavailable')
 
     def test_dashboard_reads_need_no_credential_but_session_is_opaque(self):
         with patch('master_admin.load_credential',side_effect=AssertionError('No provisioning in Lab Mode')):

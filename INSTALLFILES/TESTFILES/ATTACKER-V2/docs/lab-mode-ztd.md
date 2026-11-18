@@ -1,5 +1,10 @@
 # TEST-003 â€” Lab Mode network independent operation
 
+**Preinstall gate:** See [lab-access-preinstall.md](lab-access-preinstall.md).
+Zero-interaction operator authorization is not implemented. Registration now
+requires Master-issued pairing; automatic offline Agent identity creation does
+not authorize enrollment.
+
 Explicit Lab Mode permits Master/Slave UI reads, bound Agent traffic and
 credential-authorized operator changes across routed subnets and NAT, via IP or
 DNS. The server must be reachable; this does not create routes, port forwards,
@@ -100,13 +105,12 @@ schema and size limits. P06 accepts only the fixed synthetic fixture with matchi
 size/SHA256/content. P11 validates its fixed marker, sequence and ACK. No arbitrary
 commands, destinations or shell payloads were added to the job protocol.
 
-Lab Mode retains zero-touch first-binding enrollment, now from any source:
-the Agent persists its random per-VM token before registering; retries never
-replace an existing identity/token or undo revocation. Enrollment and telemetry
-are not proof of operator identity. An untrusted party can enroll a new Lab Agent
-and submit synthetic telemetry, but cannot authorize job mutations. Use protected
-mode and Master-issued pairing for deployments requiring controlled enrollment.
-Existing bound identities and issued-token pairing continue to work.
+Lab Mode requires Master-issued pairing before first registration. The Agent's
+offline-generated UUID/token alone is not accepted. Trusted provisioning must
+deliver a matching Master-issued identity/token to the assigned Slave; that
+automatic provisioning channel is not implemented. Existing bound identities
+and issued-token pairing continue to work. Retries never replace an existing
+identity/token or undo revocation. Pairing does not grant browser authorization.
 
 Agents initiate polling, beacons and transfers, so Master needs no inbound route
 to a Slave behind NAT. Set the Agent's root-owned `MRNOBODY_MASTER_URL` to the
