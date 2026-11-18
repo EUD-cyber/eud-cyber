@@ -1,11 +1,69 @@
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
+const http=require('node:http');
+const {spawn}=require('node:child_process');
+const {once}=require('node:events');
+const readline=require('node:readline');
 const {chromium}=require('playwright');
 const web=path.resolve(__dirname,'../../TESTFILES/ATTACKER-V2/web');
+
+async function checkNavigation(browser){
+    const fixture=spawn(process.env.MRN_PYTHON||'python',[path.join(__dirname,'lab_mode.py'),'--navigation-server'],
+        {stdio:['pipe','pipe','pipe']});
+    const lines=readline.createInterface({input:fixture.stdout});
+    let target,portal,page,diagnostics='';
+    fixture.stderr.on('data',data=>{diagnostics=(diagnostics+data).slice(-4000);});
+    try{
+        const ready=await Promise.race([
+            once(lines,'line'),
+            once(fixture,'exit').then(()=>{throw new Error('Navigation fixture exited: '+diagnostics);}),
+            new Promise((_,reject)=>{const timer=setTimeout(()=>reject(new Error('Navigation fixture timeout: '+diagnostics)),15000);timer.unref();})
+        ]);
+        const ports=JSON.parse(ready[0]);
+        portal=http.createServer((req,res)=>{
+            if(req.url==='/redirect'){res.writeHead(302,{Location:target});res.end();}
+            else{res.setHeader('Content-Type','text/html');res.end('<a href="'+target+'">Open lab</a><a href="/redirect">Redirect to lab</a>');}
+        }).listen(0,'127.0.0.1');
+        await once(portal,'listening');
+        page=await browser.newPage();
+        for(const port of ports){
+            for(const host of ['127.0.0.1','localhost']){
+                target='http://'+host+':'+port+'/';
+                const source='http://'+(host==='localhost'?'127.0.0.1':'localhost')+':'+portal.address().port;
+                for(const redirect of [false,true]){
+                    await page.goto(source);
+                    const [response]=await Promise.all([page.waitForNavigation(),
+                        page.getByRole('link',{name:redirect?'Redirect to lab':'Open lab',exact:true}).click()]);
+                    assert.equal(response.status(),200,await response.text());
+                    const headers=await response.request().allHeaders();
+                    assert.equal(headers['sec-fetch-site'],'cross-site');
+                    assert.equal(headers['sec-fetch-mode'],'navigate');
+                    assert.equal(headers['sec-fetch-dest'],'document');
+                    assert.equal(await page.locator('body').innerText(),'dashboard');
+                    const session=await page.evaluate(async()=>{
+                        const result=await fetch('/api/master/admin/session');return {status:result.status,body:await result.json()};
+                    });
+                    assert.equal(session.status,200);assert.equal(session.body.authenticated,true);
+                    assert.equal(session.body.web_job_control,false);
+                }
+            }
+        }
+        console.log('PASS real Flask/browser: cross-site links and redirects into Master/Slave via IP and DNS; same-origin session reads remain available and read-only.');
+    }finally{
+        if(page)await page.close();
+        if(portal)await new Promise(resolve=>portal.close(resolve));
+        lines.close();fixture.stdin.end();
+        if(fixture.exitCode===null){
+            const timer=setTimeout(()=>fixture.kill(),5000);timer.unref();
+            await once(fixture,'exit');clearTimeout(timer);
+        }
+    }
+}
 (async()=>{
     const browser=await chromium.launch({executablePath:process.env.MRN_CHROME_PATH,headless:true});
     try{
+        await checkNavigation(browser);
         const page=await browser.newPage({viewport:{width:1280,height:1000}});
         const starts=[],errors=[];let lost=true,job=null,stops=0,readOnly=false;
         page.on('pageerror',e=>errors.push(String(e)));

@@ -39,6 +39,13 @@ Protected/Standalone defaults are unchanged. The existing installer opt-in also
 applies to existing Lab Mode installations after updating; no new global bypass
 is enabled for other installations.
 
+Following a link or redirect from another site into Master/Slave is allowed for
+top-level GET/HEAD navigation (`Sec-Fetch-Mode: navigate`, destination `document`).
+Browsers legitimately label these entries `cross-site` or `same-site`. This
+exception does not allow cross-site API fetches, iframe/frame loads or writes;
+explicit foreign Origin headers are still rejected and framing remains blocked
+by CSP. Once the UI loads, its own API requests must be same-origin as before.
+
 **All unsafe web methods (POST/PUT/PATCH/DELETE, including start, stop, update,
 configuration and campaign changes) are separately denied** unless the observed
 source is in `MRNOBODY_LAB_NETWORKS` and the Host is either a numeric private
