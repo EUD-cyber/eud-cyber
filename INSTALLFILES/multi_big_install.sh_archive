@@ -27,7 +27,7 @@ set -e
 # ============================================================
 
 REPO="./repo.sh"
-PREREQ="./pre_req.sh"
+PREREQ="./pre_req.sh_archive"
 
 OPENVSWITCHPRE="./open-vswitch-pre.sh"
 OPENVSWITCH="./open-vswitch.sh"

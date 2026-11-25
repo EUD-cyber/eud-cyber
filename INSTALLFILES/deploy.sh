@@ -21,6 +21,67 @@ die() { printf '[ERROR] %s\n' "$*" >&2; exit 1; }
 log() { printf '[+] %s\n' "$*"; }
 require_command() { command -v "$1" >/dev/null 2>&1 || die "Required command not found: $1"; }
 
+prepare_host() (
+    # Preserve the former standalone setup script's shell options and scope.
+    set +E +u
+    set +o pipefail
+    trap - ERR
+    set -e
+    #check if snippets folder exits if not create it
+    STORAGE_CFG="/etc/pve/storage.cfg"
+    STORAGE_NAME="local"
+    STORAGE_PATH="/var/lib/vz"
+    SNIPPETS_DIR="${STORAGE_PATH}/snippets"
+
+    echo "Checking Proxmox snippets configuration..."
+
+    # 1. Check storage exists
+    if ! grep -q "^dir: ${STORAGE_NAME}" "$STORAGE_CFG"; then
+      echo "ERROR: Storage '${STORAGE_NAME}' not found in storage.cfg"
+      exit 1
+    fi
+
+    # 2. Check if snippets is already enabled
+    if grep -A5 "^dir: ${STORAGE_NAME}" "$STORAGE_CFG" | grep -q "snippets"; then
+      echo "✔ Snippets already enabled in storage.cfg"
+    else
+      echo "➕ Enabling snippets in storage.cfg..."
+
+      # Append snippets to content line safely
+      sed -i "/^dir: ${STORAGE_NAME}/,/^$/{
+        s/content \(.*\)/content \1,snippets/
+      }" "$STORAGE_CFG"
+
+      echo "✔ Snippets enabled"
+    fi
+
+    # 3. Ensure snippets directory exists
+    if [ ! -d "$SNIPPETS_DIR" ]; then
+      echo "➕ Creating snippets directory: $SNIPPETS_DIR"
+      mkdir -p "$SNIPPETS_DIR"
+    else
+      echo "✔ Snippets directory already exists"
+    fi
+
+    # 4. Permissions
+    chmod 755 "$SNIPPETS_DIR"
+
+    echo "✔ Proxmox snippets setup complete"
+
+    #check if packages is installed is not install them
+    PACKAGES=(wget bzip2 openvswitch-switch ifupdown2 ipcalc libguestfs-tools xz-utils unzip zip expect xorriso genisoimage rsync ansible-core tmux)
+
+    for pkg in "${PACKAGES[@]}"; do
+      if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+        echo "[+] Installing $pkg..."
+        apt-get update -qq
+        apt-get install -y "$pkg"
+      else
+        echo "[✓] $pkg already installed"
+      fi
+    done
+)
+
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     printf 'Usage: bash deploy.sh Big|Mini [1-16] [component ...]\n'
     printf 'Optional components: VULNSRV02 KALI02 APPSRV01 CLIENT01 WAZUH TPOT MRNOBODY\n'
@@ -104,7 +165,7 @@ done
 
 # Validate the complete plan before writing logs/configuration or running setup.
 missing=()
-for script in installer_menu.py repo.sh pre_req.sh open-vswitch-pre.sh open-vswitch.sh \
+for script in installer_menu.py repo.sh open-vswitch-pre.sh open-vswitch.sh \
     open-vswitch-last.sh OPNSENSE/generate_config.sh "$GUAC_CONFIG" \
     "$OPNSENSE" "${VM_SCRIPTS[@]}"; do
     [[ -f "$script" && -s "$script" ]] || missing+=("$script")
@@ -115,11 +176,13 @@ if (( ${#missing[@]} )); then
     die "Deployment stopped before making changes. Restore the required lab-aware scripts first."
 fi
 [[ "$EUID" -eq 0 ]] || die "Run as root on the Proxmox host."
-for command_name in bash python3 pvesh tmux tee; do
+for command_name in bash python3 pvesh tee; do
     require_command "$command_name"
 done
 SESSION="deploy-all"
-if tmux has-session -t "$SESSION" 2>/dev/null; then
+# A fresh host gets tmux from prepare_host. Still reject an existing deployment
+# before making changes when tmux is already available.
+if command -v tmux >/dev/null 2>&1 && tmux has-session -t "$SESSION" 2>/dev/null; then
     die "tmux session '$SESSION' already exists. Attach with: tmux attach -t $SESSION"
 fi
 
@@ -169,7 +232,9 @@ fi
 
 log "Preparing repository, packages and Open vSwitch."
 bash repo.sh
-bash pre_req.sh
+prepare_host
+# Verify package setup supplied tmux before network setup or VM installation.
+require_command tmux
 bash open-vswitch-pre.sh
 for ((lab = 1; lab <= LABCOUNT; lab++)); do
     bash open-vswitch.sh "$lab"
