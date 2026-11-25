@@ -77,7 +77,13 @@ class ForegroundAndWorkerTests(unittest.TestCase):
         self.bin.mkdir()
         (self.root / "snippets").mkdir()
         for name in ("deploy.sh", "installer_menu.py"):
-            self.write(name, (ROOT / name).read_text())
+            source = (ROOT / name).read_text()
+            if name == "deploy.sh":
+                # Stub host preparation together with all other host operations.
+                start = source.index("prepare_host() (\n")
+                end = source.index("\n)\n", start) + len("\n)\n")
+                source = source[:start] + "prepare_host() { bash host-setup.sh; }\n" + source[end:]
+            self.write(name, source)
         self.write("bin/pvesh", "#!/bin/bash\necho '[]'\n")
         self.write("bin/tmux", '''#!/bin/bash
 if [[ "$1" == has-session ]]; then exit 1; fi
@@ -87,7 +93,7 @@ shift 4
 export MRNOBODY_ROLE=master MRNOBODY_MASTER_URL=https://stale.test
 exec "$@" </dev/null
 ''')
-        for name in ("repo.sh", "pre_req.sh", "open-vswitch-pre.sh", "open-vswitch.sh", "open-vswitch-last.sh",
+        for name in ("repo.sh", "host-setup.sh", "open-vswitch-pre.sh", "open-vswitch.sh", "open-vswitch-last.sh",
                      "OPNSENSE/generate_config.sh", "GUACVM/GUACVM_ip.sh", "OPNSENSE/OPNSENSE_installer.sh",
                      "GUACVM/GUACVM_installer.sh", "KALI01/KALI01_installer.sh", "VULNSRV01/VULNSRV01_installer.sh"):
             self.write(name, f'#!/bin/bash\nprintf "%s %s\\n" "{name}" "${{1:-}}" | tee -a events\n')
