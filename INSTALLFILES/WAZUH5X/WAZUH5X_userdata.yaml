@@ -1,15 +1,16 @@
 #cloud-config
 hostname: wazuh5x
 manage_etc_hosts: true
-ssh_pwauth: false
+ssh_pwauth: true
+chpasswd:
+  expire: false
 disable_root: true
 users:
   - name: ubuntu
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
-    lock_passwd: true
-    ssh_authorized_keys:
-      - "__WAZUH5X_SSH_KEY__"
+    lock_passwd: false
+    passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
 package_update: true
 packages:
   - qemu-guest-agent
