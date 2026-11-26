@@ -21,6 +21,7 @@ VMS = [
     ("WAZUH", "WAZUH", "Wazuh", "WAZUH/WAZUH_installer.sh", False),
     ("TPOT", "TPOT01", "T-Pot", "TPOT01/TPOT01_installer.sh", False),
     ("MRNOBODY", "MRNOBODY", "MrNobody", "MRNOBODY/mrnobody_installer.sh", False),
+    ("WAZUH5X", "WAZUH5X", "WAZUH5X (5.0 RC2)", "WAZUH5X/wazuh5x_install.sh", False),
 ]
 OPTIONS = [vm[0] for vm in VMS if not vm[4]]
 

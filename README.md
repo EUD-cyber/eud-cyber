@@ -5,6 +5,10 @@
 
 Deploy complete, isolated cybersecurity environments where students can **attack, defend, investigate, and learn** using real-world security tools.
 
+WAZUH5X is a separate Wazuh 5.0 RC2 test component on Ubuntu 26.04. TPOT01 also uses
+26.04; other Ubuntu defaults and the existing Wazuh 4.14.1 component are unchanged.
+See the [installation and fresh Single VM test guide](INSTALLFILES/docs/wazuh5x-ubuntu2604.md).
+
 Built for 🔴 **Red Team**, 🔵 **Blue Team**, and 🟣 **Purple Team** training.
 
 ---

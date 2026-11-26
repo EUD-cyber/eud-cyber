@@ -1,0 +1,141 @@
+#cloud-config
+hostname: wazuh5x
+manage_etc_hosts: true
+ssh_pwauth: false
+disable_root: true
+users:
+  - name: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - "__WAZUH5X_SSH_KEY__"
+package_update: true
+packages:
+  - qemu-guest-agent
+  - curl
+  - ca-certificates
+  - gnupg
+  - python3
+write_files:
+  - path: /usr/local/sbin/wazuh5x-healthcheck
+    owner: root:root
+    permissions: '0700'
+    content: |
+      #!/usr/bin/env python3
+      import base64
+      import json
+      import pathlib
+      import ssl
+      import subprocess
+      import sys
+      import urllib.request
+
+      def password(file, key):
+          for line in pathlib.Path(file).read_text().splitlines():
+              if line.startswith(key + '='):
+                  return line.split('=', 1)[1].strip().strip("'\"")
+          raise RuntimeError('Missing credential: ' + key)
+
+      def request(url, ca, user=None, secret=None, method='GET'):
+          headers = {}
+          if user:
+              headers['Authorization'] = 'Basic ' + base64.b64encode((user + ':' + secret).encode()).decode()
+          req = urllib.request.Request(url, headers=headers, method=method)
+          with urllib.request.urlopen(req, context=ssl.create_default_context(cafile=ca), timeout=15) as response:
+              return json.load(response)
+
+      try:
+          if '--bootstrap' not in sys.argv:
+              if not pathlib.Path('/var/lib/wazuh5x/bootstrap.complete').is_file():
+                  raise RuntimeError('Bootstrap has not completed')
+              status = subprocess.run(['cloud-init', 'status', '--format', 'json'], check=True,
+                                      capture_output=True, text=True)
+              if json.loads(status.stdout).get('status') != 'done':
+                  raise RuntimeError('Cloud-init has not completed successfully')
+          for service in ('wazuh-indexer', 'wazuh-manager', 'wazuh-dashboard'):
+              subprocess.run(['systemctl', 'is-active', '--quiet', service], check=True)
+          subprocess.run(['/var/wazuh-manager/bin/wazuh-manager-control', 'status'], check=True,
+                         stdout=subprocess.DEVNULL)
+          health = request('https://127.0.0.1:9200/_cluster/health', '/etc/wazuh-indexer/certs/root-ca.pem',
+                           'admin', password('/etc/wazuh-indexer/export/credentials.env', 'WAZUH_INDEXER_ADMIN_PASSWORD'))
+          if health.get('status') not in ('green', 'yellow') or health.get('timed_out'):
+              raise RuntimeError('Indexer cluster not ready')
+          auth = request('https://127.0.0.1:55000/security/user/authenticate', '/etc/wazuh-manager/certs/root-ca.pem',
+                         'wazuh', password('/etc/wazuh-manager/export/credentials.env', 'WAZUH_MANAGER_API_PASSWORD'), 'POST')
+          if not auth.get('data', {}).get('token'):
+              raise RuntimeError('Manager API not ready')
+          dashboard = request('https://127.0.0.1/api/status', '/etc/wazuh-dashboard/certs/root-ca.pem',
+                              'admin', password('/etc/wazuh-indexer/export/credentials.env', 'WAZUH_INDEXER_ADMIN_PASSWORD'))
+          if dashboard.get('status', {}).get('overall', {}).get('state') not in ('green', 'available'):
+              raise RuntimeError('Dashboard not ready')
+          print('WAZUH5X healthy: manager API, indexer and dashboard')
+      except Exception as exc:
+          # Never print response bodies, tokens, request headers or credentials.
+          print('WAZUH5X health failed: ' + type(exc).__name__, file=sys.stderr)
+          sys.exit(1)
+  - path: /usr/local/sbin/wazuh5x-bootstrap
+    owner: root:root
+    permissions: '0700'
+    content: |
+      #!/usr/bin/env bash
+      set -Eeuo pipefail
+      umask 077
+      install -d -m 700 /var/lib/wazuh5x /var/log/wazuh5x
+      exec 9>/var/lib/wazuh5x/bootstrap.lock
+      flock -n 9 || exit 1
+      LOG="$(mktemp /var/log/wazuh5x/bootstrap-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX.log)"
+      exec >>"$LOG" 2>&1
+      trap 'failure_line=$LINENO' ERR
+      trap 'rc=$?; if (( rc != 0 )); then touch /var/lib/wazuh5x/bootstrap.failed; echo "Bootstrap failed near line ${failure_line:-$LINENO} (exit $rc); inspect $LOG and /var/log/wazuh-install.log"; fi; exit "$rc"' EXIT
+      source /etc/os-release
+      [[ "$ID" == ubuntu && "$VERSION_ID" == 26.04 && "$(dpkg --print-architecture)" == amd64 ]]
+      systemctl enable --now qemu-guest-agent
+      if [[ -f /var/lib/wazuh5x/bootstrap.complete ]]; then
+        /usr/local/sbin/wazuh5x-healthcheck
+        exit 0
+      fi
+      # Refuse to touch 4.x installations; WAZUH5X is fresh-install only.
+      [[ ! -e /var/ossec && ! -e /etc/ossec-init.conf ]]
+      install -d -m 700 /var/lib/wazuh5x/assistant
+      cd /var/lib/wazuh5x/assistant
+      if [[ ! -f /var/lib/wazuh5x/assistant.started ]]; then
+        for package in wazuh-manager wazuh-indexer wazuh-dashboard; do
+          if dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'install ok installed'; then
+            echo 'Existing Wazuh packages found; refusing automatic reinstall.'; exit 1
+          fi
+        done
+        curl --fail --location --retry 3 --connect-timeout 30 --max-time 300 \
+          -o wazuh-install-5.0.0-rc2.sh.part \
+          https://packages-staging.xdrsiem.wazuh.info/pre-release/5.x/installation-assistant/wazuh-install-5.0.0-rc2.sh
+        echo '294255e2c6d7fbb96be50a6f8559667487c47464f6646f120141c7e2d98241df  wazuh-install-5.0.0-rc2.sh.part' | sha256sum -c -
+        mv wazuh-install-5.0.0-rc2.sh.part wazuh-install-5.0.0-rc2.sh
+        touch /var/lib/wazuh5x/assistant.started
+        export DEBIAN_FRONTEND=noninteractive
+        # No -o/overwrite, no source build, no signature-check bypass.
+        timeout 2700 bash ./wazuh-install-5.0.0-rc2.sh -a -id -d pre-release \
+          -as 192.168.2.21 -as 172.20.0.21
+        touch /var/lib/wazuh5x/assistant.complete
+      fi
+      # A failed/interrupted assistant is never rerun with destructive overwrite.
+      [[ -f /var/lib/wazuh5x/assistant.complete ]] || {
+        echo 'Assistant was interrupted. Inspect logs; repair manually or rebuild the fresh VM.'; exit 1;
+      }
+      for service in wazuh-indexer wazuh-manager wazuh-dashboard; do
+        [[ "$(dpkg-query -W -f='${Version}' "$service")" == 5.0.0-rc2 ]]
+        systemctl enable --now "$service"
+      done
+      for attempt in $(seq 1 60); do
+        if /usr/local/sbin/wazuh5x-healthcheck --bootstrap; then
+          chmod 600 /etc/wazuh-indexer/export/credentials.env /etc/wazuh-manager/export/credentials.env
+          touch /var/lib/wazuh5x/bootstrap.complete
+          rm -f /var/lib/wazuh5x/bootstrap.failed
+          echo 'WAZUH5X bootstrap complete. Credentials remain in root-only package export files.'
+          exit 0
+        fi
+        sleep 10
+      done
+      false
+runcmd:
+  - [bash, -c, /usr/local/sbin/wazuh5x-bootstrap]
+final_message: 'WAZUH5X cloud-init finished. Check cloud-init status --long and /var/log/wazuh5x/.'

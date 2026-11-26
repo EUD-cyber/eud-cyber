@@ -426,6 +426,10 @@ configure_vm_resources() {
     export WAZUH_MEM="${WAZUH_MEM:-4096}"
     export WAZUH_HDD="${WAZUH_HDD:-80G}"
 
+    export WAZUH5X_CPU="${WAZUH5X_CPU:-4}"
+    export WAZUH5X_MEM="${WAZUH5X_MEM:-8192}"
+    export WAZUH5X_HDD="${WAZUH5X_HDD:-100G}"
+
     export APPSRV01_CPU="${APPSRV01_CPU:-2}"
     export APPSRV01_MEM="${APPSRV01_MEM:-2048}"
     export APPSRV01_HDD="${APPSRV01_HDD:-32G}"
@@ -639,6 +643,9 @@ echo "======================================================"
 echo
 echo "Ubuntu (${LINUX_IMAGE_SOURCE}):"
 echo "  ${LINUX_IMG}"
+echo "Ubuntu 26.04 (WAZUH5X and TPOT01 only; separate verified cloud image):"
+echo "  ${UBUNTU2604_IMG:-https://cloud-images.ubuntu.com/resolute/20261108/resolute-server-cloudimg-amd64.img}"
+echo "  Custom image mirror: set UBUNTU2604_IMG and UBUNTU2604_SHA256 together."
 echo
 echo "Kali (${KALI_IMAGE_SOURCE}):"
 echo "  ${KALI_IMG}"

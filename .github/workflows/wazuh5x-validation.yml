@@ -1,0 +1,34 @@
+name: WAZUH5X and Ubuntu 26.04 installer validation
+on:
+  pull_request:
+    paths:
+      - 'install.sh'
+      - 'INSTALLFILES/WAZUH5X/**'
+      - 'INSTALLFILES/TPOT01/**'
+      - 'INSTALLFILES/ubuntu2604-image.sh'
+      - 'INSTALLFILES/deploy.sh'
+      - 'INSTALLFILES/installer_menu.py'
+      - 'INSTALLFILES/single_vm_install.py'
+      - 'INSTALLFILES/GUACVM/nat.sh'
+      - 'INSTALLFILES/GUACVM/nginx/web/sessions.js'
+      - 'INSTALLFILES/tests/installer/**'
+      - '.github/workflows/wazuh5x-validation.yml'
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install YAML parser
+        run: sudo apt-get update && sudo apt-get install -y python3-yaml
+      - name: Syntax and source checksums
+        run: |
+          for file in install.sh INSTALLFILES/deploy.sh INSTALLFILES/ubuntu2604-image.sh INSTALLFILES/WAZUH5X/wazuh5x_install.sh INSTALLFILES/TPOT01/TPOT01_installer.sh INSTALLFILES/GUACVM/nat.sh; do
+            bash -n "$file"
+          done
+          node --check INSTALLFILES/GUACVM/nginx/web/sessions.js
+          cd INSTALLFILES
+          sha256sum -c WAZUH5X/SHA256SUMS
+      - name: Offline menu and installer tests (host operations stubbed)
+        run: sudo /usr/bin/python3 -m unittest discover -s INSTALLFILES/tests/installer -v

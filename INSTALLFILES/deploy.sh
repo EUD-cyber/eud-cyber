@@ -84,7 +84,7 @@ prepare_host() (
 
 if [[ "${1:-}" == "--help" || "${1:-}" == "-h" ]]; then
     printf 'Usage: bash deploy.sh Big|Mini [1-16] [component ...]\n'
-    printf 'Optional components: VULNSRV02 KALI02 APPSRV01 CLIENT01 WAZUH TPOT MRNOBODY\n'
+    printf 'Optional components: VULNSRV02 KALI02 APPSRV01 CLIENT01 WAZUH TPOT MRNOBODY WAZUH5X\n'
     printf 'Example: bash deploy.sh Big 2 WAZUH MRNOBODY\n'
     exit 0
 fi
@@ -120,6 +120,7 @@ for component in "${@:3}"; do
         VULNSRV02|KALI02|APPSRV01|CLIENT01|WAZUH)
             VM_SCRIPTS+=("${component}/${component}_installer.sh") ;;
         TPOT) VM_SCRIPTS+=("TPOT01/TPOT01_installer.sh") ;;
+        WAZUH5X) VM_SCRIPTS+=("WAZUH5X/wazuh5x_install.sh") ;;
         MRNOBODY) VM_SCRIPTS+=("MRNOBODY/mrnobody_installer.sh") ;;
         *) die "Unknown optional component: $component" ;;
     esac
@@ -143,7 +144,7 @@ fi
 # Validate per-VM hardware overrides before any configuration or host setup.
 # HDD retains each VM installer's existing resize semantics (+SIZE).
 RESOURCE_KEYS=(OPNSENSE GUACVM KALI01 KALI02 VULNSRV01 VULNSRV02
-               APPSRV01 CLIENT01 WAZUH TPOT01 MRNOBODY)
+               APPSRV01 CLIENT01 WAZUH TPOT01 MRNOBODY WAZUH5X)
 HARDWARE_SETTINGS=()
 for resource_key in "${RESOURCE_KEYS[@]}"; do
     for resource_type in CPU MEM HDD; do
@@ -261,6 +262,7 @@ done
 # An existing tmux server may retain old environment values. Pass the settings
 # selected by install.sh explicitly, clearing stale values when they are unset.
 settings=(SPEC LABCOUNT LINUX_IMG KALI_IMG WAZUH_IMG OPNSENSE_IMG_URL
+          UBUNTU2604_IMG UBUNTU2604_SHA256 WAZUH5X_SSH_PUBLIC_KEY_FILE WAZUH5X_BOOT_TIMEOUT
           OPNSENSE_VERSION LOCAL LVM BRIDGE MRNOBODY_ROLE MRNOBODY_MASTER_URL
           "${HARDWARE_SETTINGS[@]}")
 worker_env=(env)

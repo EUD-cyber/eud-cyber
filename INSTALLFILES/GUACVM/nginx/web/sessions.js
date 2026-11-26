@@ -88,6 +88,17 @@ window.CYBERLAB_SESSIONS = [
   },
 
   {
+    name: "WAZUH5X",
+    description: "Wazuh 5.0 RC2 / Ubuntu 26.04 (test)",
+    address: "192.168.2.21",
+    category: "Linux",
+    icon: "WAZUH",
+    connections: [
+      { type: "HTTPS", label: "WAZUH5X GUI", port: 3003, newTab: true }
+    ]
+  },
+
+  {
     name: "Opnsense",
     description: "Opnsense Firewall",
     address: "192.168.1.1",
