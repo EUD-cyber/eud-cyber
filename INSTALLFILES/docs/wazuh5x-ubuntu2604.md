@@ -81,6 +81,19 @@ manifest is changed; that manifest does not cover these files.
    Upstream T-Pot requires a password CLI argument during installation; it can be visible
    to local process inspection. The VM must remain a controlled installation environment.
 
+TPOT01 bootstrap explicitly changes to `/opt/tpotce` before running the upstream
+installer as `ubuntu`, sets the target HOME with `sudo -H`, and passes noninteractive
+APT configuration through sudo. This fixes the observed `tpot.yml: Permission denied`
+fallback download when the installer inherited root-owned `/opt` as cwd.
+
+TPOT01 also disables recurring systemd OSC 3008 shell/command markers using the
+[upstream opt-out](https://github.com/systemd/systemd/blob/main/profile.d/80-systemd-osc-context.sh):
+remove the profile hook and mask `20-systemd-osc-context.conf`. Reconnect existing SSH
+sessions after applying it. This preserves TERM, other prompt hooks and PAM/session
+management. A separate one-time PAM `type=session` marker on sudo/login is outside this
+shell opt-out; clients need OSC 3008 support to hide that marker. The installer does
+not disable PAM or session registration to suppress it.
+
 For an already-installed GUACVM, deploy the updated `nat.sh` and `sessions.js` to
 `/opt/guacamole/nat.sh` and `/opt/guacamole/nginx/web/sessions.js`, then run
 `sudo bash /opt/guacamole/nat.sh apply` and reload the portal. A fresh GUACVM fetches them
