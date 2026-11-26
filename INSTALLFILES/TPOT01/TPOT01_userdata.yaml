@@ -21,6 +21,23 @@ packages:
   - ca-certificates
 
 write_files:
+  - path: /usr/local/sbin/tpot-terminal-compat
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      # Official systemd opt-out: remove shell hook and mask its tmpfiles rule.
+      # Do not change PAM, login/session management, TERM or other prompt hooks.
+      install -d -m 755 /etc/tmpfiles.d
+      ln -sfn /dev/null /etc/tmpfiles.d/20-systemd-osc-context.conf
+      hook=/etc/profile.d/80-systemd-osc-context.sh
+      if [[ -L "$hook" ]]; then
+        rm -- "$hook"
+      elif [[ -f "$hook" ]]; then
+        # Preserve a directly installed hook rather than deleting package data.
+        mv -- "$hook" "${hook}.tpot-disabled"
+      fi
   - path: /usr/local/bin/tpot-install.sh
     permissions: '0755'
     owner: root:root
@@ -28,6 +45,12 @@ write_files:
       #!/bin/bash
       set -Eeuo pipefail
       umask 077
+      LOG="/var/log/tpot-install.log"
+      STATUS="/var/log/tpot-install-status.log"
+      exec > >(tee -a "$LOG") 2>&1
+      echo "starting" > "$STATUS"
+      trap 'rc=$?; echo failed > "$STATUS"; echo "T-Pot failed at line $LINENO (exit $rc)"; exit "$rc"' ERR
+      /usr/local/sbin/tpot-terminal-compat
 
       # =========================
       # VARIABLES (EDIT THESE)
@@ -41,14 +64,7 @@ write_files:
       TPOT_PASS="$(cat /root/tpot01/web-password)"
       TPOT_REF="9c3ae4aea976a63ef1f655598a4383c0cb7e140c"
 
-      LOG="/var/log/tpot-install.log"
-      STATUS="/var/log/tpot-install-status.log"
-
-      exec > >(tee -a "$LOG") 2>&1
-
       echo "===== TPOT INSTALL START $(date -Iseconds) ====="
-      echo "starting" > "$STATUS"
-      trap 'rc=$?; echo failed > "$STATUS"; echo "T-Pot failed at line $LINENO (exit $rc)"; exit "$rc"' ERR
       source /etc/os-release
       [[ "$ID" == ubuntu && "$VERSION_ID" == 26.04 ]]
 
@@ -66,14 +82,17 @@ write_files:
         git -C /opt/tpotce fetch --depth 1 origin "$TPOT_REF"
         git -C /opt/tpotce checkout --detach FETCH_HEAD
       fi
-      [[ "$(git -C /opt/tpotce rev-parse HEAD)" == "$TPOT_REF" ]]
+      [[ "$(git -c safe.directory=/opt/tpotce -C /opt/tpotce rev-parse HEAD)" == "$TPOT_REF" ]]
 
       chown -R ubuntu:ubuntu /opt/tpotce
 
       echo "Running installer as ubuntu" | tee -a "$STATUS"
 
+      # Upstream finds installer/install/tpot.yml relative to cwd. Running from
+      # /opt attempts to download tpot.yml there as ubuntu and fails permission checks.
+      cd /opt/tpotce
       # Upstream CLI requires -p. No tracing; installer output is root-only.
-      sudo -u ubuntu bash /opt/tpotce/install.sh -s -t "$TPOT_TYPE" -u "$TPOT_USER" -p "$TPOT_PASS" -b "$TPOT_REF"
+      sudo -H -u ubuntu env DEBIAN_FRONTEND=noninteractive bash ./install.sh -s -t "$TPOT_TYPE" -u "$TPOT_USER" -p "$TPOT_PASS" -b "$TPOT_REF"
 
       RC=$?
       echo "installer exit code: $RC" | tee -a "$STATUS"
@@ -90,6 +109,6 @@ write_files:
       shutdown -h now
 
 runcmd:
-  - [ bash, -lc, "/usr/local/bin/tpot-install.sh" ]
+  - [ bash, /usr/local/bin/tpot-install.sh ]
 
 final_message: "T-Pot install complete. Check logs in /var/log/"
