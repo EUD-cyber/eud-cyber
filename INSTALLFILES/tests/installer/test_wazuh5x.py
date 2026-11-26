@@ -39,8 +39,15 @@ class Wazuh5xTests(unittest.TestCase):
                 elif code.startswith(('#!/bin/bash', '#!/usr/bin/env bash')):
                     subprocess.run(['bash', '-n'], input=code, text=True, check=True)
         config = yaml.safe_load((ROOT / 'WAZUH5X/WAZUH5X_userdata.yaml').read_text())
-        self.assertFalse(config['ssh_pwauth'])
-        self.assertTrue(config['users'][0]['lock_passwd'])
+        reference = yaml.safe_load((ROOT / 'TPOT01/TPOT01_userdata.yaml').read_text())
+        self.assertTrue(config['ssh_pwauth'])
+        user = config['users'][0]
+        standard = next(user for user in reference['users'] if user['name'] == 'ubuntu')
+        for field in ('name', 'sudo', 'shell', 'lock_passwd', 'passwd'):
+            self.assertEqual(user[field], standard[field])
+        self.assertFalse(config['chpasswd']['expire'])
+        self.assertNotIn('ssh_authorized_keys', user)
+        self.assertNotIn('__WAZUH5X_SSH_KEY__', (ROOT / 'WAZUH5X/WAZUH5X_userdata.yaml').read_text())
 
     def test_host_lifecycle_and_failure_paths(self):
         if os.geteuid() != 0:
@@ -53,7 +60,6 @@ class Wazuh5xTests(unittest.TestCase):
                 binary.mkdir()
                 for name in ('wazuh5x_install.sh', 'WAZUH5X_userdata.yaml'):
                     shutil.copyfile(ROOT / 'WAZUH5X' / name, root / 'WAZUH5X' / name)
-                (root / 'key.pub').write_text('ssh-ed25519 AAAATEST test-key')
                 (root / 'ubuntu2604-image.sh').write_text('fetch_ubuntu2604() { IMG_PATH="$PWD/fake.img"; }\n')
                 def stub(name, code):
                     path = binary / name
@@ -81,7 +87,8 @@ class Wazuh5xTests(unittest.TestCase):
                 esac
                 ''')
                 env = dict(os.environ, PATH=str(binary) + ':' + os.environ['PATH'], MODE=mode,
-                           WAZUH5X_SSH_PUBLIC_KEY_FILE=str(root / 'key.pub'), WAZUH5X_BOOT_TIMEOUT='1')
+                           WAZUH5X_BOOT_TIMEOUT='1')
+                env.pop('WAZUH5X_SSH_PUBLIC_KEY_FILE', None)
                 result = subprocess.run(['bash', str(root / 'WAZUH5X/wazuh5x_install.sh'), '1'],
                                         env=env, text=True, capture_output=True, timeout=15)
                 events = (root / 'events').read_text() if (root / 'events').exists() else ''
@@ -91,6 +98,9 @@ class Wazuh5xTests(unittest.TestCase):
                     self.assertIn('snapshot 1011 First_snapshot', events)
                     self.assertIn('172.20.0.21', events)
                     self.assertNotIn('__WAZUH5X_SSH_KEY__', (root / 'snippets/userdata.yaml').read_text())
+                    snippet = yaml.safe_load((root / 'snippets/userdata.yaml').read_text())
+                    self.assertTrue(snippet['ssh_pwauth'])
+                    self.assertFalse(snippet['users'][0]['lock_passwd'])
                 else:
                     self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
                     self.assertNotIn('snapshot ', events)

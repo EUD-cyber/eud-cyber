@@ -262,7 +262,7 @@ done
 # An existing tmux server may retain old environment values. Pass the settings
 # selected by install.sh explicitly, clearing stale values when they are unset.
 settings=(SPEC LABCOUNT LINUX_IMG KALI_IMG WAZUH_IMG OPNSENSE_IMG_URL
-          UBUNTU2604_IMG UBUNTU2604_SHA256 WAZUH5X_SSH_PUBLIC_KEY_FILE WAZUH5X_BOOT_TIMEOUT
+          UBUNTU2604_IMG UBUNTU2604_SHA256 WAZUH5X_BOOT_TIMEOUT
           OPNSENSE_VERSION LOCAL LVM BRIDGE MRNOBODY_ROLE MRNOBODY_MASTER_URL
           "${HARDWARE_SETTINGS[@]}")
 worker_env=(env)

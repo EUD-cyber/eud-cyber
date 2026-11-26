@@ -56,9 +56,11 @@ manifest is changed; that manifest does not cover these files.
 
 1. Check out this change on the Proxmox host. Use an existing lab with LAN2/OOBM bridges,
    working DNS/internet, and available addresses `.21`. Ensure no existing `labN-WAZUH5X`.
-2. Set `export WAZUH5X_SSH_PUBLIC_KEY_FILE=/root/.ssh/id_ed25519.pub` to an existing public
-   key whose private key you control. Alternatively set it to another public-key file.
-   WAZUH5X has no shared/default login password. The key logs in as `ubuntu` with sudo.
+2. WAZUH5X uses the same `ubuntu` account and lab password as the other Ubuntu VMs
+   (matching the hashed password in TPOT01 userdata). No SSH-key setup or
+   `WAZUH5X_SSH_PUBLIC_KEY_FILE` environment variable is required. The guest account
+   has sudo, SSH password authentication is enabled and no first-login password
+   change is required, matching the other lab VMs. No private keys are created.
 3. Run `bash install.sh`, choose image/storage/network options, then
    **Single VM → WAZUH5X (5.0 RC2) → Big or Mini → lab number**. Only WAZUH5X is created.
    Direct equivalent from INSTALLFILES: `bash WAZUH5X/wazuh5x_install.sh 1` with storage variables exported.
@@ -98,8 +100,8 @@ For an already-installed GUACVM, deploy the updated `nat.sh` and `sessions.js` t
 `/opt/guacamole/nat.sh` and `/opt/guacamole/nginx/web/sessions.js`, then run
 `sudo bash /opt/guacamole/nat.sh apply` and reload the portal. A fresh GUACVM fetches them
 after merge. Single VM WAZUH5X does not modify an existing GUACVM automatically.
-No Guacamole SSH session ID is invented: use SSH with your key or create a Guacamole
-connection with that key explicitly.
+No Guacamole SSH session ID is invented: use SSH with the lab password or create a Guacamole
+connection using the existing lab account explicitly.
 
 ## Logs, retries and secrets
 
