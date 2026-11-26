@@ -79,6 +79,15 @@ manifest is changed; that manifest does not cover these files.
 5. SSH to `ubuntu@172.20.0.21`; run `sudo cloud-init status --long`,
    `sudo /usr/local/sbin/wazuh5x-healthcheck`, and
    `sudo systemctl is-active wazuh-manager wazuh-indexer wazuh-dashboard`.
+
+The healthcheck trusts each component's published CA at
+`/etc/wazuh-{indexer,manager,dashboard}/export/ca.pem`. In particular, a local RC2
+dashboard publishes `export/ca.pem`; `certs/root-ca.pem` is not its dashboard CA
+location. See the [tagged RC2 usage guide](https://github.com/wazuh/wazuh-installation-assistant/blob/v5.0.0-rc2/docs/ref/getting-started/usage.md)
+and [manager installation reference](https://github.com/wazuh/wazuh/blob/v5.0.0-rc2/docs/ref/getting-started/installation.md).
+TLS chain and hostname validation remain enabled. Errors name the failed component
+and missing file or HTTP/command status; credentials, tokens and response bodies are
+never included in diagnostic output.
 6. Open `https://<GUACVM-external-IP>:3003` or direct `https://172.20.0.21`.
    Login is `admin`. Read the password **inside the guest as root**:
    `sudo grep '^WAZUH_INDEXER_ADMIN_PASSWORD=' /etc/wazuh-indexer/export/credentials.env`.
@@ -142,3 +151,34 @@ started all three components, then the wrapper rejected its DEB metadata at the 
 `5.0.0-rc2` equality check. The corrected `5.0.0-1` check is covered by fixture tests,
 including rejection of 4.14.1 and 5.0.1; the corrected complete flow still needs a real
 VM acceptance test. Existing VM 100 keeps its original userdata/scripts until updated.
+
+A subsequent VM 1010 log passed the package-version checks and then repeatedly
+reported `FileNotFoundError` in the healthcheck. The old helper referenced the
+dashboard CA through the wrong `certs/root-ca.pem` path. New tests execute the actual
+helper against local authenticated TLS endpoints with the export-only CA layout;
+they check readiness, missing-file diagnostics, wrong trust roots, authentication
+failures and secret redaction. These are real local HTTPS requests, not live Wazuh
+services or a Proxmox VM test.
+
+### Existing VM with completed RC2 installation
+
+When the assistant already reports `Installation finished` and
+`/var/lib/wazuh5x/assistant.complete` exists, the existing services need not be
+reinstalled to correct the old helper's CA paths. Inside that VM:
+
+```bash
+sudo cp -p /usr/local/sbin/wazuh5x-healthcheck /root/wazuh5x-healthcheck.before-ca-fix
+sudo sed -i \
+  -e 's@/etc/wazuh-indexer/certs/root-ca.pem@/etc/wazuh-indexer/export/ca.pem@g' \
+  -e 's@/etc/wazuh-manager/certs/root-ca.pem@/etc/wazuh-manager/export/ca.pem@g' \
+  -e 's@/etc/wazuh-dashboard/certs/root-ca.pem@/etc/wazuh-dashboard/export/ca.pem@g' \
+  /usr/local/sbin/wazuh5x-healthcheck
+sudo /usr/local/sbin/wazuh5x-healthcheck --bootstrap
+```
+
+If that health probe succeeds, `sudo /usr/local/sbin/wazuh5x-bootstrap` reruns the
+post-install checks, enables the services, marks bootstrap complete and clears its
+failure marker. The completed-assistant marker prevents a reinstall. This does not
+erase cloud-init's historical failed-run status or create a baseline snapshot after
+the original host installer has exited. Normal host acceptance still requires a
+completed, error-free cloud-init run on a fresh installation.

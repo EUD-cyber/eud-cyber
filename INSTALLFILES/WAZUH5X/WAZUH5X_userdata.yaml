@@ -42,55 +42,88 @@ write_files:
     content: |
       #!/usr/bin/env python3
       import base64
+      import errno
       import json
       import pathlib
       import ssl
       import subprocess
       import sys
+      import urllib.error
       import urllib.request
 
+      class HealthError(Exception):
+          pass
+
+      def required_file(file):
+          if not pathlib.Path(file).is_file():
+              raise FileNotFoundError(errno.ENOENT, 'Required healthcheck file is missing', file)
+          return file
+
       def password(file, key):
-          for line in pathlib.Path(file).read_text().splitlines():
+          for line in pathlib.Path(required_file(file)).read_text().splitlines():
               if line.startswith(key + '='):
                   return line.split('=', 1)[1].strip().strip("'\"")
-          raise RuntimeError('Missing credential: ' + key)
+          raise HealthError('Missing credential key: ' + key)
 
       def request(url, ca, user=None, secret=None, method='GET'):
           headers = {}
           if user:
               headers['Authorization'] = 'Basic ' + base64.b64encode((user + ':' + secret).encode()).decode()
           req = urllib.request.Request(url, headers=headers, method=method)
-          with urllib.request.urlopen(req, context=ssl.create_default_context(cafile=ca), timeout=15) as response:
+          with urllib.request.urlopen(req, context=ssl.create_default_context(cafile=required_file(ca)), timeout=15) as response:
               return json.load(response)
 
+      phase = 'bootstrap state'
       try:
           if '--bootstrap' not in sys.argv:
               if not pathlib.Path('/var/lib/wazuh5x/bootstrap.complete').is_file():
-                  raise RuntimeError('Bootstrap has not completed')
+                  raise HealthError('Bootstrap has not completed')
+              phase = 'cloud-init status'
               status = subprocess.run(['cloud-init', 'status', '--format', 'json'], check=True,
                                       capture_output=True, text=True)
               if json.loads(status.stdout).get('status') != 'done':
-                  raise RuntimeError('Cloud-init has not completed successfully')
+                  raise HealthError('Cloud-init has not completed successfully')
           for service in ('wazuh-indexer', 'wazuh-manager', 'wazuh-dashboard'):
+              phase = service + ' service'
               subprocess.run(['systemctl', 'is-active', '--quiet', service], check=True)
-          subprocess.run(['/var/wazuh-manager/bin/wazuh-manager-control', 'status'], check=True,
+          phase = 'manager daemons'
+          subprocess.run([required_file('/var/wazuh-manager/bin/wazuh-manager-control'), 'status'], check=True,
                          stdout=subprocess.DEVNULL)
-          health = request('https://127.0.0.1:9200/_cluster/health', '/etc/wazuh-indexer/certs/root-ca.pem',
+          phase = 'indexer HTTPS'
+          health = request('https://127.0.0.1:9200/_cluster/health', '/etc/wazuh-indexer/export/ca.pem',
                            'admin', password('/etc/wazuh-indexer/export/credentials.env', 'WAZUH_INDEXER_ADMIN_PASSWORD'))
           if health.get('status') not in ('green', 'yellow') or health.get('timed_out'):
-              raise RuntimeError('Indexer cluster not ready')
-          auth = request('https://127.0.0.1:55000/security/user/authenticate', '/etc/wazuh-manager/certs/root-ca.pem',
+              raise HealthError('Indexer cluster not ready')
+          phase = 'manager API HTTPS'
+          auth = request('https://127.0.0.1:55000/security/user/authenticate', '/etc/wazuh-manager/export/ca.pem',
                          'wazuh', password('/etc/wazuh-manager/export/credentials.env', 'WAZUH_MANAGER_API_PASSWORD'), 'POST')
           if not auth.get('data', {}).get('token'):
-              raise RuntimeError('Manager API not ready')
-          dashboard = request('https://127.0.0.1/api/status', '/etc/wazuh-dashboard/certs/root-ca.pem',
+              raise HealthError('Manager API not ready')
+          phase = 'dashboard HTTPS'
+          dashboard = request('https://127.0.0.1/api/status', '/etc/wazuh-dashboard/export/ca.pem',
                               'admin', password('/etc/wazuh-indexer/export/credentials.env', 'WAZUH_INDEXER_ADMIN_PASSWORD'))
           if dashboard.get('status', {}).get('overall', {}).get('state') not in ('green', 'available'):
-              raise RuntimeError('Dashboard not ready')
+              raise HealthError('Dashboard not ready')
           print('WAZUH5X healthy: manager API, indexer and dashboard')
+      except FileNotFoundError as exc:
+          print('WAZUH5X health failed [' + phase + ']: missing file: ' + str(exc.filename), file=sys.stderr)
+          sys.exit(1)
+      except HealthError as exc:
+          print('WAZUH5X health failed [' + phase + ']: ' + str(exc), file=sys.stderr)
+          sys.exit(1)
+      except subprocess.CalledProcessError as exc:
+          print('WAZUH5X health failed [' + phase + ']: command exit ' + str(exc.returncode), file=sys.stderr)
+          sys.exit(1)
+      except urllib.error.HTTPError as exc:
+          print('WAZUH5X health failed [' + phase + ']: HTTP ' + str(exc.code), file=sys.stderr)
+          sys.exit(1)
+      except urllib.error.URLError as exc:
+          reason = 'TLS certificate verification failed' if isinstance(exc.reason, ssl.SSLCertVerificationError) else type(exc.reason).__name__
+          print('WAZUH5X health failed [' + phase + ']: ' + reason, file=sys.stderr)
+          sys.exit(1)
       except Exception as exc:
           # Never print response bodies, tokens, request headers or credentials.
-          print('WAZUH5X health failed: ' + type(exc).__name__, file=sys.stderr)
+          print('WAZUH5X health failed [' + phase + ']: ' + type(exc).__name__, file=sys.stderr)
           sys.exit(1)
   - path: /usr/local/sbin/wazuh5x-bootstrap
     owner: root:root
