@@ -4,6 +4,7 @@ IFS=$'\n\t'
 
 LAB="${1:-}"
 [[ "$LAB" =~ ^([1-9]|1[0-6])$ ]] || { echo "Usage: $0 <lab-number 1-16>" >&2; exit 1; }
+START_VMID=$((LAB * 1000))
 BASE_NAME="lab${LAB}-WAZUH5X"
 MEMORY="${WAZUH5X_MEM:-16384}"
 CORES="${WAZUH5X_CPU:-4}"
@@ -26,12 +27,24 @@ trap 'rc=$?; echo "WAZUH5X failed at line $LINENO (exit $rc); VMID=${VMID:-not-c
 [[ "$MEMORY" =~ ^[1-9][0-9]*$ && "$CORES" =~ ^[1-9][0-9]*$ && "$DISK_SIZE" =~ ^[1-9][0-9]*[GMT]$ ]] || exit 1
 (( MEMORY >= 8192 && CORES >= 4 )) || { echo 'WAZUH5X requires >=4 vCPU and >=8192 MiB RAM.' >&2; exit 1; }
 # Fail closed on a duplicate component; never append a suffix and reuse its IP.
-pvesh get /cluster/resources --type vm --output-format json | python3 -c '
+VMID="$(pvesh get /cluster/resources --type vm --output-format json | python3 -c '
 import json, sys
+guests=json.load(sys.stdin)
+if not isinstance(guests, list) or any(not isinstance(vm, dict) for vm in guests):
+    sys.exit("Invalid cluster VM inventory; no VM created.")
 name=sys.argv[1].lower()
-if any(str(vm.get("name", "")).lower() == name or str(vm.get("name", "")).lower().startswith(name + "-") for vm in json.load(sys.stdin)):
+if any(str(vm.get("name", "")).lower() == name or str(vm.get("name", "")).lower().startswith(name + "-") for vm in guests):
     sys.exit("WAZUH5X already exists in this lab; no VM created.")
-' "$BASE_NAME"
+start=int(sys.argv[2])
+used={int(vm["vmid"]) for vm in guests if "vmid" in vm}
+for candidate in range(start, start + 1000):
+    if candidate not in used:
+        print(candidate)
+        break
+else:
+    sys.exit("No free VMID in the selected lab range; no VM created.")
+' "$BASE_NAME" "$START_VMID")"
+echo "Selected free VMID for lab${LAB}: $VMID"
 ip link show "$BRIDGE" >/dev/null
 ip link show "$BRIDGE1" >/dev/null
 # Resolve the actual selected snippet storage, including non-default paths.
@@ -44,7 +57,6 @@ cp -- "$SCRIPT_DIR/WAZUH5X_userdata.yaml" "$DST_PATH"
 chmod 600 "$DST_PATH"
 source ./ubuntu2604-image.sh
 fetch_ubuntu2604
-VMID="$(pvesh get /cluster/nextid)"
 qm create "$VMID" --name "$BASE_NAME" --memory "$MEMORY" --cores "$CORES" --cpu host \
   --net0 "virtio,bridge=$BRIDGE" --net1 "virtio,bridge=$BRIDGE1" --ostype l26
 qm importdisk "$VMID" "$IMG_PATH" "$DISK_STORAGE"

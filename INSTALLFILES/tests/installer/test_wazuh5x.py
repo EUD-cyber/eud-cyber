@@ -52,8 +52,10 @@ class Wazuh5xTests(unittest.TestCase):
     def test_host_lifecycle_and_failure_paths(self):
         if os.geteuid() != 0:
             self.skipTest('Requires root; all host commands are stubbed')
-        for mode in ('healthy', 'duplicate', 'failed', 'timeout', 'create-fails'):
-            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
+        cases = [(mode, 1, list(range(11))) for mode in ('healthy', 'duplicate', 'failed', 'timeout', 'create-fails')]
+        cases += [('healthy', 2, []), ('healthy', 16, [0, 1, 3]), ('exhausted', 1, list(range(1000)))]
+        for mode, lab, offsets in cases:
+            with self.subTest(mode=mode, lab=lab), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 (root / 'WAZUH5X').mkdir()
                 binary = root / 'bin'
@@ -68,17 +70,14 @@ class Wazuh5xTests(unittest.TestCase):
                 stub('ip', 'exit 0\n')
                 stub('sleep', 'exit 0\n')
                 stub('pvesm', 'echo "$PWD/snippets/userdata.yaml"\n')
-                stub('pvesh', '''if [[ "$3" == /cluster/resources ]]; then
-                  if [[ "$MODE" == duplicate ]]; then echo '[{"name":"lab1-WAZUH5X","vmid":1010}]'; else echo '[]'; fi
-                else echo 1011; fi
+                stub('pvesh', '''if [[ "$1" == get && "$2" == /cluster/resources ]]; then
+                  printf '%s\\n' "$TEST_INVENTORY"
+                else exit 91; fi
                 ''')
-                # pvesh argv is: get /cluster/resources ...
-                path = binary / 'pvesh'
-                path.write_text(path.read_text().replace('$3', '$2'))
                 stub('qm', '''printf '%s\\n' "$*" >> "$PWD/events"
                 case "$1" in
                   create) [[ "$MODE" != create-fails ]] ;;
-                  config) echo 'unused0: custom-zfs:vm-1011-disk-0' ;;
+                  config) echo "unused0: custom-zfs:vm-$2-disk-0" ;;
                   status) echo 'status: stopped' ;;
                   guest)
                     if [[ "$MODE" == failed && "$*" == *bootstrap.failed* ]]; then echo '{"exitcode":0}';
@@ -86,16 +85,23 @@ class Wazuh5xTests(unittest.TestCase):
                     else echo '{"exitcode":1}'; fi ;;
                 esac
                 ''')
+                inventory = [dict(vmid=lab * 1000 + offset, name='existing',
+                                  type='lxc' if offset % 2 else 'qemu', node='another-node') for offset in offsets]
+                inventory.append(dict(vmid=100, name='unrelated'))
+                if mode == 'duplicate':
+                    inventory.append(dict(vmid=lab * 1000 + 50, name=f'lab{lab}-WAZUH5X'))
                 env = dict(os.environ, PATH=str(binary) + ':' + os.environ['PATH'], MODE=mode,
-                           WAZUH5X_BOOT_TIMEOUT='1')
+                           WAZUH5X_BOOT_TIMEOUT='1', TEST_INVENTORY=json.dumps(inventory))
                 env.pop('WAZUH5X_SSH_PUBLIC_KEY_FILE', None)
-                result = subprocess.run(['bash', str(root / 'WAZUH5X/wazuh5x_install.sh'), '1'],
+                result = subprocess.run(['bash', str(root / 'WAZUH5X/wazuh5x_install.sh'), str(lab)],
                                         env=env, text=True, capture_output=True, timeout=15)
                 events = (root / 'events').read_text() if (root / 'events').exists() else ''
                 if mode == 'healthy':
+                    expected_id = lab * 1000 + next(i for i in range(1000) if i not in offsets)
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                    self.assertIn('--scsi0 custom-zfs:vm-1011-disk-0', events)
-                    self.assertIn('snapshot 1011 First_snapshot', events)
+                    self.assertIn(f'create {expected_id} --name lab{lab}-WAZUH5X', events)
+                    self.assertIn(f'--scsi0 custom-zfs:vm-{expected_id}-disk-0', events)
+                    self.assertIn(f'snapshot {expected_id} First_snapshot', events)
                     self.assertIn('172.20.0.21', events)
                     self.assertNotIn('__WAZUH5X_SSH_KEY__', (root / 'snippets/userdata.yaml').read_text())
                     snippet = yaml.safe_load((root / 'snippets/userdata.yaml').read_text())
@@ -104,7 +110,7 @@ class Wazuh5xTests(unittest.TestCase):
                 else:
                     self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
                     self.assertNotIn('snapshot ', events)
-                if mode == 'duplicate':
+                if mode in ('duplicate', 'exhausted'):
                     self.assertNotIn('create ', events)
                 self.assertNotIn('destroy', events)
 
@@ -145,8 +151,8 @@ class Wazuh5xTests(unittest.TestCase):
     def test_bootstrap_repeat_and_interrupted_install(self):
         config = yaml.safe_load((ROOT / 'WAZUH5X/WAZUH5X_userdata.yaml').read_text())
         source = next(e['content'] for e in config['write_files'] if e['path'].endswith('wazuh5x-bootstrap'))
-        for partial in (False, True):
-            with self.subTest(partial=partial), tempfile.TemporaryDirectory() as temporary:
+        for partial, version in ((False, '5.0.0-1'), (True, '5.0.0-1'), (False, '4.14.1-1'), (False, '5.0.1-1')):
+            with self.subTest(partial=partial, version=version), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
                 state = root / 'state'
                 state.mkdir()
@@ -171,7 +177,7 @@ class Wazuh5xTests(unittest.TestCase):
                 stubs = {
                     'systemctl': 'exit 0\n',
                     'dpkg': 'echo amd64\n',
-                    'dpkg-query': 'if [[ "$2" == *Version* ]]; then printf 5.0.0-rc2; else exit 1; fi\n',
+                    'dpkg-query': 'if [[ "$2" == *Version* ]]; then printf "%s" "$TEST_DEB_VERSION"; else exit 1; fi\n',
                     'healthcheck': 'exit 0\n',
                     'curl': 'while [[ "$1" != -o ]]; do shift; done; cp "$TEST_ROOT/assistant-fixture" "$2"\n',
                 }
@@ -181,18 +187,49 @@ class Wazuh5xTests(unittest.TestCase):
                     dest.chmod(0o755)
                 if partial:
                     (state / 'assistant.started').touch()
-                env = dict(os.environ, PATH=str(binary) + ':' + os.environ['PATH'], TEST_ROOT=str(root))
+                env = dict(os.environ, PATH=str(binary) + ':' + os.environ['PATH'], TEST_ROOT=str(root), TEST_DEB_VERSION=version)
+                success = not partial and version == '5.0.0-1'
                 for _ in range(2):
                     result = subprocess.run(['bash', str(script)], env=env, text=True, capture_output=True)
-                    self.assertEqual(result.returncode == 0, not partial, result.stdout + result.stderr)
+                    self.assertEqual(result.returncode == 0, success, result.stdout + result.stderr)
                     self.assertNotIn('not-printed', result.stdout + result.stderr)
                 if partial:
                     self.assertFalse((root / 'assistant-calls').exists())
                     self.assertTrue((state / 'bootstrap.failed').exists())
                 else:
                     self.assertEqual((root / 'assistant-calls').read_text(), 'installed\n')
+                if success:
                     self.assertTrue((state / 'bootstrap.complete').exists())
                     self.assertFalse((state / 'bootstrap.failed').exists())
+                else:
+                    self.assertFalse((state / 'bootstrap.complete').exists())
+                    self.assertTrue((state / 'bootstrap.failed').exists())
+                if not partial and not success:
+                    logs = '\n'.join(p.read_text() for p in (root / 'logs').glob('*.log'))
+                    self.assertIn('Unexpected wazuh-indexer DEB version: ' + version, logs)
+
+    def test_terminal_optout_runs_before_bootstrap_and_is_repeatable(self):
+        config = yaml.safe_load((ROOT / 'WAZUH5X/WAZUH5X_userdata.yaml').read_text())
+        command = '/usr/local/sbin/wazuh5x-terminal-compat'
+        self.assertEqual(config['runcmd'][0], ['bash', command])
+        code = next(e['content'] for e in config['write_files'] if e['path'] == command)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            profile = root / 'etc/profile.d'
+            profile.mkdir(parents=True)
+            vendor = root / 'vendor.sh'
+            vendor.write_text('# vendor script\n')
+            hook = profile / '80-systemd-osc-context.sh'
+            hook.symlink_to(vendor)
+            other = profile / '99-unrelated.sh'
+            other.write_text('TERM=xterm-256color\nPROMPT_COMMAND=(unrelated_hook)\n')
+            fixture = code.replace('/etc/', str(root / 'etc') + '/')
+            for _ in range(2):
+                subprocess.run(['bash', '-c', fixture], check=True)
+            self.assertFalse(hook.is_symlink())
+            self.assertEqual(vendor.read_text(), '# vendor script\n')
+            self.assertEqual((root / 'etc/tmpfiles.d/20-systemd-osc-context.conf').readlink(), Path('/dev/null'))
+            self.assertEqual(other.read_text(), 'TERM=xterm-256color\nPROMPT_COMMAND=(unrelated_hook)\n')
 
 
 if __name__ == '__main__':
