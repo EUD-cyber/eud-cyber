@@ -26,14 +26,20 @@ write_files:
     owner: root:root
     content: |
       #!/bin/bash
-      set -euxo pipefail
+      set -Eeuo pipefail
+      umask 077
 
       # =========================
       # VARIABLES (EDIT THESE)
       # =========================
       TPOT_TYPE="h"              # h = hive
       TPOT_USER="admin"
-      TPOT_PASS="Password1!"
+      install -d -m 700 /root/tpot01
+      if [[ ! -s /root/tpot01/web-password ]]; then
+        openssl rand -base64 32 > /root/tpot01/web-password
+      fi
+      TPOT_PASS="$(cat /root/tpot01/web-password)"
+      TPOT_REF="9c3ae4aea976a63ef1f655598a4383c0cb7e140c"
 
       LOG="/var/log/tpot-install.log"
       STATUS="/var/log/tpot-install-status.log"
@@ -42,6 +48,9 @@ write_files:
 
       echo "===== TPOT INSTALL START $(date -Iseconds) ====="
       echo "starting" > "$STATUS"
+      trap 'rc=$?; echo failed > "$STATUS"; echo "T-Pot failed at line $LINENO (exit $rc)"; exit "$rc"' ERR
+      source /etc/os-release
+      [[ "$ID" == ubuntu && "$VERSION_ID" == 26.04 ]]
 
       export DEBIAN_FRONTEND=noninteractive
 
@@ -50,23 +59,21 @@ write_files:
 
       cd /opt
 
-      # Clean previous install if exists
-      if [ -d /opt/tpotce ]; then
-        rm -rf /opt/tpotce
+      # Fetch an inspected Ubuntu 26.04 commit; preserve failures for diagnosis.
+      if [[ ! -d /opt/tpotce ]]; then
+        git init /opt/tpotce
+        git -C /opt/tpotce remote add origin https://github.com/telekom-security/tpotce
+        git -C /opt/tpotce fetch --depth 1 origin "$TPOT_REF"
+        git -C /opt/tpotce checkout --detach FETCH_HEAD
       fi
-
-      git clone https://github.com/telekom-security/tpotce /opt/tpotce
+      [[ "$(git -C /opt/tpotce rev-parse HEAD)" == "$TPOT_REF" ]]
 
       chown -R ubuntu:ubuntu /opt/tpotce
 
       echo "Running installer as ubuntu" | tee -a "$STATUS"
 
-      sudo -u ubuntu bash -lc "
-        set -euxo pipefail
-        cd /opt/tpotce/
-
-        echo "y" | ./install.sh -t ${TPOT_TYPE} -u ${TPOT_USER} -p ${TPOT_PASS}
-      "
+      # Upstream CLI requires -p. No tracing; installer output is root-only.
+      sudo -u ubuntu bash /opt/tpotce/install.sh -s -t "$TPOT_TYPE" -u "$TPOT_USER" -p "$TPOT_PASS" -b "$TPOT_REF"
 
       RC=$?
       echo "installer exit code: $RC" | tee -a "$STATUS"

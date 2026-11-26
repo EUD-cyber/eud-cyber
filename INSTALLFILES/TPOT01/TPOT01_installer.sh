@@ -9,6 +9,7 @@ if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
+mkdir -p LOGS
 LOGFILE="$(pwd)/LOGS/TPOT01_lab${LAB}.log"
 
 # Create log file and ensure permissions
@@ -23,9 +24,7 @@ echo "===== TPOT01 installation started at $(date) ====="
 # ===== CONFIG =====
 START_VMID=$((LAB * 1000))
 BASE_NAME="lab${LAB}-TPOT01"
-IMG_URL="${LINUX_IMG:-https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
-IMG_NAME="noble-server-cloudimg-amd64.img"
-IMG_PATH="$(pwd)/$IMG_NAME"
+# Dedicated Ubuntu 26.04 image; never inherit the other VMs' LINUX_IMG (24.04).
 ISO_STORAGE="${LOCAL:-local}"
 DISK_STORAGE="${LVM:-local-lvm}"
 MEMORY="${TPOT01_MEM:-16384}"      # in MB
@@ -37,11 +36,11 @@ IP_ADDR="ip=192.168.1.210/24"
 DNS_SERVER="192.168.1.1"
 IP_GW="gw=192.168.1.1"
 OOBM_IP="ip=172.20.0.210/24"
-SNIPPET_DIR="/var/lib/vz/snippets"
 SRC_USERDATA="$(pwd)/TPOT01/TPOT01_userdata.yaml"     # source file
-DST_USERDATA="TPOT01_userdata_lab${LAB}.yaml"            # destination filename
+DST_USERDATA="TPOT01_userdata_lab${LAB}_$(date -u +%Y%m%dT%H%M%SZ).yaml"
 
-DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
+DST_PATH="$(pvesm path "${ISO_STORAGE}:snippets/${DST_USERDATA}")"
+mkdir -p "$(dirname -- "$DST_PATH")"
 
 echo "Checking Cloud-Init user-data snippet..."
 
@@ -72,13 +71,9 @@ while qm list | awk '{print $2}' | grep -x "$VM_NAME" &>/dev/null; do
 done
 echo "VM name to use: $VM_NAME"
 
-# ===== Download IMG if missing =====
-if [ ! -f "$IMG_PATH" ]; then
-    echo "Downloading $IMG_NAME IMG..."
-    wget --show-progress -O "$IMG_PATH" "$IMG_URL"
-else
-    echo "IMG already exists: $IMG_PATH"
-fi
+# ===== Download and verify Ubuntu 26.04 cloud image =====
+source "$(pwd)/ubuntu2604-image.sh"
+fetch_ubuntu2604
 
 # ===== Create VM =====
 echo "Creating VM $VMID..."
@@ -92,10 +87,12 @@ qm create $VMID \
   --ostype l26
 
 # ===== Add LVM disk =====
-qm importdisk $VMID $IMG_NAME $DISK_STORAGE
+qm importdisk "$VMID" "$IMG_PATH" "$DISK_STORAGE"
+VOLUME="$(qm config "$VMID" | sed -n 's/^unused0: //p')"
+[[ -n "$VOLUME" ]]
 qm set $VMID \
   --scsihw virtio-scsi-pci \
-  --scsi0 ${DISK_STORAGE}:"vm-$VMID-disk-0"
+  --scsi0 "$VOLUME"
 
 qm disk resize $VMID scsi0 +$DISK_SIZE
 
@@ -127,7 +124,8 @@ echo "VM $VMID ($VM_NAME) started successfully!"
 
 echo "Waiting for VM to power off..."
 
-while true; do
+deadline=$((SECONDS + ${TPOT01_BOOT_TIMEOUT:-7200}))
+while (( SECONDS < deadline )); do
   STATUS=$(qm status "$VMID" | awk '{print $2}')
 
   if [[ "$STATUS" == "stopped" ]]; then
@@ -137,6 +135,9 @@ while true; do
 
   sleep 5
 done
+[[ "$(qm status "$VMID" | awk '{print $2}')" == stopped ]] || {
+  echo "T-Pot timed out; inspect cloud-init in VM $VMID. No snapshot created." >&2; exit 1;
+}
 
 echo "Creating snapshot..."
 qm snapshot "$VMID" First_snapshot --description "Clean baseline snapshot for lab reset"
