@@ -19,6 +19,23 @@ packages:
   - gnupg
   - python3
 write_files:
+  - path: /usr/local/sbin/wazuh5x-terminal-compat
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      # Official systemd opt-out: remove shell hook and mask its tmpfiles rule.
+      # Do not change PAM, login/session management, TERM or other prompt hooks.
+      install -d -m 755 /etc/tmpfiles.d
+      ln -sfn /dev/null /etc/tmpfiles.d/20-systemd-osc-context.conf
+      hook=/etc/profile.d/80-systemd-osc-context.sh
+      if [[ -L "$hook" ]]; then
+        rm -- "$hook"
+      elif [[ -f "$hook" ]]; then
+        # Preserve a directly installed hook rather than deleting package data.
+        mv -- "$hook" "${hook}.wazuh5x-disabled"
+      fi
   - path: /usr/local/sbin/wazuh5x-healthcheck
     owner: root:root
     permissions: '0700'
@@ -91,7 +108,8 @@ write_files:
       trap 'rc=$?; if (( rc != 0 )); then touch /var/lib/wazuh5x/bootstrap.failed; echo "Bootstrap failed near line ${failure_line:-$LINENO} (exit $rc); inspect $LOG and /var/log/wazuh-install.log"; fi; exit "$rc"' EXIT
       source /etc/os-release
       [[ "$ID" == ubuntu && "$VERSION_ID" == 26.04 && "$(dpkg --print-architecture)" == amd64 ]]
-      systemctl enable --now qemu-guest-agent
+      # Ubuntu activates this static unit through the virtio device.
+      systemctl start qemu-guest-agent
       if [[ -f /var/lib/wazuh5x/bootstrap.complete ]]; then
         /usr/local/sbin/wazuh5x-healthcheck
         exit 0
@@ -123,7 +141,12 @@ write_files:
         echo 'Assistant was interrupted. Inspect logs; repair manually or rebuild the fresh VM.'; exit 1;
       }
       for service in wazuh-indexer wazuh-manager wazuh-dashboard; do
-        [[ "$(dpkg-query -W -f='${Version}' "$service")" == 5.0.0-rc2 ]]
+        # Official RC2 filenames contain -rc2; their DEB Version is 5.0.0-1.
+        # Artifact selection/signatures remain pinned by the RC2 assistant above.
+        installed_version="$(dpkg-query -W -f='${Version}' "$service")"
+        [[ "$installed_version" == 5.0.0-1 ]] || {
+          echo "Unexpected $service DEB version: $installed_version (expected 5.0.0-1 from pinned RC2 artifacts)."; exit 1;
+        }
         systemctl enable --now "$service"
       done
       for attempt in $(seq 1 60); do
@@ -138,5 +161,6 @@ write_files:
       done
       false
 runcmd:
+  - [bash, /usr/local/sbin/wazuh5x-terminal-compat]
   - [bash, -c, /usr/local/sbin/wazuh5x-bootstrap]
 final_message: 'WAZUH5X cloud-init finished. Check cloud-init status --long and /var/log/wazuh5x/.'

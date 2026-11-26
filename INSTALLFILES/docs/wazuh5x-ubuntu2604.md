@@ -15,7 +15,10 @@ not a migration of WAZUH 4.14.1. Existing WAZUH files and agent destinations are
 The downloaded RC2 assistant was inspected, including OS checks, artifact selection,
 package-signature verification, per-package credentials and service startup. Its SHA256
 is pinned in userdata. No Wazuh repository main branch is cloned, no 4.x assistant is reused,
-and signature/OS checks are not disabled. The installed package versions must match RC2.
+and signature/OS checks are not disabled. The installed DEB versions must be `5.0.0-1`:
+the official RC2 files are named `5.0.0-rc2`, but their internal Debian version is
+`5.0.0-1`, as recorded in the [official RC2 UX test](https://github.com/wazuh/wazuh/issues/41041).
+This metadata distinction must not be used to select a different assistant or release.
 The assistant downloads signed packages through its official RC2 manifest; package bytes
 are authenticated by the upstream pinned Wazuh signing-key fingerprint.
 
@@ -41,6 +44,12 @@ OOBM `172.20.0.21/24`, and bridges `labN_lan2` / `labN_oobm`. WAZUH retains `.20
 and external TCP 3001. WAZUH5X uses TCP 3003 through GUACVM. Indexer and manager API
 are not forwarded externally. Agent TLS SANs include both WAZUH5X IPs. Existing agents
 are not automatically repointed; use the 5.x dashboard's enrollment flow when testing.
+
+VMID selection starts at `lab number × 1000`: lab1 starts at 1000, lab2 at 2000, etc.
+It selects the first free ID in that lab's 1000-ID block, checking cluster inventory
+including containers and guests on other nodes. An exhausted block fails before VM
+creation. The global `/cluster/nextid` allocator is not used. Existing guests, including
+an earlier WAZUH5X created as VM 100, are never renumbered or removed automatically.
 
 Big: 4 vCPU / 16 GiB / +100 GiB disk. Mini: 4 vCPU / 8 GiB / +100 GiB.
 Overrides: `WAZUH5X_CPU`, `WAZUH5X_MEM`, `WAZUH5X_HDD`. Less than 4 vCPU/8 GiB is rejected.
@@ -88,13 +97,15 @@ installer as `ubuntu`, sets the target HOME with `sudo -H`, and passes nonintera
 APT configuration through sudo. This fixes the observed `tpot.yml: Permission denied`
 fallback download when the installer inherited root-owned `/opt` as cwd.
 
-TPOT01 also disables recurring systemd OSC 3008 shell/command markers using the
+TPOT01 and WAZUH5X disable recurring systemd OSC 3008 shell/command markers using the
 [upstream opt-out](https://github.com/systemd/systemd/blob/main/profile.d/80-systemd-osc-context.sh):
 remove the profile hook and mask `20-systemd-osc-context.conf`. Reconnect existing SSH
 sessions after applying it. This preserves TERM, other prompt hooks and PAM/session
 management. A separate one-time PAM `type=session` marker on sudo/login is outside this
 shell opt-out; clients need OSC 3008 support to hide that marker. The installer does
 not disable PAM or session registration to suppress it.
+WAZUH5X applies its terminal compatibility helper before bootstrap so an installation
+failure does not leave the repeated prompt markers enabled on a fresh VM.
 
 For an already-installed GUACVM, deploy the updated `nat.sh` and `sessions.js` to
 `/opt/guacamole/nat.sh` and `/opt/guacamole/nginx/web/sessions.js`, then run
@@ -125,3 +136,9 @@ image checksums/cache/corruption, YAML parsing and embedded script syntax.
 They do **not** establish that real Wazuh or T-Pot services work on a booted 26.04 guest.
 The fresh-VM acceptance procedure above must be run on Proxmox before treating this RC2
 component as validated for teaching. No real Proxmox VM was available for this implementation.
+
+The user's subsequent WAZUH5X VM log confirmed that the RC2 assistant installed and
+started all three components, then the wrapper rejected its DEB metadata at the old
+`5.0.0-rc2` equality check. The corrected `5.0.0-1` check is covered by fixture tests,
+including rejection of 4.14.1 and 5.0.1; the corrected complete flow still needs a real
+VM acceptance test. Existing VM 100 keeps its original userdata/scripts until updated.
