@@ -1,169 +1,205 @@
 #cloud-config
-
 hostname: wazuh
 manage_etc_hosts: true
-
+ssh_pwauth: true
+chpasswd:
+  expire: false
+disable_root: true
 users:
+  - name: ubuntu
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: $6$rounds=656000$EIJevHcgOcbBAWJH$4ITaOdQ/.TqZCJ81esVdmNt8m0WF1y2afKMmVlU2Ukjc/RxWuX00Mcdt.g55AnmSgQ6KO8d0KqPcbT2WHPhpS0
+  # Existing Guacamole SSH connection uses this account and its saved password.
   - name: wazuh
     sudo: ALL=(ALL) NOPASSWD:ALL
     shell: /bin/bash
     lock_passwd: false
     passwd: $6$qTDYvGhBFYXcEuz.$k1DP25NmlgMNIQLbDGCQh8k3zNDLyrdVJ/99ojc3ir5xNjGxvB736GWNHA0LszFPYdIpD4W6Jxhz45ql6LpmM0
-
-ssh_pwauth: true
-chpasswd:
-  expire: false
-
 package_update: true
-package_upgrade: true
-
 packages:
+  - qemu-guest-agent
   - curl
   - ca-certificates
   - gnupg
-  - tar
   - python3
-
 write_files:
-  - path: /root/install-wazuh.sh
+  - path: /usr/local/sbin/wazuh5x-terminal-compat
     permissions: '0755'
+    owner: root:root
     content: |
       #!/bin/bash
       set -euo pipefail
-      exec > >(tee -a /root/wazuh-install.log) 2>&1
+      # Official systemd opt-out: remove shell hook and mask its tmpfiles rule.
+      # Do not change PAM, login/session management, TERM or other prompt hooks.
+      install -d -m 755 /etc/tmpfiles.d
+      ln -sfn /dev/null /etc/tmpfiles.d/20-systemd-osc-context.conf
+      hook=/etc/profile.d/80-systemd-osc-context.sh
+      if [[ -L "$hook" ]]; then
+        rm -- "$hook"
+      elif [[ -f "$hook" ]]; then
+        # Preserve a directly installed hook rather than deleting package data.
+        mv -- "$hook" "${hook}.wazuh5x-disabled"
+      fi
+  - path: /usr/local/sbin/wazuh5x-healthcheck
+    owner: root:root
+    permissions: '0700'
+    content: |
+      #!/usr/bin/env python3
+      import base64
+      import errno
+      import json
+      import pathlib
+      import ssl
+      import subprocess
+      import sys
+      import urllib.error
+      import urllib.request
 
-      PASS='Password1?'
-      TOKEN_FILE='/root/wazuh-api.token'
+      class HealthError(Exception):
+          pass
 
-      echo "=== Waiting for apt/cloud-init ==="
-      sleep 60
-      while fuser /var/lib/dpkg/lock >/dev/null 2>&1 || \
-            fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || \
-            fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
-        echo "Waiting for apt locks..."
-        sleep 5
+      def required_file(file):
+          if not pathlib.Path(file).is_file():
+              raise FileNotFoundError(errno.ENOENT, 'Required healthcheck file is missing', file)
+          return file
+
+      def password(file, key):
+          for line in pathlib.Path(required_file(file)).read_text().splitlines():
+              if line.startswith(key + '='):
+                  return line.split('=', 1)[1].strip().strip("'\"")
+          raise HealthError('Missing credential key: ' + key)
+
+      def request(url, ca, user=None, secret=None, method='GET'):
+          headers = {}
+          if user:
+              headers['Authorization'] = 'Basic ' + base64.b64encode((user + ':' + secret).encode()).decode()
+          req = urllib.request.Request(url, headers=headers, method=method)
+          with urllib.request.urlopen(req, context=ssl.create_default_context(cafile=required_file(ca)), timeout=15) as response:
+              return json.load(response)
+
+      phase = 'bootstrap state'
+      try:
+          if '--bootstrap' not in sys.argv:
+              if not pathlib.Path('/var/lib/wazuh5x/bootstrap.complete').is_file():
+                  raise HealthError('Bootstrap has not completed')
+              phase = 'cloud-init status'
+              status = subprocess.run(['cloud-init', 'status', '--format', 'json'], check=True,
+                                      capture_output=True, text=True)
+              if json.loads(status.stdout).get('status') != 'done':
+                  raise HealthError('Cloud-init has not completed successfully')
+          for service in ('wazuh-indexer', 'wazuh-manager', 'wazuh-dashboard'):
+              phase = service + ' service'
+              subprocess.run(['systemctl', 'is-active', '--quiet', service], check=True)
+          phase = 'manager daemons'
+          subprocess.run([required_file('/var/wazuh-manager/bin/wazuh-manager-control'), 'status'], check=True,
+                         stdout=subprocess.DEVNULL)
+          phase = 'indexer HTTPS'
+          health = request('https://127.0.0.1:9200/_cluster/health', '/etc/wazuh-indexer/export/ca.pem',
+                           'admin', password('/etc/wazuh-indexer/export/credentials.env', 'WAZUH_INDEXER_ADMIN_PASSWORD'))
+          if health.get('status') not in ('green', 'yellow') or health.get('timed_out'):
+              raise HealthError('Indexer cluster not ready')
+          phase = 'manager API HTTPS'
+          auth = request('https://127.0.0.1:55000/security/user/authenticate', '/etc/wazuh-manager/export/ca.pem',
+                         'wazuh', password('/etc/wazuh-manager/export/credentials.env', 'WAZUH_MANAGER_API_PASSWORD'), 'POST')
+          if not auth.get('data', {}).get('token'):
+              raise HealthError('Manager API not ready')
+          phase = 'dashboard HTTPS'
+          dashboard = request('https://127.0.0.1/api/status', '/etc/wazuh-dashboard/export/ca.pem',
+                              'admin', password('/etc/wazuh-indexer/export/credentials.env', 'WAZUH_INDEXER_ADMIN_PASSWORD'))
+          if dashboard.get('status', {}).get('overall', {}).get('state') not in ('green', 'available'):
+              raise HealthError('Dashboard not ready')
+          print('WAZUH5X healthy: manager API, indexer and dashboard')
+      except FileNotFoundError as exc:
+          print('WAZUH5X health failed [' + phase + ']: missing file: ' + str(exc.filename), file=sys.stderr)
+          sys.exit(1)
+      except HealthError as exc:
+          print('WAZUH5X health failed [' + phase + ']: ' + str(exc), file=sys.stderr)
+          sys.exit(1)
+      except subprocess.CalledProcessError as exc:
+          print('WAZUH5X health failed [' + phase + ']: command exit ' + str(exc.returncode), file=sys.stderr)
+          sys.exit(1)
+      except urllib.error.HTTPError as exc:
+          print('WAZUH5X health failed [' + phase + ']: HTTP ' + str(exc.code), file=sys.stderr)
+          sys.exit(1)
+      except urllib.error.URLError as exc:
+          reason = 'TLS certificate verification failed' if isinstance(exc.reason, ssl.SSLCertVerificationError) else type(exc.reason).__name__
+          print('WAZUH5X health failed [' + phase + ']: ' + reason, file=sys.stderr)
+          sys.exit(1)
+      except Exception as exc:
+          # Never print response bodies, tokens, request headers or credentials.
+          print('WAZUH5X health failed [' + phase + ']: ' + type(exc).__name__, file=sys.stderr)
+          sys.exit(1)
+  - path: /usr/local/sbin/wazuh5x-bootstrap
+    owner: root:root
+    permissions: '0700'
+    content: |
+      #!/usr/bin/env bash
+      set -Eeuo pipefail
+      umask 077
+      install -d -m 700 /var/lib/wazuh5x /var/log/wazuh5x
+      exec 9>/var/lib/wazuh5x/bootstrap.lock
+      flock -n 9 || exit 1
+      LOG="$(mktemp /var/log/wazuh5x/bootstrap-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX.log)"
+      exec >>"$LOG" 2>&1
+      trap 'failure_line=$LINENO' ERR
+      trap 'rc=$?; if (( rc != 0 )); then touch /var/lib/wazuh5x/bootstrap.failed; echo "Bootstrap failed near line ${failure_line:-$LINENO} (exit $rc); inspect $LOG and /var/log/wazuh-install.log"; fi; exit "$rc"' EXIT
+      source /etc/os-release
+      [[ "$ID" == ubuntu && "$VERSION_ID" == 26.04 && "$(dpkg --print-architecture)" == amd64 ]]
+      # Ubuntu activates this static unit through the virtio device.
+      systemctl start qemu-guest-agent
+      if [[ -f /var/lib/wazuh5x/bootstrap.complete ]]; then
+        /usr/local/sbin/wazuh5x-healthcheck
+        exit 0
+      fi
+      # Refuse to touch 4.x installations; this installer is fresh-install only.
+      [[ ! -e /var/ossec && ! -e /etc/ossec-init.conf ]]
+      install -d -m 700 /var/lib/wazuh5x/assistant
+      cd /var/lib/wazuh5x/assistant
+      if [[ ! -f /var/lib/wazuh5x/assistant.started ]]; then
+        for package in wazuh-manager wazuh-indexer wazuh-dashboard; do
+          if dpkg-query -W -f='${Status}' "$package" 2>/dev/null | grep -q 'install ok installed'; then
+            echo 'Existing Wazuh packages found; refusing automatic reinstall.'; exit 1
+          fi
+        done
+        curl --fail --location --retry 3 --connect-timeout 30 --max-time 300 \
+          -o wazuh-install-5.0.0-rc2.sh.part \
+          https://packages-staging.xdrsiem.wazuh.info/pre-release/5.x/installation-assistant/wazuh-install-5.0.0-rc2.sh
+        echo '294255e2c6d7fbb96be50a6f8559667487c47464f6646f120141c7e2d98241df  wazuh-install-5.0.0-rc2.sh.part' | sha256sum -c -
+        mv wazuh-install-5.0.0-rc2.sh.part wazuh-install-5.0.0-rc2.sh
+        touch /var/lib/wazuh5x/assistant.started
+        export DEBIAN_FRONTEND=noninteractive
+        # No -o/overwrite, no source build, no signature-check bypass.
+        timeout 2700 bash ./wazuh-install-5.0.0-rc2.sh -a -id -d pre-release \
+          -as 192.168.2.20 -as 172.20.0.20
+        touch /var/lib/wazuh5x/assistant.complete
+      fi
+      # A failed/interrupted assistant is never rerun with destructive overwrite.
+      [[ -f /var/lib/wazuh5x/assistant.complete ]] || {
+        echo 'Assistant was interrupted. Inspect logs; repair manually or rebuild the fresh VM.'; exit 1;
+      }
+      for service in wazuh-indexer wazuh-manager wazuh-dashboard; do
+        # Official RC2 filenames contain -rc2; their DEB Version is 5.0.0-1.
+        # Artifact selection/signatures remain pinned by the RC2 assistant above.
+        installed_version="$(dpkg-query -W -f='${Version}' "$service")"
+        [[ "$installed_version" == 5.0.0-1 ]] || {
+          echo "Unexpected $service DEB version: $installed_version (expected 5.0.0-1 from pinned RC2 artifacts)."; exit 1;
+        }
+        systemctl enable --now "$service"
       done
-
-      echo "=== Installing Wazuh ==="
-      cd /root
-      rm -f /root/wazuh-install.sh
-      curl -sO https://packages.wazuh.com/4.13/wazuh-install.sh
-      chmod +x /root/wazuh-install.sh
-      bash /root/wazuh-install.sh -a --ignore-check
-
-      echo "=== Enabling archive logging in Wazuh manager ==="
-      if grep -q '<logall>' /var/ossec/etc/ossec.conf; then
-        sed -i 's|<logall>.*</logall>|<logall>yes</logall>|' /var/ossec/etc/ossec.conf
-      else
-        sed -i '/<global>/a \  <logall>yes</logall>' /var/ossec/etc/ossec.conf
-      fi
-
-      if grep -q '<logall_json>' /var/ossec/etc/ossec.conf; then
-        sed -i 's|<logall_json>.*</logall_json>|<logall_json>yes</logall_json>|' /var/ossec/etc/ossec.conf
-      else
-        sed -i '/<global>/a \  <logall_json>yes</logall_json>' /var/ossec/etc/ossec.conf
-      fi
-
-      systemctl restart wazuh-manager
-
-      echo "=== Enabling archives in Filebeat ==="
-      python3 - <<'PY'
-      from pathlib import Path
-      path = Path("/etc/filebeat/filebeat.yml")
-      text = path.read_text()
-
-      old = """filebeat.modules:
-        - module: wazuh
-          alerts:
-            enabled: true
-          archives:
-            enabled: false
-      """
-
-      new = """filebeat.modules:
-        - module: wazuh
-          alerts:
-            enabled: true
-          archives:
-            enabled: true
-      """
-
-      if old in text:
-          text = text.replace(old, new)
-      else:
-          text = text.replace("archives:\n      enabled: false", "archives:\n      enabled: true")
-
-      path.write_text(text)
-      PY
-
-      echo "=== Setting indexer/dashboard admin password ==="
-      /usr/share/wazuh-indexer/plugins/opensearch-security/tools/wazuh-passwords-tool.sh \
-        -u admin -p "${PASS}"
-
-      echo "=== Reading current API credentials generated by installer ==="
-      API_ADMIN_USER="wazuh"
-      API_ADMIN_PASS="$(tar -axf /root/wazuh-install-files.tar wazuh-install-files/wazuh-passwords.txt -O | awk "/API user wazuh/{getline; print}" | sed 's/^.*: //')"
-
-      if [ -z "${API_ADMIN_PASS}" ]; then
-        echo "ERROR: Could not extract current wazuh API password from wazuh-install-files.tar"
-        exit 1
-      fi
-
-      echo "=== Setting Wazuh API password for user wazuh ==="
-      /usr/share/wazuh-indexer/plugins/opensearch-security/tools/wazuh-passwords-tool.sh \
-        --api -u wazuh -p "${PASS}" \
-        --admin-user "${API_ADMIN_USER}" --admin-password "${API_ADMIN_PASS}"
-
-      echo "=== Updating dashboard connector user password (wazuh-wui) ==="
-      /usr/share/wazuh-indexer/plugins/opensearch-security/tools/wazuh-passwords-tool.sh \
-        --api -u wazuh-wui -p "${PASS}" \
-        --admin-user wazuh --admin-password "${PASS}"
-
-      echo "=== Restarting services in correct order ==="
-      systemctl restart wazuh-indexer
-      sleep 20
-      systemctl restart filebeat
-      sleep 10
-      systemctl restart wazuh-manager
-      systemctl restart wazuh-dashboard
-
-      echo "=== Waiting for API ==="
-      for i in $(seq 1 60); do
-        if curl -sk https://localhost:55000/ >/dev/null 2>&1; then
-          break
+      for attempt in $(seq 1 60); do
+        if /usr/local/sbin/wazuh5x-healthcheck --bootstrap; then
+          chmod 600 /etc/wazuh-indexer/export/credentials.env /etc/wazuh-manager/export/credentials.env
+          touch /var/lib/wazuh5x/bootstrap.complete
+          rm -f /var/lib/wazuh5x/bootstrap.failed
+          echo 'WAZUH5X bootstrap complete. Credentials remain in root-only package export files.'
+          exit 0
         fi
-        sleep 5
+        sleep 10
       done
-
-      echo "=== Requesting JWT token ==="
-      TOKEN="$(curl -sSk -u "wazuh:${PASS}" -X POST "https://localhost:55000/security/user/authenticate?raw=true")"
-
-      if [ -z "${TOKEN}" ]; then
-        echo "ERROR: API token is empty"
-        exit 1
-      fi
-
-      echo "${TOKEN}" > "${TOKEN_FILE}"
-      chmod 600 "${TOKEN_FILE}"
-
-      echo "=== Testing token ==="
-      curl -sSk -H "Authorization: Bearer ${TOKEN}" \
-        "https://localhost:55000/manager/status" > /root/wazuh-manager-status.json
-
-      echo "=== Done ==="
-      echo "Dashboard/indexer user: admin"
-      echo "Dashboard/indexer password: ${PASS}"
-      echo "API user: wazuh"
-      echo "API password: ${PASS}"
-      echo "Dashboard connector user: wazuh-wui"
-      echo "Dashboard connector password: ${PASS}"
-      echo "Token saved to: ${TOKEN_FILE}"
-
+      false
 runcmd:
-  - bash /root/install-wazuh.sh
-
-power_state:
-  mode: poweroff
-  message: "Cloud-init finished - powering off"
-  timeout: 30
-  condition: True
+  - [bash, /usr/local/sbin/wazuh5x-terminal-compat]
+  - [bash, -c, /usr/local/sbin/wazuh5x-bootstrap]
+final_message: 'WAZUH5X cloud-init finished. Check cloud-init status --long and /var/log/wazuh5x/.'

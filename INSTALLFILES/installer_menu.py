@@ -18,10 +18,9 @@ VMS = [
     ("KALI02", "KALI02", "Kali02", "KALI02/KALI02_installer.sh", False),
     ("APPSRV01", "APPSRV01", "AppSrv01", "APPSRV01/APPSRV01_installer.sh", False),
     ("CLIENT01", "CLIENT01", "Client01", "CLIENT01/CLIENT01_installer.sh", False),
-    ("WAZUH", "WAZUH", "Wazuh", "WAZUH/WAZUH_installer.sh", False),
+    ("WAZUH", "WAZUH", "Wazuh (5.0 RC2)", "WAZUH/WAZUH_installer.sh", False),
     ("TPOT", "TPOT01", "T-Pot", "TPOT01/TPOT01_installer.sh", False),
     ("MRNOBODY", "MRNOBODY", "MrNobody", "MRNOBODY/mrnobody_installer.sh", False),
-    ("WAZUH5X", "WAZUH5X", "WAZUH5X (5.0 RC2)", "WAZUH5X/wazuh5x_install.sh", False),
 ]
 OPTIONS = [vm[0] for vm in VMS if not vm[4]]
 

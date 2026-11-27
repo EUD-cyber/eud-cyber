@@ -1,7 +1,8 @@
-# WAZUH5X and TPOT01 on Ubuntu 26.04
+# Wazuh 5.x and TPOT01 on Ubuntu 26.04
 
-Verified 2026-11-26. WAZUH5X is a separate **Wazuh 5.0.0-rc2 prerelease lab VM**,
-not a migration of WAZUH 4.14.1. Existing WAZUH files and agent destinations are unchanged.
+WAZUH installs **Wazuh 5.0.0-rc2** for fresh lab deployments. The 4.x files are archived in
+WAZUH_OLD. To replace an existing VM, back up and retire it before provisioning the new VM.
+Plan agent re-enrollment and any data migration separately.
 
 ## Version and installation evidence
 
@@ -26,37 +27,36 @@ are authenticated by the upstream pinned Wazuh signing-key fingerprint.
 
 | File | Change |
 |---|---|
-| `WAZUH5X/wazuh5x_install.sh` | New independent Proxmox installer |
-| `WAZUH5X/WAZUH5X_userdata.yaml` | New automatic RC2 bootstrap and health checker |
-| `WAZUH5X/SHA256SUMS` | Component source integrity manifest (run from INSTALLFILES) |
-| `ubuntu2604-image.sh` | Dedicated checksum-verified, atomic image cache shared only by WAZUH5X/TPOT01 |
-| `installer_menu.py` | WAZUH5X in Single VM and optional Big/Mini components |
+| `WAZUH/WAZUH_installer.sh` | New independent Proxmox installer |
+| `WAZUH/WAZUH_userdata.yaml` | New automatic RC2 bootstrap and health checker |
+| `WAZUH/SHA256SUMS` | Component source integrity manifest (run from INSTALLFILES) |
+| `ubuntu2604-image.sh` | Dedicated checksum-verified, atomic image cache shared only by WAZUH/TPOT01 |
+| `installer_menu.py` | WAZUH in Single VM and optional Big/Mini components |
 | `deploy.sh` | Component dispatch, resource validation, explicit tmux environment |
-| `../install.sh` | Mini WAZUH5X resources and separate image-source display |
+| `../install.sh` | Mini WAZUH resources and separate image-source display |
 | `TPOT01/TPOT01_installer.sh` | Ubuntu 26.04 image, selected snippet/disk storage resolution, bounded wait |
 | `TPOT01/TPOT01_userdata.yaml` | OS guard, pinned T-Pot commit, protected random web password, error status |
-| `GUACVM/nat.sh` | TCP 3003 to WAZUH5X OOBM HTTPS |
-| `GUACVM/nginx/web/sessions.js` | Separate WAZUH5X portal card |
+| `GUACVM/nat.sh` | TCP 3001 to WAZUH OOBM HTTPS |
+| `GUACVM/nginx/web/sessions.js` | Existing Wazuh dashboard and SSH links |
 | `tests/installer/test_wazuh5x.py` and CI workflow | Offline regression coverage |
 
-WAZUH5X uses `labN-WAZUH5X`, LAN2 `192.168.2.21/24`, gateway/DNS `192.168.2.1`,
-OOBM `172.20.0.21/24`, and bridges `labN_lan2` / `labN_oobm`. WAZUH retains `.20`
-and external TCP 3001. WAZUH5X uses TCP 3003 through GUACVM. Indexer and manager API
-are not forwarded externally. Agent TLS SANs include both WAZUH5X IPs. Existing agents
-are not automatically repointed; use the 5.x dashboard's enrollment flow when testing.
+WAZUH uses `labN-WAZUH`, LAN2 `192.168.2.20/24`, gateway/DNS `192.168.2.1`,
+OOBM `172.20.0.20/24`, and bridges `labN_lan2` / `labN_oobm`. Each lab has separate
+bridges and uses the same addresses. GUACVM forwards external TCP 3001 to the OOBM dashboard.
+Agent TLS SANs include both IPs. Use the 5.x dashboard to enroll agents.
 
 VMID selection starts at `lab number × 1000`: lab1 starts at 1000, lab2 at 2000, etc.
 It selects the first free ID in that lab's 1000-ID block, checking cluster inventory
 including containers and guests on other nodes. An exhausted block fails before VM
 creation. The global `/cluster/nextid` allocator is not used. Existing guests, including
-an earlier WAZUH5X created as VM 100, are never renumbered or removed automatically.
+an earlier legacy test VM created as VM 100, are never renumbered or removed automatically.
 
 Big: 4 vCPU / 16 GiB / +100 GiB disk. Mini: 4 vCPU / 8 GiB / +100 GiB.
-Overrides: `WAZUH5X_CPU`, `WAZUH5X_MEM`, `WAZUH5X_HDD`. Less than 4 vCPU/8 GiB is rejected.
+Overrides: `WAZUH_CPU`, `WAZUH_MEM`, `WAZUH_HDD`. Less than 4 vCPU/8 GiB is rejected.
 `LOCAL` selects snippet storage; `LVM` selects VM disks, including ZFS-style volume names.
 
 The default image for all other Ubuntu guests remains the existing Noble 24.04 image.
-WAZUH5X and TPOT01 ignore `LINUX_IMG`. To use a CyberRepo mirror of the 26.04 image,
+WAZUH and TPOT01 ignore `LINUX_IMG`. To use a CyberRepo mirror of the 26.04 image,
 set **both** `UBUNTU2604_IMG` and `UBUNTU2604_SHA256`. A cached image is rehashed before
 reuse. Corrupt/partial downloads are never imported. No unrelated ATTACKER update
 manifest is changed; that manifest does not cover these files.
@@ -64,19 +64,19 @@ manifest is changed; that manifest does not cover these files.
 ## Fresh Single VM test on Proxmox
 
 1. Check out this change on the Proxmox host. Use an existing lab with LAN2/OOBM bridges,
-   working DNS/internet, and available addresses `.21`. Ensure no existing `labN-WAZUH5X`.
-2. WAZUH5X uses the same `ubuntu` account and lab password as the other Ubuntu VMs
-   (matching the hashed password in TPOT01 userdata). No SSH-key setup or
-   `WAZUH5X_SSH_PUBLIC_KEY_FILE` environment variable is required. The guest account
-   has sudo, SSH password authentication is enabled and no first-login password
-   change is required, matching the other lab VMs. No private keys are created.
+   working DNS/internet, and available addresses `.20`. The installer rejects existing lab Wazuh VMs,
+   including historical Wazuh 5.x test VMs and suffixed duplicates.
+2. The `ubuntu` SSH login uses the lab password `Password1?`.
+   Guacamole's existing Wazuh SSH link uses the preserved `wazuh` account.
+   The RC2 installer generates the dashboard admin password because its policy requires
+   12–64 characters and excludes `?`.
 3. Run `bash install.sh`, choose image/storage/network options, then
-   **Single VM → WAZUH5X (5.0 RC2) → Big or Mini → lab number**. Only WAZUH5X is created.
-   Direct equivalent from INSTALLFILES: `bash WAZUH5X/wazuh5x_install.sh 1` with storage variables exported.
+   **Single VM → Wazuh (5.0 RC2) → Big or Mini → lab number**. Only WAZUH is created.
+   Direct equivalent from INSTALLFILES: `bash WAZUH/WAZUH_installer.sh 1` with storage variables exported.
 4. Wait for the explicit healthy result, baseline snapshot and restart (default limit 3600 s;
-   override `WAZUH5X_BOOT_TIMEOUT`). The host checks manager daemons/API, indexer cluster and
+   override `WAZUH_BOOT_TIMEOUT`). The host checks manager daemons/API, indexer cluster and
    dashboard readiness, with CA validation. A single-node indexer may be yellow due to replicas.
-5. SSH to `ubuntu@172.20.0.21`; run `sudo cloud-init status --long`,
+5. SSH to `ubuntu@172.20.0.20`; run `sudo cloud-init status --long`,
    `sudo /usr/local/sbin/wazuh5x-healthcheck`, and
    `sudo systemctl is-active wazuh-manager wazuh-indexer wazuh-dashboard`.
 
@@ -88,12 +88,12 @@ and [manager installation reference](https://github.com/wazuh/wazuh/blob/v5.0.0-
 TLS chain and hostname validation remain enabled. Errors name the failed component
 and missing file or HTTP/command status; credentials, tokens and response bodies are
 never included in diagnostic output.
-6. Open `https://<GUACVM-external-IP>:3003` or direct `https://172.20.0.21`.
+6. Open `https://<GUACVM-external-IP>:3001` or direct `https://172.20.0.20`.
    Login is `admin`. Read the password **inside the guest as root**:
    `sudo grep '^WAZUH_INDEXER_ADMIN_PASSWORD=' /etc/wazuh-indexer/export/credentials.env`.
    Do not paste it into logs, tickets or chat. Import the dashboard CA if desired.
-7. Verify WAZUH 4.x still runs on `.20` / TCP 3001. Re-run Single VM WAZUH5X in the same
-   lab: it must refuse a duplicate without writing to that VM. Reboot WAZUH5X and repeat health checks.
+7. Verify the existing Guacamole SSH link and dashboard port 3001. Re-run Single VM WAZUH in
+   the same lab and confirm it refuses the duplicate. Reboot WAZUH and repeat health checks.
 8. Separately choose **Single VM → T-Pot → Big → lab number** on a fresh TPOT01.
    Check `/etc/os-release` is 26.04, `cloud-init status --long`,
    `/var/log/tpot-install-status.log` and T-Pot containers/UI after its baseline restart.
@@ -106,26 +106,25 @@ installer as `ubuntu`, sets the target HOME with `sudo -H`, and passes nonintera
 APT configuration through sudo. This fixes the observed `tpot.yml: Permission denied`
 fallback download when the installer inherited root-owned `/opt` as cwd.
 
-TPOT01 and WAZUH5X disable recurring systemd OSC 3008 shell/command markers using the
+TPOT01 and WAZUH disable recurring systemd OSC 3008 shell/command markers using the
 [upstream opt-out](https://github.com/systemd/systemd/blob/main/profile.d/80-systemd-osc-context.sh):
 remove the profile hook and mask `20-systemd-osc-context.conf`. Reconnect existing SSH
 sessions after applying it. This preserves TERM, other prompt hooks and PAM/session
 management. A separate one-time PAM `type=session` marker on sudo/login is outside this
 shell opt-out; clients need OSC 3008 support to hide that marker. The installer does
 not disable PAM or session registration to suppress it.
-WAZUH5X applies its terminal compatibility helper before bootstrap so an installation
+WAZUH applies its terminal compatibility helper before bootstrap so an installation
 failure does not leave the repeated prompt markers enabled on a fresh VM.
 
 For an already-installed GUACVM, deploy the updated `nat.sh` and `sessions.js` to
 `/opt/guacamole/nat.sh` and `/opt/guacamole/nginx/web/sessions.js`, then run
 `sudo bash /opt/guacamole/nat.sh apply` and reload the portal. A fresh GUACVM fetches them
-after merge. Single VM WAZUH5X does not modify an existing GUACVM automatically.
-No Guacamole SSH session ID is invented: use SSH with the lab password or create a Guacamole
-connection using the existing lab account explicitly.
+after merge. Single VM WAZUH does not modify an existing GUACVM automatically.
+The existing Guacamole SSH session ID is preserved.
 
 ## Logs, retries and secrets
 
-Host logs: `LOGS/WAZUH5X_labN_<UTC>.<unique>.log` (0600).
+Host logs: `LOGS/WAZUH_labN_<UTC>.<unique>.log` (0600).
 Guest logs: `/var/log/wazuh5x/bootstrap-<UTC>-<unique>.log` (0600),
 `/var/log/wazuh-install.log`, cloud-init status/output, and systemd journals.
 State: `/var/lib/wazuh5x/{assistant.started,assistant.complete,bootstrap.complete,bootstrap.failed}`.
@@ -146,7 +145,7 @@ They do **not** establish that real Wazuh or T-Pot services work on a booted 26.
 The fresh-VM acceptance procedure above must be run on Proxmox before treating this RC2
 component as validated for teaching. No real Proxmox VM was available for this implementation.
 
-The user's subsequent WAZUH5X VM log confirmed that the RC2 assistant installed and
+The user's subsequent RC2 test VM log confirmed that the RC2 assistant installed and
 started all three components, then the wrapper rejected its DEB metadata at the old
 `5.0.0-rc2` equality check. The corrected `5.0.0-1` check is covered by fixture tests,
 including rejection of 4.14.1 and 5.0.1; the corrected complete flow still needs a real

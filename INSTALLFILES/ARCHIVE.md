@@ -26,10 +26,10 @@ baseline snapshots. The old main-installer backup is also retained.
 | `VULNSRV02/VULNSRV02_installer.sh.archive` | `VULNSRV02/VULNSRV02_installer.sh_archive` |
 | `VULNSRV02/VULNSRV02_mini_installer.sh` | `VULNSRV02/VULNSRV02_mini_installer.sh_archive` |
 | `VULNSRV02/VULNSRV02_mini_multi_installer.sh` | `VULNSRV02/VULNSRV02_mini_multi_installer.sh_archive` |
-| `WAZUH/WAZUH_installer.sh.archive` | `WAZUH/WAZUH_installer.sh_archive` |
-| `WAZUH/WAZUH_mini_installer.sh` | `WAZUH/WAZUH_mini_installer.sh_archive` |
-| `WAZUH/WAZUH_mini_multi_installer.sh` | `WAZUH/WAZUH_mini_multi_installer.sh_archive` |
-| `WAZUH/WAZUH_multi_installer2.sh.archive` | `WAZUH/WAZUH_multi_installer2.sh_archive` |
+| `WAZUH_OLD/WAZUH_installer.sh.archive` | `WAZUH_OLD/WAZUH_installer.sh_archive` |
+| `WAZUH_OLD/WAZUH_mini_installer.sh` | `WAZUH_OLD/WAZUH_mini_installer.sh_archive` |
+| `WAZUH_OLD/WAZUH_mini_multi_installer.sh` | `WAZUH_OLD/WAZUH_mini_multi_installer.sh_archive` |
+| `WAZUH_OLD/WAZUH_multi_installer2.sh.archive` | `WAZUH_OLD/WAZUH_multi_installer2.sh_archive` |
 | `big_install.sh` | `big_install.sh_archive` |
 | `finish.sh` | `finish.sh_archive` |
 | `install.sh_bck` | `install.sh_bck_archive` |

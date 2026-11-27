@@ -1,37 +1,28 @@
 #!/bin/bash
-set -euo pipefail
-IFS=$'\n\t'
-
-LAB="$1"
-
-if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
-  echo "Usage: $0 <lab-number>"
-  exit 1
-fi
+set -e
 
 # -----------------------------
 # CONFIG
 # -----------------------------
-START_VMID=$((LAB * 1000))
-BASE_NAME="lab${LAB}-WAZUH"
-IMG_URL="${WAZUH_IMG:-https://packages.wazuh.com/4.x/vm/wazuh-4.14.1.ova}"
+START_VMID=100
+BASE_NAME="WAZUH"
+IMG_URL="https://packages.wazuh.com/4.x/vm/wazuh-4.14.1.ova"
 IMG_NAME="wazuh.ova"
-IMG_PATH="$(pwd)/WAZUH/$IMG_NAME"
-STORAGE="${LOCAL:-local}"
-DISK_STORAGE="${LVM:-local-lvm}"
-BRIDGE1="lab${LAB}_lan2"
-BRIDGE2="lab${LAB}_oobm"
+IMG_PATH="$(pwd)/WAZUH_OLD/$IMG_NAME"
+DISK_STORAGE="local-lvm"
+BRIDGE1="lan2"
+BRIDGE2="oobm"
 CORES=4
 MEMORY=16384
-DISK_SIZE=60G
+DISK_SIZE=80G
 IP_ADDR="ip=192.168.2.20/24"
 DNS_SERVER="192.168.2.1"
 OOBM_IP="ip=172.20.0.20/24"
 IP_GW="gw=192.168.2.1"
-WORKDIR="$(pwd)/WAZUH/"
+WORKDIR="$(pwd)/WAZUH_OLD/"
 SNIPPET_DIR="/var/lib/vz/snippets"
-SRC_USERDATA="$(pwd)/WAZUH/WAZUH_userdata.yaml"     # source file
-DST_USERDATA="WAZUH_userdata_lab${LAB}.yaml"            # destination filename
+SRC_USERDATA="$(pwd)/WAZUH_OLD/WAZUH_userdata.yaml"     # source file
+DST_USERDATA="WAZUH_userdata.yaml"            # destination filename
 # -----------------------------
 
 DST_PATH="${SNIPPET_DIR}/${DST_USERDATA}"
@@ -96,7 +87,7 @@ qm create "$VMID" \
 
 qm importdisk "$VMID" "$VMDK_FILE" "$DISK_STORAGE" --format raw
 
-qm set "$VMID" --scsi0 "$DISK_STORAGE:vm-$VMID-disk-0"
+qm set "$VMID" --scsi0 "local-lvm:vm-$VMID-disk-0"
 qm disk resize $VMID scsi0 +$DISK_SIZE
 echo "➡ Adding cloud-init drive..."
 qm set "$VMID" --ide2 "$DISK_STORAGE":cloudinit
@@ -111,10 +102,11 @@ qm set $VMID --ipconfig0 $IP_ADDR,$IP_GW \
   --ciupgrade \
 
 echo "➡ Attaching custom cloud-init config..."
-qm set "$VMID" --cicustom "user=local:snippets/${DST_USERDATA}"
+qm set "$VMID" --cicustom "user=local:snippets/WAZUH_userdata.yaml"
 
 #Creating first snapshot of the VM 
 qm snapshot $VMID First_snapshot --description "Clean baseline snapshot for lab reset"
 
 echo "➡ Done — starting VM..."
 qm start "$VMID"
+
