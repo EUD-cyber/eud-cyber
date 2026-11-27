@@ -22,6 +22,8 @@ class WazuhHealthcheckTests(unittest.TestCase):
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
         self.secret = 'fixture-secret-Only!123&'
+        self.admin_secret = 'FixtureAdmin123@'
+        self.indexer_secret = self.admin_secret
         self.token = 'fixture-token-must-not-be-logged'
         self.state = dict(indexer='yellow', dashboard='green', reject_auth=False)
         self.requests = []
@@ -33,10 +35,13 @@ class WazuhHealthcheckTests(unittest.TestCase):
             export.mkdir(parents=True)
             (export / 'ca.pem').write_bytes(cert.read_bytes())
             credential = 'WAZUH_MANAGER_API_PASSWORD' if component == 'manager' else 'WAZUH_INDEXER_ADMIN_PASSWORD'
-            (export / 'credentials.env').write_text(credential + "='" + self.secret + "'\n")
+            value = self.secret if component == 'manager' else self.admin_secret
+            (export / 'credentials.env').write_text(credential + "='" + value + "'\n")
+        self.indexer_export = self.root / 'etc/wazuh-indexer/export/credentials.env'
         state = self.root / 'var/lib/wazuh5x'
         state.mkdir(parents=True)
         (state / 'bootstrap.complete').touch()
+        (state / 'admin-password').write_text(self.admin_secret + '\n')
         binary = self.root / 'bin'
         binary.mkdir()
         self.executable(binary / 'systemctl', '''#!/bin/bash
@@ -60,8 +65,16 @@ printf '{"status":"%s"}\\n' "${TEST_CLOUD_STATUS:-done}"
             def handle_request(self, method):
                 fixture.requests.append((method, self.path))
                 user = 'wazuh' if self.path.startswith('/manager/') else 'admin'
-                expected = 'Basic ' + base64.b64encode((user + ':' + fixture.secret).encode()).decode()
-                if self.headers.get('Authorization') != expected or fixture.state['reject_auth']:
+                secret = fixture.secret if user == 'wazuh' else fixture.indexer_secret
+                expected = 'Basic ' + base64.b64encode((user + ':' + secret).encode()).decode()
+                if self.path == '/dashboard/auth/login':
+                    login = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+                    authorized = (login == {'username': 'admin', 'password': fixture.admin_secret}
+                                  and self.headers.get('osd-xsrf') == 'true'
+                                  and not fixture.state.get('reject_dashboard_login'))
+                else:
+                    authorized = self.headers.get('Authorization') == expected
+                if not authorized or fixture.state['reject_auth']:
                     # Deliberately echo secrets into an error body: healthcheck must never log it.
                     status, body = 401, {'error': fixture.secret, 'token': fixture.token}
                 elif self.path == '/indexer/_cluster/health' and method == 'GET':
@@ -70,12 +83,16 @@ printf '{"status":"%s"}\\n' "${TEST_CLOUD_STATUS:-done}"
                     status, body = 200, {'data': {'token': fixture.token}}
                 elif self.path == '/dashboard/api/status' and method == 'GET':
                     status, body = 200, {'status': {'overall': {'state': fixture.state['dashboard']}}}
+                elif self.path == '/dashboard/auth/login' and method == 'POST':
+                    status, body = 200, {}
                 else:
                     status, body = 404, {}
                 payload = json.dumps(body).encode()
                 self.send_response(status)
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Content-Length', str(len(payload)))
+                if self.path == '/dashboard/auth/login' and status == 200:
+                    self.send_header('Set-Cookie', 'security_authentication=' + fixture.token)
                 self.end_headers()
                 self.wfile.write(payload)
 
@@ -97,6 +114,9 @@ printf '{"status":"%s"}\\n' "${TEST_CLOUD_STATUS:-done}"
         code = code.replace('https://127.0.0.1:9200', base + '/indexer')
         code = code.replace('https://127.0.0.1:55000', base + '/manager')
         code = code.replace('https://127.0.0.1/api/status', base + '/dashboard/api/status')
+        code = code.replace('https://127.0.0.1/auth/login', base + '/dashboard/auth/login')
+        self.password_tool = self.root / 'password-tool.sh'
+        code = code.replace('/usr/share/wazuh-indexer/tools/wazuh-passwords-tool.sh', str(self.password_tool))
         self.script = self.root / 'healthcheck.py'
         self.script.write_text(code)
         self.env = dict(os.environ, PATH=str(binary) + ':' + os.environ['PATH'], NO_PROXY='127.0.0.1', no_proxy='127.0.0.1')
@@ -120,6 +140,7 @@ printf '{"status":"%s"}\\n' "${TEST_CLOUD_STATUS:-done}"
         result = subprocess.run([sys.executable, str(self.script), *args], env=self.env,
                                 text=True, capture_output=True, timeout=20)
         self.assertNotIn(self.secret, result.stdout + result.stderr)
+        self.assertNotIn(self.admin_secret, result.stdout + result.stderr)
         self.assertNotIn(self.token, result.stdout + result.stderr)
         return result
 
@@ -127,8 +148,44 @@ printf '{"status":"%s"}\\n' "${TEST_CLOUD_STATUS:-done}"
         result = self.check()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.requests, [('GET', '/indexer/_cluster/health'),
-                         ('POST', '/manager/security/user/authenticate'), ('GET', '/dashboard/api/status')])
+                         ('POST', '/manager/security/user/authenticate'), ('GET', '/dashboard/api/status'),
+                         ('POST', '/dashboard/auth/login')])
         self.assertIn('WAZUH5X healthy', result.stdout)
+
+    def test_admin_rotation_and_idempotence(self):
+        self.indexer_secret = self.secret
+        internal = 'WAZUH_INDEXER_KIBANASERVER_PASSWORD=fixture-internal\n'
+        self.indexer_export.write_text(f'WAZUH_INDEXER_ADMIN_PASSWORD={self.secret}\n' + internal)
+        self.env.update(TEST_EXPORT=str(self.indexer_export), TEST_CALLS=str(self.root / 'calls'))
+        self.executable(self.password_tool, '''#!/bin/bash
+[[ "$#" == 3 && "$1" == -u && "$2" == admin && "$3" == -p ]] || exit 7
+IFS= read -r secret || exit 8
+printf '%s\n' "$secret"
+printf 'called\n' >> "$TEST_CALLS"
+if [[ "${TEST_TOOL_FAILURE:-}" == yes ]]; then exit 9; fi
+sed -i "s/^WAZUH_INDEXER_ADMIN_PASSWORD=.*/WAZUH_INDEXER_ADMIN_PASSWORD=$secret/" "$TEST_EXPORT"
+''')
+        self.assertNotEqual(self.check('--bootstrap').returncode, 0)
+        self.env['TEST_TOOL_FAILURE'] = 'yes'
+        failed = self.check('--rotate-admin')
+        self.assertEqual(failed.returncode, 2, failed.stderr)
+        self.assertIn('Password tool failed', failed.stderr)
+        del self.env['TEST_TOOL_FAILURE']
+        rotated = self.check('--rotate-admin')
+        self.assertEqual(rotated.returncode, 0, rotated.stderr)
+        self.assertEqual(self.indexer_export.read_text(),
+                         f'WAZUH_INDEXER_ADMIN_PASSWORD={self.admin_secret}\n' + internal)
+        self.assertNotEqual(self.check('--bootstrap').returncode, 0)
+        self.indexer_secret = self.admin_secret
+        self.assertEqual(self.check('--rotate-admin').returncode, 0)
+        self.assertEqual((self.root / 'calls').read_text().splitlines(), ['called', 'called'])
+        self.assertEqual(self.check('--bootstrap').returncode, 0)
+
+    def test_dashboard_session_requires_admin_login(self):
+        self.state['reject_dashboard_login'] = True
+        result = self.check('--bootstrap')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('[dashboard admin login]: HTTP 401', result.stderr)
 
     def test_missing_dashboard_ca_names_exact_path_and_stage(self):
         for component, phase in (('indexer', 'indexer HTTPS'), ('manager', 'manager API HTTPS'), ('dashboard', 'dashboard HTTPS')):

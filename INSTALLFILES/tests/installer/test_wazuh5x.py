@@ -70,6 +70,9 @@ class Wazuh5xTests(unittest.TestCase):
                 for name in ('WAZUH_installer.sh', 'WAZUH_userdata.yaml'):
                     shutil.copyfile(ROOT / 'WAZUH' / name, root / 'WAZUH' / name)
                 (root / 'ubuntu2604-image.sh').write_text('fetch_ubuntu2604() { IMG_PATH="$PWD/fake.img"; }\n')
+                password_file = root / 'admin-password'
+                password_file.write_text('FixtureAdmin123@\n')
+                password_file.chmod(0o600)
                 def stub(name, code):
                     path = binary / name
                     path.write_text('#!/bin/bash\n' + code)
@@ -88,6 +91,9 @@ class Wazuh5xTests(unittest.TestCase):
                   status) echo 'status: stopped' ;;
                   guest)
                     if [[ "$MODE" == failed && "$*" == *bootstrap.failed* ]]; then echo '{"exitcode":0}';
+                    elif [[ "$*" == *--pass-stdin* ]]; then
+                      IFS= read -r received
+                      [[ "$received" == FixtureAdmin123@ ]] && echo '{"exitcode":0}'
                     elif [[ "$MODE" == healthy && "$*" == *wazuh5x-healthcheck* ]]; then echo '{"exitcode": 0}';
                     else echo '{"exitcode":1}'; fi ;;
                 esac
@@ -100,11 +106,13 @@ class Wazuh5xTests(unittest.TestCase):
                     inventory.append(dict(vmid=lab * 1000 + 50, name=f'lab{lab}-{duplicate_names[mode]}'))
                 inventory.append(dict(vmid=5000, name='lab5-WAZUH'))
                 env = dict(os.environ, PATH=str(binary) + ':' + os.environ['PATH'], MODE=mode,
-                           WAZUH_BOOT_TIMEOUT='1', TEST_INVENTORY=json.dumps(inventory))
+                           WAZUH_BOOT_TIMEOUT='1', TEST_INVENTORY=json.dumps(inventory),
+                           WAZUH_ADMIN_PASSWORD_FILE=str(password_file))
                 env.pop('WAZUH5X_SSH_PUBLIC_KEY_FILE', None)
                 result = subprocess.run(['bash', str(root / 'WAZUH/WAZUH_installer.sh'), str(lab)],
                                         env=env, text=True, capture_output=True, timeout=15)
                 events = (root / 'events').read_text() if (root / 'events').exists() else ''
+                self.assertNotIn('FixtureAdmin123@', result.stdout + result.stderr + events)
                 if mode == 'healthy':
                     expected_id = lab * 1000 + next(i for i in range(1000) if i not in offsets)
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

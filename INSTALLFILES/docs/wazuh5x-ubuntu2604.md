@@ -68,8 +68,12 @@ manifest is changed; that manifest does not cover these files.
    including historical Wazuh 5.x test VMs and suffixed duplicates.
 2. The `ubuntu` SSH login uses the lab password `Password1?`.
    Guacamole's existing Wazuh SSH link uses the preserved `wazuh` account.
-   The RC2 installer generates the dashboard admin password because its policy requires
-   12–64 characters and excludes `?`.
+   Before running ZTD, provision the agreed Dashboard password on each Proxmox host
+   in `/etc/cyberlab/wazuh-admin-password` as one line in a root-owned mode `0600`
+   file. `WAZUH_ADMIN_PASSWORD_FILE` can point to a different file. RC2 requires
+   12–64 characters with uppercase, lowercase, a digit and a symbol from `.,_+:@%^=~-`.
+   ZTD transfers the password via QEMU guest-agent stdin and rotates `admin` with the
+   packaged password tool before taking the baseline snapshot.
 3. Run `bash install.sh`, choose image/storage/network options, then
    **Single VM → Wazuh (5.0 RC2) → Big or Mini → lab number**. Only WAZUH is created.
    Direct equivalent from INSTALLFILES: `bash WAZUH/WAZUH_installer.sh 1` with storage variables exported.
@@ -89,9 +93,8 @@ TLS chain and hostname validation remain enabled. Errors name the failed compone
 and missing file or HTTP/command status; credentials, tokens and response bodies are
 never included in diagnostic output.
 6. Open `https://<GUACVM-external-IP>:3001` or direct `https://172.20.0.20`.
-   Login is `admin`. Read the password **inside the guest as root**:
-   `sudo grep '^WAZUH_INDEXER_ADMIN_PASSWORD=' /etc/wazuh-indexer/export/credentials.env`.
-   Do not paste it into logs, tickets or chat. Import the dashboard CA if desired.
+   Log in as `admin` with the password provisioned on the Proxmox host.
+   Import the dashboard CA if desired.
 7. Verify the existing Guacamole SSH link and dashboard port 3001. Re-run Single VM WAZUH in
    the same lab and confirm it refuses the duplicate. Reboot WAZUH and repeat health checks.
 8. Separately choose **Single VM → T-Pot → Big → lab number** on a fresh TPOT01.
@@ -132,8 +135,8 @@ Bootstrap is locked; successful repeat runs only check health. Failure retains t
 returns an error. An interrupted assistant is **not** automatically rerun with overwrite:
 inspect logs and repair manually or rebuild that new VM. Retry repaired service/health
 failures with `sudo /usr/local/sbin/wazuh5x-bootstrap`. No failed baseline is snapshotted.
-Credentials stay in root-only package export files; the assistant runs with redirected
-output so its interactive password summary is suppressed. Back up package CA directories
+Package exports and the guest's desired admin password are root-only. The assistant runs
+with redirected output so its interactive password summary is suppressed. Back up package CA directories
 and credential files securely; a baseline snapshot contains secrets and needs restricted access.
 
 ## Validation boundary
