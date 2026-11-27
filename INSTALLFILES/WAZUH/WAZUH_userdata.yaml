@@ -50,6 +50,7 @@ write_files:
       import base64
       import errno
       import json
+      import os
       import pathlib
       import ssl
       import subprocess
@@ -57,8 +58,23 @@ write_files:
       import urllib.error
       import urllib.request
 
+      ADMIN_INPUT = '/var/lib/wazuh5x/admin-password'
+      ADMIN_KEY = 'WAZUH_INDEXER_ADMIN_PASSWORD'
+      INDEXER_EXPORT = '/etc/wazuh-indexer/export/credentials.env'
+      INDEXER_CA = '/etc/wazuh-indexer/export/ca.pem'
+      INDEXER_HEALTH = 'https://127.0.0.1:9200/_cluster/health'
+      DASHBOARD_CA = '/etc/wazuh-dashboard/export/ca.pem'
+      PASSWORD_TOOL = '/usr/share/wazuh-indexer/tools/wazuh-passwords-tool.sh'
+
       class HealthError(Exception):
           pass
+
+      class RotationError(Exception):
+          pass
+
+      class NoRedirect(urllib.request.HTTPRedirectHandler):
+          def redirect_request(self, req, fp, code, msg, headers, newurl):
+              return None
 
       def required_file(file):
           if not pathlib.Path(file).is_file():
@@ -71,16 +87,60 @@ write_files:
                   return line.split('=', 1)[1].strip().strip("'\"")
           raise HealthError('Missing credential key: ' + key)
 
-      def request(url, ca, user=None, secret=None, method='GET'):
+      def open_local(req, ca):
+          tls = urllib.request.HTTPSHandler(context=ssl.create_default_context(cafile=required_file(ca)))
+          opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect(), tls)
+          return opener.open(req, timeout=15)
+
+      def request(url, ca, user, secret, method='GET'):
           headers = {}
-          if user:
-              headers['Authorization'] = 'Basic ' + base64.b64encode((user + ':' + secret).encode()).decode()
+          headers['Authorization'] = 'Basic ' + base64.b64encode((user + ':' + secret).encode()).decode()
           req = urllib.request.Request(url, headers=headers, method=method)
-          with urllib.request.urlopen(req, context=ssl.create_default_context(cafile=required_file(ca)), timeout=15) as response:
+          with open_local(req, ca) as response:
               return json.load(response)
+
+      def indexer_health(secret):
+          health = request(INDEXER_HEALTH, INDEXER_CA, 'admin', secret)
+          if health.get('status') not in ('green', 'yellow') or health.get('timed_out'):
+              raise HealthError('Indexer cluster not ready')
+
+      def rotate_admin(admin_password):
+          saved = password(INDEXER_EXPORT, ADMIN_KEY)
+          try:
+              indexer_health(admin_password)
+          except urllib.error.HTTPError as exc:
+              if exc.code != 401 or saved == admin_password:
+                  raise
+              indexer_health(saved)
+          else:
+              if saved == admin_password:
+                  return
+          # RC2 reads -p from stdin and synchronizes only the selected account.
+          # Its internal service keystores use separate users.
+          env = {key: value for key, value in os.environ.items() if key not in ('BASH_ENV', 'SHELLOPTS', 'BASHOPTS')}
+          try:
+              subprocess.run(['bash', '+x', required_file(PASSWORD_TOOL), '-u', 'admin', '-p'],
+                             input=admin_password + '\n', text=True, check=True, env=env,
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=180)
+          except (OSError, subprocess.SubprocessError) as exc:
+              raise RotationError('Password tool failed (' + type(exc).__name__ + ')') from None
+          if password(INDEXER_EXPORT, ADMIN_KEY) != admin_password:
+              raise RotationError('Password tool did not synchronize the admin export')
+
+      def dashboard_login(admin_password):
+          data = json.dumps({'username': 'admin', 'password': admin_password}).encode()
+          req = urllib.request.Request('https://127.0.0.1/auth/login', data=data,
+                                       headers={'Content-Type': 'application/json', 'osd-xsrf': 'true'})
+          with open_local(req, DASHBOARD_CA) as response:
+              if response.status != 200 or not response.headers.get('Set-Cookie'):
+                  raise HealthError('Dashboard login did not issue a session')
 
       phase = 'bootstrap state'
       try:
+          if sys.argv[1:] == ['--rotate-admin']:
+              phase = 'admin password rotation'
+              rotate_admin(pathlib.Path(required_file(ADMIN_INPUT)).read_text().rstrip('\r\n'))
+              sys.exit(0)
           if '--bootstrap' not in sys.argv:
               if not pathlib.Path('/var/lib/wazuh5x/bootstrap.complete').is_file():
                   raise HealthError('Bootstrap has not completed')
@@ -96,21 +156,25 @@ write_files:
           subprocess.run([required_file('/var/wazuh-manager/bin/wazuh-manager-control'), 'status'], check=True,
                          stdout=subprocess.DEVNULL)
           phase = 'indexer HTTPS'
-          health = request('https://127.0.0.1:9200/_cluster/health', '/etc/wazuh-indexer/export/ca.pem',
-                           'admin', password('/etc/wazuh-indexer/export/credentials.env', 'WAZUH_INDEXER_ADMIN_PASSWORD'))
-          if health.get('status') not in ('green', 'yellow') or health.get('timed_out'):
-              raise HealthError('Indexer cluster not ready')
+          admin_password = pathlib.Path(required_file(ADMIN_INPUT)).read_text().rstrip('\r\n')
+          if password(INDEXER_EXPORT, ADMIN_KEY) != admin_password:
+              raise HealthError('Admin export is out of sync')
+          indexer_health(admin_password)
           phase = 'manager API HTTPS'
           auth = request('https://127.0.0.1:55000/security/user/authenticate', '/etc/wazuh-manager/export/ca.pem',
                          'wazuh', password('/etc/wazuh-manager/export/credentials.env', 'WAZUH_MANAGER_API_PASSWORD'), 'POST')
           if not auth.get('data', {}).get('token'):
               raise HealthError('Manager API not ready')
           phase = 'dashboard HTTPS'
-          dashboard = request('https://127.0.0.1/api/status', '/etc/wazuh-dashboard/export/ca.pem',
-                              'admin', password('/etc/wazuh-indexer/export/credentials.env', 'WAZUH_INDEXER_ADMIN_PASSWORD'))
+          dashboard = request('https://127.0.0.1/api/status', DASHBOARD_CA, 'admin', admin_password)
           if dashboard.get('status', {}).get('overall', {}).get('state') not in ('green', 'available'):
               raise HealthError('Dashboard not ready')
+          phase = 'dashboard admin login'
+          dashboard_login(admin_password)
           print('WAZUH5X healthy: manager API, indexer and dashboard')
+      except RotationError as exc:
+          print('WAZUH5X ' + phase + ' failed: ' + str(exc), file=sys.stderr)
+          sys.exit(2)
       except FileNotFoundError as exc:
           print('WAZUH5X health failed [' + phase + ']: missing file: ' + str(exc.filename), file=sys.stderr)
           sys.exit(1)
@@ -136,6 +200,7 @@ write_files:
     permissions: '0700'
     content: |
       #!/usr/bin/env bash
+      set +x
       set -Eeuo pipefail
       umask 077
       install -d -m 700 /var/lib/wazuh5x /var/log/wazuh5x
@@ -171,7 +236,7 @@ write_files:
         touch /var/lib/wazuh5x/assistant.started
         export DEBIAN_FRONTEND=noninteractive
         # No -o/overwrite, no source build, no signature-check bypass.
-        timeout 2700 bash ./wazuh-install-5.0.0-rc2.sh -a -id -d pre-release \
+        timeout 2700 bash ./wazuh-install-5.0.0-rc2.sh -a -id -d pre-release </dev/null \
           -as 192.168.2.20 -as 172.20.0.20
         touch /var/lib/wazuh5x/assistant.complete
       fi
@@ -187,6 +252,17 @@ write_files:
           echo "Unexpected $service DEB version: $installed_version (expected 5.0.0-1 from pinned RC2 artifacts)."; exit 1;
         }
         systemctl enable --now "$service"
+      done
+      for attempt in $(seq 1 30); do
+        if /usr/local/sbin/wazuh5x-healthcheck --rotate-admin; then
+          break
+        else
+          rc=$?
+          if (( rc != 1 || attempt == 30 )); then
+            exit "$rc"
+          fi
+        fi
+        sleep 10
       done
       for attempt in $(seq 1 60); do
         if /usr/local/sbin/wazuh5x-healthcheck --bootstrap; then
