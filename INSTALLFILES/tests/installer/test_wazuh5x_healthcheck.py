@@ -89,7 +89,7 @@ printf '{"status":"%s"}\\n' "${TEST_CLOUD_STATUS:-done}"
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
         self.addCleanup(self.stop_server)
-        config = yaml.safe_load((ROOT / 'WAZUH5X/WAZUH5X_userdata.yaml').read_text())
+        config = yaml.safe_load((ROOT / 'WAZUH/WAZUH_userdata.yaml').read_text())
         code = next(e['content'] for e in config['write_files'] if e['path'].endswith('wazuh5x-healthcheck'))
         for prefix in ('/etc/wazuh-', '/var/lib/wazuh5x', '/var/wazuh-manager'):
             code = code.replace(prefix, str(self.root) + prefix)

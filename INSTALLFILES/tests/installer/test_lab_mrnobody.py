@@ -144,6 +144,22 @@ exec "$@" </dev/null
                             self.assertIn(f"      MRNOBODY_ROLE={role}\n", rendered)
                             self.assertIn("      MRNOBODY_MASTER_URL=" + ("http://master.test:8080" if role == "agent" else "''") + "\n", rendered)
 
+    def test_wazuh_worker_runs_once_per_lab(self):
+        self.write("WAZUH/WAZUH_installer.sh",
+                   '#!/bin/bash\nprintf "WAZUH %s\\n" "$1" >> events\n')
+        env = dict(os.environ, PATH=str(self.bin) + ":" + os.environ["PATH"])
+        for profile, labs in (("Big", 1), ("Mini", 2), ("Big", 16)):
+            with self.subTest(profile=profile, labs=labs):
+                (self.root / "events").unlink(missing_ok=True)
+                result = subprocess.run(
+                    ["bash", "deploy.sh", profile, str(labs), "WAZUH", "WAZUH"],
+                    cwd=self.root, env=env, input="", text=True, capture_output=True, timeout=20,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                events = (self.root / "events").read_text().splitlines()
+                self.assertEqual([event for event in events if event.startswith("WAZUH ")],
+                                 [f"WAZUH {lab}" for lab in range(1, labs + 1)])
+
     def test_missing_master_eof_stops_before_setup_or_tmux(self):
         result = self.deploy(answers="")
         self.assertNotEqual(result.returncode, 0)

@@ -77,24 +77,13 @@ window.CYBERLAB_SESSIONS = [
 
   {
     name: "Wazuh",
-    description: "Wazuh SIEM",
-    address: "192.168.1.20",
+    description: "Wazuh 5.0 RC2 SIEM",
+    address: "192.168.2.20",
     category: "Linux",
     icon: "WAZUH",
     connections: [
       { type: "HTTPS", label: "Wazuh GUI", port: 3001, newTab: true },
       { type: "SSH", label: "Wazuh SSH", url: "/guacamole/#/client/NABjAHBvc3RncmVzcWw", newTab: true }
-    ]
-  },
-
-  {
-    name: "WAZUH5X",
-    description: "Wazuh 5.0 RC2 / Ubuntu 26.04 (test)",
-    address: "192.168.2.21",
-    category: "Linux",
-    icon: "WAZUH",
-    connections: [
-      { type: "HTTPS", label: "WAZUH5X GUI", port: 3003, newTab: true }
     ]
   },
 

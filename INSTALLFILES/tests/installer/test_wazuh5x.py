@@ -19,18 +19,22 @@ import single_vm_install as single
 
 class Wazuh5xTests(unittest.TestCase):
     def test_menu_and_isolated_dispatch(self):
-        vm = next(vm for vm in menu.VMS if vm[0] == 'WAZUH5X')
-        self.assertEqual(vm[3], 'WAZUH5X/wazuh5x_install.sh')
+        vm = next(vm for vm in menu.VMS if vm[0] == 'WAZUH')
+        self.assertEqual(vm[3], 'WAZUH/WAZUH_installer.sh')
         profiles = {p: menu.hardware(ROOT, p, {}) for p in ('Big', 'Mini')}
-        choice = dict(vm='WAZUH5X', profile='Big', role=None)
-        selected, row, env = single.single_environment(choice, profiles, {'WAZUH_MEM': '999'})
+        choice = dict(vm='WAZUH', profile='Big', role=None)
+        selected, row, env = single.single_environment(choice, profiles, {})
         self.assertEqual(selected, vm)
-        self.assertNotIn('WAZUH_MEM', env)
         self.assertEqual(row['memory_mib'], 16384)
-        self.assertEqual(menu.validate_selection(dict(profile='Big', labs=1, components=['WAZUH', 'WAZUH5X']))['components'], ['WAZUH', 'WAZUH5X'])
+        for profile in ('Big', 'Mini'):
+            for labs in (1, 2, 16):
+                value = dict(profile=profile, labs=labs, components=['WAZUH', 'WAZUH'])
+                self.assertEqual(menu.validate_selection(value)['components'], ['WAZUH'])
+        with self.assertRaises(ValueError):
+            menu.validate_selection(dict(profile='Big', labs=1, components=['WAZUH5X']))
 
     def test_cloud_init_and_embedded_syntax(self):
-        for relative in ('WAZUH5X/WAZUH5X_userdata.yaml', 'TPOT01/TPOT01_userdata.yaml'):
+        for relative in ('WAZUH/WAZUH_userdata.yaml', 'TPOT01/TPOT01_userdata.yaml'):
             config = yaml.safe_load((ROOT / relative).read_text())
             for entry in config['write_files']:
                 code = entry['content']
@@ -38,30 +42,33 @@ class Wazuh5xTests(unittest.TestCase):
                     compile(code, entry['path'], 'exec')
                 elif code.startswith(('#!/bin/bash', '#!/usr/bin/env bash')):
                     subprocess.run(['bash', '-n'], input=code, text=True, check=True)
-        config = yaml.safe_load((ROOT / 'WAZUH5X/WAZUH5X_userdata.yaml').read_text())
+        config = yaml.safe_load((ROOT / 'WAZUH/WAZUH_userdata.yaml').read_text())
         reference = yaml.safe_load((ROOT / 'TPOT01/TPOT01_userdata.yaml').read_text())
         self.assertTrue(config['ssh_pwauth'])
         user = config['users'][0]
         standard = next(user for user in reference['users'] if user['name'] == 'ubuntu')
-        for field in ('name', 'sudo', 'shell', 'lock_passwd', 'passwd'):
+        for field in ('name', 'sudo', 'shell', 'lock_passwd'):
             self.assertEqual(user[field], standard[field])
+        archived = yaml.safe_load((ROOT / 'WAZUH_OLD/WAZUH_userdata.yaml').read_text())
+        guacamole_user = next(user for user in config['users'] if user['name'] == 'wazuh')
+        self.assertEqual(guacamole_user, archived['users'][0])
         self.assertFalse(config['chpasswd']['expire'])
         self.assertNotIn('ssh_authorized_keys', user)
-        self.assertNotIn('__WAZUH5X_SSH_KEY__', (ROOT / 'WAZUH5X/WAZUH5X_userdata.yaml').read_text())
+        self.assertNotIn('__WAZUH5X_SSH_KEY__', (ROOT / 'WAZUH/WAZUH_userdata.yaml').read_text())
 
     def test_host_lifecycle_and_failure_paths(self):
         if os.geteuid() != 0:
             self.skipTest('Requires root; all host commands are stubbed')
-        cases = [(mode, 1, list(range(11))) for mode in ('healthy', 'duplicate', 'failed', 'timeout', 'create-fails')]
+        cases = [(mode, 1, list(range(11))) for mode in ('healthy', 'duplicate', 'legacy-test', 'archived', 'failed', 'timeout', 'create-fails')]
         cases += [('healthy', 2, []), ('healthy', 16, [0, 1, 3]), ('exhausted', 1, list(range(1000)))]
         for mode, lab, offsets in cases:
             with self.subTest(mode=mode, lab=lab), tempfile.TemporaryDirectory() as temporary:
                 root = Path(temporary)
-                (root / 'WAZUH5X').mkdir()
+                (root / 'WAZUH').mkdir()
                 binary = root / 'bin'
                 binary.mkdir()
-                for name in ('wazuh5x_install.sh', 'WAZUH5X_userdata.yaml'):
-                    shutil.copyfile(ROOT / 'WAZUH5X' / name, root / 'WAZUH5X' / name)
+                for name in ('WAZUH_installer.sh', 'WAZUH_userdata.yaml'):
+                    shutil.copyfile(ROOT / 'WAZUH' / name, root / 'WAZUH' / name)
                 (root / 'ubuntu2604-image.sh').write_text('fetch_ubuntu2604() { IMG_PATH="$PWD/fake.img"; }\n')
                 def stub(name, code):
                     path = binary / name
@@ -88,21 +95,26 @@ class Wazuh5xTests(unittest.TestCase):
                 inventory = [dict(vmid=lab * 1000 + offset, name='existing',
                                   type='lxc' if offset % 2 else 'qemu', node='another-node') for offset in offsets]
                 inventory.append(dict(vmid=100, name='unrelated'))
-                if mode == 'duplicate':
-                    inventory.append(dict(vmid=lab * 1000 + 50, name=f'lab{lab}-WAZUH5X'))
+                duplicate_names = {'duplicate': 'WAZUH-1', 'legacy-test': 'WAZUH5X', 'archived': 'WAZUH_OLD'}
+                if mode in duplicate_names:
+                    inventory.append(dict(vmid=lab * 1000 + 50, name=f'lab{lab}-{duplicate_names[mode]}'))
+                inventory.append(dict(vmid=5000, name='lab5-WAZUH'))
                 env = dict(os.environ, PATH=str(binary) + ':' + os.environ['PATH'], MODE=mode,
-                           WAZUH5X_BOOT_TIMEOUT='1', TEST_INVENTORY=json.dumps(inventory))
+                           WAZUH_BOOT_TIMEOUT='1', TEST_INVENTORY=json.dumps(inventory))
                 env.pop('WAZUH5X_SSH_PUBLIC_KEY_FILE', None)
-                result = subprocess.run(['bash', str(root / 'WAZUH5X/wazuh5x_install.sh'), str(lab)],
+                result = subprocess.run(['bash', str(root / 'WAZUH/WAZUH_installer.sh'), str(lab)],
                                         env=env, text=True, capture_output=True, timeout=15)
                 events = (root / 'events').read_text() if (root / 'events').exists() else ''
                 if mode == 'healthy':
                     expected_id = lab * 1000 + next(i for i in range(1000) if i not in offsets)
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-                    self.assertIn(f'create {expected_id} --name lab{lab}-WAZUH5X', events)
+                    self.assertIn(f'create {expected_id} --name lab{lab}-WAZUH', events)
                     self.assertIn(f'--scsi0 custom-zfs:vm-{expected_id}-disk-0', events)
                     self.assertIn(f'snapshot {expected_id} First_snapshot', events)
-                    self.assertIn('172.20.0.21', events)
+                    self.assertIn('--ipconfig0 ip=192.168.2.20/24,gw=192.168.2.1', events)
+                    self.assertIn('--ipconfig1 ip=172.20.0.20/24', events)
+                    self.assertIn(f'bridge=lab{lab}_lan2', events)
+                    self.assertIn(f'bridge=lab{lab}_oobm', events)
                     self.assertNotIn('__WAZUH5X_SSH_KEY__', (root / 'snippets/userdata.yaml').read_text())
                     snippet = yaml.safe_load((root / 'snippets/userdata.yaml').read_text())
                     self.assertTrue(snippet['ssh_pwauth'])
@@ -110,7 +122,7 @@ class Wazuh5xTests(unittest.TestCase):
                 else:
                     self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
                     self.assertNotIn('snapshot ', events)
-                if mode in ('duplicate', 'exhausted'):
+                if mode in duplicate_names or mode == 'exhausted':
                     self.assertNotIn('create ', events)
                 self.assertNotIn('destroy', events)
 
@@ -149,7 +161,7 @@ class Wazuh5xTests(unittest.TestCase):
             self.assertNotEqual(fetch().returncode, 0)
 
     def test_bootstrap_repeat_and_interrupted_install(self):
-        config = yaml.safe_load((ROOT / 'WAZUH5X/WAZUH5X_userdata.yaml').read_text())
+        config = yaml.safe_load((ROOT / 'WAZUH/WAZUH_userdata.yaml').read_text())
         source = next(e['content'] for e in config['write_files'] if e['path'].endswith('wazuh5x-bootstrap'))
         for partial, version in ((False, '5.0.0-1'), (True, '5.0.0-1'), (False, '4.14.1-1'), (False, '5.0.1-1')):
             with self.subTest(partial=partial, version=version), tempfile.TemporaryDirectory() as temporary:
@@ -209,7 +221,7 @@ class Wazuh5xTests(unittest.TestCase):
                     self.assertIn('Unexpected wazuh-indexer DEB version: ' + version, logs)
 
     def test_terminal_optout_runs_before_bootstrap_and_is_repeatable(self):
-        config = yaml.safe_load((ROOT / 'WAZUH5X/WAZUH5X_userdata.yaml').read_text())
+        config = yaml.safe_load((ROOT / 'WAZUH/WAZUH_userdata.yaml').read_text())
         command = '/usr/local/sbin/wazuh5x-terminal-compat'
         self.assertEqual(config['runcmd'][0], ['bash', command])
         code = next(e['content'] for e in config['write_files'] if e['path'] == command)

@@ -98,7 +98,7 @@ class HardwareMenuTests(unittest.TestCase):
         final = screen.frames[-2]
         self.assertIn("Profil: Mini", final[3])
         self.assertNotIn("Big", " ".join(final.values()))
-        self.assertIn("28 vCPU | 36 GiB RAM | +476 GiB disk", final[18])
+        self.assertIn("32 vCPU | 44 GiB RAM | +516 GiB disk", final[18])
         self.assertIn("10 vCPU | 12 GiB RAM", final[15])
         self.assertIn("20 vCPU | 28 GiB RAM", screen.frames[0][3])
 

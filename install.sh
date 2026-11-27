@@ -9,10 +9,9 @@ IFS=$'\n\t'
 #   1. Internet image sources
 #   2. CyberRepo / ImageSrv discovered through manifest.json
 #
-# Ubuntu, Kali, Wazuh and OPNsense URLs are exported as:
+# Ubuntu, Kali and OPNsense URLs are exported as:
 #   LINUX_IMG
 #   KALI_IMG
-#   WAZUH_IMG
 #   OPNSENSE_IMG_URL
 #
 # OPNSENSE_VERSION is exported as well. If an OPNsense image is selected from
@@ -33,7 +32,6 @@ cd "$SCRIPT_DIR"
 ###############################################################################
 
 INTERNET_LINUX_IMG="https://cloud-images.ubuntu.com/noble/20261017/noble-server-cloudimg-amd64.img"
-INTERNET_WAZUH_IMG="https://packages.wazuh.com/4.x/vm/wazuh-4.14.1.ova"
 INTERNET_KALI_IMG="https://kali.download/cloud-images/kali-2025.4/kali-linux-2025.4-cloud-genericcloud-amd64.tar.xz"
 
 DEFAULT_IMAGE_SERVER="http://10.134.71.139"
@@ -422,13 +420,9 @@ configure_vm_resources() {
     export KALI02_MEM="${KALI02_MEM:-4096}"
     export KALI02_HDD="${KALI02_HDD:-32G}"
 
-    export WAZUH_CPU="${WAZUH_CPU:-2}"
-    export WAZUH_MEM="${WAZUH_MEM:-4096}"
-    export WAZUH_HDD="${WAZUH_HDD:-80G}"
-
-    export WAZUH5X_CPU="${WAZUH5X_CPU:-4}"
-    export WAZUH5X_MEM="${WAZUH5X_MEM:-8192}"
-    export WAZUH5X_HDD="${WAZUH5X_HDD:-100G}"
+    export WAZUH_CPU="${WAZUH_CPU:-4}"
+    export WAZUH_MEM="${WAZUH_MEM:-8192}"
+    export WAZUH_HDD="${WAZUH_HDD:-100G}"
 
     export APPSRV01_CPU="${APPSRV01_CPU:-2}"
     export APPSRV01_MEM="${APPSRV01_MEM:-2048}"
@@ -539,18 +533,12 @@ case "$IMAGE_SOURCE_CHOICE" in
       "Kali image" \
       "$INTERNET_KALI_IMG"
 
-    validate_url_or_die \
-      "Wazuh image" \
-      "$INTERNET_WAZUH_IMG"
-
     LINUX_IMG="$INTERNET_LINUX_IMG"
     KALI_IMG="$INTERNET_KALI_IMG"
-    WAZUH_IMG="$INTERNET_WAZUH_IMG"
     OPNSENSE_IMG_URL="$INTERNET_OPNSENSE_IMG"
 
     LINUX_IMAGE_SOURCE="Internet"
     KALI_IMAGE_SOURCE="Internet"
-    WAZUH_IMAGE_SOURCE="Internet"
     OPNSENSE_IMAGE_SOURCE="Internet"
     ;;
 
@@ -597,15 +585,6 @@ case "$IMAGE_SOURCE_CHOICE" in
     KALI_IMG="$SELECTED_IMAGE_URL"
     KALI_IMAGE_SOURCE="$SELECTED_IMAGE_SOURCE"
 
-    select_manifest_image \
-      "Wazuh" \
-      '^images/wazuh/.*\.(ova|ovf|qcow2|img|raw|zst|xz|gz)$' \
-      "$INTERNET_WAZUH_IMG" \
-      "$MANIFEST_FILE"
-
-    WAZUH_IMG="$SELECTED_IMAGE_URL"
-    WAZUH_IMAGE_SOURCE="$SELECTED_IMAGE_SOURCE"
-
     select_manifest_image       "OPNsense"       '^images/opnsense/.*OPNsense-[0-9]+\.[0-9]+(\.[0-9]+)?-nano-amd64\.img\.bz2$'       "$INTERNET_OPNSENSE_IMG"       "$MANIFEST_FILE"
 
     OPNSENSE_IMG_URL="$SELECTED_IMAGE_URL"
@@ -628,7 +607,6 @@ export IMAGE_SOURCE
 export IMAGE_SERVER_URL
 export LINUX_IMG
 export KALI_IMG
-export WAZUH_IMG
 export OPNSENSE_IMG_URL
 export OPNSENSE_VERSION
 
@@ -643,15 +621,12 @@ echo "======================================================"
 echo
 echo "Ubuntu (${LINUX_IMAGE_SOURCE}):"
 echo "  ${LINUX_IMG}"
-echo "Ubuntu 26.04 (WAZUH5X and TPOT01 only; separate verified cloud image):"
+echo "Ubuntu 26.04 (WAZUH and TPOT01 only; separate verified cloud image):"
 echo "  ${UBUNTU2604_IMG:-https://cloud-images.ubuntu.com/resolute/20261108/resolute-server-cloudimg-amd64.img}"
 echo "  Custom image mirror: set UBUNTU2604_IMG and UBUNTU2604_SHA256 together."
 echo
 echo "Kali (${KALI_IMAGE_SOURCE}):"
 echo "  ${KALI_IMG}"
-echo
-echo "Wazuh (${WAZUH_IMAGE_SOURCE}):"
-echo "  ${WAZUH_IMG}"
 echo
 echo "OPNsense (${OPNSENSE_IMAGE_SOURCE}):"
 echo "  ${OPNSENSE_IMG_URL}"
@@ -802,7 +777,6 @@ echo
 echo "Image source: ${IMAGE_SOURCE}"
 echo "Ubuntu:       ${LINUX_IMAGE_SOURCE}"
 echo "Kali:         ${KALI_IMAGE_SOURCE}"
-echo "Wazuh:        ${WAZUH_IMAGE_SOURCE}"
 echo "OPNsense:     ${OPNSENSE_IMAGE_SOURCE}"
 echo
 echo "ISO storage:  ${LOCAL}"

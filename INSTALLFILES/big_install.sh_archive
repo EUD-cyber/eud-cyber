@@ -49,7 +49,7 @@ KALI02="./KALI02/KALI02_installer.sh"
 APPSRV01="./APPSRV01/APPSRV01_installer.sh"
 CLIENT01="./CLIENT01/CLIENT01_installer.sh"
 
-WAZUH="./WAZUH/WAZUH_installer.sh"
+WAZUH="./WAZUH_OLD/WAZUH_installer.sh"
 TPOT="./TPOT01/TPOT01_installer.sh"
 
 IMAGESRV="./IMAGESRV/IMAGESRV_installer.sh"

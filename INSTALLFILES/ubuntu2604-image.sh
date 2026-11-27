@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Only WAZUH5X and TPOT01 source this file. LINUX_IMG remains Ubuntu 24.04.
+# Only WAZUH and TPOT01 source this file. LINUX_IMG remains Ubuntu 24.04.
 fetch_ubuntu2604() {
   local url="${UBUNTU2604_IMG:-https://cloud-images.ubuntu.com/resolute/20261108/resolute-server-cloudimg-amd64.img}"
   local digest="${UBUNTU2604_SHA256:-7b90593f5532b49b7e3fe3d2743f0d1f0d822e5b07cebcd8e00c0df8069ecab9}"

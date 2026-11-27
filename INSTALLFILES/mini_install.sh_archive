@@ -17,7 +17,7 @@ CLIENT01="./CLIENT01/CLIENT01_mini_multi_installer.sh"
 PACKETFENCE="./PACKETFENCE/PACKETFENCE_installer.sh"
 PREREQ="./pre_req.sh_archive"
 KALI01="./KALI01/KALI01_mini_multi_installer.sh_archive"
-WAZUH="./WAZUH/WAZUH_mini_multi_installer.sh_archive"
+WAZUH="./WAZUH_OLD/WAZUH_mini_multi_installer.sh_archive"
 WIN11="./WIN11/WIN11_installer.sh"
 WIN2025="./WIN2025/WIN2025_mini_multi_installer.sh"
 
