@@ -28,8 +28,15 @@ trap 'rc=$?; echo "WAZUH failed at line $LINENO (exit $rc); VMID=${VMID:-not-cre
 [[ "$MEMORY" =~ ^[1-9][0-9]*$ && "$CORES" =~ ^[1-9][0-9]*$ && "$DISK_SIZE" =~ ^[1-9][0-9]*[GMT]$ ]] || exit 1
 (( MEMORY >= 8192 && CORES >= 4 )) || { echo 'WAZUH requires >=4 vCPU and >=8192 MiB RAM.' >&2; exit 1; }
 PASSWORD_FILE="${WAZUH_ADMIN_PASSWORD_FILE:-/etc/cyberlab/wazuh-admin-password}"
+if [[ -z "${WAZUH_ADMIN_PASSWORD_FILE:-}" && ! -e "$PASSWORD_FILE" && ! -L "$PASSWORD_FILE" ]]; then
+  PASSWORD_FILE="$SCRIPT_DIR/wazuh-admin-password"
+  # Git checkouts do not preserve the owner's read/write-only mode.
+  if [[ -f "$PASSWORD_FILE" && ! -L "$PASSWORD_FILE" && -O "$PASSWORD_FILE" ]]; then
+    chmod 600 -- "$PASSWORD_FILE"
+  fi
+fi
 if [[ ! -f "$PASSWORD_FILE" || -L "$PASSWORD_FILE" || "$(stat -c '%u:%a' -- "$PASSWORD_FILE")" != 0:600 ]]; then
-  echo 'WAZUH requires a root-owned mode 0600 admin password file on the Proxmox host.' >&2
+  echo 'WAZUH requires a root-owned admin password file in /etc/cyberlab or beside WAZUH_installer.sh.' >&2
   exit 1
 fi
 if ! python3 -c '
