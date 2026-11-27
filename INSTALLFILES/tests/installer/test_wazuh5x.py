@@ -109,11 +109,21 @@ class Wazuh5xTests(unittest.TestCase):
                            WAZUH_BOOT_TIMEOUT='1', TEST_INVENTORY=json.dumps(inventory),
                            WAZUH_ADMIN_PASSWORD_FILE=str(password_file))
                 env.pop('WAZUH5X_SSH_PUBLIC_KEY_FILE', None)
+                if mode == 'healthy' and lab == 2:
+                    installer = root / 'WAZUH/WAZUH_installer.sh'
+                    installer.write_text(installer.read_text().replace(
+                        '/etc/cyberlab/wazuh-admin-password', str(root / 'missing-host-password')))
+                    checkout_password = root / 'WAZUH/wazuh-admin-password'
+                    password_file.rename(checkout_password)
+                    checkout_password.chmod(0o644)
+                    del env['WAZUH_ADMIN_PASSWORD_FILE']
                 result = subprocess.run(['bash', str(root / 'WAZUH/WAZUH_installer.sh'), str(lab)],
                                         env=env, text=True, capture_output=True, timeout=15)
                 events = (root / 'events').read_text() if (root / 'events').exists() else ''
                 self.assertNotIn('FixtureAdmin123@', result.stdout + result.stderr + events)
                 if mode == 'healthy':
+                    if lab == 2:
+                        self.assertEqual(checkout_password.stat().st_mode & 0o777, 0o600)
                     expected_id = lab * 1000 + next(i for i in range(1000) if i not in offsets)
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                     self.assertIn(f'create {expected_id} --name lab{lab}-WAZUH', events)
