@@ -195,6 +195,34 @@ def install_admin_auth(app, deployment, credential_path=CREDENTIAL, clock=time.m
             raise ValueError('Invalid job request.')
         return data
 
+    @app.route(PREFIX + '/agents/<agent_id>/remove', methods=['POST'])
+    @app.route(PREFIX + '/removed-agents', methods=['GET'])
+    def admin_agents(agent_id=None):
+        config = deployment()
+        if config.role != 'master' or config.config_status != 'loaded':
+            return response({'message': 'Not found.'}, 404)
+        # Deliberately outside agent_posts: existing operator auth, Origin and
+        # CSRF checks apply in protected mode and explicit Lab Mode alike.
+        import sqlite3
+        try:
+            store = Registry(registry_path)
+            if request.args:
+                raise ValueError('No query parameters.')
+            if request.method == 'GET':
+                if not store.path.exists() and not store.path.is_symlink():
+                    return response({'agents': []})
+                return response({'agents': [row for row in store.list_agents(include_removed=True)
+                                           if row['status'] == 'removed']})
+            data = job_body({'confirm_agent_id'})
+            return response(store.remove(agent_id, data['confirm_agent_id'],
+                            actor='lab-operator' if getattr(config, 'lab_mode', False) else 'master-operator'))
+        except Conflict as error:
+            return response({'message': str(error)}, 409)
+        except (ValueError, TypeError, UnicodeError, RecursionError):
+            return response({'message': 'Invalid removal request. Type the exact Agent ID.'}, 400)
+        except (Unavailable, OSError, sqlite3.Error):
+            return response({'message': 'Registry unavailable. Refresh agents before retrying.'}, 503)
+
     @app.route(PREFIX + '/jobs', methods=['GET', 'POST'])
     @app.route(PREFIX + '/jobs/<job_id>', methods=['GET'])
     @app.route(PREFIX + '/jobs/<job_id>/stop', methods=['POST'])

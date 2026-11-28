@@ -656,9 +656,14 @@ const MrnUI = (() => {
     const setText = (id,text) => {const el=byId(id);if(el)el.textContent=text;};
     async function get(url) {const response=await fetch(url);if(!response.ok)throw new Error('Unavailable');return response.json();}
     let masterAgentsRequest = 0, masterAgentsTimer = null, selectedMasterAgent = null, masterControlCapabilities = null;
+    let masterRemovalBusy = false, masterRemovalNotice = '', removedMasterAgents = [];
     function renderMasterAgents(agents) {
         const root = byId('masterAgentsRuntime');
         root.replaceChildren();
+        if (masterRemovalNotice) {
+            const notice = node(root, 'p', masterRemovalNotice);
+            notice.setAttribute('role', 'status');
+        }
         const control = node(root, 'section', undefined, 'empty-state');
         control.id = 'masterControlReadiness';
         node(control, 'h3', 'Campaign control prerequisites');
@@ -682,7 +687,7 @@ const MrnUI = (() => {
             ? new Date(value * 1000).toLocaleString() : 'Never';
         function fields(parent, agent) {
             const row = node(parent, 'dl', undefined, 'overview-fields');
-            const status = {pending:'Pending registration', online:'Online', offline:'Offline', revoked:'Revoked'}[agent.status] || 'Unknown';
+            const status = {pending:'Pending registration', online:'Online', offline:'Offline', revoked:'Revoked', removed:'Removed'}[agent.status] || 'Unknown';
             for (const [label, value] of [['Agent ID', agent.agent_id], ['Name', agent.name || 'Not registered'],
                     ['Status', status], ['Last heartbeat', timestamp(agent.last_seen_at)]]) {
                 node(row, 'dt', label);
@@ -704,9 +709,14 @@ const MrnUI = (() => {
                 renderMasterAgents(agents);
                 Array.from(root.querySelectorAll('[data-agent-id]')).find(button => button.dataset.agentId === previous)?.focus();
             };
-            const agent = agents.find(item => item.agent_id === selectedMasterAgent);
+            const agent = [...agents, ...removedMasterAgents].find(item => item.agent_id === selectedMasterAgent);
             if (agent) fields(detail, agent);
             else node(detail, 'p', 'This agent is no longer available in the registry.', 'empty-state');
+            if (agent?.removal) {
+                node(detail, 'p', `Removed: ${timestamp(agent.removal.removed_at)} by ${agent.removal.actor}. Old credentials are revoked; this ID cannot enroll again.`, 'muted');
+                const events = node(detail, 'a', 'View retained Receiver events');
+                events.href = '/api/master/receiver/events?agent_id=' + encodeURIComponent(agent.agent_id);
+            }
             node(detail, 'h4', 'Slave reports');
             if (agent?.reports_synced_at) {
                 node(detail, 'p', `Last metadata sync: ${timestamp(agent.reports_synced_at)}. Latest synchronized reports (up to 50).`, 'muted');
@@ -720,14 +730,13 @@ const MrnUI = (() => {
                         view.href = url; view.target = '_blank'; view.rel = 'noopener';
                         const download = node(detail, 'a', 'Download JSON', 'button button-small');
                         download.href = url + '?download=1';
-                    } else node(detail, 'p', report.status === 'running' ? 'Report is still running.' : 'Waiting for Slave report sync. Update the Slave if this persists.', 'muted');
+                    } else node(detail, 'p', agent.status === 'removed' ? 'No finalized snapshot was synchronized before removal.' : report.status === 'running' ? 'Report is still running.' : 'Waiting for Slave report sync. Update the Slave if this persists.', 'muted');
                 }
-            } else node(detail, 'p', 'Report metadata has not been synchronized. Update the Slave and wait for its next heartbeat.', 'muted');
+            } else node(detail, 'p', agent?.status === 'removed' ? 'No report metadata was synchronized before removal.' : 'Report metadata has not been synchronized. Update the Slave and wait for its next heartbeat.', 'muted');
             node(detail, 'p', 'Finalized JSON snapshots sync one per heartbeat. Report copies persist on Master; no connection into the Slave is required.', 'muted');
         }
         if (!agents.length) {
             node(root, 'p', 'No agents registered yet. Slaves appear here after enrollment with this Master.', 'empty-state');
-            return;
         }
         const list = node(root, 'div');
         for (const agent of agents) {
@@ -741,7 +750,66 @@ const MrnUI = (() => {
                 renderMasterAgents(agents);
                 byId('masterAgentDetailTitle').focus();
             };
+            const remove = node(entry, 'button', 'Remove', 'button button-small');
+            remove.type = 'button';
+            remove.setAttribute('aria-label', `Remove agent ${agent.agent_id}`);
+            remove.disabled = agent.status !== 'offline' || masterRemovalBusy;
+            remove.title = agent.status === 'offline'
+                ? 'Remove this offline registration; active jobs will block removal.'
+                : 'Only offline agents can be removed.';
+            remove.onclick = async () => {
+                if (masterRemovalBusy) return;
+                const confirmation = window.prompt(`Remove offline agent ${agent.name || agent.agent_id}?\nAgent ID: ${agent.agent_id}\nOld credentials will be permanently revoked, even if the VM returns. Jobs, events and synchronized reports will be retained. Active jobs block removal.\n\nType the exact Agent ID to confirm:`);
+                if (confirmation === null) return;
+                if (confirmation !== agent.agent_id) {
+                    masterRemovalNotice = 'Removal cancelled: Agent ID did not match.';
+                    renderMasterAgents(agents);
+                    return;
+                }
+                masterRemovalBusy = true;
+                renderMasterAgents(agents);
+                try {
+                    const response = await window.mrnFetch('/api/master/admin/agents/' + encodeURIComponent(agent.agent_id) + '/remove', {
+                        method: 'POST', headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({confirm_agent_id: confirmation})
+                    });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.message || 'Removal refused.');
+                    masterRemovalNotice = `Removed ${agent.agent_id}. Credentials revoked; history retained.`;
+                    if (selectedMasterAgent === agent.agent_id) selectedMasterAgent = null;
+                } catch (error) {
+                    masterRemovalNotice = `Could not remove ${agent.agent_id}: ${error.message} Refresh agents before retrying.`;
+                } finally {
+                    masterRemovalBusy = false;
+                    await refreshMasterAgents();
+                }
+            };
             fields(entry, agent);
+        }
+        const archive = node(root, 'section');
+        node(archive, 'h3', 'Removed agents / retained history');
+        const loadArchive = node(archive, 'button', 'Load removed agents', 'button button-small');
+        loadArchive.type = 'button';
+        loadArchive.onclick = async () => {
+            loadArchive.disabled = true;
+            try {
+                const data = await get('/api/master/admin/removed-agents');
+                if (!Array.isArray(data.agents)) throw new Error('Invalid archive');
+                removedMasterAgents = data.agents;
+                renderMasterAgents(agents);
+            } catch {
+                node(archive, 'p', 'Removed agent history unavailable. Retry after refreshing agents.');
+                loadArchive.disabled = false;
+            }
+        };
+        for (const agent of removedMasterAgents) {
+            const view = node(archive, 'button', `View removed agent ${agent.agent_id}`, 'button button-small');
+            view.type = 'button';
+            view.onclick = () => {
+                selectedMasterAgent = agent.agent_id;
+                renderMasterAgents(agents);
+                byId('masterAgentDetailTitle').focus();
+            };
         }
     }
     async function refreshMasterAgents() {

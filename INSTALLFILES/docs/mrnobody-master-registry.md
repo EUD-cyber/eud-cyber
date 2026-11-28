@@ -62,7 +62,11 @@ Autentifikationen gælder de to nye endpoints. Den ændrer ikke de eksisterende
 UI-/execution-ruters adgangskontrol. Masterens administrationsflade skal fortsat
 ligge bag labbets adgangsgrænse; offentlig administration kræver særskilt
 adgangskontrol. Agents-fanen viser Master agents med agent-ID, navn, status og seneste kontakt.
-Oversigten er read-only og opdateres med Refresh agents. Den vises kun på
+Oversigten opdateres med Refresh agents. Remove ved hver Agent kan fjerne en
+offline registrering efter indtastning af det præcise Agent-ID; online Agents og
+Agents med aktive jobs afvises. Historik bevares, og gamle credentials tilbagekaldes.
+Se [Remove Agent, opdatering og historik](../TESTFILES/ATTACKER-V2/docs/agent-removal.md).
+Oversigten vises kun på
 Master. Ingen nøgler eller nøglehashes sendes til browseren. Agentklienten konfigureres og aktiveres
 eksplicit og forbinder ud gennem NAT.
 

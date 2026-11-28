@@ -349,7 +349,8 @@ class Registry:
             raise ValueError("Invalid report ID.")
         with self._db() as db:
             row=db.execute("SELECT revoked FROM agents WHERE agent_id=?",(agent_id,)).fetchone()
-            if row is None or row[0]:
+            removed = self._removed(db).get(agent_id)
+            if row is None or (row[0] and not removed):
                 return None
             if not db.execute("SELECT 1 FROM sqlite_master WHERE name='report_content'").fetchone():
                 return None
@@ -363,9 +364,54 @@ class Registry:
             if result.rowcount != 1:
                 raise ValueError("Unknown agent ID.")
 
-    def list_agents(self):
+    @staticmethod
+    def _removed(db):
+        # Read-only compatibility with registries predating agent removal.
+        if not db.execute("SELECT 1 FROM sqlite_master WHERE name='agent_removals' AND type='table'").fetchone():
+            return {}
+        return {r['agent_id']: dict(r) for r in db.execute('SELECT * FROM agent_removals')}
+
+    def remove(self, agent_id, confirm_agent_id, *, actor='master-operator'):
+        """Revoke one offline identity atomically; retain its row and all evidence.
+
+        The write lock also serializes heartbeat, enrollment and job enqueue.
+        Do not reconcile jobs here: removing one identity must not mutate others.
+        """
+        validate_id(agent_id)
+        if confirm_agent_id != agent_id:
+            raise ValueError('Type the exact Agent ID to confirm removal.')
+        if actor not in {'master-operator', 'lab-operator'}:
+            raise ValueError('Invalid audit actor.')
+        with self._db(write=True) as db:
+            row = db.execute('SELECT * FROM agents WHERE agent_id=?', (agent_id,)).fetchone()
+            removed = self._removed(db).get(agent_id)
+            if removed:
+                return dict(agent_id=agent_id, removed=True, removed_at=removed['removed_at'])
+            if row is None:
+                raise ValueError('Unknown agent ID.')
+            if (row['revoked'] or row['registered_at'] is None or row['last_seen_at'] is None
+                    or int(self.clock()) - row['last_seen_at'] <= OFFLINE_AFTER):
+                raise Conflict('Only an OFFLINE, registered, non-revoked agent can be removed.')
+            if db.execute("SELECT 1 FROM sqlite_master WHERE name='execution_jobs' AND type='table'").fetchone():
+                if db.execute("""SELECT 1 FROM execution_jobs WHERE agent_id=?
+                                 AND status NOT IN ('succeeded','failed','stopped') LIMIT 1""",
+                              (agent_id,)).fetchone():
+                    raise Conflict('Agent has active jobs. Stop or resolve them before removal.')
+            db.execute('''CREATE TABLE IF NOT EXISTS agent_removals (
+                agent_id TEXT PRIMARY KEY, name TEXT NOT NULL, removed_at INTEGER NOT NULL,
+                last_seen_at INTEGER, actor TEXT NOT NULL, reason TEXT NOT NULL)''')
+            now = int(self.clock())
+            db.execute('INSERT INTO agent_removals VALUES(?,?,?,?,?,?)',
+                       (agent_id, row['name'], now, row['last_seen_at'], actor, 'operator_confirmed_offline_removal'))
+            # Keep the identity reserved forever, including in automatic Lab enrollment.
+            # Destroy its credential hash as well as setting the common revocation flag.
+            db.execute("UPDATE agents SET revoked=1, token_hash='' WHERE agent_id=?", (agent_id,))
+            return dict(agent_id=agent_id, removed=True, removed_at=now)
+
+    def list_agents(self, *, include_removed=False):
         now=int(self.clock())
         with self._db() as db:
+            removed = self._removed(db)
             rows=db.execute("""SELECT agent_id,name,created_at,registered_at,last_seen_at,revoked
                                FROM agents ORDER BY agent_id""").fetchall()
             inventory={}
@@ -378,12 +424,17 @@ class Registry:
                            for r in db.execute("SELECT * FROM report_inventory")}
         result=[]
         for row in rows:
+            tombstone = removed.get(row['agent_id'])
+            if tombstone and not include_removed:
+                continue
             item=dict(row)
-            item["available_reports"]=[] if row["revoked"] else available.get(row["agent_id"],[])
+            item["available_reports"]=[] if row["revoked"] and not tombstone else available.get(row["agent_id"],[])
             item.update(inventory.get(row["agent_id"],dict(reports=[],reports_synced_at=None)))
             item["status"]=("revoked" if row["revoked"] else "pending" if row["registered_at"] is None
                             else "online" if now-row["last_seen_at"] <= OFFLINE_AFTER else "offline")
             item["revoked"]=bool(item["revoked"])
+            if tombstone:
+                item.update(status='removed', removal=tombstone)
             result.append(item)
         return result
 
