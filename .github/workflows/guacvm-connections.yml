@@ -37,3 +37,17 @@ jobs:
           node --check INSTALLFILES/GUACVM/nginx/web/connections.js
           node --check INSTALLFILES/GUACVM/nginx/web/app.js
           python INSTALLFILES/tests/guacvm/test_installation.py
+      - run: |
+          npm install --no-save playwright@1.65.1
+          npx playwright install --with-deps chromium
+      - name: Browser workflow against PostgreSQL
+        run: |
+          python INSTALLFILES/tests/guacvm/serve_test.py > /tmp/guacvm-http.log 2>&1 &
+          node INSTALLFILES/tests/guacvm/browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: guacvm-evidence
+          path: |
+            guacvm-evidence/
+            /tmp/guacvm-http.log
