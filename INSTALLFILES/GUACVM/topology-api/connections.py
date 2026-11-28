@@ -95,6 +95,8 @@ def initialize(db):
             metadata.update(label=connection["label"], host=session.get("address", ""),
                             protocol=connection["type"].lower(), visible=True,
                             legacy=connection)
+            if metadata['protocol'] not in PROTOCOLS:
+                metadata['port'] = connection.get('port',443)
             cid = None
             if metadata["protocol"] in PROTOCOLS:
                 encoded = connection["url"].rsplit("/", 1)[-1]
@@ -132,6 +134,8 @@ def validate(body, existing=None):
     if "lab" in body and (type(body["lab"]) is not int or body["lab"] != lab_id()):
         raise Invalid("Connection belongs to another lab instance")
     protocol = body.get("protocol", "")
+    if not isinstance(protocol,str):
+        raise Invalid('protocol must be a string')
     old_protocol = existing["metadata"]["protocol"] if existing else None
     if protocol not in PROTOCOLS and protocol != old_protocol:
         raise Invalid("Only RDP, SSH and VNC can be added")
@@ -154,14 +158,14 @@ def validate(body, existing=None):
         if len(host) > 253 or any(not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", p)
                                    for p in host.rstrip(".").split(".")):
             raise Invalid("Host must be an IP address or DNS hostname, without URL or port")
-    port = body.get("port", PROTOCOLS.get(protocol, 443))
+    port = body.get("port", PROTOCOLS.get(protocol, existing['metadata'].get('port',443) if existing else 443))
     if type(port) is not int or not 1 <= port <= 65535:
         raise Invalid("Port must be an integer from 1 to 65535")
     if type(body.get("visible", True)) is not bool:
         raise Invalid("visible must be boolean")
     result.update(port=port, visible=body.get("visible", True))
     if protocol not in PROTOCOLS and existing:
-        if host != existing['metadata']['host'] or any(f in body for f in ('username','password','domain')):
+        if host != existing['metadata']['host'] or port != existing['metadata'].get('port',443) or any(f in body for f in ('username','password','domain')):
             raise Invalid('HTTP/HTTPS supports portal labels and visibility only; NAT is unchanged')
     for field in ("username", "password", "domain"):
         if field in body and (not isinstance(body[field], str) or len(body[field]) > 4096 or "\0" in body[field]):

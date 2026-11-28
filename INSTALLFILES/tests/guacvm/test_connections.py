@@ -20,6 +20,7 @@ import psycopg
 from psycopg.rows import dict_row
 import connections as service
 from app import app
+CONFIGURED_DATABASE = service.database
 
 DSN = os.environ.get("GUACVM_TEST_DSN")
 
@@ -169,7 +170,7 @@ class ConnectionTests(unittest.TestCase):
         self.assertEqual(self.put(key=row['key'],body=body,op='shared').status_code,409)
 
     def test_validation_and_cross_origin_no_login(self):
-        for change in [{'protocol':'https'},{'host':'http://bad/'},{'host':'a;DROP TABLE x'},
+        for change in [{'protocol':'https'},{'protocol':[]},{'protocol':{}},{'host':'http://bad/'},{'host':'a;DROP TABLE x'},
                        {'port':True},{'port':0},{'visible':'yes'},{'password':None},{'lab':2},{'unknown':1}]:
             body=self.body();body.update(change)
             self.assertEqual(self.put(body=body).status_code,400,change)
@@ -178,12 +179,25 @@ class ConnectionTests(unittest.TestCase):
         self.assertEqual(self.client.put('/api/vm-connections/a',data='{}').status_code,415)
         self.assertEqual(self.put(body=self.body(description='x'*17000)).status_code,413)
         self.assertEqual(self.put(Origin='http://localhost').status_code,200)
+        self.assertEqual(self.put(key='https-origin',op='https-origin',Origin='https://localhost',
+            **{'X-Forwarded-Proto':'https'}).status_code,200)
+
+    def test_database_secret_file_configuration(self):
+        config = psycopg.conninfo.conninfo_to_dict(DSN)
+        password_file = Path(self.temp.name)/'db-secret'
+        password_file.write_text(config.get('password',''),encoding='utf-8')
+        with patch.dict(os.environ,dict(PGHOST=config['host'],PGPORT=config.get('port','5432'),
+                PGDATABASE=config['dbname'],PGUSER=config['user'],PGPASSWORD_FILE=str(password_file))):
+            with CONFIGURED_DATABASE() as db:
+                self.assertEqual(db.execute('SELECT 1 AS value').fetchone()['value'],1)
 
     def test_http_preserved_but_cannot_be_added_or_changed(self):
         row = next(r for r in self.rows() if r['protocol']=='https')
         body = {k:row[k] for k in service.FIELDS if k in row}
-        body.update(label='Existing web',port=443)
+        body.update(label='Existing web')
         self.assertEqual(self.put(key=row['key'],body=body,op='web-edit').status_code,200)
+        changed = dict(body,port=body['port']+1,version=2)
+        self.assertEqual(self.put(key=row['key'],body=changed,op='web-port').status_code,400)
         sessions=self.client.get('/api/sessions').get_json()['sessions']
         self.assertTrue(any(c['label']=='Existing web' for s in sessions for c in s['connections']))
         body.pop('version');self.assertEqual(self.put(key='new-web',body=body,op='web-new').status_code,400)
