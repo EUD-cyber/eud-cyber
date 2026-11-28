@@ -32,6 +32,11 @@ packages:
   - openssl
 
 write_files:
+  - path: /opt/guacamole/postgres-password
+    owner: root:root
+    permissions: '0600'
+    content: |
+      Password1!
   - path: /opt/guacamole/scripts/generate-https-certificate.sh
     owner: root:root
     permissions: '0755'
@@ -253,6 +258,13 @@ write_files:
           restart: always
 
           working_dir: /app
+          environment:
+            PGHOST: postgres
+            PGDATABASE: guacamole_db
+            PGUSER: guacamole_user
+            PGPASSWORD_FILE: /run/secrets/postgres_password
+            GUACVM_LAB_ID: "__GUACVM_LAB_ID__"
+            GUACVM_PORTAL_USER: guacadmin
 
           command:
             - sh
@@ -272,6 +284,7 @@ write_files:
           volumes:
             - ./topology-api:/app:ro
             - ./data:/data
+            - ./postgres-password:/run/secrets/postgres_password:ro
 
           expose:
             - "5000"
@@ -359,6 +372,10 @@ runcmd:
 
   # API
   - wget -O /opt/guacamole/topology-api/app.py https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INSTALLFILES/GUACVM/topology-api/app.py
+  - wget -O /opt/guacamole/topology-api/connections.py https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INSTALLFILES/GUACVM/topology-api/connections.py
+  - wget -O /opt/guacamole/topology-api/legacy-sessions.json https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INSTALLFILES/GUACVM/topology-api/legacy-sessions.json
+  - wget -O /opt/guacamole/nginx/web/connections.js https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INSTALLFILES/GUACVM/nginx/web/connections.js
+  - wget -O /opt/guacamole/nginx/web/connections.css https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INSTALLFILES/GUACVM/nginx/web/connections.css
   - wget -O /opt/guacamole/topology-api/requirements.txt https://raw.githubusercontent.com/EUD-cyber/eud-cyber/main/INSTALLFILES/GUACVM/topology-api/requirements.txt
   
 

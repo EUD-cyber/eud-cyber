@@ -30,7 +30,7 @@ docker compose ps -q postgres >/dev/null 2>&1 ||
 
 log "Stopper Guacamole og Nginx."
 
-docker compose stop guacamole nginx || true
+docker compose stop guacamole nginx topology-api
 
 log "Afbryder aktive forbindelser til databasen."
 
@@ -73,7 +73,7 @@ gzip -dc "$BACKUP_FILE" |
 
 log "Starter Guacamole og Nginx."
 
-docker compose up -d guacamole nginx
+docker compose up -d guacamole topology-api nginx
 
 log "Restore gennemført."
 

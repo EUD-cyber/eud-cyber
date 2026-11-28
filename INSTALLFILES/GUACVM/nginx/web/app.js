@@ -1,7 +1,16 @@
-(() => {
+(async () => {
   "use strict";
 
-  const sessions = Array.isArray(window.CYBERLAB_SESSIONS) ? window.CYBERLAB_SESSIONS : [];
+  let sessions = [];
+  try {
+    const response = await fetch('/api/sessions', { cache: 'no-store' });
+    if (!response.ok) throw new Error('Session API unavailable');
+    sessions = (await response.json()).sessions;
+  } catch (error) {
+    // Do not resurrect removed entries from the historical static list.
+    document.getElementById('resultText').textContent = 'Forbindelser kunne ikke hentes. Genindlæs siden for at prøve igen.';
+    return;
+  }
   const grid = document.getElementById("sessionGrid");
   const template = document.getElementById("sessionTemplate");
   const searchInput = document.getElementById("searchInput");
