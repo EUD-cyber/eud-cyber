@@ -439,6 +439,10 @@ write_files:
           "$INSTALL_DIR/docs/master-admin-prerequisite.md"
 
       download_file \
+          "docs/agent-removal.md" \
+          "$INSTALL_DIR/docs/agent-removal.md"
+
+      download_file \
           "web/agent_jobs.py" \
           "$INSTALL_DIR/web/agent_jobs.py"
 
