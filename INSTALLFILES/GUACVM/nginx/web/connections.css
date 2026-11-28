@@ -1,0 +1,13 @@
+.vm-settings{max-width:1100px;margin:auto;padding:28px}
+.vm-toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:18px 0}
+.vm-settings button,.vm-form button{padding:10px 16px;border:1px solid #4b6488;border-radius:9px;background:#163251;color:#fff;cursor:pointer;font:inherit}
+.vm-settings button:disabled,.vm-form button:disabled{opacity:.5;cursor:wait}
+.vm-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:18px 0;border-bottom:1px solid #34445e}
+.vm-row p{margin:6px 0;color:#aebed5;overflow-wrap:anywhere}
+.vm-row .vm-toolbar{flex-shrink:0;margin:0}
+.vm-form{display:grid;gap:14px;padding:24px;width:min(540px,80vw);max-height:80vh;overflow:auto}
+.vm-form label{display:grid;gap:5px}
+.vm-form input,.vm-form select{padding:10px;border:1px solid #4b6488;border-radius:6px;background:#111f34;color:#fff;font:inherit;width:100%;box-sizing:border-box}
+.vm-form .vm-check{display:flex;align-items:center;gap:10px}.vm-check input{width:auto}
+#editError{color:#ffb7b7}
+@media(max-width:620px){.vm-row{align-items:flex-start;flex-direction:column}.vm-settings{padding:16px}}

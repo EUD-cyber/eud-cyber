@@ -2,10 +2,10 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-LAB="$1"
+LAB="${1:-}"
 STATE_FILE="$(pwd)/GUACVM/STATE/lab${LAB}.env"
 
-if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^[0-9]+$ ]]; then
+if [[ -z "$LAB" ]] || ! [[ "$LAB" =~ ^([1-9]|1[0-6])$ ]]; then
   echo "Usage: $0 <lab-number>"
   exit 1
 fi
@@ -62,6 +62,10 @@ else
   echo "User-data copied to $DST_PATH"
 fi
 echo "Done."
+
+# The compose environment scopes portal metadata to this lab. Never rewrite an
+# already configured value on re-run. Also patch older cached cloud-init snippets.
+sed -i "s/__GUACVM_LAB_ID__/${LAB}/g" "$DST_PATH"
 
 # ===== Find next free VMID =====
 VMID=$START_VMID

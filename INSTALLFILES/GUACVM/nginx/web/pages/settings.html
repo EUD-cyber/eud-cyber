@@ -1,6 +1,30 @@
 <!doctype html>
 <html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Settings · Cyberlab</title><link rel="stylesheet" href="/style.css"></head>
+<title>Settings · Cyberlab</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/connections.css"></head>
 <body><header class="topbar"><a class="brand" href="/"><span class="brand-mark">C</span><span>Cyberlab</span></a>
 <nav class="tabs"><a href="/">Connections</a><a  href="/pages/labs.html">Labs</a><a  href="/pages/documentation.html">Documentation</a><a  href="/pages/topology.html">Tools</a><a class="active" href="/pages/settings.html">Settings</a></nav></header>
-<main class="page-shell"><section class="page-card"><p class="eyebrow">CYBERLAB V2</p><h1>Settings</h1><p>Plads til frontend-indstillinger. Docker og Guacamole administreres fortsat fra serveren.</p></section></main></body></html>
+<main class="page-shell"><section class="page-card vm-settings">
+<p class="eyebrow">SETTINGS</p><h1>VM Connections</h1>
+<p>Administrer labbets portalforbindelser. RDP, SSH og VNC åbnes gennem Apache Guacamole.</p>
+<p>Labportal uden login: alle med adgang til portalen kan ændre forbindelser.</p>
+<div class="vm-toolbar"><button id="addConnection" type="button">Tilføj forbindelse</button><button id="refreshConnections" type="button">Opdater liste</button><span id="labLabel"></span></div>
+<p id="connectionStatus" role="status" aria-live="polite"></p><div id="connectionRows"></div>
+</section></main>
+<dialog id="editConnection" aria-labelledby="editHeading"><form id="connectionForm" class="vm-form">
+<h2 id="editHeading">Tilføj forbindelse</h2>
+<label>Systemnavn<input name="name" required maxlength="128" placeholder="MrNobody Slave"></label>
+<label>Forbindelsesnavn<input name="label" required maxlength="128" placeholder="MrNobody Slave SSH"></label>
+<label>Protokol<select name="protocol"><option value="rdp">RDP</option><option value="ssh">SSH</option><option value="vnc">VNC</option></select></label>
+<label>IP-adresse eller hostname<input name="host" required maxlength="253" placeholder="192.168.1.50"></label>
+<label>Port<input name="port" type="number" min="1" max="65535" required value="3389"></label>
+<label>Brugernavn<input name="username" maxlength="4096" autocomplete="off"></label>
+<label>Password<input name="password" type="password" maxlength="4096" autocomplete="new-password" placeholder="Tomt felt bevarer eksisterende password"></label>
+<label class="vm-check"><input name="clearPassword" type="checkbox"> Fjern gemt password</label>
+<label>Domæne (RDP)<input name="domain" maxlength="4096" autocomplete="off"></label>
+<label>Kategori<input name="category" maxlength="64" placeholder="Linux"></label>
+<label>Ikon-tekst<input name="icon" maxlength="32" placeholder="MRN"></label>
+<label>Beskrivelse<input name="description" maxlength="512"></label>
+<label class="vm-check"><input name="visible" type="checkbox" checked> Vis i portalens sessionliste</label>
+<p id="editNote"></p><p id="editError" role="alert"></p>
+<div class="vm-toolbar"><button id="saveConnection" type="submit">Gem forbindelse</button><button id="cancelEdit" type="button">Annuller</button></div>
+</form></dialog><script src="/connections.js" defer></script></body></html>

@@ -3,8 +3,10 @@ set -Eeuo pipefail
 APP_DIR="/opt/guacamole"
 BACKUP_FILE="$APP_DIR/backups/guacamole-db.sql.gz"
 cd "$APP_DIR"
-set -a; source .env; set +a
+POSTGRES_USER="${POSTGRES_USER:-guacamole_user}"
+POSTGRES_DB="${POSTGRES_DB:-guacamole_db}"
 mkdir -p backups
+umask 077
 TMP="${BACKUP_FILE}.tmp"
 docker compose exec -T postgres pg_dump \
   --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" \

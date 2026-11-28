@@ -8,8 +8,13 @@ from pathlib import Path
 from typing import Any
 
 from flask import Flask, jsonify, request
+from connections import api as connections_api
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
+# Nginx overwrites X-Forwarded-Proto; this container has no published host port.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
+app.register_blueprint(connections_api)
 
 DATA_DIR = Path("/data")
 TOPOLOGY_FILE = DATA_DIR / "topology.json"

@@ -1,0 +1,39 @@
+name: GUACVM VM Connections
+on:
+  pull_request:
+    paths:
+      - 'INSTALLFILES/GUACVM/**'
+      - 'INSTALLFILES/tests/guacvm/**'
+      - '.github/workflows/guacvm-connections.yml'
+permissions:
+  contents: read
+jobs:
+  connections:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: test-only
+          POSTGRES_DB: guacvm_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres -d guacvm_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      GUACVM_TEST_DSN: 'host=127.0.0.1 dbname=guacvm_test user=postgres password=test-only'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: pip install -r INSTALLFILES/GUACVM/topology-api/requirements.txt pyyaml
+      - run: python INSTALLFILES/tests/guacvm/test_connections.py
+      - run: |
+          bash -n INSTALLFILES/GUACVM/GUACVM_installer.sh INSTALLFILES/GUACVM/scripts/*.sh
+          node --check INSTALLFILES/GUACVM/nginx/web/connections.js
+          node --check INSTALLFILES/GUACVM/nginx/web/app.js
+          python INSTALLFILES/tests/guacvm/test_installation.py
